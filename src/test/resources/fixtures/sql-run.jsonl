@@ -1,0 +1,4 @@
+{"type":"welcome"}
+{"identifier":"{\"channel\":\"Challenge::DatabaseChannel\",\"challengeable_type\":\"database\",\"challengeable_id\":2778,\"language\":\"mysql\",\"lesson_id\":131528}","type":"confirm_subscription"}
+{"identifier":"{\"channel\":\"Challenge::DatabaseChannel\",\"challengeable_type\":\"database\",\"challengeable_id\":2778,\"language\":\"mysql\",\"lesson_id\":131528}","message":{"action":"run","type":"start","testcase_ids":[5437],"challengeable_type":"database","challengeable_id":2778}}
+{"identifier":"{\"channel\":\"Challenge::DatabaseChannel\",\"challengeable_type\":\"database\",\"challengeable_id\":2778,\"language\":\"mysql\",\"lesson_id\":131528}","message":{"action":"run","type":"finish","testcase_id":5437,"passed":true,"msg":null,"returned_rows":"{\"columns\":[\"USERS\"],\"data\":[[4]]}","challengeable_type":"database","challengeable_id":2778}}

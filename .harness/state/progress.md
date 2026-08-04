@@ -43,3 +43,21 @@ Issue-first squash-merge flow (issue #4, branch `chore/4-dev-workflow`). ADR
 ## [2026-08-04] Phase 1 — Implementation ⏳
 
 See the implementation order in `docs/superpowers/specs/…-design.md` §11. Start from #1 (reproduce Kotlin WebSocket subscription).
+
+### Issue #6 — Kotlin ActionCable client (`feat/6-actioncable-client`)
+
+- ✅ Step 1/3 — Gradle Kotlin DSL project skeleton (1c7b58a)
+- ✅ Step 2/3 — Protocol frame DTOs + lenient parsing (commit: see branch)
+  - 8 measured fixtures extracted from protocol doc §4–§8/§15 into
+    `src/test/resources/fixtures/*.jsonl` (scrubbed per dev-rules §7.3)
+  - `protocol` package: `ActionCableFrame` envelope (welcome/ping/confirm/reject/
+    broadcast/Unknown/Malformed), `SubmitMessage` sealed DTOs (all fields nullable,
+    camelCase+snake_case, `Unknown(type, raw)` + warning log), `LessonId`/
+    `ChallengeableId`/`CodesKey` value classes + `ChannelIdentifier.of` (byte-for-byte
+    identifier match verified against captures)
+  - 42 new tests (5 classes) — plain JUnit5 + Kotest, fixture-loaded via `FixtureLoader`
+  - Gradle: default `test` excludes `@Tag("integration")`; new `integrationTest` task
+  - ADR [[decisions/2026-08-04-test-environment]] (no Spring in layer tests ·
+    integrationTest split · fixture-file enforcement) + dev-rules §6 amended
+- ⏳ Step 3/3 — WebSocket client: real subscribe/receive against Programmers
+  (the "actually connected at least once" gate is still OPEN — nothing verified live yet)

@@ -31,6 +31,21 @@ dependencies {
     testImplementation("io.mockk:mockk:1.14.11")
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
+// Default test task = unit + layer only; integration runs live against Programmers
+// and is opt-in via the separate integrationTest task (ADR 2026-08-04-test-environment).
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
+}
+
+tasks.register<Test>("integrationTest") {
+    description = "Runs @Tag(\"integration\") tests against the real Programmers server."
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("integration")
+    }
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    shouldRunAfter(tasks.test)
 }
