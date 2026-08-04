@@ -80,7 +80,8 @@ BaekjoonHub 같은 기존 도구도 정답일 때만 동작해서 구조적으�
 programmers-tracker/            (이 저장소)
 ├── CLAUDE.md                   개발 헌법 — 금지·품질 게이트·state 운영
 ├── .claude/commands/           프로젝트 전용 위키 커맨드
-├── .harness/state/             세션 밖 기억 (goal · progress · decisions)
+├── .githooks/                  push 게이트 — 위키 기록 없는 push 차단
+├── .harness/state/             세션 밖 기억 (goal · progress)
 ├── docs/
 │   ├── programmers-protocol.md   프로토콜 리버스 엔지니어링 (실측 근거)
 │   ├── development-rules.md      코딩 컨벤션
@@ -92,6 +93,9 @@ programmers-tracker/            (이 저장소)
 ps-records/                     (별도 저장소 — 서버가 생성)
 └── Obsidian vault 로 열면 대시보드·약점 분석·복습 큐를 GUI 로 본다
 ```
+
+> 클론 후 1회: `git config core.hooksPath .githooks` — push 게이트 활성화.
+> Claude Code 는 세션 시작 훅이 자동으로 설정한다.
 
 ---
 

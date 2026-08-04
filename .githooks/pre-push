@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# wiki push gate — push 범위에 docs/llm-wiki/ 변경이 없으면 차단한다.
+# 목적: 브랜치 단위 증류(/wiki-ingest) 강제. 결정·노하우가 기록 없이 publish 되는 것을 막는다.
+# 원칙: fail-open — git 오류·예상 밖 입력은 전부 통과. 이 게이트는 "무의식적 누락" 방지
+# 장치이지 우회 방지 장치가 아니다. 의도적 예외는 커밋 트레일러 `Wiki-Skip: <사유>` 로 남긴다.
+# 근거: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.3
+set -u
+
+WIKI_DIR="docs/llm-wiki/"
+Z40="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_ref:-}" ] && continue
+
+  # 브랜치만 게이트한다 — 태그·notes 는 통과.
+  # remote_ref 기준이어야 한다: local_ref 는 refspec 소스 리터럴이라
+  # `git push origin HEAD` 시 "HEAD" 로 온다 (실측 — E2E S1).
+  case "$remote_ref" in
+    refs/heads/*) ;;
+    *) continue ;;
+  esac
+
+  # 브랜치 삭제 push — 검사할 커밋이 없다
+  [ "$local_sha" = "$Z40" ] && continue
+
+  if [ "$remote_sha" = "$Z40" ]; then
+    # 신규 브랜치: 어느 리모트에도 없는 커밋만 검사
+    range=("$local_sha" --not --remotes)
+  else
+    range=("$remote_sha..$local_sha")
+  fi
+
+  # push 되는 새 커밋 수 — 0이면 새로 공개되는 것이 없다 (기존 커밋에 브랜치 포인터만)
+  total=$(git rev-list --count "${range[@]}" -- 2>/dev/null) || { echo "wiki-gate: skip (rev-list 실패 — fail-open)" >&2; continue; }
+  [ "$total" -eq 0 ] && continue
+
+  # 범위 안에 위키 변경이 있으면 통과
+  wiki=$(git rev-list --count "${range[@]}" -- "$WIKI_DIR" 2>/dev/null) || { echo "wiki-gate: skip (rev-list 실패 — fail-open)" >&2; continue; }
+  if [ "$wiki" -gt 0 ]; then
+    echo "wiki-gate: pass — $WIKI_DIR 변경 포함. PR 전 /wiki-lint 권장." >&2
+    continue
+  fi
+
+  # 탈출구: 범위 내 커밋의 Wiki-Skip 트레일러 (사유를 감사 흔적으로 남긴다)
+  reason=$(git log "${range[@]}" --format='%(trailers:key=Wiki-Skip,valueonly)' 2>/dev/null | grep -m1 . || true)
+  if [ -n "$reason" ]; then
+    echo "wiki-gate: skip by trailer — Wiki-Skip: $reason" >&2
+    continue
+  fi
+
+  echo "" >&2
+  echo "✖ wiki-gate: push 범위($total commits)에 $WIKI_DIR 변경이 없습니다." >&2
+  echo "  이 브랜치의 결정·노하우를 먼저 기록하세요: /wiki-ingest" >&2
+  echo "  기록할 것이 정말 없다면 사유를 트레일러로 남기세요:" >&2
+  echo "    git commit --amend --no-edit --trailer 'Wiki-Skip: <사유>'" >&2
+  exit 1
+done
+
+exit 0
