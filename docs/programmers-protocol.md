@@ -1,57 +1,57 @@
-# 프로그래머스 채점 프로토콜 리버스 엔지니어링
+# Programmers Grading Protocol Reverse Engineering
 
-작성일: 2026-08-04
-대상: `school.programmers.co.kr` 코딩테스트 연습 (`/learn/courses/30/lessons/{lessonId}`)
+Date: 2026-08-04
+Target: `school.programmers.co.kr` coding test practice (`/learn/courses/30/lessons/{lessonId}`)
 
-## 요약
+## Summary
 
-프로그래머스의 "제출 후 채점하기"는 REST API가 아니라 **Rails ActionCable WebSocket**이다.
-버튼은 `channel.perform("submit", {codes})`를 부르는 껍데기일 뿐이며,
-동일한 메시지를 직접 보내면 브라우저 UI 없이 채점이 가능하다.
+Programmers' "submit and grade" is not a REST API but a **Rails ActionCable WebSocket**.
+The button is just a shell that calls `channel.perform("submit", {codes})`,
+and sending the same message directly grades the code without any browser UI.
 
-**엔드투엔드 검증 완료** — 알고리즘 문제와 SQL 문제 양쪽 모두 로컬 코드를 WebSocket으로
-제출해 100점 통과를 확인했다 (풀이 수 90 → 92, 레이팅 1371 → 1372).
+**End-to-end verified** — for both an algorithm problem and a SQL problem, local code was
+submitted over the WebSocket and passed with a score of 100 (solved count 90 → 92, rating 1371 → 1372).
 
-## 1. 접속 정보
+## 1. Connection Info
 
-| 항목 | 값 |
+| Item | Value |
 |---|---|
 | WebSocket | `wss://ws.programmers.co.kr:443/cable` |
-| 서브프로토콜 | `actioncable-v1-json` |
-| 인증 | `_session_production` 쿠키 (HttpOnly) |
+| Subprotocol | `actioncable-v1-json` |
+| Auth | `_session_production` cookie (HttpOnly) |
 
-WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 읽는다.
+The WebSocket URL is read from `<meta name="action-cable-url">` on the problem page.
 
-## 2. 문제 유형별 채널
+## 2. Channels by Problem Type
 
-`data-challengeable-type` 속성으로 판별한다.
+Determined by the `data-challengeable-type` attribute.
 
-| 유형 | `challengeable_type` | 채널 | 검증 |
+| Type | `challengeable_type` | Channel | Verified |
 |---|---|---|---|
-| 알고리즘 | `algorithm` | `Challenge::AlgorithmChannel` | ✅ |
+| Algorithm | `algorithm` | `Challenge::AlgorithmChannel` | ✅ |
 | SQL | `database` | `Challenge::DatabaseChannel` | ✅ |
 
-번들에는 `Challenge::SqlChannel`도 존재하나, 코딩테스트 연습의 SQL 문제는
-전부 `database` 타입이므로 `DatabaseChannel`을 쓴다. `SqlChannel`은 미검증.
+The bundle also contains `Challenge::SqlChannel`, but every SQL problem in the coding
+test practice is of type `database`, so `DatabaseChannel` is used. `SqlChannel` is unverified.
 
-그 외 존재하는 채널(전부 미검증): `Challenge::ApiChannel`, `Challenge::DataScienceChannel`,
+Other channels that exist (all unverified): `Challenge::ApiChannel`, `Challenge::DataScienceChannel`,
 `Challenge::EssayChannel`, `Challenge::QuizChannel`, `Challenge::WebChannel`,
-`Challenge::VscodeChannel`, `Live::AlgorithmChannel`, `TryoutChannel` 등.
+`Challenge::VscodeChannel`, `Live::AlgorithmChannel`, `TryoutChannel`, etc.
 
-구독 파라미터 형태는 모든 채널이 동일하며 `channel` 이름만 다르다.
+The subscription parameter shape is identical across all channels; only the `channel` name differs.
 
-## 3. 필요한 식별자
+## 3. Required Identifiers
 
-문제 페이지(`?language=<lang>`)의 HTML에서 전부 추출된다. **로그인 불필요.**
+All extracted from the HTML of the problem page (`?language=<lang>`). **No login required.**
 
-| 이름 | 출처 | 언어 의존 |
+| Name | Source | Language-dependent |
 |---|---|---|
-| `lesson_id` | URL 경로 / `data-lesson-id` | ✗ |
-| `challengeable_id` | `data-challengeable-id` 속성 | **✗ 언어 무관** |
-| `challengeable_type` | `data-challengeable-type` 속성 | ✗ |
-| codes 키 | `<input data-type="code">` 의 `id` 속성 | **✓ 언어별로 다름** |
+| `lesson_id` | URL path / `data-lesson-id` | ✗ |
+| `challengeable_id` | `data-challengeable-id` attribute | **✗ language-independent** |
+| `challengeable_type` | `data-challengeable-type` attribute | ✗ |
+| codes key | `id` attribute of `<input data-type="code">` | **✓ differs per language** |
 
-실측:
+Measured:
 
 ```
 120804 (알고리즘)  challengeable_id=14643 고정
@@ -60,14 +60,15 @@ WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 �
                    codes키: mysql=86909, oracle=86910
 ```
 
-> **함정**: `challengeable_id`와 codes 키는 서로 다른 값이다.
-> codes 키를 `challengeable_id`로 잘못 보내면 **구독은 승인되고 테스트케이스도 정상 실행되지만**,
-> 결과 확정 단계에서 `{"type":"error","msg":"내부적인 오류가 발생했습니다"}`로 조용히 실패한다.
-> 실제로 이 혼동 때문에 초기 시도가 반복 실패했다. 디버깅하기 고약한 함정이므로 주의.
+> **Trap**: `challengeable_id` and the codes key are different values.
+> If you mistakenly send the codes key as `challengeable_id`, **the subscription is confirmed
+> and the testcases even run normally**, but the result-finalization step silently fails with
+> `{"type":"error","msg":"내부적인 오류가 발생했습니다"}` ("an internal error occurred").
+> This confusion actually caused repeated failures in early attempts. A nasty trap to debug — beware.
 
-지원 언어 13종: `c, cpp, csharp, go, java, javascript, kotlin, python3, ruby, scala, swift, mysql, oracle`
+13 supported languages: `c, cpp, csharp, go, java, javascript, kotlin, python3, ruby, scala, swift, mysql, oracle`
 
-## 4. 메시지 시퀀스
+## 4. Message Sequence
 
 ```jsonc
 // ← 서버
@@ -86,14 +87,15 @@ WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 �
  "data":"{\"action\":\"submit\",\"codes\":{\"49598\":\"class Solution { … }\"}}"}
 ```
 
-`identifier`는 구독 시 보낸 문자열과 **바이트 단위로 동일**해야 한다 (ActionCable이 키로 사용).
+The `identifier` must be **byte-for-byte identical** to the string sent at subscription
+(ActionCable uses it as the key).
 
-`{"type":"ping"}` 은 3초마다 오는 하트비트이므로 무시한다.
+`{"type":"ping"}` is a heartbeat arriving every 3 seconds; ignore it.
 
-모든 응답은 `{"identifier":"…","message":{…}}` 로 감싸여 온다.
-`message.action` 은 요청한 액션, `message.type` 이 세부 종류다.
+Every response arrives wrapped as `{"identifier":"…","message":{…}}`.
+`message.action` is the requested action; `message.type` is the specific kind.
 
-## 5. 알고리즘 문제 응답 (실측)
+## 5. Algorithm Problem Responses (measured)
 
 ```jsonc
 {"action":"submit","type":"start","msg":"채점을 시작합니다."}
@@ -118,12 +120,12 @@ WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 �
 {"action":"submit","type":"finish"}
 ```
 
-**오답도 동일한 시퀀스**로 오며 `passed:false`, `userScore`에 부분점수가 담긴다.
-실측: 16개 중 1개 통과 → `"userScore":"1.4"` (테스트케이스별 배점이 균등하지 않음).
+**Wrong answers arrive in the same sequence**, with `passed:false` and the partial score in
+`userScore`. Measured: 1 of 16 passed → `"userScore":"1.4"` (per-testcase weights are not uniform).
 
-## 6. SQL 문제 응답 (실측)
+## 6. SQL Problem Responses (measured)
 
-**알고리즘과 필드 명명 규칙이 다르다. 파서는 양쪽을 모두 처리해야 한다.**
+**Field naming differs from algorithm problems. The parser must handle both.**
 
 ### submit
 
@@ -141,7 +143,7 @@ WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 �
  "challengeable_type":"database","challengeable_id":2778}
 ```
 
-### run (예제 실행 — 제출 이력에 남지 않음)
+### run (example execution — leaves no submission history)
 
 ```jsonc
 {"action":"run","type":"start","testcase_ids":[5437],
@@ -152,46 +154,47 @@ WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 �
  "challengeable_type":"database","challengeable_id":2778}
 ```
 
-`returned_rows`는 **이중 인코딩된 JSON 문자열**이다. 한 번 더 파싱해야 테이블이 나온다.
-`run`과 `submit`은 서로 다른 테스트케이스를 쓴다 (예제 5437 vs 채점 5438).
+`returned_rows` is a **double-encoded JSON string**. It must be parsed once more to get the table.
+`run` and `submit` use different testcases (example 5437 vs grading 5438).
 
-### 알고리즘 대비 차이 요약
+### Differences from algorithm problems
 
-| 항목 | 알고리즘 | SQL |
+| Item | Algorithm | SQL |
 |---|---|---|
-| 필드 명명 | camelCase (`testcaseId`) | **snake_case** (`testcase_id`) |
-| `test_group` 메시지 | 있음 | **없음** (`start`에 `testcase_ids` 포함) |
-| 케이스별 시간/메모리 | `run_time`, `memory_size` | **없음** |
-| `scores` 배열 | 있음 | **없음** |
-| 레이팅 변화 | `isNewRating`, `old/newUserRating` | **없음 — 레이팅에 영향 없음** |
-| `finish` 메시지 | 있음 | **없음 — `result_lesson_challenge`에서 끝** |
-| 타입/ID 에코 | 결과에만 | **모든 메시지에 포함** |
-| 테스트케이스 수 | 16개 (예시) | 1개 |
+| Field naming | camelCase (`testcaseId`) | **snake_case** (`testcase_id`) |
+| `test_group` message | present | **absent** (`start` carries `testcase_ids`) |
+| Per-case time/memory | `run_time`, `memory_size` | **absent** |
+| `scores` array | present | **absent** |
+| Rating change | `isNewRating`, `old/newUserRating` | **absent — no rating impact** |
+| `finish` message | present | **absent — ends at `result_lesson_challenge`** |
+| Type/ID echo | in the result only | **in every message** |
+| Testcase count | 16 (example) | 1 |
 
-> **주의**: SQL은 `finish`를 보내지 않는다. `finish` 대기로 종료 판정하면 무한 대기한다.
-> `result_lesson_challenge` 수신을 종료 조건에 포함해야 한다.
+> **Caution**: SQL never sends `finish`. Detecting completion by waiting for `finish` hangs forever.
+> Receiving `result_lesson_challenge` must be part of the termination condition.
 
-## 7. 실패 유형 판별 (실측)
+## 7. Failure Type Classification (measured)
 
-### submit 경로 — `msg` 문자열로만 판별 가능
+### submit path — distinguishable only by the `msg` string
 
-`testcase` 메시지의 `msg`가 유일한 단서다. `exitCode`나 `stderr`는 **오지 않는다.**
+The `msg` of the `testcase` message is the only clue. `exitCode` and `stderr` **never arrive.**
+(Measured `msg` strings kept verbatim — `통과` = pass, `실패` = failure.)
 
-| 유형 | `msg` | `run_time` / `memory_size` |
+| Type | `msg` | `run_time` / `memory_size` |
 |---|---|---|
-| 통과 | `"통과 (0.01ms, 85.2MB)"` | 값 있음 |
-| 오답 | `"실패 (0.01ms, 75.3MB)"` | 값 있음 |
-| 런타임 에러 | `"실패 (런타임 에러)"` | **`null`** |
-| 컴파일 에러 | `"실패 (런타임 에러)"` | **`null`** |
-| 시간 초과 | `"실패 (시간 초과)"` | **`null`** |
+| Pass | `"통과 (0.01ms, 85.2MB)"` | present |
+| Wrong answer | `"실패 (0.01ms, 75.3MB)"` | present |
+| Runtime error | `"실패 (런타임 에러)"` | **`null`** |
+| Compile error | `"실패 (런타임 에러)"` | **`null`** |
+| Timeout | `"실패 (시간 초과)"` | **`null`** |
 
-> **컴파일 에러와 런타임 에러는 submit 응답만으로 구분할 수 없다.**
-> 둘 다 `"실패 (런타임 에러)"`로 보고된다. 구분하려면 `run` 액션을 써야 한다.
+> **Compile errors and runtime errors cannot be distinguished from the submit response alone.**
+> Both are reported as `"실패 (런타임 에러)"`. Use the `run` action to tell them apart.
 
-세 경우 모두 `result_lesson_challenge`는 `userScore: "0.0"`, `passed: false`로 오고
-`finish`까지 정상적으로 도착한다.
+In all three cases `result_lesson_challenge` arrives with `userScore: "0.0"`, `passed: false`,
+and `finish` arrives normally.
 
-### run 경로 — 에러 전문을 준다
+### run path — gives the full error text
 
 ```jsonc
 // 예제 테스트케이스가 start에 통째로 실려온다 (본문 HTML 파싱 불필요!)
@@ -208,15 +211,15 @@ WebSocket 주소는 문제 페이지의 `<meta name="action-cable-url">`에서 �
  "msg":"Exception in thread &quot;main&quot; java.lang.ArrayIndexOutOfBoundsException: Index 1000 out of bounds for length 5<br/>\tat Solution.solution(Unknown Source)<br/>\tat SolutionTest.lambda$main$0(Unknown Source)<br/>…"}
 ```
 
-- `msg`는 **HTML 이스케이프**되어 있다. 줄바꿈은 `<br/>`, 따옴표는 `&quot;` / `&#39;`.
-  표시하려면 언이스케이프 + `<br/>` → `\n` 치환이 필요하다.
-- `index`는 **몇 번째 예제에서 터졌는지**를 가리킨다 (0-based).
-- 알고리즘 `run`의 `input`은 `"3, 2"` 처럼 쉼표로 이어붙인 인자 문자열이다.
+- `msg` is **HTML-escaped**. Newlines are `<br/>`, quotes are `&quot;` / `&#39;`.
+  Displaying it requires unescaping plus replacing `<br/>` → `\n`.
+- `index` indicates **which example blew up** (0-based).
+- The `input` of an algorithm `run` is a comma-joined argument string like `"3, 2"`.
 
-**`run`의 `start`에 담긴 `testcases`가 로컬 스캐폴딩의 최적 경로다.**
-문제 본문 HTML을 파싱해 표를 긁을 필요 없이 예제 입출력을 구조화된 형태로 바로 받는다.
+**The `testcases` carried in `run`'s `start` is the best path for local scaffolding.**
+Example inputs/outputs arrive already structured — no need to parse the problem body HTML for tables.
 
-## 8. 전체 type 카탈로그 (번들 추출)
+## 8. Full type Catalog (extracted from the bundle)
 
 ```
 submit : start, test_group, testcase, result_without_score, result,
@@ -226,31 +229,31 @@ save   : result, failed_git, failed_save
 reset  : completed, failed
 ```
 
-`submit` 응답에 등장 가능한 필드:
+Fields that can appear in `submit` responses:
 `category, challengeableId, exitCode, finishCondition, isNewRating, msg,
 newUserRating, oldUserRating, passed, passingScore, perfectScore, scores,
 scoringUnit, stderr, testcaseId, testcaseIds, type, userScore, run_time, memory_size`
 
-알고리즘 `run` 응답 필드 (번들 기준):
+Algorithm `run` response fields (per the bundle):
 `exitCode, hideResult, index, msg, passed, passedCount, stdout, stderr, testcases, totalCount, type`
 
-실측에서는 에러 발생 시 `type:"error"` + `msg`(전문)로 끊기며, `stdout`은 함께 오지 않았다.
-정상 실행 시 `stdout`이 오는지는 미검증.
+In measurements, on error the stream ended with `type:"error"` + `msg` (full text), and `stdout`
+did not come along. Whether `stdout` arrives on successful execution is unverified.
 
-### 기타 액션
+### Other actions
 
-- `run` — 예제 테스트케이스만 실행. 제출 이력에 남지 않음. ✅ 알고리즘·SQL 양쪽 검증
-- `save` — 코드 자동저장. 응답에 `challengeableId`가 실려오므로 id 검증에 활용 가능. ✅ 검증
-- `stop` / `reset` / `finish` — 실행 중단 / 초기화 / 시험 종료. 미검증
+- `run` — runs example testcases only. Leaves no submission history. ✅ verified for both algorithm and SQL
+- `save` — code autosave. The response carries `challengeableId`, usable for id validation. ✅ verified
+- `stop` / `reset` / `finish` — abort execution / reset / end exam. Unverified
 
-## 9. 문제 목록 API
+## 9. Problem List API
 
 ```
 GET /api/v2/school/challenges/?perPage=100&page=1
 GET /api/v2/school/challenges/?perPage=100&statuses[]=solved&page=1
 ```
 
-**인증 없이도 동작**하며, 로그인 시 `status`가 `solved`/`unsolved`로 갈린다.
+**Works without authentication**; when logged in, `status` splits into `solved`/`unsolved`.
 
 ```jsonc
 {"page":1,"perPage":100,"totalPages":7,"totalEntries":689,
@@ -261,35 +264,36 @@ GET /api/v2/school/challenges/?perPage=100&statuses[]=solved&page=1
             "status":"unsolved","openedAt":"…","aiCommentable":false}]}
 ```
 
-전체 689문제. `partTitle`이 유형/출처(해시, DFS/BFS, SELECT, 2024 KAKAO …)라
-약점 분석 축으로 쓸 수 있다.
+689 problems in total. `partTitle` is a type/source label (`해시` (hash), DFS/BFS, SELECT,
+2024 KAKAO …), so it can serve as a weak-point analysis axis.
 
-- 레벨 분포: `Lv0 240, Lv1 119, Lv2 155, Lv3 109, Lv4 45, Lv5 21`
-- SQL 문제 106개: `SELECT 33, GROUP BY 24, String·Date 19, JOIN 12, SUM·MAX·MIN 10, IS NULL 8`
+- Level distribution: `Lv0 240, Lv1 119, Lv2 155, Lv3 109, Lv4 45, Lv5 21`
+- 106 SQL problems: `SELECT 33, GROUP BY 24, String·Date 19, JOIN 12, SUM·MAX·MIN 10, IS NULL 8`
 
-## 10. 브로드캐스트 — 수동 관찰 (실측)
+## 10. Broadcast — Passive Observation (measured)
 
-**같은 `identifier`를 구독한 모든 클라이언트가 동일한 메시지를 동시에 받는다.**
-ActionCable 스트림이 커넥션이 아니라 채널 파라미터 기준으로 스코프되기 때문이다.
+**Every client subscribed to the same `identifier` receives identical messages simultaneously.**
+This is because ActionCable streams are scoped by channel parameters, not by connection.
 
-즉 **서버가 채널을 구독만 해두면, 사용자가 브라우저에서 누른 채점 결과가
-그대로 서버에도 흘러들어온다.** 프록시도 브라우저 확장의 트래픽 가로채기도 필요 없다.
+In other words, **if the server merely keeps a subscription to the channel, grading results the
+user triggers in the browser flow into the server as well.** No proxy, no browser-extension
+traffic interception needed.
 
-### 검증 1 — 같은 페이지 내 소켓 2개
+### Verification 1 — two sockets on the same page
 
-소켓 B가 구독만 하고 대기, 소켓 A가 `run` 발사:
+Socket B only subscribes and waits; socket A fires `run`:
 
 ```
 A_received: start@2050  testcase@3150  testcase@3150  result@3150
 B_received: start@2050  testcase@3150  testcase@3150  result@3150
 ```
 
-동일 메시지, 동일 시각.
+Identical messages, identical timestamps.
 
-### 검증 2 — 별도 프로세스 (핵심)
+### Verification 2 — a separate process (the key one)
 
-Python 프로세스가 `_session_production` 쿠키만으로 접속해 구독하고,
-**브라우저에서** `run`을 발사:
+A Python process connects and subscribes with only the `_session_production` cookie,
+and `run` is fired **from the browser**:
 
 ```
 [ 0.40s] CONNECTED subprotocol=actioncable-v1-json
@@ -300,9 +304,9 @@ Python 프로세스가 `_session_production` 쿠키만으로 접속해 구독하
 [14.07s] BROADCAST action=run type=result
 ```
 
-브라우저가 받은 4건과 정확히 일치. **수동 관찰 아키텍처가 성립한다.**
+Exactly matches the 4 messages the browser received. **The passive-observation architecture holds.**
 
-접속 시 필요한 헤더:
+Headers required on connect:
 
 ```
 Cookie: _session_production=…; tracking_id=…; locale=…; timezone=…
@@ -310,19 +314,20 @@ Origin: https://school.programmers.co.kr
 Sec-WebSocket-Protocol: actioncable-v1-json
 ```
 
-### 한계 — 와일드카드 구독이 없다
+### Limitation — no wildcard subscription
 
-`identifier`는 글자 단위로 일치해야 하며 `challengeable_id: *` 같은 패턴 구독이 없다.
-"이 사용자의 모든 제출"을 구독하는 방법도 없다. 따라서 **서버는 사용자가 어떤 문제를
-열었는지 미리 알아야** 해당 채널을 구독할 수 있다.
+The `identifier` must match character-for-character; there is no pattern subscription like
+`challengeable_id: *`. There is also no way to subscribe to "all submissions of this user".
+Therefore **the server must know in advance which problem the user has opened** in order to
+subscribe to that channel.
 
-문제 689개 × 언어 13종이라 전부 구독하는 것은 비현실적이다.
+With 689 problems × 13 languages, subscribing to everything is unrealistic.
 
-### 결과 메시지에 코드는 없다 — 별도로 회수한다
+### Result messages carry no code — retrieve it separately
 
-브로드캐스트에는 소스코드가 포함되지 않는다. 대신 **로그인 상태로 문제 페이지를 받으면
-사용자가 마지막으로 저장한 코드**가 들어있다 (편집 중 `save` 액션으로 자동저장되며,
-`submit` 시에도 저장된다).
+Broadcasts contain no source code. Instead, **the problem page fetched while logged in contains
+the user's last saved code** (autosaved by the `save` action while editing, and also saved
+on `submit`).
 
 ```
 GET /learn/courses/30/lessons/{lessonId}?language={lang}   (인증 필요)
@@ -330,96 +335,98 @@ GET /learn/courses/30/lessons/{lessonId}?language={lang}   (인증 필요)
   → <input id="initial_code_{id}" value="<문제 초기 골격>">   비교용
 ```
 
-실측:
+Measured:
 
 ```
 59036  savedCode: "SELECT ANIMAL_ID, NAME FROM ANIMAL_INS WHERE INTAKE_CONDITION = 'Sick'…"
 120804 savedCode: "class Solution { public int solution(int num1, int num2) { return num1 * num2; } }"
 ```
 
-## 11. 제출 이력 API는 없다
+## 11. There Is No Submission History API
 
-지나간 제출을 조회할 방법이 없다. 번들의 API 경로를 전수 확인한 결과 제출 관련
-엔드포인트는 `/essay_submissions`, `/quiz_submissions`, `/skill_checks/…/source.js` 뿐이며
-전부 다른 제품(에세이·퀴즈·역량진단)용이다. 코딩테스트 연습용은 존재하지 않는다.
+Past submissions cannot be queried. An exhaustive check of the API paths in the bundle found
+only `/essay_submissions`, `/quiz_submissions`, and `/skill_checks/…/source.js` as
+submission-related endpoints, all belonging to other products (essay · quiz · skill check).
+None exists for coding test practice.
 
-조회 가능한 것은 두 가지뿐이다.
+Only two things are queryable.
 
 ```
 GET /api/v2/school/challenges/?statuses[]=solved      풀었다/못 풀었다
 GET /api/v1/main/open-challenge-activities?year=2026  날짜별 시도 횟수 집계
 ```
 
-후자의 응답:
+The latter's response:
 
 ```jsonc
 {"solvedChallengeCount":43,"attemptedChallengeCount":46,"attemptTotalCount":449,
  "attempts":[["2025-01-02",35],["2025-01-03",9], …]}   // 날짜와 횟수뿐
 ```
 
-문제도 코드도 성패도 없다. **채점 결과는 그 순간에 잡지 않으면 영구히 소실된다.**
+No problem, no code, no pass/fail. **A grading result not captured at that moment is lost forever.**
 
-## 12. 문제 본문 · 입출력 예제
+## 12. Problem Body · I/O Examples
 
-`GET /learn/courses/30/lessons/{lessonId}?language=java` (인증 불필요)
+`GET /learn/courses/30/lessons/{lessonId}?language=java` (no auth required)
 
-- 본문: `div.guide-section-description > div.markdown`
-- 입출력 예제: 본문 내 `<table>` → `[['num1','num2','result'], ['2','3','-1'], …]`
-- 언어별 초기 코드: `<input data-type="code" data-language="java" value="…">`
-- SQL은 본문에 테이블 스키마(컬럼명·타입·Nullable)가 표로 들어있다
+- Body: `div.guide-section-description > div.markdown`
+- I/O examples: `<table>` inside the body → `[['num1','num2','result'], ['2','3','-1'], …]`
+- Per-language initial code: `<input data-type="code" data-language="java" value="…">`
+- For SQL, the body contains the table schema (column names · types · Nullable) as a table
 
-로컬 스캐폴딩에 필요한 재료가 전부 나온다.
+Everything needed for local scaffolding is available here.
 
-## 13. 주의사항 (실측 기반)
+## 13. Caveats (measurement-based)
 
-1. **채점 요청은 열려 있는 페이지와 무관하다.** 12943 페이지에서 120803을 제출해도 정상 동작한다.
-   커넥션 하나로 임의의 문제를 채점할 수 있다.
+1. **Grading requests are independent of the open page.** Submitting 120803 from the 12943 page
+   works fine. Any problem can be graded over a single connection.
 
-2. **같은 문제에 연속 제출하면 서버 상태가 꼬인다.** 동일 코드 재제출 시 캐시된 결과가
-   1초 내에 돌아오고 결과 확정이 `error`로 실패했다. 제출 간 간격을 두어야 한다.
+2. **Consecutive submissions to the same problem corrupt server state.** On resubmitting identical
+   code, a cached result came back within 1 second and result finalization failed with `error`.
+   Leave a gap between submissions.
 
-3. **동시 제출 금지.** 같은 문제에 WebSocket을 겹쳐 열면 `error`가 발생한다.
-   원 UI도 `channel.isIdle()`로 중복 실행을 막는다.
+3. **No concurrent submissions.** Opening overlapping WebSockets for the same problem raises
+   `error`. The original UI also prevents duplicate runs with `channel.isIdle()`.
 
-4. `enabledDailyLimit` / `dailyLimitType` / `dailyLimitProgress` 필드가 존재한다.
-   연습문제에는 적용되지 않는 것으로 보이나 데브코스 과제에는 일일 제한이 있을 수 있다.
+4. `enabledDailyLimit` / `dailyLimitType` / `dailyLimitProgress` fields exist.
+   They appear not to apply to practice problems, but Dev-Course assignments may have daily limits.
 
-5. **채점 소요 시간 실측 — 클라이언트 타임아웃 설계에 중요:**
+5. **Measured grading durations — important for client timeout design:**
 
-   | 상황 | 소요 |
+   | Situation | Duration |
    |---|---|
-   | 알고리즘 정상 채점 (Java, 16케이스) | 6~9초 |
-   | 알고리즘 런타임/컴파일 에러 | 4~7초 |
-   | **알고리즘 시간 초과 (16케이스)** | **약 87초** |
-   | SQL 채점 | 1~2초 |
-   | `run` (예제 실행) | 1~2초 |
+   | Algorithm normal grading (Java, 16 cases) | 6~9 s |
+   | Algorithm runtime/compile error | 4~7 s |
+   | **Algorithm timeout (16 cases)** | **~87 s** |
+   | SQL grading | 1~2 s |
+   | `run` (example execution) | 1~2 s |
 
-   시간 초과 케이스가 압도적으로 느리다. 클라이언트 타임아웃은 **최소 120초**를 잡아야
-   정상적인 시간초과 판정을 중간에 끊지 않는다.
+   The timeout case is overwhelmingly the slowest. The client timeout must be **at least
+   120 seconds** so a legitimate timeout verdict is not cut off midway.
 
-## 14. 미검증 항목
+## 14. Unverified Items
 
-- 효율성 테스트가 있는 문제의 `scores` 배열 2항목 형태
-- 알고리즘 `run` 정상 실행 시 `stdout` 회수 여부
-- `Challenge::SqlChannel` (연습문제는 전부 `database` 타입이라 미사용)
-- 레이트리밋의 정확한 규칙
-- Oracle 제출
-- 메모리 초과(`메모리 초과`) 메시지 — 미유발
+- The 2-entry `scores` array shape for problems with efficiency tests
+- Whether `stdout` is retrievable on a successful algorithm `run`
+- `Challenge::SqlChannel` (unused — practice problems are all `database` type)
+- Exact rate-limit rules
+- Oracle submissions
+- Memory-limit-exceeded (`메모리 초과`) message — never triggered
 
-## 15. 검증 로그
+## 15. Verification Log
 
-| # | 문제 | 유형 | 액션 | 결과 |
+| # | Problem | Type | Action | Result |
 |---|---|---|---|---|
-| 1 | 120803 | 알고리즘 | submit | 오답 → `result_lesson_challenge` 수신, 1.4점 (id 49587 — 잘못된 값) |
-| 2~5 | 120803 | 알고리즘 | submit | 정답 → 16/16 통과하나 결과 확정 `error` (id 혼동 + 반복 제출) |
-| 6 | **120804** | 알고리즘 | submit | **100점, 레이팅 1371→1372, `finish` 정상** (id 14643) |
-| 7 | **131528** | **SQL** | submit | **100점, `finish` 없이 종료** (id 2778) |
-| 8 | 131528 | SQL | `run` | `returned_rows` 수신, 제출 이력 없음 |
-| 9 | 120820 | 알고리즘 | submit | 컴파일 에러 → 12케이스 전부 `"실패 (런타임 에러)"`, 0점 |
-| 10 | 120810 | 알고리즘 | submit | 런타임 예외 → 14케이스 전부 `"실패 (런타임 에러)"`, 0점 |
-| 11 | 120805 | 알고리즘 | submit | 무한 루프 → 16케이스 전부 `"실패 (시간 초과)"`, 0점, **87초 소요** |
-| 12 | 120820 | 알고리즘 | `run` | **컴파일러 출력 전문 회수** (`/Solution.java:3: error: ';' expected`) |
-| 13 | 120810 | 알고리즘 | `run` | **스택 트레이스 전문 회수** (`ArrayIndexOutOfBoundsException`) |
+| 1 | 120803 | Algorithm | submit | Wrong answer → `result_lesson_challenge` received, score 1.4 (id 49587 — wrong value) |
+| 2~5 | 120803 | Algorithm | submit | Correct → 16/16 passed but result finalization `error` (id confusion + repeated submission) |
+| 6 | **120804** | Algorithm | submit | **Score 100, rating 1371→1372, `finish` normal** (id 14643) |
+| 7 | **131528** | **SQL** | submit | **Score 100, ended without `finish`** (id 2778) |
+| 8 | 131528 | SQL | `run` | `returned_rows` received, no submission history left |
+| 9 | 120820 | Algorithm | submit | Compile error → all 12 cases `"실패 (런타임 에러)"`, score 0 |
+| 10 | 120810 | Algorithm | submit | Runtime exception → all 14 cases `"실패 (런타임 에러)"`, score 0 |
+| 11 | 120805 | Algorithm | submit | Infinite loop → all 16 cases `"실패 (시간 초과)"`, score 0, **took 87 s** |
+| 12 | 120820 | Algorithm | `run` | **Full compiler output retrieved** (`/Solution.java:3: error: ';' expected`) |
+| 13 | 120810 | Algorithm | `run` | **Full stack trace retrieved** (`ArrayIndexOutOfBoundsException`) |
 
-풀이 수 90 → 92 증가로 서버 반영 확인. 레이팅 1371 → 1372.
-9~11번은 의도적 실패 제출이므로 해당 문제들은 미해결 상태로 남아 있다.
+Server-side effect confirmed by the solved count rising 90 → 92. Rating 1371 → 1372.
+Entries 9~11 were intentional failing submissions, so those problems remain unsolved.
