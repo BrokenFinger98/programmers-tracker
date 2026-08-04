@@ -1,30 +1,31 @@
 # programmers-tracker Wiki — Index
 
-전체 페이지 카탈로그. 검색 시 **가장 먼저 읽는다.**
-새 페이지는 반드시 여기 등록한다 (고아 금지). append 항목은 날짜로 시작한다.
+Full page catalog. **Read this first** when searching.
+Every new page must be registered here (no orphans). Append entries start with the date.
 
 ## Decisions
-- 2026-08-04 [[decisions/2026-08-04-passive-broadcast-observation]] — 채점 연동 = 브로드캐스트 수동 관찰
-- 2026-08-04 [[decisions/2026-08-04-solve-in-web-editor]] — 코드 작성은 프로그래머스 웹 편집기에서
-- 2026-08-04 [[decisions/2026-08-04-solved-ac-tag-vocabulary]] — 태그 어휘는 solved.ac 180종
-- 2026-08-04 [[decisions/2026-08-04-reject-vector-db]] — 벡터 DB · 그래프 DB 기각
-- 2026-08-04 [[decisions/2026-08-04-no-ai-debugger]] — AI 디버거 제어 미채택
-- 2026-08-04 [[decisions/2026-08-04-two-public-repos]] — 저장소 2개 · 양쪽 public
-- 2026-08-04 [[decisions/2026-08-04-decisions-live-in-wiki]] — 결정 기록은 위키 ADR 단일 권위
-- 2026-08-04 [[decisions/2026-08-04-wiki-push-gate]] — push 게이트로 증류 강제 (native pre-push)
-- 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — 전역/프로젝트 위키 3계층 분리
+- 2026-08-04 [[decisions/2026-08-04-passive-broadcast-observation]] — Judging integration = passive broadcast observation
+- 2026-08-04 [[decisions/2026-08-04-solve-in-web-editor]] — Code is written in the Programmers web editor
+- 2026-08-04 [[decisions/2026-08-04-solved-ac-tag-vocabulary]] — Tag vocabulary is the solved.ac 180-tag set
+- 2026-08-04 [[decisions/2026-08-04-reject-vector-db]] — Vector DB · graph DB rejected
+- 2026-08-04 [[decisions/2026-08-04-no-ai-debugger]] — AI debugger control not adopted
+- 2026-08-04 [[decisions/2026-08-04-two-public-repos]] — Two repos · both public
+- 2026-08-04 [[decisions/2026-08-04-decisions-live-in-wiki]] — Decision records: wiki ADRs are the single authority
+- 2026-08-04 [[decisions/2026-08-04-wiki-push-gate]] — Push gate forces distillation (native pre-push)
+- 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — Global/project wikis split into 3 layers
+- 2026-08-04 [[decisions/2026-08-04-english-only-artifacts]] — All work artifacts in English
 
 ## Concepts
-- 2026-08-04 [[concepts/actioncable-broadcast-observation]] — 브로드캐스트 수동 관찰 원리와 한계
-- 2026-08-04 [[concepts/verdict-classification]] — verdict 판별과 조용한 실패 함정
+- 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits
+- 2026-08-04 [[concepts/verdict-classification]] — Verdict classification and the silent-failure trap
 
 ## Entities
-- 2026-08-04 [[entities/programmers-actioncable]] — 프로그래머스 채점기의 실체
-- 2026-08-04 [[entities/solved-ac]] — 태그 어휘 출처
-- 2026-08-04 [[entities/baekjoonhub]] — 대체 대상 선행 도구
+- 2026-08-04 [[entities/programmers-actioncable]] — What the Programmers judge actually is
+- 2026-08-04 [[entities/solved-ac]] — Source of the tag vocabulary
+- 2026-08-04 [[entities/baekjoonhub]] — The prior tool this project replaces
 
 ## Syntheses
-- 2026-08-04 [[syntheses/protocol-reverse-engineering]] — 프로토콜 규명 전말
+- 2026-08-04 [[syntheses/protocol-reverse-engineering]] — The full protocol-discovery story
 
 ## Sources
 - 2026-08-04 [[sources/2026-08-04-protocol-reverse-engineering-and-design]]

@@ -2,40 +2,44 @@
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [태그, 분류체계, solved.ac]
+tags: [tags, taxonomy, solved.ac]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md]
 ---
 
-# 태그 어휘는 solved.ac 180종을 쓴다
+# Tag vocabulary is the solved.ac 180-tag set
 
-## 맥락
-약점을 유형별로 분석하려면 문제에 알고리즘 태그가 필요하다. 그런데 **프로그래머스는
-문제별 태그를 공개하지 않는다.** `partTitle` 689개 중 알고리즘 유형은 47개(7%)뿐이고
-나머지는 대회명·난이도 묶음이다.
+## Context
+Analyzing weaknesses by type requires algorithm tags on problems. But **Programmers does
+not publish per-problem tags.** Of the 689 `partTitle` values only 47 (7%) are algorithm
+types; the rest are contest names and difficulty groupings.
 
-## 검토한 선택지
-- **A. 자체 태그 체계** — 실전 코테 유형에 맞춰 직접 정의
-- **B. solved.ac 어휘 채택** — 외부 체계를 그대로 사용
-- **C. 프로그래머스 내부 categories** — 추천 API 에서 새어나오는 값 수집
+## Options considered
+- **A. Our own tag taxonomy** — define one ourselves around real coding-test types
+- **B. Adopt the solved.ac vocabulary** — use the external taxonomy as-is
+- **C. Programmers' internal categories** — collect values leaking from the recommendation API
 
-## 결정
-**B.** solved.ac 180종을 어휘로 채택하고 AI 가 문제를 읽어 태깅한다.
+## Decision
+**B.** Adopt the 180 solved.ac tags as the vocabulary and have the AI read and tag each problem.
 
-## 이유
-A 로 17개 목록을 만들었다가 **KMP·LIS·펜윅 트리·트라이·위상정렬·조합론·분할정복이
-전부 빠진 것**을 지적받고 폐기했다. 직접 만든 목록은 반드시 빈다.
+## Rationale
+We built a 17-item list for A, then discarded it after it was pointed out that **KMP, LIS,
+Fenwick tree, trie, topological sort, combinatorics, and divide-and-conquer were all
+missing**. A hand-made list is always incomplete.
 
-solved.ac 어휘는 완전하고(180종) 계층적이며(`그래프 이론 > 그래프 탐색 > BFS`)
-한국어 네이티브다. 유지보수 부담도 없다.
+The solved.ac vocabulary is complete (180 tags), hierarchical (`그래프 이론 > 그래프 탐색 > BFS`,
+i.e. graph theory > graph traversal > BFS), and Korean-native. Zero maintenance burden.
 
-C 는 추천 API 가 문제 1건만 돌려주고 반복 호출해도 같은 값이라 전량 수집이 불가능했다.
+C was infeasible: the recommendation API returns only one problem at a time and repeats
+the same value on repeated calls, so full collection was impossible.
 
-## 받아들인 비용
-- **외부 의존이 생긴다.** 백준 온라인 저지는 2026년 5월 종료했고 solved.ac 도 언제까지일지 알 수 없다
-  → `.ps/tag-vocab.json` 스냅샷으로 고정해 완화. 원본이 사라져도 태깅·집계는 계속 동작한다
-- Cloudflare 챌린지 때문에 수집은 브라우저 컨텍스트에서 1회 수행해야 한다
+## Accepted costs
+- **An external dependency appears.** Baekjoon Online Judge shut down in May 2026, and no
+  one knows how long solved.ac will last
+  → mitigated by pinning the `.ps/tag-vocab.json` snapshot. Even if the origin disappears,
+  tagging and aggregation keep working
+- Because of the Cloudflare challenge, collection must be done once in a browser context
 
-## 결과
-2026-08-04 실측: 태그 목록 180종 수집 성공, 백준 210문제 태그 대조 완료.
+## Outcome
+Measured 2026-08-04: 180 tags collected successfully; cross-checked against tags of 210 Baekjoon problems.
