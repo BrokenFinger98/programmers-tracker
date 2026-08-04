@@ -11,5 +11,18 @@
       "Bash(git show:*)",
       "Bash(git branch:*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/inject-state.sh"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -241,7 +241,7 @@ See docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.3."
 
 **Files:**
 - Create: `.claude/hooks/inject-state.sh`
-- Modify: `.claude/settings.json` (현재 내용 `{}`)
+- Modify: `.claude/settings.json` (기존 permissions 블록 보존 — hooks 키만 merge)
 
 - [ ] **Step 1: 스크립트 작성** — 아래 전문
 
@@ -294,14 +294,17 @@ Expected (순서 포함):
 
 - [ ] **Step 3: 단위 검증 (goal.md 없는 클로너 상황 + hooksPath 자동 설치)**
 
+스크립트는 Step 5 에서야 커밋되므로 클론에는 아직 없다 — 원본 레포의 스크립트를
+절대경로로 실행한다 (스크립트는 cwd 의 git root 만 보므로 검증 의미 동일).
+
 ```bash
-W=$(mktemp -d) && git clone -q . "$W/c" && cd "$W/c"
-bash .claude/hooks/inject-state.sh </dev/null | jq -r '.hookSpecificOutput.additionalContext' | grep '^===' ; git config core.hooksPath ; cd - >/dev/null && rm -rf "$W"
+R=$(pwd) && W=$(mktemp -d) && git clone -q "$R" "$W/c" && cd "$W/c"
+bash "$R/.claude/hooks/inject-state.sh" </dev/null | jq -r '.hookSpecificOutput.additionalContext' | grep '^===' ; git config core.hooksPath ; cd "$R" && rm -rf "$W"
 ```
 
 Expected: `goal.md` 줄 **없이** progress·index 2줄만, 이어서 `.githooks` (자동 설치 확인).
 
-- [ ] **Step 4: settings.json 훅 등록** — `.claude/settings.json` 전체를 아래로 교체
+- [ ] **Step 4: settings.json 훅 등록** — 기존 키(permissions 등)를 보존하고 아래 `hooks` 키를 merge
 
 ```json
 {
