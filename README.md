@@ -113,6 +113,14 @@ Since this tool uses a private protocol, the judgment and responsibility for usi
 
 ---
 
+## Contributing
+
+Issues and PRs are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first
+(issue-first, squash-only, English-only, and a push gate that asks you to
+record decisions). AI-assisted contributions are explicitly welcome.
+
+---
+
 ## License
 
 MIT
