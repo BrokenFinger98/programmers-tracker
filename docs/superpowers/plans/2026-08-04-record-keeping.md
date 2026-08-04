@@ -1,27 +1,27 @@
-# 기록 보존 체계 구현 계획 (record-keeping)
+# Record-Keeping Implementation Plan (record-keeping)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 결정 기록을 위키 ADR 로 단일화하고, push 게이트로 증류를 강제하며, compact 후 state 를 자동 복구한다.
+**Goal:** Unify decision records under wiki ADRs as the single authority, force distillation with a push gate, and auto-restore state after compact.
 
-**Architecture:** git native pre-push 훅(`.githooks/`)이 push 범위의 `docs/llm-wiki/` 변경을 검사해 차단/통과. 프로젝트 SessionStart 훅이 state 재주입 + hooksPath 멱등 설치. `.harness/state/decisions.md` 는 참조 갱신 후 삭제.
+**Architecture:** A git native pre-push hook (`.githooks/`) inspects the push range for `docs/llm-wiki/` changes and blocks/passes. A project SessionStart hook re-injects state + idempotently installs hooksPath. `.harness/state/decisions.md` is deleted after its references are updated.
 
 **Tech Stack:** bash 5.x · jq · git hooks (pre-push) · Claude Code hooks (SessionStart)
 
-**Spec:** [`docs/superpowers/specs/2026-08-04-record-keeping-design.md`](../specs/2026-08-04-record-keeping-design.md) (커밋 8958fe4)
+**Spec:** [`docs/superpowers/specs/2026-08-04-record-keeping-design.md`](../specs/2026-08-04-record-keeping-design.md) (commit 8958fe4)
 
-**계획 단계에서 이미 확정된 사실 (재검증 불필요):**
-- parity check 완료 — `decisions.md` 6건 중 5건은 대응 ADR 이 **상위집합** (merge 불필요, 삭제만). 6번째(저장소 2개)만 ADR 신설 (Task 4)
-- 전역 `core.hooksPath` 미설정 — hooksPath 충돌 없음
-- bash 5.3 · jq `/opt/homebrew/bin/jq` · `%(trailers:key=X,valueonly)` 포맷 지원 확인
-- `scripts/check.sh` 등 Quality Gate 스크립트 **아직 미존재** (Phase 1 산출물) — 이 브랜치는 셸 시나리오 검증으로 갈음
-- 스펙 §4 에 없는 raw 세션 기록 + sources stub 을 Task 5 에 추가 — 위키 스키마가 ADR frontmatter 에 `sources:` 를 요구하고 고아 페이지를 금지하므로 스펙 누락을 계획에서 보완
+**Facts already confirmed during planning (no re-verification needed):**
+- Parity check complete — 5 of the 6 `decisions.md` entries have corresponding ADRs that are **supersets** (no merge needed, delete only). Only the 6th (two public repos) gets a new ADR (Task 4)
+- Global `core.hooksPath` unset — no hooksPath conflict
+- bash 5.3 · jq `/opt/homebrew/bin/jq` · `%(trailers:key=X,valueonly)` format support confirmed
+- Quality Gate scripts such as `scripts/check.sh` **do not exist yet** (Phase 1 deliverables) — this branch substitutes shell scenario verification
+- The raw session record + sources stub absent from spec §4 are added in Task 5 — the wiki schema requires `sources:` in ADR frontmatter and forbids orphan pages, so the plan fills this spec gap
 
 ---
 
-### Task 0: 브랜치 생성
+### Task 0: Create branch
 
-- [ ] **Step 1: 브랜치**
+- [ ] **Step 1: Branch**
 
 ```bash
 git checkout -b feat/record-keeping
@@ -29,14 +29,14 @@ git checkout -b feat/record-keeping
 
 ---
 
-### Task 1: push 게이트 E2E 테스트 하네스 (RED)
+### Task 1: Push gate E2E test harness (RED)
 
 **Files:**
-- Create: `<scratchpad>/e2e-wiki-gate.sh` (스크래치 — 레포에 커밋하지 않는다)
+- Create: `<scratchpad>/e2e-wiki-gate.sh` (scratch — do not commit to the repo)
 
-훅보다 테스트를 먼저 만든다. 훅이 없는 상태에서 시나리오 1이 실패하는 것(RED)을 확인한 뒤 Task 2 에서 훅을 작성한다(GREEN).
+Build the test before the hook. Confirm scenario 1 fails with no hook present (RED), then write the hook in Task 2 (GREEN).
 
-- [ ] **Step 1: 하네스 작성** — 아래 전문을 스크래치 디렉터리에 저장
+- [ ] **Step 1: Write the harness** — save the full text below to the scratch directory
 
 ```bash
 #!/usr/bin/env bash
@@ -60,7 +60,7 @@ cd "$WORK/clone"
 git config user.email t@t && git config user.name t
 mkdir -p docs/llm-wiki
 echo seed > seed.txt && echo idx > docs/llm-wiki/index.md
-git add -A && git commit -qm "seed" && git push -q origin HEAD  # 최초 push 는 훅 설치 전
+git add -A && git commit -qm "seed" && git push -q origin HEAD  # first push happens before the hook is installed
 if [ -n "$HOOK_SRC" ] && [ -f "$HOOK_SRC" ]; then
   mkdir -p .githooks && cp "$HOOK_SRC" .githooks/pre-push && chmod +x .githooks/pre-push
   git config core.hooksPath .githooks
@@ -68,79 +68,81 @@ fi
 
 expect_block() { # $1=label, rest=push args
   local label="$1"; shift
-  if git push "$@" >/dev/null 2>&1; then bad "$label — 통과해버림 (차단 기대)"; else ok "$label — 차단됨"; fi
+  if git push "$@" >/dev/null 2>&1; then bad "$label — slipped through (expected block)"; else ok "$label — blocked"; fi
 }
 expect_pass() {
   local label="$1"; shift
-  if git push "$@" >/dev/null 2>&1; then ok "$label — 통과"; else bad "$label — 차단됨 (통과 기대)"; fi
+  if git push "$@" >/dev/null 2>&1; then ok "$label — passed"; else bad "$label — blocked (expected pass)"; fi
 }
 
-# 1. 위키 변경 없는 push → 차단
+# 1. push with no wiki change → block
 echo a > a.txt && git add a.txt && git commit -qm "feat: no wiki"
-expect_block "S1 위키 없음" origin HEAD
+expect_block "S1 no wiki" origin HEAD
 
-# 2. 위키 변경 추가 → 통과
+# 2. add a wiki change → pass
 echo w >> docs/llm-wiki/index.md && git add -A && git commit -qm "docs(wiki): ingest"
-expect_pass "S2 위키 있음" origin HEAD
+expect_pass "S2 wiki present" origin HEAD
 
-# 3. 위키 없는 새 커밋 + Wiki-Skip 트레일러 → 통과
+# 3. new commit without wiki + Wiki-Skip trailer → pass
 echo b > b.txt && git add b.txt \
   && git commit -qm "fix: typo" -m "Wiki-Skip: typo fix only"
-expect_pass "S3 트레일러" origin HEAD
+expect_pass "S3 trailer" origin HEAD
 
-# 4. 신규 브랜치, 위키 없음 → 차단
+# 4. new branch, no wiki → block
 git checkout -qb feat/nowiki
 echo c > c.txt && git add c.txt && git commit -qm "feat: no wiki on new branch"
-expect_block "S4 신규 브랜치 위키 없음" origin feat/nowiki
+expect_block "S4 new branch no wiki" origin feat/nowiki
 
-# 5. 같은 신규 브랜치에 위키 커밋 추가 → 통과
+# 5. add a wiki commit on the same new branch → pass
 echo w2 >> docs/llm-wiki/index.md && git add -A && git commit -qm "docs(wiki): ingest"
-expect_pass "S5 신규 브랜치 위키 있음" origin feat/nowiki
+expect_pass "S5 new branch wiki present" origin feat/nowiki
 
-# 6. 브랜치 삭제 push → 통과
-expect_pass "S6 브랜치 삭제" origin --delete feat/nowiki
+# 6. branch deletion push → pass
+expect_pass "S6 branch delete" origin --delete feat/nowiki
 
-# 7. 태그 push → 통과 (게이트는 refs/heads/* 만 본다)
+# 7. tag push → pass (the gate only looks at refs/heads/*)
 git tag v0-test
-expect_pass "S7 태그" origin v0-test
+expect_pass "S7 tag" origin v0-test
 
-# 8. --dry-run 도 게이트를 태우는지 실측 (문서화 목적 — 결과를 그대로 보고)
+# 8. measure whether --dry-run also goes through the gate (for documentation — report the result as-is)
 git checkout -q - >/dev/null 2>&1 || git checkout -q main 2>/dev/null || git checkout -q master
 echo d > d.txt && git add d.txt && git commit -qm "feat: dry-run probe"
 if git push --dry-run origin HEAD >/dev/null 2>&1; then
-  say "  ℹ️  S8 --dry-run: 게이트 미발화 또는 통과"
+  say "  ℹ️  S8 --dry-run: gate did not fire, or passed"
 else
-  say "  ℹ️  S8 --dry-run: 게이트 발화·차단 확인"
+  say "  ℹ️  S8 --dry-run: gate fired and blocked"
 fi
 
-say ""; say "결과: PASS=$PASS FAIL=$FAIL"
+say ""; say "Result: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
 ```
 
-- [ ] **Step 2: RED 확인 — 훅 없이 실행**
+- [ ] **Step 2: Confirm RED — run without the hook**
 
 ```bash
 bash <scratchpad>/e2e-wiki-gate.sh ""
 ```
 
-Expected: `S1 위키 없음 — 통과해버림 (차단 기대)` ❌ 와 `S4` ❌ 를 포함해 **FAIL ≥ 2, exit 1**. (게이트가 없으니 차단 시나리오가 전부 실패해야 정상)
+Expected: **FAIL ≥ 2, exit 1**, including `S1 no wiki — slipped through (expected block)` ❌ and `S4` ❌. (With no gate in place, every blocking scenario must fail — that is the correct outcome)
 
 ---
 
-### Task 2: push 게이트 구현 (GREEN)
+### Task 2: Push gate implementation (GREEN)
 
 **Files:**
 - Create: `.githooks/pre-push`
 
-- [ ] **Step 1: 훅 작성** — 아래 전문
+- [ ] **Step 1: Write the hook** — full text below
 
 ```bash
 #!/usr/bin/env bash
-# wiki push gate — push 범위에 docs/llm-wiki/ 변경이 없으면 차단한다.
-# 목적: 브랜치 단위 증류(/wiki-ingest) 강제. 결정·노하우가 기록 없이 publish 되는 것을 막는다.
-# 원칙: fail-open — git 오류·예상 밖 입력은 전부 통과. 이 게이트는 "무의식적 누락" 방지
-# 장치이지 우회 방지 장치가 아니다. 의도적 예외는 커밋 트레일러 `Wiki-Skip: <사유>` 로 남긴다.
-# 근거: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.3
+# wiki push gate — block any push whose range contains no docs/llm-wiki/ change.
+# Purpose: force per-branch distillation (/wiki-ingest). Prevents decisions and know-how
+# from being published unrecorded.
+# Principle: fail-open — any git error or unexpected input passes. This gate guards against
+# "unconscious omission", not against circumvention. Intentional exceptions are recorded
+# via the commit trailer `Wiki-Skip: <reason>`.
+# Basis: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.3
 set -u
 
 WIKI_DIR="docs/llm-wiki/"
@@ -149,36 +151,36 @@ Z40="0000000000000000000000000000000000000000"
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ -z "${local_ref:-}" ] && continue
 
-  # 브랜치만 게이트한다 — 태그·notes 는 통과.
-  # remote_ref 기준이어야 한다: local_ref 는 refspec 소스 리터럴이라
-  # `git push origin HEAD` 시 "HEAD" 로 온다 (실측 — E2E S1).
+  # Gate branches only — tags and notes pass.
+  # Must key on remote_ref: local_ref is the refspec source literal, so it
+  # arrives as "HEAD" on `git push origin HEAD` (measured — E2E S1).
   case "$remote_ref" in
     refs/heads/*) ;;
     *) continue ;;
   esac
 
-  # 브랜치 삭제 push — 검사할 커밋이 없다
+  # branch deletion push — no commits to inspect
   [ "$local_sha" = "$Z40" ] && continue
 
   if [ "$remote_sha" = "$Z40" ]; then
-    # 신규 브랜치: 어느 리모트에도 없는 커밋만 검사
+    # new branch: inspect only commits not on any remote
     range=("$local_sha" --not --remotes)
   else
     range=("$remote_sha..$local_sha")
   fi
 
-  # push 되는 새 커밋 수 — 0이면 새로 공개되는 것이 없다 (기존 커밋에 브랜치 포인터만)
-  total=$(git rev-list --count "${range[@]}" -- 2>/dev/null) || { echo "wiki-gate: skip (rev-list 실패 — fail-open)" >&2; continue; }
+  # number of new commits being pushed — 0 means nothing new is published (only a branch pointer to existing commits)
+  total=$(git rev-list --count "${range[@]}" -- 2>/dev/null) || { echo "wiki-gate: skip (rev-list failed — fail-open)" >&2; continue; }
   [ "$total" -eq 0 ] && continue
 
-  # 범위 안에 위키 변경이 있으면 통과
-  wiki=$(git rev-list --count "${range[@]}" -- "$WIKI_DIR" 2>/dev/null) || { echo "wiki-gate: skip (rev-list 실패 — fail-open)" >&2; continue; }
+  # pass if the range contains a wiki change
+  wiki=$(git rev-list --count "${range[@]}" -- "$WIKI_DIR" 2>/dev/null) || { echo "wiki-gate: skip (rev-list failed — fail-open)" >&2; continue; }
   if [ "$wiki" -gt 0 ]; then
-    echo "wiki-gate: pass — $WIKI_DIR 변경 포함. PR 전 /wiki-lint 권장." >&2
+    echo "wiki-gate: pass — $WIKI_DIR change included. /wiki-lint recommended before PR." >&2
     continue
   fi
 
-  # 탈출구: 범위 내 커밋의 Wiki-Skip 트레일러 (사유를 감사 흔적으로 남긴다)
+  # escape hatch: Wiki-Skip trailer on a commit in the range (leaves the reason as an audit trail)
   reason=$(git log "${range[@]}" --format='%(trailers:key=Wiki-Skip,valueonly)' 2>/dev/null | grep -m1 . || true)
   if [ -n "$reason" ]; then
     echo "wiki-gate: skip by trailer — Wiki-Skip: $reason" >&2
@@ -186,31 +188,31 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   echo "" >&2
-  echo "✖ wiki-gate: push 범위($total commits)에 $WIKI_DIR 변경이 없습니다." >&2
-  echo "  이 브랜치의 결정·노하우를 먼저 기록하세요: /wiki-ingest" >&2
-  echo "  기록할 것이 정말 없다면 사유를 트레일러로 남기세요:" >&2
-  echo "    git commit --amend --no-edit --trailer 'Wiki-Skip: <사유>'" >&2
+  echo "✖ wiki-gate: no $WIKI_DIR change in the push range ($total commits)." >&2
+  echo "  Record this branch's decisions and know-how first: /wiki-ingest" >&2
+  echo "  If there is truly nothing to record, leave the reason as a trailer:" >&2
+  echo "    git commit --amend --no-edit --trailer 'Wiki-Skip: <reason>'" >&2
   exit 1
 done
 
 exit 0
 ```
 
-- [ ] **Step 2: 실행 권한**
+- [ ] **Step 2: Make executable**
 
 ```bash
 chmod +x .githooks/pre-push
 ```
 
-- [ ] **Step 3: GREEN 확인 — E2E 재실행**
+- [ ] **Step 3: Confirm GREEN — rerun the E2E**
 
 ```bash
 bash <scratchpad>/e2e-wiki-gate.sh "$(pwd)/.githooks/pre-push"
 ```
 
-Expected: `S1~S7 전부 ✅, PASS=7 FAIL=0, exit 0`. S8(ℹ️) 결과는 그대로 최종 보고에 기록한다.
+Expected: `S1–S7 all ✅, PASS=7 FAIL=0, exit 0`. Record the S8 (ℹ️) result as-is in the final report.
 
-- [ ] **Step 4: 이 레포에 게이트 활성화** (이후 Task 12 의 실전 push 가 게이트를 실제로 타게 된다)
+- [ ] **Step 4: Enable the gate in this repo** (the live push in Task 12 will then actually go through the gate)
 
 ```bash
 git config core.hooksPath .githooks && git config core.hooksPath
@@ -218,7 +220,7 @@ git config core.hooksPath .githooks && git config core.hooksPath
 
 Expected: `.githooks`
 
-- [ ] **Step 5: 커밋**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .githooks/pre-push
@@ -237,31 +239,31 @@ See docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.3."
 
 ---
 
-### Task 3: SessionStart 주입 훅
+### Task 3: SessionStart injection hook
 
 **Files:**
 - Create: `.claude/hooks/inject-state.sh`
-- Modify: `.claude/settings.json` (기존 permissions 블록 보존 — hooks 키만 merge)
+- Modify: `.claude/settings.json` (preserve the existing permissions block — merge only the hooks key)
 
-- [ ] **Step 1: 스크립트 작성** — 아래 전문
+- [ ] **Step 1: Write the script** — full text below
 
 ```bash
 #!/usr/bin/env bash
-# SessionStart hook (project) — 세션 시작·compact 복구 시 세션 밖 기억을 재주입하고,
-# wiki push 게이트(.githooks)를 멱등 설치한다.
-# fail-open: 어떤 실패도 세션 시작을 막지 않는다 (항상 exit 0).
-# 근거: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.4
-cat >/dev/null 2>&1  # stdin 소비 (SessionStart input 미사용)
+# SessionStart hook (project) — re-injects out-of-session memory on session start /
+# compact recovery, and idempotently installs the wiki push gate (.githooks).
+# fail-open: no failure blocks session start (always exit 0).
+# Basis: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.4
+cat >/dev/null 2>&1  # consume stdin (SessionStart input unused)
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 
-# 1. push 게이트 멱등 설치
+# 1. idempotently install the push gate
 if [ -d "$root/.githooks" ]; then
   current=$(git -C "$root" config core.hooksPath 2>/dev/null || true)
   [ "$current" = ".githooks" ] || git -C "$root" config core.hooksPath .githooks 2>/dev/null || true
 fi
 
-# 2. state + 위키 인덱스 재주입 (없는 파일은 skip — 클로너는 goal.md 가 없다)
+# 2. re-inject state + wiki index (skip missing files — cloners have no goal.md)
 ctx=""
 for f in ".harness/state/goal.md" ".harness/state/progress.md" "docs/llm-wiki/index.md"; do
   p="$root/$f"
@@ -273,38 +275,39 @@ $(cat "$p")
 done
 [ -z "$ctx" ] && exit 0
 
-jq -n --arg c "[세션 밖 기억 재주입 — 시작/compact 복구. index 의 Decisions 절에서 기존 결정과의 충돌을 감지하라]
+jq -n --arg c "[Out-of-session memory re-injection — start/compact recovery. Detect conflicts with existing decisions in the index's Decisions section]
 $ctx" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c}}' 2>/dev/null
 exit 0
 ```
 
-- [ ] **Step 2: 실행 권한 + 단위 검증 (레포 안 — 3파일 주입)**
+- [ ] **Step 2: Make executable + unit check (inside the repo — 3-file injection)**
 
 ```bash
 chmod +x .claude/hooks/inject-state.sh
 bash .claude/hooks/inject-state.sh </dev/null | jq -r '.hookSpecificOutput.additionalContext' | grep '^==='
 ```
 
-Expected (순서 포함):
+Expected (order included):
 ```
 === .harness/state/goal.md ===
 === .harness/state/progress.md ===
 === docs/llm-wiki/index.md ===
 ```
 
-- [ ] **Step 3: 단위 검증 (goal.md 없는 클로너 상황 + hooksPath 자동 설치)**
+- [ ] **Step 3: Unit check (cloner scenario without goal.md + automatic hooksPath install)**
 
-스크립트는 Step 5 에서야 커밋되므로 클론에는 아직 없다 — 원본 레포의 스크립트를
-절대경로로 실행한다 (스크립트는 cwd 의 git root 만 보므로 검증 의미 동일).
+The script is only committed in Step 5, so the clone does not have it yet — run the original
+repo's script by absolute path (the script only looks at the cwd's git root, so the
+verification is equivalent).
 
 ```bash
 R=$(pwd) && W=$(mktemp -d) && git clone -q "$R" "$W/c" && cd "$W/c"
 bash "$R/.claude/hooks/inject-state.sh" </dev/null | jq -r '.hookSpecificOutput.additionalContext' | grep '^===' ; git config core.hooksPath ; cd "$R" && rm -rf "$W"
 ```
 
-Expected: `goal.md` 줄 **없이** progress·index 2줄만, 이어서 `.githooks` (자동 설치 확인).
+Expected: **no** `goal.md` line, only the 2 progress·index lines, followed by `.githooks` (auto-install confirmed).
 
-- [ ] **Step 4: settings.json 훅 등록** — 기존 키(permissions 등)를 보존하고 아래 `hooks` 키를 merge
+- [ ] **Step 4: Register the hook in settings.json** — preserve existing keys (permissions etc.) and merge the `hooks` key below
 
 ```json
 {
@@ -324,7 +327,7 @@ Expected: `goal.md` 줄 **없이** progress·index 2줄만, 이어서 `.githooks
 }
 ```
 
-- [ ] **Step 5: 커밋**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .claude/hooks/inject-state.sh .claude/settings.json
@@ -337,11 +340,11 @@ for Claude Code users without manual setup. Fail-open, always exit 0.
 See docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.4."
 ```
 
-주의: 이 훅의 **실제 SessionStart 발화**는 다음 세션에서만 검증 가능하다. 최종 보고의 "남은 위험"에 명시할 것.
+Note: the **actual SessionStart firing** of this hook can only be verified in the next session. State this under "remaining risks" in the final report.
 
 ---
 
-### Task 4: ADR 4건 신설
+### Task 4: Create four ADRs
 
 **Files:**
 - Create: `docs/llm-wiki/wiki/decisions/2026-08-04-two-public-repos.md`
@@ -349,48 +352,49 @@ See docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.4."
 - Create: `docs/llm-wiki/wiki/decisions/2026-08-04-wiki-push-gate.md`
 - Create: `docs/llm-wiki/wiki/decisions/2026-08-04-global-project-wiki-split.md`
 
-- [ ] **Step 1: two-public-repos** (decisions.md 6번 항목의 마이그레이션 — 유일하게 ADR 이 없던 결정)
+- [ ] **Step 1: two-public-repos** (migration of the 6th decisions.md entry — the only decision that had no ADR)
 
 ```markdown
 ---
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [저장소, 공개전략]
+tags: [repository, publishing-strategy]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 저장소 2개 · 양쪽 public
+# Two repositories · both public
 
-## 맥락
-코드·설계 문서·풀이 기록을 어디에 어떻게 둘 것인가. 풀이 기록에는 실패 이력·힌트
-사용 단계까지 포함되고, 저장소는 포트폴리오를 겸한다.
+## Context
+Where and how to keep the code, design documents, and solve records. Solve records include
+failure history and hint-usage stages, and the repositories double as a portfolio.
 
-## 검토한 선택지
-- **A. 단일 레포** — 코드와 기록을 한 곳에
-- **B. 2레포 · 양쪽 public** — `programmers-tracker`(코드+설계+위키) / `ps-records`(기록)
-- **C. 2레포 · 기록만 private** — 실패 이력 비공개
+## Options considered
+- **A. Single repo** — code and records in one place
+- **B. Two repos · both public** — `programmers-tracker` (code+design+wiki) / `ps-records` (records)
+- **C. Two repos · records private** — failure history stays private
 
-## 결정
+## Decision
 **B.**
 
-## 이유
-설계 문서를 코드와 분리하면 반드시 어긋나므로 한 레포에 둔다. 기록은 성격(개인 데이터)
-과 수명(계정 단위)이 코드와 달라 분리한다. `ps-records` 를 public 으로 두는 것은
-**실패 이력·힌트 사용 단계까지 포함한 성장 서사가 자산**이라는 판단이다.
+## Rationale
+Design documents drift out of sync whenever they are separated from the code, so they live in
+one repo with it. Records differ from code in nature (personal data) and lifespan (per-account),
+so they are split off. Keeping `ps-records` public reflects the judgment that **the growth
+narrative — including failure history and hint-usage stages — is an asset**.
 
-## 받아들인 비용
-- 실패까지 공개하는 심리 비용
-- 자격증명·개인정보 관리가 한층 엄격해야 한다 — **gitignore 예외 없음**
-  (세션 쿠키·이메일은 어떤 경우에도 커밋 금지, [[decisions/2026-08-04-global-project-wiki-split]] 의
-  raw 원문 반입 금지 규칙과 같은 축)
+## Accepted costs
+- The psychological cost of publishing failures too
+- Credential and PII management must be stricter by a notch — **no gitignore exceptions**
+  (session cookies and emails are never committed under any circumstances; the same axis as the
+  raw-transcript import ban in [[decisions/2026-08-04-global-project-wiki-split]])
 
-## 결과
-2026-08-04 두 레포 생성. 이 결정은 `.harness/state/decisions.md` 에만 있다가
-[[decisions/2026-08-04-decisions-live-in-wiki]] 에 따라 ADR 로 이관됐다 —
-이중 기록이 첫날부터 발산한 실례(6건 vs 5건)가 바로 이 항목이다.
+## Outcome
+Both repos created 2026-08-04. This decision lived only in `.harness/state/decisions.md` until it
+was migrated to an ADR per [[decisions/2026-08-04-decisions-live-in-wiki]] —
+this very entry is the live example of dual records diverging from day one (6 vs 5).
 ```
 
 - [ ] **Step 2: decisions-live-in-wiki**
@@ -400,45 +404,47 @@ sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, ra
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [기록체계, 위키, 단일화]
+tags: [record-keeping, wiki, single-authority]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 결정 기록은 위키 ADR 단일 권위
+# Decision records: wiki ADRs are the single authority
 
-## 맥락
-결정이 `.harness/state/decisions.md`(요약 append)와 `wiki/decisions/`(상세 ADR) 두 곳에
-쓰이고 있었다. 운영 첫날 실측: state 6건 vs 위키 5건 — **하루 만에 발산했다**
-("저장소 2개" 결정이 위키에 없었다). 어긋난 두 기록은 어느 쪽이 진실인지 알 수 없게 한다.
+## Context
+Decisions were being written in two places: `.harness/state/decisions.md` (summary append) and
+`wiki/decisions/` (detailed ADRs). Measured on day one of operation: 6 state entries vs 5 wiki
+entries — **they diverged within a single day** (the "two repos" decision was missing from the
+wiki). Two records out of sync make it impossible to know which one is the truth.
 
-## 검토한 선택지
-- **A. 2단 유지** — state 는 요약 인덱스, 위키는 상세 (원설계)
-- **B. decisions.md 폐지** — 위키 ADR 이 유일한 권위
-- **C. 위키 결정 페이지 폐지** — state 파일만
+## Options considered
+- **A. Keep both tiers** — state as summary index, wiki as detail (original design)
+- **B. Retire decisions.md** — wiki ADRs are the sole authority
+- **C. Retire the wiki decision pages** — state file only
 
-## 결정
-**B.** `.harness/state/decisions.md` 를 삭제하고 `docs/llm-wiki/wiki/decisions/`
-(1건 1파일)만 남긴다. 세션 시작 시의 요약 스캔은 `index.md` 의 Decisions 절
-(1결정 1줄)이 대신한다 — ingest 가 어차피 유지하는 파일이라 동기화 부담이 없다.
+## Decision
+**B.** Delete `.harness/state/decisions.md` and keep only `docs/llm-wiki/wiki/decisions/`
+(one file per decision). The session-start summary scan is replaced by the Decisions section
+of `index.md` (one line per decision) — a file ingest maintains anyway, so there is no sync burden.
 
-## 이유
-이중 쓰기는 반드시 발산한다(첫날 실측). 프로토콜 사실을 `docs/programmers-protocol.md`
-한 곳에만 두는 기존 원칙(위키 스키마 §5.1)의 일반화다: **한 사실은 한 곳에, 나머지는 참조.**
-C 는 위키의 이중 목적(개발 기억 + 포트폴리오, 스키마 §0)을 버리게 되어 기각.
+## Rationale
+Dual writes always diverge (measured on day one). This generalizes the existing principle of
+keeping protocol facts in `docs/programmers-protocol.md` alone (wiki schema §5.1):
+**one fact in one place, everything else references it.**
+C is rejected because it abandons the wiki's dual purpose (dev memory + portfolio, schema §0).
 
-state 의 역할은 재정의된다 — **state = 위치**(goal·progress: 어디까지 왔나),
-**위키 = 지식**(무엇을 왜 결정했나).
+State's role is redefined — **state = position** (goal·progress: how far we have come),
+**wiki = knowledge** (what was decided and why).
 
-## 받아들인 비용
-- 세션 시작 시 결정 전문이 아니라 제목만 스캔하게 된다. 충돌이 의심되면 해당 ADR 을
-  한 번 더 열어야 한다 (1단계 추가)
-- ADR 작성이 append 한 줄보다 무겁다 → 게이트는 존재만 검사하고 품질은 리뷰가 맡아
-  stub ADR 로 시작하는 것을 허용한다
+## Accepted costs
+- At session start only titles are scanned, not full decision texts. If a conflict is suspected,
+  the ADR must be opened once more (one extra step)
+- Writing an ADR is heavier than a one-line append → the gate checks existence only and review
+  owns quality, so starting with a stub ADR is allowed
 
-## 결과
-_구현 후 갱신 — parity 대조(5건 상위집합 확인) 후 decisions.md 삭제._
+## Outcome
+_Update after implementation — delete decisions.md after the parity check (5 supersets confirmed)._
 ```
 
 - [ ] **Step 3: wiki-push-gate**
@@ -448,47 +454,48 @@ _구현 후 갱신 — parity 대조(5건 상위집합 확인) 후 decisions.md 
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [기록체계, git훅, 강제장치]
+tags: [record-keeping, git-hooks, enforcement]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# push 게이트로 증류를 강제한다 (native pre-push)
+# Force distillation with a push gate (native pre-push)
 
-## 맥락
-세션 원문은 auto-compact 후에도 디스크에 남는다(230MB transcript 실측 — compact 는
-in-context 만 압축). 따라서 잃는 것은 원본이 아니라 **증류**다. 전역 위키 실측:
-리마인더가 매 세션 떴는데도 한 달간 75개 세션(2.4GB) 적체, ingest 0회.
-**넛지만으로는 증류가 일어나지 않고**, 증류는 맥락이 신선할 때가 가장 싸다.
+## Context
+Session transcripts survive on disk after auto-compact (230MB transcript measured — compact only
+compresses in-context). So what is lost is not the original but the **distillation**. Global wiki
+measurement: even with the reminder appearing every session, 75 sessions (2.4GB) piled up in one
+month with zero ingests. **Nudges alone do not produce distillation**, and distillation is
+cheapest while context is fresh.
 
-## 검토한 선택지
-강제 수위 — **A. 넛지만**(전역에서 실패 실증) · **B. commit 단위 차단**(토큰 비용,
-같은 내용 반복 merge 로 페이지 오염) · **C. 브랜치/push 단위 차단**
-메커니즘 — **㉮ Claude PreToolUse deny** · **㉯ git native pre-push**
-탈출구 — **ⓐ permissionDecision "ask"**(흔적이 안 남음) · **ⓑ 커밋 트레일러**(감사 가능)
+## Options considered
+Enforcement level — **A. nudge only** (empirically failed globally) · **B. block per commit**
+(token cost; page pollution from repeatedly merging the same content) · **C. block per branch/push**
+Mechanism — **㉮ Claude PreToolUse deny** · **㉯ git native pre-push**
+Escape hatch — **ⓐ permissionDecision "ask"** (leaves no trace) · **ⓑ commit trailer** (auditable)
 
-## 결정
-**C + ㉯ + ⓑ.** `.githooks/pre-push` 가 push 범위에 `docs/llm-wiki/` 변경이 없으면
-차단한다. 예외는 `Wiki-Skip: <사유>` 트레일러 — 사유가 히스토리에 감사 흔적으로 남는다.
+## Decision
+**C + ㉯ + ⓑ.** `.githooks/pre-push` blocks when the push range contains no `docs/llm-wiki/`
+change. The exception is the `Wiki-Skip: <reason>` trailer — the reason stays in history as an audit trail.
 
-## 이유
-㉯ 가 ㉮ 를 3축에서 이긴다: **터미널 직접 push 도 잡고**, push 범위를 추정(HEAD 기준)이
-아니라 **stdin 으로 정확히 받으며**, Claude Code 전용이 아니라 **도구·플랫폼 중립**이다
-(GitHub/GitLab, 어떤 AI 도구든). 차단 시 stderr 는 Bash 도구 결과로 모델에게 보이므로
-"차단 → /wiki-ingest → 재시도" 흐름이 성립한다.
+## Rationale
+㉯ beats ㉮ on three axes: it **also catches direct terminal pushes**, receives the push range
+**exactly on stdin** rather than estimating from HEAD, and is **tool- and platform-neutral**
+rather than Claude Code-specific (GitHub/GitLab, any AI tool). On block, stderr is visible to
+the model as the Bash tool result, so the "block → /wiki-ingest → retry" flow works.
 
-fail-open 원칙: git 오류·예상 밖 입력은 전부 통과. 이 게이트는 **무의식적 누락 방지
-장치이지 우회 방지 장치가 아니다.**
+Fail-open principle: any git error or unexpected input passes. This gate is a **guard against
+unconscious omission, not against circumvention.**
 
-## 받아들인 비용
-- 클로너 설치 마찰 — `git config core.hooksPath .githooks` 1커맨드 (Claude Code 는
-  SessionStart 훅이 자동 설치)
-- 트레일러 남용 가능 — 기계는 존재만 보고, 남용은 PR 리뷰·/wiki-lint 가 잡는다
-- 관행 밖 push 형태(비 HEAD refspec 등)는 통과한다 — 의도된 한계
+## Accepted costs
+- Cloner install friction — one command, `git config core.hooksPath .githooks` (Claude Code
+  auto-installs it via the SessionStart hook)
+- Trailer abuse is possible — the machine checks existence only; abuse is caught by PR review and /wiki-lint
+- Unconventional push forms (non-HEAD refspecs etc.) pass — an intended limitation
 
-## 결과
-_구현 후 갱신 — 이 게이트를 도입한 브랜치 자체가 첫 실전 통과 사례(dogfooding)._
+## Outcome
+_Update after implementation — the branch introducing this gate is itself the first live pass (dogfooding)._
 ```
 
 - [ ] **Step 4: global-project-wiki-split**
@@ -498,108 +505,113 @@ _구현 후 갱신 — 이 게이트를 도입한 브랜치 자체가 첫 실전
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [기록체계, 위키, 계층화]
+tags: [record-keeping, wiki, layering]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 전역/프로젝트 위키는 3계층으로 분리한다
+# Global/project wikis split into three layers
 
-## 맥락
-개인 PC 전역 위키(`~/Desktop/llm-wiki`)와 이 레포의 위키(`docs/llm-wiki/`)가 병존한다.
-"위키가 두 군데로 분리되고, 프로젝트 작업이 개인 위키에 안 쌓이는 것 아닌가"라는 우려.
+## Context
+The personal-PC global wiki (`~/Desktop/llm-wiki`) and this repo's wiki (`docs/llm-wiki/`)
+coexist. Concern: "doesn't this split the wiki into two places, with project work no longer
+accumulating in the personal wiki?"
 
-## 검토한 선택지
-- **A. 전역 단일화** — 프로젝트 위키 폐지, 전역에 몰기
-- **B. 프로젝트 단일화** — 전역 폐지
-- **C. 3계층 분리** — raw=개인 PC(자동) / 1차 증류=레포 위키 / 2차 증류=전역 위키
+## Options considered
+- **A. Consolidate globally** — retire the project wiki, pile everything into the global one
+- **B. Consolidate in the project** — retire the global one
+- **C. Three-layer split** — raw = personal PC (automatic) / 1st distillation = repo wiki / 2nd distillation = global wiki
 
-## 결정
-**C.** 같은 내용의 중복이 아니라 **계층이 다른** 배치다:
-raw(모든 세션 원문) → 1차 증류(프로젝트 결정·개념) → 2차 증류(범프로젝트 일반화).
+## Decision
+**C.** Not a duplication of the same content but a placement at **different layers**:
+raw (all session transcripts) → 1st distillation (project decisions·concepts) → 2nd distillation (cross-project generalization).
 
-## 이유
-프로젝트 위키가 레포 안이어야 하는 4근거 — ① 포트폴리오(위키 스키마 §0 이중 목적),
-② 클론하면 지식+워크플로우가 같이 옴, ③ push 게이트가 성립(같은 레포여야 기계 검증),
-④ 지식의 수명이 코드와 같음. A 는 이 넷을 모두 잃고, 전역 위키는 raw 원문·타 프로젝트
-기록이 섞여 있어 **공개 목적지가 될 수 없다**(구조적).
+## Rationale
+Four reasons the project wiki must live inside the repo — ① portfolio (wiki schema §0 dual
+purpose), ② cloning brings knowledge + workflow together, ③ the push gate becomes possible
+(machine verification requires the same repo), ④ knowledge has the same lifespan as the code.
+A loses all four, and the global wiki mixes raw transcripts with other projects' records, so
+it **cannot be a publication target** (structurally).
 
-"개인 PC 에 안 쌓인다"는 우려는 사실이 아님을 실측으로 확인: 전역 SessionEnd/PreCompact
-아카이브 훅은 user-level 이라 cwd 무관 발화한다. 2026-08-04 이 세션의 실제 transcript 로
-훅을 실행해 전역 inbox 에 551k 파일이 생기는 것을 확인했다. **raw 는 계속 전역에 쌓인다.**
+The concern "it won't accumulate on my personal PC" was measured to be false: the global
+SessionEnd/PreCompact archive hooks are user-level and fire regardless of cwd. On 2026-08-04
+we ran the hook against this session's actual transcript and confirmed a 551k file appearing
+in the global inbox. **Raw keeps accumulating globally.**
 
-원칙은 [[decisions/2026-08-04-decisions-live-in-wiki]] 와 동일: 한 사실은 한 곳에,
-나머지는 참조.
+The principle is the same as [[decisions/2026-08-04-decisions-live-in-wiki]]: one fact in one
+place, everything else references it.
 
-## 받아들인 비용
-- 전역에서 프로젝트 지식을 찾으려면 레지스트리(전역 위키에 프로젝트당 1페이지)가
-  필요하다 — 전역 위키 정비는 별건으로 유예
-- **프로젝트 위키에 raw 원문 반입 금지가 절대 규칙이 된다** — 세션 원문에는 쿠키·이메일이
-  흐르고 이 레포는 public 이다
-- 전역 리마인더 훅이 이 레포에서 오작동 넛지가 되므로 가드가 필요하다 — 훅은 설정 계층 간
-  merge 되어 프로젝트에서 끌 수 없고, **전역 스크립트의 자진 후퇴가 유일한 방법**
+## Accepted costs
+- Finding project knowledge from the global side requires a registry (one page per project in
+  the global wiki) — global wiki housekeeping deferred as separate work
+- **Importing raw transcripts into the project wiki becomes an absolute prohibition** — session
+  transcripts carry cookies and emails, and this repo is public
+- The global reminder hook becomes a misfiring nudge in this repo, so a guard is needed — hooks
+  merge across settings layers and cannot be disabled per-project; **voluntary retreat by the
+  global script is the only way**
 
-## 결과
-_구현 후 갱신._
+## Outcome
+_Update after implementation._
 ```
 
 ---
 
-### Task 5: raw 세션 기록 + sources stub
+### Task 5: Raw session record + sources stub
 
 **Files:**
 - Create: `docs/llm-wiki/raw/sessions/2026-08-04-record-keeping-design.md`
 - Create: `docs/llm-wiki/wiki/sources/2026-08-04-record-keeping-design.md`
 
-- [ ] **Step 1: raw 세션 기록** (불변 — 이후 수정 금지)
+- [ ] **Step 1: raw session record** (immutable — never edited afterward)
 
 ```markdown
-# 2026-08-04 기록 보존 체계 설계 세션
+# 2026-08-04 Record-Keeping Design Session
 
-> raw 큐레이션 기록. 세션 원문(transcript)이 아니라 사람이 다시 볼 가치가 있는
-> 사실·결정·틀린 가설의 증류다. 원문은 개인 PC 전역 아카이브에 있다.
+> A raw curation record. Not the session transcript, but a distillation of the facts,
+> decisions, and wrong hypotheses worth revisiting. The transcript lives in the
+> personal-PC global archive.
 
-## 실측 사실
+## Measured facts
 
-1. **auto-compact 는 디스크 transcript 를 지우지 않는다.** 230MB transcript 가
-   PreCompact 5회 이상을 겪고도 온전히 append 유지 중임을 확인. 잃는 것은 원본이
-   아니라 *증류* 다.
-2. **넛지만으로 증류는 일어나지 않는다.** 전역 위키 inbox: 한 달간 75개 세션(2.4GB)
-   적체, ingest 0회 — 리마인더는 매 세션 떴다.
-3. **이중 기록은 하루 만에 발산했다.** `.harness/state/decisions.md` 6건 vs
-   `wiki/decisions/` 5건 ("저장소 2개" 결정 누락).
-4. **훅은 설정 계층 간 merge 된다** (user/project/local 이 전부 실행) — 프로젝트
-   설정으로 전역 훅을 끌 수 없다. 전역 스크립트의 자진 후퇴가 유일한 가드 방법.
-5. **전역 아카이브 훅은 cwd 무관 발화한다.** 이 세션의 실제 transcript 로
-   `wiki-archive-session.sh` 를 실행 → 전역 inbox 에 551k 파일 생성 확인 (직후 삭제,
-   실파일은 세션 종료 시 생성됨).
-6. git `%(trailers:key=X,valueonly)` 포맷·bash 5.3·jq 가용 확인. 전역
-   `core.hooksPath` 미설정 — 레포 로컬 설정과 충돌 없음.
+1. **auto-compact does not delete the on-disk transcript.** Confirmed a 230MB transcript
+   surviving 5+ PreCompact events fully intact and still appending. What is lost is not
+   the original but the *distillation*.
+2. **Nudges alone do not produce distillation.** Global wiki inbox: 75 sessions (2.4GB)
+   piled up over one month, zero ingests — the reminder appeared every session.
+3. **Dual records diverged within a day.** `.harness/state/decisions.md` 6 entries vs
+   `wiki/decisions/` 5 (the "two repos" decision missing).
+4. **Hooks merge across settings layers** (user/project/local all run) — project settings
+   cannot disable a global hook. Voluntary retreat by the global script is the only guard.
+5. **The global archive hook fires regardless of cwd.** Ran `wiki-archive-session.sh`
+   against this session's actual transcript → confirmed a 551k file created in the global
+   inbox (deleted right after; the real file is created at session end).
+6. git `%(trailers:key=X,valueonly)` format, bash 5.3, and jq availability confirmed. Global
+   `core.hooksPath` unset — no conflict with the repo-local setting.
 
-## 내린 결정
+## Decisions made
 
 [[decisions/2026-08-04-decisions-live-in-wiki]] ·
 [[decisions/2026-08-04-wiki-push-gate]] ·
 [[decisions/2026-08-04-global-project-wiki-split]] ·
-[[decisions/2026-08-04-two-public-repos]] (state 에만 있던 결정의 이관)
+[[decisions/2026-08-04-two-public-repos]] (migration of a decision that lived only in state)
 
-## 틀렸던 가설 (보존 — 스키마 §5.2)
+## Wrong hypotheses (preserved — schema §5.2)
 
-- **"전역 wiki-ingest 스킬이 이름 충돌로 잡힌 것"** — 오진. 전역에는 wiki-* 스킬이
-  아예 없다. 실제 원인은 전역 *훅* 의 경로 하드코딩이었다. 스킬 개명(ptw-ingest)은
-  아무것도 고치지 못했을 것이다.
-- **"아카이브 훅을 cwd 기반 분기로 고치자"** — 폐기. 프로젝트 위키에는 inbox 개념이
-  없고(소비자 부재), 공개 레포 워킹트리에 세션 원문(쿠키·이메일 포함)을 떨구는
-  경로를 새로 뚫는 제안이었다.
-- **"compact 되면 대화가 소실된다"** — 절반만 사실. in-context 는 압축되지만 디스크
-  원본은 남는다. 문제 정의가 "원본 보존"에서 "증류 강제"로 바뀌었고 설계 전체가
-  그에 따라 달라졌다.
+- **"The global wiki-ingest skill was shadowed by a name collision"** — misdiagnosis. There
+  are no wiki-* skills globally at all. The real cause was a hardcoded path in the global
+  *hook*. Renaming the skill (ptw-ingest) would have fixed nothing.
+- **"Fix the archive hook with cwd-based branching"** — discarded. The project wiki has no
+  inbox concept (no consumer), and the proposal would have opened a new path dropping session
+  transcripts (cookies and emails included) into a public repo's working tree.
+- **"Compact loses the conversation"** — only half true. In-context gets compressed but the
+  on-disk original remains. The problem definition shifted from "preserve the original" to
+  "force distillation", and the whole design changed accordingly.
 
-## 산출물
+## Deliverables
 
-스펙 `docs/superpowers/specs/2026-08-04-record-keeping-design.md` (커밋 8958fe4) ·
-구현 계획 `docs/superpowers/plans/2026-08-04-record-keeping.md`
+Spec `docs/superpowers/specs/2026-08-04-record-keeping-design.md` (commit 8958fe4) ·
+implementation plan `docs/superpowers/plans/2026-08-04-record-keeping.md`
 ```
 
 - [ ] **Step 2: sources stub**
@@ -608,22 +620,22 @@ _구현 후 갱신._
 ---
 type: source
 project: programmers-tracker
-tags: [기록체계, 위키, git훅]
+tags: [record-keeping, wiki, git-hooks]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 2026-08-04 기록 보존 체계 설계 세션 요약
+# 2026-08-04 Record-Keeping Design Session Summary
 
-## 핵심 주장
-1. auto-compact 는 디스크 transcript 를 지우지 않는다 — 잃는 것은 원본이 아니라 **증류**다.
-2. 넛지만으로 증류는 일어나지 않는다 (전역 inbox 75건/2.4GB/월, ingest 0회 실측).
-3. 이중 기록은 하루 만에 발산한다 (state 6건 vs 위키 ADR 5건 실측).
-4. 훅은 설정 계층 간 merge — 프로젝트가 전역 훅을 끌 수 없다.
-5. 전역 아카이브 훅은 cwd 무관 발화 — 프로젝트 위키를 레포에 둬도 raw 는 개인 PC 에 쌓인다 (실증).
+## Key claims
+1. auto-compact does not delete the on-disk transcript — what is lost is not the original but the **distillation**.
+2. Nudges alone do not produce distillation (global inbox 75 sessions/2.4GB/month, zero ingests, measured).
+3. Dual records diverge within a day (state 6 entries vs wiki ADR 5, measured).
+4. Hooks merge across settings layers — a project cannot disable global hooks.
+5. The global archive hook fires regardless of cwd — even with the project wiki in the repo, raw accumulates on the personal PC (verified).
 
-## 이 소스가 갱신한 페이지
+## Pages this source updated
 [[decisions/2026-08-04-two-public-repos]] ·
 [[decisions/2026-08-04-decisions-live-in-wiki]] ·
 [[decisions/2026-08-04-wiki-push-gate]] ·
@@ -632,35 +644,35 @@ sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 
 ---
 
-### Task 6: index.md · log.md 등록
+### Task 6: Register in index.md · log.md
 
 **Files:**
 - Modify: `docs/llm-wiki/index.md`
 - Modify: `docs/llm-wiki/log.md`
 
-- [ ] **Step 1: index.md — Decisions 절 끝에 4줄 append** (기존 `- 2026-08-04 [[decisions/2026-08-04-no-ai-debugger]] — AI 디버거 제어 미채택` 줄 뒤)
+- [ ] **Step 1: index.md — append 4 lines at the end of the Decisions section** (after the existing `- 2026-08-04 [[decisions/2026-08-04-no-ai-debugger]] — AI debugger control not adopted` line)
 
 ```markdown
-- 2026-08-04 [[decisions/2026-08-04-two-public-repos]] — 저장소 2개 · 양쪽 public
-- 2026-08-04 [[decisions/2026-08-04-decisions-live-in-wiki]] — 결정 기록은 위키 ADR 단일 권위
-- 2026-08-04 [[decisions/2026-08-04-wiki-push-gate]] — push 게이트로 증류 강제 (native pre-push)
-- 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — 전역/프로젝트 위키 3계층 분리
+- 2026-08-04 [[decisions/2026-08-04-two-public-repos]] — two repositories · both public
+- 2026-08-04 [[decisions/2026-08-04-decisions-live-in-wiki]] — decision records: wiki ADRs are the single authority
+- 2026-08-04 [[decisions/2026-08-04-wiki-push-gate]] — force distillation via push gate (native pre-push)
+- 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — global/project wiki three-layer split
 ```
 
-- [ ] **Step 2: index.md — Sources 절 끝에 1줄 append**
+- [ ] **Step 2: index.md — append 1 line at the end of the Sources section**
 
 ```markdown
 - 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
 ```
 
-- [ ] **Step 3: log.md — 끝에 append**
+- [ ] **Step 3: log.md — append at the end**
 
 ```markdown
 
-## [2026-08-04] ingest | 기록 보존 체계 설계 → 6 created (ADR 4 · source 1 · raw 1), 0 updated
+## [2026-08-04] ingest | record-keeping design → 6 created (ADR 4 · source 1 · raw 1), 0 updated
 ```
 
-- [ ] **Step 4: 커밋**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add docs/llm-wiki
@@ -674,115 +686,115 @@ Includes discarded hypotheses per wiki schema §5.2."
 
 ---
 
-### Task 7: CLAUDE.md 참조 전환 (5개소)
+### Task 7: CLAUDE.md reference switch (5 sites)
 
 **Files:**
 - Modify: `CLAUDE.md`
 
-각 edit 은 old → new 정확 치환이다.
+Each edit is an exact old → new substitution.
 
-- [ ] **Step 1: 세션 시작 절** — old:
-
-```
-**1. state 3종을 이 순서로 읽는다.** 맥락 없이 요청부터 처리하지 않는다.
+- [ ] **Step 1: Session-start section** — old:
 
 ```
-.harness/state/goal.md        현재 목표. "결정 대기" 면 후보 제시부터
-.harness/state/progress.md    단계별 현황
-.harness/state/decisions.md   의사결정 이력 — 요청이 충돌하면 그 자리에서 확인
+**1. Read the 3 state files in this order.** Do not process the request without context.
+
+```
+.harness/state/goal.md        Current goal. If it says "awaiting decision", present candidates first
+.harness/state/progress.md    Step-by-step status
+.harness/state/decisions.md   Decision history — if the request conflicts, check on the spot
 ```
 ```
 
 new:
 
 ```
-**1. 세션 훅이 아래 3개를 주입한다. 주입이 안 보이면 이 순서로 직접 읽는다.** 맥락 없이 요청부터 처리하지 않는다.
+**1. The session hook injects the 3 files below. If the injection is missing, read them directly in this order.** Do not process the request without context.
 
 ```
-.harness/state/goal.md        현재 목표. "결정 대기" 면 후보 제시부터
-.harness/state/progress.md    단계별 현황
-docs/llm-wiki/index.md        Decisions 절 스캔 — 요청이 기존 결정과 충돌하면 해당 ADR 열람
+.harness/state/goal.md        Current goal. If it says "awaiting decision", present candidates first
+.harness/state/progress.md    Step-by-step status
+docs/llm-wiki/index.md        Scan the Decisions section — if the request conflicts with an existing decision, open that ADR
 ```
 ```
 
-- [ ] **Step 2: Architecture 절** — old: `변경 시 PR + `.harness/state/decisions.md` 갱신.` → new: `변경 시 PR + `docs/llm-wiki/wiki/decisions/` ADR 추가.`
+- [ ] **Step 2: Architecture section** — old: `Changes require a PR + updating `.harness/state/decisions.md`.` → new: `Changes require a PR + an ADR in `docs/llm-wiki/wiki/decisions/`.`
 
-- [ ] **Step 3: Quality Gate — 추가 게이트 목록에 1줄 추가.** old:
+- [ ] **Step 3: Quality Gate — add 1 line to the additional-gates list.** old:
 
 ```
-- `.harness/state/progress.md` 갱신분이 같은 브랜치에 포함
+- The updated `.harness/state/progress.md` is included in the same branch
 ```
 
 new:
 
 ```
-- `.harness/state/progress.md` 갱신분이 같은 브랜치에 포함
-- 의사결정이 있었던 브랜치는 같은 브랜치에 **wiki ADR** — push 게이트(`.githooks/pre-push`)가
-  위키 변경 없는 push 를 차단한다 (예외는 커밋 트레일러 `Wiki-Skip: <사유>`)
+- The updated `.harness/state/progress.md` is included in the same branch
+- A branch that made decisions carries a **wiki ADR** in the same branch — the push gate
+  (`.githooks/pre-push`) blocks pushes without wiki changes (escape hatch: commit trailer `Wiki-Skip: <reason>`)
 ```
 
-- [ ] **Step 4: State 파일 운영 절** — 3개 sub-edit:
+- [ ] **Step 4: State File Operations section** — 3 sub-edits:
 
-(a) old: `` `.harness/state/` 는 **세션 밖 기억**이다. 대화가 끊겨도 작업을 재개할 수 있게 한다. `` → new: `` `.harness/state/` 는 **세션 밖 기억**이다. 대화가 끊겨도 작업을 재개할 수 있게 한다.
-**state = 위치**(어디까지 왔나), **위키 = 지식**(무엇을 왜 결정했나 — `docs/llm-wiki/`). ``
+(a) old: `` `.harness/state/` is **out-of-session memory**. It lets work resume even when the conversation is cut off. `` → new: `` `.harness/state/` is **out-of-session memory**. It lets work resume even when the conversation is cut off.
+**state = position** (how far we have come), **wiki = knowledge** (what was decided and why — `docs/llm-wiki/`). ``
 
-(b) old: `3. `state/decisions.md` — 의사결정 이력. 요청이 이전 결정과 **충돌하면 그 자리에서 확인**` → new: `3. `docs/llm-wiki/index.md` — Decisions 절 스캔. 요청이 이전 결정과 **충돌하면 해당 ADR 확인**`
+(b) old: `3. `state/decisions.md` — decision history. If the request **conflicts with a prior decision, check on the spot**` → new: `3. `docs/llm-wiki/index.md` — scan the Decisions section. If the request **conflicts with a prior decision, check that ADR**`
 
-(c) old: `| 설계 결정 | `decisions.md` 에 *왜* (이유·대안·근거) append |` → new: `| 설계 결정 | wiki ADR 신설 — `docs/llm-wiki/wiki/decisions/<날짜>-<slug>.md` (1건 1파일) |`
+(c) old: `| Design decision | Append the *why* (reason·alternatives·basis) to `decisions.md` |` → new: `| Design decision | New wiki ADR — `docs/llm-wiki/wiki/decisions/<date>-<slug>.md` (one file per decision) |`
 
-- [ ] **Step 5: 보고 형식** — old: `4. **새 `decisions.md` entry** (의사결정 발생 시)` → new: `4. **새 wiki ADR** (의사결정 발생 시 — `docs/llm-wiki/wiki/decisions/`)`
+- [ ] **Step 5: Report Format** — old: `4. **New `decisions.md` entry** (when a decision occurred)` → new: `4. **New wiki ADR** (when a decision occurred — `docs/llm-wiki/wiki/decisions/`)`
 
 ---
 
-### Task 8: README · .gitignore 참조 전환
+### Task 8: README · .gitignore reference switch
 
 **Files:**
 - Modify: `README.md`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: README 구조 트리** — old:
+- [ ] **Step 1: README structure tree** — old:
 
 ```
-├── .claude/commands/           프로젝트 전용 위키 커맨드
-├── .harness/state/             세션 밖 기억 (goal · progress · decisions)
+├── .claude/commands/           project-scoped wiki commands
+├── .harness/state/             out-of-session memory (goal · progress · decisions)
 ```
 
 new:
 
 ```
-├── .claude/commands/           프로젝트 전용 위키 커맨드
-├── .githooks/                  push 게이트 — 위키 기록 없는 push 차단
-├── .harness/state/             세션 밖 기억 (goal · progress)
+├── .claude/commands/           project-scoped wiki commands
+├── .githooks/                  push gate — blocks pushes without wiki records
+├── .harness/state/             out-of-session memory (goal · progress)
 ```
 
-- [ ] **Step 2: README — 구조 코드블록 닫는 ``` 바로 뒤에 설치 안내 추가**
+- [ ] **Step 2: README — add the install note right after the closing ``` of the structure code block**
 
 ```markdown
 
-> 클론 후 1회: `git config core.hooksPath .githooks` — push 게이트 활성화.
-> Claude Code 는 세션 시작 훅이 자동으로 설정한다.
+> Once after cloning: `git config core.hooksPath .githooks` — enables the push gate.
+> Claude Code sets it automatically via the session-start hook.
 ```
 
-- [ ] **Step 3: .gitignore 주석** — old: `# 개인 작업 상태 (progress·decisions 는 커밋한다)` → new: `# 개인 작업 상태 (progress 는 커밋한다)`
+- [ ] **Step 3: .gitignore comment** — old: `# personal work state (progress and decisions are committed)` → new: `# personal work state (progress is committed)`
 
 ---
 
-### Task 9: decisions.md 삭제
+### Task 9: Delete decisions.md
 
 **Files:**
 - Delete: `.harness/state/decisions.md`
 
-parity 는 계획 단계에서 완료 — 5건 전부 대응 ADR 이 상위집합, 6번째는 Task 4 에서 신설됨. 재대조 불필요.
+Parity was completed at planning time — all 5 entries have superset ADRs, and the 6th is created in Task 4. No re-check needed.
 
-- [ ] **Step 1: 참조가 남았는지 최종 확인**
+- [ ] **Step 1: Final check for leftover references**
 
 ```bash
 grep -rn "decisions\.md" --include="*.md" . | grep -v "docs/superpowers" | grep -v "docs/llm-wiki" || echo CLEAN
 ```
 
-Expected: `CLEAN` (스펙·플랜·위키 안의 역사 서술은 남아도 된다 — 살아있는 참조만 없으면 된다)
+Expected: `CLEAN` (historical narration inside specs, plans, and the wiki may remain — only live references must be gone)
 
-- [ ] **Step 2: 삭제**
+- [ ] **Step 2: Delete**
 
 ```bash
 git rm .harness/state/decisions.md
@@ -790,26 +802,26 @@ git rm .harness/state/decisions.md
 
 ---
 
-### Task 10: progress.md 갱신 + 참조 전환 커밋
+### Task 10: Update progress.md + commit the reference switch
 
 **Files:**
 - Modify: `.harness/state/progress.md`
 
-- [ ] **Step 1: Phase 0.5 절과 Phase 1 절 사이에 삽입**
+- [ ] **Step 1: Insert between the Phase 0.5 section and the Phase 1 section**
 
 ```markdown
-## [2026-08-04] Phase 0.7 — 기록 체계 정비 ✅
+## [2026-08-04] Phase 0.7 — record-keeping overhaul ✅
 
-스펙 `docs/superpowers/specs/2026-08-04-record-keeping-design.md` (8958fe4).
+Spec `docs/superpowers/specs/2026-08-04-record-keeping-design.md` (8958fe4).
 
-- 결정 기록 단일 권위 = wiki ADR — `.harness/state/decisions.md` 폐지 (parity 대조: 5건 상위집합 확인)
-- push 게이트 `.githooks/pre-push` — push 범위에 위키 변경 강제, `Wiki-Skip:` 트레일러 탈출구
-- SessionStart 훅 `.claude/hooks/inject-state.sh` — state·index 재주입(compact 복구) + hooksPath 멱등 설치
-- ADR 4건 신설 · raw 세션 1건 · 전역 리마인더 가드(레포 밖, 별도 적용)
+- Single authority for decision records = wiki ADRs — `.harness/state/decisions.md` retired (parity check: 5 supersets confirmed)
+- Push gate `.githooks/pre-push` — forces wiki changes in the push range, `Wiki-Skip:` trailer escape hatch
+- SessionStart hook `.claude/hooks/inject-state.sh` — re-injects state·index (compact recovery) + idempotent hooksPath install
+- 4 new ADRs · 1 raw session · global reminder guard (outside the repo, applied separately)
 
 ```
 
-- [ ] **Step 2: 커밋**
+- [ ] **Step 2: Commit**
 
 ```bash
 git add CLAUDE.md README.md .gitignore .harness/state/progress.md
@@ -823,16 +835,16 @@ State keeps position (goal/progress); wiki keeps knowledge.
 See docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.2."
 ```
 
-(직전 Task 9 의 `git rm` 이 스테이징에 포함돼 함께 커밋된다)
+(The `git rm` from Task 9 just before is already staged and gets committed together)
 
 ---
 
-### Task 11: 전역 리마인더 가드 (레포 밖 — 브랜치에 포함 불가)
+### Task 11: Global reminder guard (outside the repo — cannot be part of the branch)
 
 **Files:**
-- Modify: `~/.claude/hooks/wiki-remind.sh` (사용자 홈 — 이 레포 PR 에 들어가지 않는다)
+- Modify: `~/.claude/hooks/wiki-remind.sh` (user home — does not go into this repo's PR)
 
-- [ ] **Step 1: stdin 소비 줄과 inbox 계산 사이에 가드 삽입** — old:
+- [ ] **Step 1: Insert the guard between the stdin-consuming line and the inbox computation** — old:
 
 ```bash
 cat >/dev/null 2>&1  # stdin 비우기 (SessionStart input은 사용 안 함)
@@ -845,8 +857,8 @@ new:
 ```bash
 cat >/dev/null 2>&1  # stdin 비우기 (SessionStart input은 사용 안 함)
 
-# 자체 위키(docs/llm-wiki)를 가진 레포에서는 후퇴 — 전역 inbox 리마인드가 프로젝트의
-# /wiki-ingest(다른 대상)를 오도한다. 2026-08-04 programmers-tracker 설계 D3.
+# Retreat in repos that have their own wiki (docs/llm-wiki) — the global inbox reminder
+# misleads the project's /wiki-ingest (a different target). 2026-08-04 programmers-tracker design D3.
 if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -d "$root/docs/llm-wiki" ]; then
   exit 0
 fi
@@ -854,55 +866,55 @@ fi
 inbox="$HOME/Desktop/llm-wiki/raw/inbox"
 ```
 
-- [ ] **Step 2: 가드 동작 확인**
+- [ ] **Step 2: Confirm the guard behavior**
 
 ```bash
-bash ~/.claude/hooks/wiki-remind.sh </dev/null; echo "exit=$? (이 레포 안 — 빈 출력이어야 함)"
+bash ~/.claude/hooks/wiki-remind.sh </dev/null; echo "exit=$? (inside this repo — must print nothing)"
 cd "$HOME" && bash ~/.claude/hooks/wiki-remind.sh </dev/null | jq -r '.hookSpecificOutput.additionalContext' | head -1; cd - >/dev/null
 ```
 
-Expected: 레포 안 — 출력 없음 + exit=0. 홈 — `[LLM Wiki] raw/inbox에 아직...` 리마인더 정상 출력 (전역 동작 보존 확인).
+Expected: inside the repo — no output + exit=0. From home — the `[LLM Wiki] raw/inbox에 아직...` reminder prints normally (confirms global behavior is preserved).
 
 ---
 
-### Task 12: 실전 검증 — push 게이트 dogfooding + PR
+### Task 12: Live verification — push gate dogfooding + PR
 
-- [ ] **Step 1: 상태 확인**
+- [ ] **Step 1: Status check**
 
 ```bash
 git status --short && git log --oneline main..HEAD
 ```
 
-Expected: 클린 트리, 커밋 4개 (gate · inject · wiki · retire)
+Expected: clean tree, 4 commits (gate · inject · wiki · retire)
 
-- [ ] **Step 2: 실전 push — 게이트가 실제로 발화하는지 stderr 관찰**
+- [ ] **Step 2: Live push — watch stderr to confirm the gate actually fires**
 
 ```bash
 git push -u origin feat/record-keeping
 ```
 
-Expected: `wiki-gate: pass — docs/llm-wiki/ 변경 포함. PR 전 /wiki-lint 권장.` 가 stderr 에 표시된 뒤 push 성공. **이 메시지가 안 보이면 게이트가 발화하지 않은 것** — `git config core.hooksPath` 가 `.githooks` 인지 확인하고 재시도.
+Expected: `wiki-gate: pass — docs/llm-wiki/ change included. /wiki-lint recommended before PR.` appears on stderr, then the push succeeds. **If this message is not visible, the gate did not fire** — check that `git config core.hooksPath` is `.githooks` and retry.
 
-- [ ] **Step 3: PR 생성**
+- [ ] **Step 3: Create the PR**
 
 ```bash
 gh pr create --title "feat: record-keeping — wiki single authority, push gate, compact restore" --body "$(cat <<'EOF'
-## 요약
-- 결정 기록 단일 권위 = wiki ADR (`.harness/state/decisions.md` 폐지 — 첫날부터 6 vs 5 발산 실측)
-- push 게이트 `.githooks/pre-push`: push 범위에 `docs/llm-wiki/` 변경 없으면 차단, `Wiki-Skip:` 트레일러 탈출구, fail-open
-- SessionStart 훅: state·위키 인덱스 재주입 (compact 복구) + hooksPath 멱등 설치
-- ADR 4건 신설 (two-public-repos 마이그레이션 포함) · raw 세션 1건
+## Summary
+- Single authority for decision records = wiki ADRs (`.harness/state/decisions.md` retired — 6 vs 5 divergence measured from day one)
+- Push gate `.githooks/pre-push`: blocks when the push range has no `docs/llm-wiki/` change, `Wiki-Skip:` trailer escape hatch, fail-open
+- SessionStart hook: re-injects state · wiki index (compact recovery) + idempotent hooksPath install
+- 4 new ADRs (including the two-public-repos migration) · 1 raw session record
 
-스펙: `docs/superpowers/specs/2026-08-04-record-keeping-design.md`
+Spec: `docs/superpowers/specs/2026-08-04-record-keeping-design.md`
 
-## 검증
-- E2E 시나리오 7종 (bare origin 왕복): 차단/통과/트레일러/신규 브랜치/삭제/태그 — 전부 통과
-- inject-state 단위 2종 (3파일 주입 · goal.md 부재 클로너)
-- 이 브랜치의 push 자체가 게이트 첫 실전 통과 사례
+## Verification
+- 7 E2E scenarios (round-trips against a bare origin): block/pass/trailer/new branch/delete/tag — all passed
+- 2 inject-state unit checks (3-file injection · cloner without goal.md)
+- This branch's own push is the gate's first live pass
 
-## 남은 위험
-- SessionStart 훅의 실제 발화는 다음 세션에서 확인 (스크립트 단위 검증은 완료)
-- Quality Gate 스크립트(scripts/*.sh)는 아직 미존재 (Phase 1 산출물) — 셸 검증으로 갈음
+## Remaining risks
+- The hook's actual SessionStart firing is confirmed in the next session (script-level unit checks done)
+- Quality Gate scripts (scripts/*.sh) do not exist yet (Phase 1 deliverables) — shell verification substitutes
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
@@ -911,8 +923,8 @@ EOF
 
 ---
 
-## Self-Review 결과 (작성 시 수행)
+## Self-Review Results (performed at authoring time)
 
-- **스펙 커버리지**: D1(계층 모델 — 유지 결정이라 구현 없음, ADR 로 기록됨 T4) · D2(T4~T10) · D3(T11) · D4(T1·T2·T12) · D5(T3). 스펙 §4 산출물 전항목이 태스크에 매핑됨. §4 미열거였던 raw+stub 은 위키 스키마 요구(sources 필수·고아 금지)로 T5 에 보완, 스펙 대비 추가임을 명시
-- **플레이스홀더**: 없음 — 스크립트·ADR·edit 전문 포함
-- **타입/이름 일관성**: `Wiki-Skip:` 트레일러 표기, `.githooks/pre-push`, `inject-state.sh`, 파일명·경로가 태스크 간 일치함을 확인
+- **Spec coverage**: D1 (layer model — a keep-as-is decision, so no implementation; recorded as an ADR, T4) · D2 (T4–T10) · D3 (T11) · D4 (T1·T2·T12) · D5 (T3). Every spec §4 deliverable maps to a task. The raw+stub items unlisted in §4 are added in T5 per wiki-schema requirements (sources mandatory · no orphans), explicitly noted as an addition over the spec
+- **Placeholders**: none — full texts of scripts, ADRs, and edits included
+- **Type/name consistency**: `Wiki-Skip:` trailer spelling, `.githooks/pre-push`, `inject-state.sh` — filenames and paths confirmed consistent across tasks
