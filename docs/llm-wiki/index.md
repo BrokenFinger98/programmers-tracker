@@ -9,6 +9,10 @@
 - 2026-08-04 [[decisions/2026-08-04-solved-ac-tag-vocabulary]] — 태그 어휘는 solved.ac 180종
 - 2026-08-04 [[decisions/2026-08-04-reject-vector-db]] — 벡터 DB · 그래프 DB 기각
 - 2026-08-04 [[decisions/2026-08-04-no-ai-debugger]] — AI 디버거 제어 미채택
+- 2026-08-04 [[decisions/2026-08-04-two-public-repos]] — 저장소 2개 · 양쪽 public
+- 2026-08-04 [[decisions/2026-08-04-decisions-live-in-wiki]] — 결정 기록은 위키 ADR 단일 권위
+- 2026-08-04 [[decisions/2026-08-04-wiki-push-gate]] — push 게이트로 증류 강제 (native pre-push)
+- 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — 전역/프로젝트 위키 3계층 분리
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — 브로드캐스트 수동 관찰 원리와 한계
@@ -24,3 +28,4 @@
 
 ## Sources
 - 2026-08-04 [[sources/2026-08-04-protocol-reverse-engineering-and-design]]
+- 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
