@@ -31,3 +31,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 ## Sources
 - 2026-08-04 [[sources/2026-08-04-protocol-reverse-engineering-and-design]]
 - 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
+- 2026-08-04 [[sources/2026-08-04-oss-workflow]]

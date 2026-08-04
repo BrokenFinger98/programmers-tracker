@@ -5,7 +5,7 @@ author: BrokenFinger98
 tags: [record-keeping, git-flow, open-source]
 created: 2026-08-04
 updated: 2026-08-04
-sources: [raw/sessions/2026-08-04-record-keeping-design.md]
+sources: [raw/sessions/2026-08-04-oss-workflow.md]
 ---
 
 # Issue-first flow, squash-only merges
