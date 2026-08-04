@@ -187,10 +187,19 @@ Prefer factories over direct constructor calls.
 | **Layer** | Parsers · services · controllers | Fixtures / MockK | `test/protocol/**`, `test/application/**` |
 | **Integration** | Real Programmers connection | Session cookie | `test/integration/**` |
 
+**Layer tests boot no Spring context** — plain JUnit 5 + Kotest assertions + MockK.
+`@SpringBootTest` stays only in the single context-load test; Spring slice tests come later,
+only for web controllers. See [[decisions/2026-08-04-test-environment]].
+
 ### 6.2 Pin measured messages as fixtures
 
 Protocol parsers are tested with **actually captured messages**. Hand-written JSON only
 verifies the protocol we imagined.
+
+Every normal-path and verdict-path parser test **must load a `fixtures/*.jsonl` capture
+through the `FixtureLoader` helper** (test `support/fixtures` package). Inline JSON literals
+are allowed only for cases that cannot have a measured capture (malformed JSON, synthetic
+boundary values).
 
 ```
 src/test/resources/fixtures/
@@ -201,6 +210,7 @@ src/test/resources/fixtures/
   algorithm-compile.jsonl     120820 · compile error
   sql-pass.jsonl              131528 · snake_case · no finish
   sql-run.jsonl               131528 · returned_rows double-encoded
+  algorithm-run-error.jsonl   120810/120820 · run-path HTML-escaped error output
 ```
 
 Each fixture is a real capture from the [protocol doc](programmers-protocol.md) ch. 15 verification log.
@@ -229,7 +239,10 @@ tests with it.
 ### 6.5 Integration tests
 
 - Disabled by default (`@Tag("integration")`), run explicitly and locally only
-- No session cookie → **skip — that is not a failure**
+- The default `test` Gradle task **excludes** the tag; run them via the separate
+  `integrationTest` task (`scripts/test.sh` stays unit + layer only)
+- Session cookie is read from `TRACKER_SESSION_FILE` (default `~/.ps/session`);
+  no session cookie → **skip via JUnit assumption — that is not a failure**
 - Never run in CI
 - Only against Lv0 problems (minimize impact on the account record)
 

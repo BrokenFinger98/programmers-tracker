@@ -15,6 +15,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — Global/project wikis split into 3 layers
 - 2026-08-04 [[decisions/2026-08-04-english-only-artifacts]] — All work artifacts in English
 - 2026-08-04 [[decisions/2026-08-04-issue-first-squash-flow]] — Issue-first flow, squash-only merges
+- 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits
