@@ -1,19 +1,19 @@
 # programmers-tracker Wiki
 
-이 프로젝트의 지식 베이스. 개발 기억이자 **포트폴리오 산출물**이다.
+This project's knowledge base. Development memory and a **portfolio artifact**.
 
-## 쓰는 법
+## How to use
 
-| 명령 | 시점 |
+| Command | When |
 |---|---|
-| `/wiki-ingest` | 작업이 일단락되어 중요한 결정·결과물이 나왔을 때 |
-| `/wiki-query <질문>` | "전에 뭐 정했지" · "왜 이렇게 했지" |
-| `/wiki-lint` | 주기적 건강검진 — 모순·고아 페이지·index 불일치 |
+| `/wiki-ingest` | When a piece of work wraps up with significant decisions or artifacts |
+| `/wiki-query <question>` | "What did we decide before?" · "Why did we do it this way?" |
+| `/wiki-lint` | Periodic health check — contradictions · orphan pages · index mismatches |
 
-스킬 정의는 `.claude/skills/wiki-*/` 에, 스키마는 `CLAUDE.md` 에 있다.
+Skill definitions live in `.claude/skills/wiki-*/`; the schema is in `CLAUDE.md`.
 
-## 원칙
+## Principles
 
-- **사람은 큐레이션, LLM 은 집필.** 본문을 직접 쓰지 않는다
-- **프로토콜 사실은 여기 쓰지 않는다.** `docs/programmers-protocol.md` 가 유일한 출처
-- **실패한 시도도 남긴다.** 되돌아간 접근·틀린 가설이 오히려 가치 있다
+- **Humans curate, the LLM writes.** Page bodies are not written by hand
+- **Protocol facts do not go here.** `docs/programmers-protocol.md` is the single source of truth
+- **Failed attempts are kept too.** Abandoned approaches and wrong hypotheses are what carry the value

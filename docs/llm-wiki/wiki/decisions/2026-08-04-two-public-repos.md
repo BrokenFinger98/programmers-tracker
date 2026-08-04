@@ -2,38 +2,40 @@
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [저장소, 공개전략]
+tags: [repository, publishing-strategy]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 저장소 2개 · 양쪽 public
+# Two repos · both public
 
-## 맥락
-코드·설계 문서·풀이 기록을 어디에 어떻게 둘 것인가. 풀이 기록에는 실패 이력·힌트
-사용 단계까지 포함되고, 저장소는 포트폴리오를 겸한다.
+## Context
+Where and how to keep the code, design documents, and solving records. The records include
+failure history and hint-usage stages, and the repositories double as a portfolio.
 
-## 검토한 선택지
-- **A. 단일 레포** — 코드와 기록을 한 곳에
-- **B. 2레포 · 양쪽 public** — `programmers-tracker`(코드+설계+위키) / `ps-records`(기록)
-- **C. 2레포 · 기록만 private** — 실패 이력 비공개
+## Options considered
+- **A. Single repo** — code and records in one place
+- **B. 2 repos · both public** — `programmers-tracker` (code + design + wiki) / `ps-records` (records)
+- **C. 2 repos · records private** — failure history kept private
 
-## 결정
+## Decision
 **B.**
 
-## 이유
-설계 문서를 코드와 분리하면 반드시 어긋나므로 한 레포에 둔다. 기록은 성격(개인 데이터)
-과 수명(계정 단위)이 코드와 달라 분리한다. `ps-records` 를 public 으로 두는 것은
-**실패 이력·힌트 사용 단계까지 포함한 성장 서사가 자산**이라는 판단이다.
+## Rationale
+Design documents separated from code always drift, so they stay in one repo. Records
+differ from code in nature (personal data) and lifespan (per-account), so they are split
+off. Keeping `ps-records` public reflects the judgment that **a growth narrative including
+failure history and hint-usage stages is an asset**.
 
-## 받아들인 비용
-- 실패까지 공개하는 심리 비용
-- 자격증명·개인정보 관리가 한층 엄격해야 한다 — **gitignore 예외 없음**
-  (세션 쿠키·이메일은 어떤 경우에도 커밋 금지, [[decisions/2026-08-04-global-project-wiki-split]] 의
-  raw 원문 반입 금지 규칙과 같은 축)
+## Accepted costs
+- The psychological cost of making even failures public
+- Credential and personal-data handling must be a notch stricter — **no gitignore
+  exceptions** (session cookies and emails are never committed under any circumstances,
+  the same axis as the raw-text import ban in
+  [[decisions/2026-08-04-global-project-wiki-split]])
 
-## 결과
-2026-08-04 두 레포 생성. 이 결정은 `.harness/state/decisions.md` 에만 있다가
-[[decisions/2026-08-04-decisions-live-in-wiki]] 에 따라 ADR 로 이관됐다 —
-이중 기록이 첫날부터 발산한 실례(6건 vs 5건)가 바로 이 항목이다.
+## Outcome
+Both repos created 2026-08-04. This decision existed only in `.harness/state/decisions.md`
+before being migrated to an ADR per [[decisions/2026-08-04-decisions-live-in-wiki]] —
+this very entry is the real-world case (6 vs 5) of dual records diverging on day one.

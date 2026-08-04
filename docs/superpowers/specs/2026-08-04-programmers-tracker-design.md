@@ -1,112 +1,116 @@
-# programmers-tracker 설계
+# programmers-tracker Design
 
-작성일: 2026-08-04
-상태: 설계 확정 대기
+Written: 2026-08-04
+Status: awaiting design finalization
 
-## 1. 목적
+## 1. Purpose
 
-프로그래머스 풀이 과정을 **제출 단위로 빠짐없이 기록**하고, 그 데이터를 MCP로 노출해
-어떤 AI로든 약점 진단·문제 추천·단계적 힌트를 받을 수 있게 한다.
+Record the Programmers solving process **completely, at submission granularity**, and expose
+that data over MCP so any AI can provide weakness diagnosis, problem recommendations, and
+staged hints.
 
-### 왜 필요한가
+### Why this is needed
 
-프로그래머스는 채점 결과를 그 순간에 흘려보내고 끝낸다. 지나간 제출을 조회할 API가 없다
-([프로토콜 문서](../../programmers-protocol.md) 11절). 남는 것은 "풀었다/못 풀었다"와
-날짜별 시도 횟수뿐이다.
+Programmers streams grading results in the moment and then discards them. There is no API to
+look up past submissions ([protocol doc](../../programmers-protocol.md) §11). All that
+remains is "solved / not solved" and the attempt count per day.
 
-실제로 2025년 기록은 `attemptTotalCount: 449`, `solvedChallengeCount: 43`이다.
-**449번의 시도 중 43번의 성공만 알 수 있고, 나머지 406번이 왜 실패했는지는 이미 소실됐다.**
+The actual 2025 record reads `attemptTotalCount: 449`, `solvedChallengeCount: 43`.
+**Of 449 attempts we can only see the 43 successes; why the other 406 failed is already lost.**
 
-BaekjoonHub도 정답일 때만 동작한다(`getSolvedResult().includes('정답')`). 구조적으로
-실패를 기록할 수 없다. 이 프로젝트가 완성되면 BaekjoonHub는 제거한다.
+BaekjoonHub also only works on correct answers (`getSolvedResult().includes('정답')`).
+It is structurally incapable of recording failure. Once this project is complete, BaekjoonHub
+gets removed.
 
-### 설계를 가르는 판단
+### The judgment that shapes the design
 
-**분석 로직을 서버에 넣지 않는다.** 서버는 수집과 집계까지만 하고, "왜 틀렸는지"의 해석은
-AI가 원본 코드와 시도 간 diff를 읽고 한다.
+**No analysis logic goes into the server.** The server only collects and aggregates; the
+interpretation of "why it was wrong" is done by an AI reading the original code and the diffs
+between attempts.
 
-규칙 기반 분석기("시간초과 3회 이상이면 시간복잡도 문제")는 금방 천장에 부딪힌다.
-반면 1차 제출과 2차 제출의 diff를 AI가 읽으면 "경계 조건을 반복해서 놓친다" 같은
-패턴을 잡아낼 수 있다. 서버의 임무는 **AI가 읽을 수 있는 형태로 빠짐없이 남기는 것**이다.
+A rule-based analyzer ("3+ timeouts means a time-complexity problem") hits its ceiling fast.
+By contrast, when an AI reads the diff between the 1st and 2nd submission it can catch
+patterns like "repeatedly misses boundary conditions". The server's mission is to
+**leave everything behind, completely, in a form an AI can read.**
 
-## 2. 사용자 워크플로
+## 2. User workflow
 
-사용자는 **프로그래머스 웹에서만** 논다. 서버는 개입하지 않는다.
+The user lives **entirely on the Programmers website.** The server never intervenes.
 
 ```
-1. 프로그래머스에서 문제를 고르고 읽는다        ← 탐색·검색은 프로그래머스가 이미 잘한다
-2. 웹 편집기에서 코드를 쓴다                   ← 자동완성 없음 = 실전 환경과 동일
-3. "코드 실행"을 누른다                        → 서버가 결과 + 코드를 로컬에 기록
-4. 막히면 IntelliJ로 로컬 파일을 열어 디버깅     ← 서버가 러너까지 만들어둠
-5. "제출 후 채점하기"를 누른다                  → 서버가 기록 + 커밋
-6. 통과하면 서버가 GitHub에 push
-7. AI에게 "내 약점 뭐야" 라고 묻는다            → MCP로 데이터에 접근
+1. Pick and read a problem on Programmers          ← Programmers already does browse/search well
+2. Write code in the web editor                    ← no autocomplete = same as the real exam environment
+3. Press "코드 실행" (Run Code)                     → the server records the result + code locally
+4. When stuck, open the local file in IntelliJ     ← the server has already generated a runner
+5. Press "제출 후 채점하기" (Submit and Grade)       → the server records + commits
+6. On pass, the server pushes to GitHub
+7. Ask an AI "what are my weaknesses?"             → it accesses the data over MCP
 ```
 
-서버는 프로그래머스에 **아무것도 보내지 않는다.** 같은 채널을 구독해 듣기만 한다.
+The server sends **nothing** to Programmers. It subscribes to the same channel and only listens.
 
-## 3. 아키텍처
+## 3. Architecture
 
-### 3.1 시스템 구성
+### 3.1 System layout
 
 ```mermaid
 flowchart TB
-    subgraph PGM["프로그래머스 (외부)"]
+    subgraph PGM["Programmers (external)"]
         direction LR
-        WEB["웹 편집기<br/>탐색 · 검색 · 작성 · 실행 · 제출"]
+        WEB["Web editor<br/>browse · search · write · run · submit"]
         CABLE{{"ActionCable<br/>wss://ws.programmers.co.kr/cable"}}
-        PAGE[/"문제 페이지<br/>lessons/:id?language=:lang"/]
-        CATALOG[/"카탈로그 API<br/>/api/v2/school/challenges"/]
+        PAGE[/"Problem page<br/>lessons/:id?language=:lang"/]
+        CATALOG[/"Catalog API<br/>/api/v2/school/challenges"/]
     end
 
-    subgraph BROWSER["사용자 브라우저"]
-        SENSOR["센서 확장<br/>data-* 속성 5개만 읽어 전송"]
-        COOKIE[("쿠키 저장소<br/>_session_production")]
+    subgraph BROWSER["User's browser"]
+        SENSOR["Sensor extension<br/>reads only 5 data-* attributes and sends them"]
+        COOKIE[("Cookie store<br/>_session_production")]
     end
 
-    subgraph SERVER["programmers-tracker · Kotlin + Spring Boot (로컬 상주)"]
+    subgraph SERVER["programmers-tracker · Kotlin + Spring Boot (resident local process)"]
         direction TB
-        WATCHER["Watcher<br/>POST /watch → 채널 구독 LRU 8"]
-        CAPTURE["Capture<br/>브로드캐스트 수동 관찰"]
-        AUTH["SessionProvider<br/>Keychain 복호화"]
-        FETCH["CodeFetch<br/>저장된 코드 회수"]
-        RECORDER["Recorder<br/>verdict · diff · 러너 생성"]
+        WATCHER["Watcher<br/>POST /watch → channel subscription, LRU 8"]
+        CAPTURE["Capture<br/>passive broadcast observation"]
+        AUTH["SessionProvider<br/>Keychain decryption"]
+        FETCH["CodeFetch<br/>retrieves saved code"]
+        RECORDER["Recorder<br/>verdict · diff · runner generation"]
         GIT["GitSync<br/>commit / push"]
         MCP["McpFacade<br/>Streamable HTTP"]
     end
 
-    subgraph STORE["ps-records (기록 저장소)"]
+    subgraph STORE["ps-records (record repository)"]
         DIRS[("problems/<br/>README · Solution · attempts")]
         JSONL[("log/submissions.jsonl")]
         STATE[(".ps/<br/>catalog · timers · hints")]
     end
 
-    subgraph CONSUMERS["소비자"]
-        IDE["IntelliJ<br/>디버깅"]
-        AI["Claude · Cursor · 로컬 LLM"]
+    subgraph CONSUMERS["Consumers"]
+        IDE["IntelliJ<br/>debugging"]
+        AI["Claude · Cursor · local LLM"]
         GH[("GitHub")]
     end
 
-    WEB -.->|"① 문제 열림"| SENSOR
+    WEB -.->|"① problem opened"| SENSOR
     SENSOR -->|"lessonId · challengeableId<br/>type · language · codesKey"| WATCHER
-    WATCHER ==>|"구독"| CABLE
-    WEB ==>|"② 실행 / 제출"| CABLE
-    CABLE ==>|"③ 브로드캐스트<br/>동일 메시지 동시 수신"| CAPTURE
+    WATCHER ==>|"subscribe"| CABLE
+    WEB ==>|"② run / submit"| CABLE
+    CABLE ==>|"③ broadcast<br/>same messages received simultaneously"| CAPTURE
 
-    COOKIE -.->|"추출"| AUTH
+    COOKIE -.->|"extract"| AUTH
     AUTH -.-> CAPTURE
     AUTH -.-> FETCH
 
-    CAPTURE -->|"④ 결과 수신"| FETCH
-    FETCH -->|"⑤ 코드 회수"| PAGE
+    CAPTURE -->|"④ result received"| FETCH
+    FETCH -->|"⑤ code retrieval"| PAGE
     FETCH --> RECORDER
-    CATALOG -.->|"문제 메타"| RECORDER
+    CATALOG -.->|"problem metadata"| RECORDER
 
     RECORDER --> DIRS
     RECORDER --> JSONL
     RECORDER --> STATE
-    RECORDER -->|"submit 일 때만"| GIT
-    GIT -->|"통과 시 push"| GH
+    RECORDER -->|"only on submit"| GIT
+    GIT -->|"push on pass"| GH
 
     DIRS --> IDE
     DIRS --> MCP
@@ -122,86 +126,86 @@ flowchart TB
     class DIRS,JSONL,STATE,GH sto
 ```
 
-**굵은 화살표가 채점 데이터의 주 경로다.** 서버는 프로그래머스로 아무것도 보내지 않는다 —
-구독해서 듣고, 코드는 페이지에서 가져온다.
+**The bold arrows are the main path of the grading data.** The server sends nothing to
+Programmers — it subscribes and listens, and fetches the code from the page.
 
-### 3.2 캡처 시퀀스
+### 3.2 Capture sequence
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor U as 사용자
-    participant W as 프로그래머스 웹
-    participant X as 센서 확장
+    actor U as User
+    participant W as Programmers web
+    participant X as Sensor extension
     participant S as tracker
     participant C as ActionCable
     participant D as ps-records
     participant G as GitHub
 
-    U->>W: 문제 페이지 열기
-    W-->>X: DOM 로드
+    U->>W: Open a problem page
+    W-->>X: DOM loaded
     X->>S: POST /watch<br/>lessonId · challengeableId · type · language · codesKey
     S->>C: subscribe (identifier)
     C-->>S: confirm_subscription
-    Note over S,C: 이 시점부터 서버가 듣기 시작<br/>30초 heartbeat 로 재시작 대비
+    Note over S,C: From this point the server is listening<br/>30 s heartbeat guards against restarts
 
     rect rgba(59,130,246,0.08)
-        Note over U,D: 코드 실행 — 반복 구간
-        U->>W: "코드 실행" 클릭
+        Note over U,D: Run code — repeated section
+        U->>W: Click "코드 실행" (Run Code)
         W->>C: perform("run", codes)
         C-->>W: start · testcase · result
-        C-->>S: 동일 메시지 브로드캐스트
-        S->>W: GET lesson 페이지
-        W-->>S: 저장된 코드
-        S->>D: JSONL + Solution.java 갱신
-        Note right of S: run 은 커밋하지 않는다<br/>errorText 의 유일한 출처
+        C-->>S: same messages broadcast
+        S->>W: GET lesson page
+        W-->>S: saved code
+        S->>D: update JSONL + Solution.java
+        Note right of S: run is never committed<br/>the only source of errorText
     end
 
-    opt 막혔을 때
-        U->>D: IntelliJ 로 SolutionTest.java 열기
-        Note right of U: 서버가 만들어둔 러너<br/>예제는 run 의 testcases 그대로
-        U->>U: 중단점 · 스텝 · 변수 검사
+    opt When stuck
+        U->>D: Open SolutionTest.java in IntelliJ
+        Note right of U: runner pre-generated by the server<br/>examples come straight from run's testcases
+        U->>U: breakpoints · stepping · variable inspection
     end
 
     rect rgba(34,197,94,0.08)
-        Note over U,G: 제출
-        U->>W: "제출 후 채점하기" 클릭
+        Note over U,G: Submit
+        U->>W: Click "제출 후 채점하기" (Submit and Grade)
         W->>C: perform("submit", codes)
         C-->>S: start · test_group · testcase×N · result · finish
-        Note over S: 타임아웃 150초<br/>시간초과 채점은 실측 87초
-        S->>W: GET lesson 페이지
-        W-->>S: 저장된 코드
+        Note over S: 150 s timeout<br/>a timeout grading run measured 87 s
+        S->>W: GET lesson page
+        W-->>S: saved code
         S->>D: attempts/00N + JSONL + diff
         S->>G: commit
-        alt 통과
+        alt passed
             S->>G: push
-        else 미통과
-            Note over S,G: 로컬 보관<br/>매일 23:00 백업 push
+        else not passed
+            Note over S,G: kept locally<br/>daily 23:00 backup push
         end
     end
 ```
 
-### 3.3 verdict 판별
+### 3.3 Verdict classification
 
-`submit` 응답만으로는 컴파일 에러와 런타임 에러를 구분할 수 없다. 직전 `run` 레코드를
-참조해 승격시키는 것이 핵심이다.
+The `submit` response alone cannot distinguish a compile error from a runtime error. The key
+is consulting the immediately preceding `run` record and promoting the verdict.
 
 ```mermaid
 flowchart TB
-    START(["result_lesson_challenge 수신"]) --> PASSED{"passed<br/>== true ?"}
-    PASSED -->|예| VPASS["PASS"]
-    PASSED -->|아니오| MSG{"실패한 testcase 의<br/>msg 패턴"}
+    START(["result_lesson_challenge received"]) --> PASSED{"passed<br/>== true ?"}
+    PASSED -->|yes| VPASS["PASS"]
+    PASSED -->|no| MSG{"msg pattern of the<br/>failed testcase"}
 
-    MSG -->|"실패 (0.01ms, 75.3MB)"| VWRONG["WRONG<br/>runTime 값 있음"]
+    MSG -->|"실패 (0.01ms, 75.3MB)"| VWRONG["WRONG<br/>runTime present"]
     MSG -->|"실패 (시간 초과)"| VTIME["TIMEOUT<br/>runTime null"]
-    MSG -->|"실패 (런타임 에러)"| PREV{"직전 run 레코드에<br/>errorText 존재 ?"}
+    MSG -->|"실패 (런타임 에러)"| PREV{"errorText present in the<br/>previous run record?"}
 
-    PREV -->|아니오| VRT["RUNTIME_ERROR"]
-    PREV -->|예| KIND{"errorText 형태"}
-    KIND -->|"/Solution.java:N: error:"| VCE["COMPILE_ERROR<br/>승격"]
+    PREV -->|no| VRT["RUNTIME_ERROR"]
+    PREV -->|yes| KIND{"shape of errorText"}
+    KIND -->|"/Solution.java:N: error:"| VCE["COMPILE_ERROR<br/>promoted"]
     KIND -->|"Exception in thread ..."| VRT
 
-    VPASS --> REC["레코드 저장"]
+    VPASS --> REC["save record"]
     VWRONG --> REC
     VTIME --> REC
     VRT --> REC
@@ -215,180 +219,190 @@ flowchart TB
     class VTIME warn
 ```
 
-`errorText` 는 `run` 경로에서만 얻을 수 있고 HTML 이스케이프되어 있다
-(`<br/>`, `&quot;`, `&#39;`). 언이스케이프 후 형태로 판별한다.
+`errorText` is only obtainable via the `run` path and arrives HTML-escaped
+(`<br/>`, `&quot;`, `&#39;`). Unescape it first, then classify by shape.
 
-### 왜 수동 관찰인가
+### Why passive observation
 
-ActionCable 스트림은 커넥션이 아니라 **채널 파라미터 기준으로 스코프**된다. 같은
-`identifier`를 구독한 모든 클라이언트가 동일한 메시지를 받는다. 별도 프로세스에서
-세션 쿠키만으로 접속해 브라우저가 발사한 결과 4건을 그대로 수신하는 것을 실측 확인했다
-(프로토콜 문서 10절).
+ActionCable streams are **scoped by channel parameters**, not by connection. Every client
+subscribed to the same `identifier` receives identical messages. We verified empirically that
+a separate process, connecting with nothing but the session cookie, received all 4 result
+messages fired by the browser as-is (protocol doc §10).
 
-따라서 MITM 프록시도, 확장의 트래픽 가로채기도 필요 없다.
+Therefore no MITM proxy and no traffic interception by the extension is needed.
 
-### 왜 센서가 필요한가
+### Why a sensor is needed
 
-`identifier`는 글자 단위로 일치해야 하고 와일드카드가 없다. "이 사용자의 모든 제출"을
-구독하는 방법이 없으므로, 서버는 **사용자가 어떤 문제를 열었는지 미리 알아야** 한다.
-문제 689개 × 언어 13종이라 전부 구독하는 것은 비현실적이다.
+The `identifier` must match character-for-character and has no wildcards. There is no way to
+subscribe to "all submissions of this user", so the server **must know in advance which
+problem the user has opened.** With 689 problems × 13 languages, subscribing to everything is
+unrealistic.
 
-## 4. 컴포넌트
+## 4. Components
 
 ### 4.1 Watcher
 
-`POST /watch` 를 받아 해당 채널 구독을 연다.
+Receives `POST /watch` and opens a subscription for that channel.
 
 ```jsonc
 { "lessonId": 120804, "challengeableId": 14643,
   "challengeableType": "algorithm", "language": "java", "codesKey": "49598" }
 ```
 
-- `challengeableType` 으로 채널을 고른다: `algorithm` → `Challenge::AlgorithmChannel`,
+- The channel is chosen by `challengeableType`: `algorithm` → `Challenge::AlgorithmChannel`,
   `database` → `Challenge::DatabaseChannel`
-- 동시 구독은 **LRU 8개**로 제한한다. 초과 시 가장 오래된 것부터 닫는다.
-- 확장이 30초마다 heartbeat를 보낸다. 서버 재시작 후에도 자동 복구된다.
-- 언어 탭 변경 시 `codesKey`가 바뀌므로 확장이 다시 보낸다.
+- Concurrent subscriptions are capped at **LRU 8**. Beyond that, the oldest is closed first.
+- The extension sends a heartbeat every 30 seconds, so subscriptions recover automatically
+  after a server restart.
+- Switching the language tab changes `codesKey`, so the extension re-sends.
 
 ### 4.2 Capture
 
-WebSocket으로 `wss://ws.programmers.co.kr:443/cable` 에 붙어 구독을 유지한다.
+Connects over WebSocket to `wss://ws.programmers.co.kr:443/cable` and holds the subscriptions.
 
-- 서브프로토콜 `actioncable-v1-json`
-- 헤더: `Cookie: _session_production=…`, `Origin: https://school.programmers.co.kr`
-- `{"type":"ping"}` 은 무시
-- **종료 조건: `finish` 또는 `result_lesson_challenge` 수신.**
-  SQL은 `finish`를 보내지 않으므로 `finish`만 기다리면 무한 대기한다.
-- **타임아웃 150초.** 시간초과 채점이 실측 87초 걸린다. 60초로 잡으면 정상적인
-  시간초과 판정을 중간에 끊는다.
-- `testcase` 메시지는 병렬 채점이라 순서가 뒤섞여 도착한다. `testcaseId` 기준 정렬 후 저장.
-- 필드 명명이 알고리즘은 camelCase(`testcaseId`), SQL은 snake_case(`testcase_id`).
-  파서는 양쪽을 모두 받는다.
+- Subprotocol `actioncable-v1-json`
+- Headers: `Cookie: _session_production=…`, `Origin: https://school.programmers.co.kr`
+- `{"type":"ping"}` is ignored
+- **Termination condition: receiving `finish` OR `result_lesson_challenge`.**
+  SQL never sends `finish`, so waiting only for `finish` hangs forever.
+- **150-second timeout.** A timeout-verdict grading run measured 87 seconds. Capping at 60
+  seconds would cut off a legitimate timeout verdict mid-grade.
+- `testcase` messages arrive out of order due to parallel grading. Sort by `testcaseId`
+  before saving.
+- Field naming is camelCase for algorithm (`testcaseId`) and snake_case for SQL
+  (`testcase_id`). The parser accepts both.
 
-### 4.3 세션 쿠키
+### 4.3 Session cookie
 
-`_session_production` 은 HttpOnly라 JS로 읽을 수 없다. 서버가 **브라우저 쿠키 저장소에서
-직접 읽는다.**
+`_session_production` is HttpOnly and unreadable from JS. The server reads it
+**directly from the browser's cookie store.**
 
-- macOS: Chrome `Cookies` SQLite + Keychain 복호화
-- 최초 1회 Keychain 접근 허가 프롬프트가 뜬다
-- 만료 감지 시(구독 `reject_subscription`) 재추출하고, 실패하면 로그로 재로그인을 안내한다
-- 쿠키 값은 메모리에만 두고 디스크·로그에 남기지 않는다
+- macOS: Chrome `Cookies` SQLite + Keychain decryption
+- A one-time Keychain access permission prompt appears on first use
+- On detecting expiry (`reject_subscription` on subscribe), re-extract; if that fails, log a
+  message telling the user to log in again
+- The cookie value lives only in memory — never written to disk or logs
 
 ### 4.4 CodeFetch
 
-브로드캐스트에는 소스코드가 없다. 결과 수신 직후 문제 페이지를 받아 저장된 코드를 꺼낸다.
+The broadcast carries no source code. Immediately after receiving a result, fetch the problem
+page and pull out the saved code.
 
 ```
-GET /learn/courses/30/lessons/{lessonId}?language={lang}   (인증 필요)
-  → <input data-type="code" value="<저장된 내 코드>">
+GET /learn/courses/30/lessons/{lessonId}?language={lang}   (auth required)
+  → <input data-type="code" value="<my saved code>">
 ```
 
-> **미검증 가정**: `submit` 시 코드가 저장되는 것은 실측했으나, `run` 시에도
-> 저장되는지는 확인하지 않았다. 저장되지 않는다면 `run` 캡처가 직전 코드를 집게 된다.
-> 구현 1단계에서 검증하고, 실패하면 **확장이 CodeMirror 값을 함께 전송**하는 방식으로
-> 대체한다 (MAIN world 주입 필요).
+> **Unverified assumption**: we measured that code is saved on `submit`, but did not confirm
+> whether it is also saved on `run`. If it is not, a `run` capture would pick up the previous
+> code. Verify in implementation step 1; if it fails, fall back to **the extension sending
+> the CodeMirror value along** (requires MAIN-world injection).
 
 ### 4.5 Recorder
 
-verdict 판별 규칙 (프로토콜 문서 7절):
+Verdict classification rules (protocol doc §7):
 
-| verdict | 판별 |
+| verdict | rule |
 |---|---|
 | `PASS` | `result.passed == true` |
-| `WRONG` | 실패 + `msg`에 실행시간 포함 (`실패 (0.01ms, 75.3MB)`) |
+| `WRONG` | failed + `msg` contains a runtime (`실패 (0.01ms, 75.3MB)`) |
 | `TIMEOUT` | `msg == "실패 (시간 초과)"` |
 | `RUNTIME_ERROR` | `msg == "실패 (런타임 에러)"` |
-| `COMPILE_ERROR` | 위와 동일하되, **직전 `run`에서 컴파일 에러 전문을 받은 경우 승격** |
+| `COMPILE_ERROR` | same as above, but **promoted when the preceding `run` returned a full compile-error text** |
 
-`submit` 응답만으로는 컴파일 에러와 런타임 에러를 구분할 수 없다. 둘 다
-`"실패 (런타임 에러)"`로 온다. `run` 경로에서만 실제 에러 전문을 얻을 수 있고,
-`msg`는 HTML 이스케이프되어 있어 언이스케이프 + `<br/>` → `\n` 치환이 필요하다.
+The `submit` response alone cannot distinguish a compile error from a runtime error — both
+arrive as `"실패 (런타임 에러)"`. Only the `run` path yields the actual error text, and
+`msg` is HTML-escaped, so it needs unescaping plus `<br/>` → `\n` replacement.
 
 ### 4.6 GitSync
 
-- **`submit` 1건 = 커밋 1개.** 오답 커밋도 그대로 쌓는다 — 그게 학습 기록이다.
-  `run`은 커밋하지 않는다 (JSONL에만 남는다).
-- **push 시점: 해당 문제를 통과했을 때.** 한 문제의 시도 이력이 통째로 올라간다.
-- **백업 트리거**: 끝내 못 푼 문제는 push되지 않으므로, 매일 23:00(Asia/Seoul)에
-  미push 커밋을 밀고 MCP `push()` 로 수동 실행도 가능하게 한다.
+- **1 `submit` = 1 commit.** Wrong-answer commits pile up as-is — that *is* the learning
+  record. `run` is never committed (it only lands in the JSONL).
+- **Push timing: when the problem passes.** The whole attempt history of a problem goes up
+  at once.
+- **Backup trigger**: problems never solved are never pushed, so push un-pushed commits
+  daily at 23:00 (Asia/Seoul), plus allow manual runs via MCP `push()`.
 
-커밋 메시지 형식:
+Commit message format:
 
 ```
 [Lv2] 소수 찾기 — WRONG (12/16, attempt 3)
 [Lv2] 소수 찾기 — PASS (16/16, attempt 4, 24m18s)
 ```
 
-verdict와 시도 횟수가 `git log` 만으로도 읽히게 한다.
+Verdict and attempt count stay readable from `git log` alone.
 
-## 5. 데이터 모델
+## 5. Data model
 
-### 5.1 디렉터리
+### 5.1 Directory layout
 
 ```
 ps-records/
 ├── problems/
 │   └── 120804-두-수의-곱-구하기/
-│       ├── README.md            문제 본문 + 예제
-│       ├── Solution.java        최신 코드 (run/submit 때마다 갱신)
-│       ├── SolutionTest.java    서버 생성 러너 — IntelliJ 디버깅용
-│       ├── meta.json            식별자 · level · partTitle · acceptanceRate
+│       ├── README.md            problem statement + examples
+│       ├── Solution.java        latest code (updated on every run/submit)
+│       ├── SolutionTest.java    server-generated runner — for IntelliJ debugging
+│       ├── meta.json            identifiers · level · partTitle · acceptanceRate
 │       └── attempts/
 │           ├── 001.java  001.json
 │           ├── 002.java  002.json
 │           └── 003.java  003.json
 ├── log/
-│   └── submissions.jsonl        전체 제출 1줄 1건
+│   └── submissions.jsonl        every submission, one line each
 └── .ps/
-    ├── catalog.json             689문제 카탈로그 캐시
-    ├── timers.json              문제별 시작 시각
-    └── hints.json               문제별 힌트 해금 단계
+    ├── catalog.json             cached catalog of 689 problems
+    ├── timers.json              per-problem start times
+    └── hints.json               per-problem hint unlock level
 ```
 
-`attempts/` 가 이 설계의 심장이다. **001 → 002 사이의 diff가 곧 "무엇을 놓쳤는지"다.**
+`attempts/` is the heart of this design. **The diff between 001 → 002 is precisely "what
+was missed".**
 
-### run 과 submit 의 처리 차이
+### How run and submit are handled differently
 
-둘 다 기록하되 **취급이 다르다.** `run`은 코드를 쓰는 동안 수십 번 눌리므로
-`submit`과 같이 다루면 커밋과 시도 번호가 무의미하게 부풀어 오른다.
+Both are recorded, but **treated differently.** `run` gets pressed dozens of times while
+writing code; treating it like `submit` would meaninglessly inflate commits and attempt
+numbers.
 
 | | `run` | `submit` |
 |---|---|---|
-| `log/submissions.jsonl` 기록 | ✅ | ✅ |
-| `Solution.java` 갱신 | ✅ | ✅ |
-| `attempts/NNN.*` 파일 생성 | ✗ | ✅ |
-| `attempt` 번호 증가 | ✗ (직전 submit 번호 유지) | ✅ |
-| git 커밋 | ✗ | ✅ |
-| `diffFromPrev` 계산 | ✗ | ✅ (직전 submit 대비) |
+| recorded in `log/submissions.jsonl` | ✅ | ✅ |
+| `Solution.java` updated | ✅ | ✅ |
+| `attempts/NNN.*` files created | ✗ | ✅ |
+| `attempt` number incremented | ✗ (keeps the previous submit's number) | ✅ |
+| git commit | ✗ | ✅ |
+| `diffFromPrev` computed | ✗ | ✅ (vs. the previous submit) |
 
-`run`은 **에러 전문(`errorText`)의 유일한 출처**이므로 반드시 기록한다. `submit`이
-`"실패 (런타임 에러)"`만 줄 때, 그 직전 `run` 레코드에 컴파일러 출력이나 스택 트레이스가
-남아 있다. Recorder가 `COMPILE_ERROR` 승격 판정에 쓰는 것도 이 레코드다.
+`run` is **the only source of the full error text (`errorText`)**, so it must be recorded.
+When `submit` gives only `"실패 (런타임 에러)"`, the compiler output or stack trace survives
+in the immediately preceding `run` record. That record is also what the Recorder uses for
+the `COMPILE_ERROR` promotion.
 
-`run` 횟수 자체도 지표가 된다 — **제출 전에 몇 번이나 돌려봤는지**는 신중함과
-시행착오 패턴을 보여준다.
+The `run` count itself is a metric — **how many times you tried before submitting** shows
+carefulness and trial-and-error patterns.
 
-`elapsedSec` 의 기준점은 **확장이 그 문제를 처음 통보한 시각**(`.ps/timers.json`)이다.
-같은 문제를 나중에 다시 열면 타이머를 재시작하지 않고 누적한다.
+The reference point for `elapsedSec` is **the time the extension first reported the problem**
+(`.ps/timers.json`). Re-opening the same problem later does not restart the timer; it
+accumulates.
 
-`SolutionTest.java` 의 테스트케이스는 `run` 메시지의 `start`에 실려오는
-`testcases: [{input, output}]` 를 그대로 쓴다. 문제 본문 HTML을 파싱할 필요가 없다.
+The testcases for `SolutionTest.java` come straight from the `testcases: [{input, output}]`
+payload carried in the `run` message's `start`. No need to parse the problem-statement HTML.
 
-### 5.2 제출 레코드
+### 5.2 Submission record
 
 ```jsonc
 {
   "ts": "2026-08-04T14:23:01+09:00",
   "lessonId": 120804, "title": "두 수의 곱 구하기",
   "level": 0, "part": "코딩테스트 입문", "acceptanceRate": 91,
-  "tags": ["구현"],                      // meta.json 에서 복사 · 미태깅이면 []
+  "tags": ["구현"],                      // copied from meta.json · [] if untagged
   "language": "java",
   "action": "submit",                    // submit | run
   "attempt": 2,
-  "elapsedSec": 847,                     // 문제 최초 관측 이후
-  "sincePrevSec": 312,                   // 직전 제출 이후
-  "hintLevel": 0,                        // 0=안 봄, 1~4
+  "elapsedSec": 847,                     // since the problem was first observed
+  "sincePrevSec": 312,                   // since the previous submission
+  "hintLevel": 0,                        // 0 = none seen, 1–4
 
   "verdict": "TIMEOUT",
   "score": {"user": "0.0", "perfect": "100.0"},
@@ -401,48 +415,52 @@ ps-records/
 
   "codePath": "problems/120804-…/attempts/002.java",
   "diffFromPrev": "@@ -3,1 +3,1 @@\n-        return num1 * num2;\n+        long r = 0; …",
-  "errorText": null                      // run에서 얻은 컴파일/스택트레이스 전문
+  "errorText": null                      // full compiler/stack-trace text obtained from run
 }
 ```
 
-### 5.3 문제 유형 태그 — AI 태깅
+### 5.3 Problem-type tags — AI tagging
 
-**프로그래머스는 문제별 알고리즘 태그를 공개하지 않는다.** 문제 페이지에 태그 마크업이
-없고, breadcrumb이 `partTitle`과 같은 값일 뿐이다. 689문제의 `partTitle`을 분해하면:
+**Programmers does not publish per-problem algorithm tags.** The problem page has no tag
+markup, and the breadcrumb is just the same value as `partTitle`. Decomposing the
+`partTitle` of all 689 problems:
 
-| 성격 | 개수 | 예시 |
+| nature | count | examples |
 |---|---:|---|
-| 대회 · 코스 묶음 | 422 (61%) | `2022 KAKAO BLIND RECRUITMENT`, `코딩테스트 입문` |
-| `연습문제` — 미분류 | 114 (17%) | — |
-| SQL 주제 | 106 (15%) | `SELECT`, `GROUP BY`, `JOIN` |
-| **알고리즘 유형** | **47 (7%)** | `해시`, `DFS/BFS`, `탐욕법`, `힙` |
+| contest · course bundles | 422 (61%) | `2022 KAKAO BLIND RECRUITMENT`, `코딩테스트 입문` |
+| `연습문제` — uncategorized | 114 (17%) | — |
+| SQL topics | 106 (15%) | `SELECT`, `GROUP BY`, `JOIN` |
+| **algorithm type** | **47 (7%)** | `해시`, `DFS/BFS`, `탐욕법`, `힙` |
 
-알고리즘 유형이 붙은 문제는 고득점 Kit 47개뿐이다. `partTitle` 만으로 약점을 분석하면
-**93%의 문제에 대해 "무슨 알고리즘에 약한지" 답이 나오지 않는다.**
+Only the 47 high-score Kit problems carry an algorithm type. Analyzing weaknesses by
+`partTitle` alone means **for 93% of problems there is no answer to "which algorithm am I
+weak at".**
 
-내부적으로 `categories` 체계는 존재한다. `/api/v1/ai/recommended-challenges/recommend`
-응답에 `"categories":["자료구조"]` 가 실려온다. 그러나 이 API는 추천 1건만 돌려주고
-반복 호출해도 같은 값이라 전량 수집이 불가능하다.
+Internally a `categories` scheme does exist: `/api/v1/ai/recommended-challenges/recommend`
+responses carry `"categories":["자료구조"]`. But that API returns a single recommendation
+and repeats the same value on repeated calls, so full collection is impossible.
 
-#### 해결 — AI가 태깅하고 서버가 캐시한다
+#### Solution — AI tags, server caches
 
-서버는 문제 본문을 이미 저장한다. AI가 한 번 읽고 분류해 `meta.json` 에 넣으면
-영구 재사용된다. "서버는 수집, AI는 해석" 원칙 그대로다.
+The server already stores the problem statements. An AI reads each once, classifies it, and
+the result goes into `meta.json` for permanent reuse. Exactly the "server collects, AI
+interprets" principle.
 
 ```jsonc
 // problems/49189-가장-먼-노드/meta.json
 {
   "lessonId": 49189, "challengeableId": 813, "codesKey": {"java": 2458},
   "level": 3, "part": "고득점 Kit", "acceptanceRate": 51,
-  "tags": ["그래프", "BFS"],          // AI 태깅
+  "tags": ["그래프", "BFS"],          // AI-tagged
   "taggedBy": "claude-opus-5", "taggedAt": "2026-08-04T15:02:11+09:00",
-  "pgCategories": ["자료구조"]        // 프로그래머스가 흘려준 값이 있으면 함께 보관
+  "pgCategories": ["자료구조"]        // kept alongside when Programmers happens to leak a value
 }
 ```
 
-#### 태그 어휘는 solved.ac 것을 쓴다
+#### The tag vocabulary is solved.ac's
 
-자체 태그 체계를 만들지 않는다. **solved.ac의 180종 태그를 어휘로 채택한다.**
+We do not invent our own tag scheme. **The 180 solved.ac tags are adopted as the
+vocabulary.**
 
 ```
 세그먼트 트리 · 느리게 갱신되는 세그먼트 트리 · 최소 공통 조상 · 트라이 · 위상 정렬
@@ -450,72 +468,79 @@ ps-records/
 최소 스패닝 트리 · 강한 연결 요소 · 값/좌표 압축 · 오프라인 쿼리 · 스위핑 …
 ```
 
-채택 이유:
+Reasons for adoption:
 
-- **완전하다.** 직접 만든 17개 목록으로는 KMP·LIS·펜윅 트리·위상정렬·조합론이 전부 빠졌다.
-- **계층적이다.** `그래프 이론 > 그래프 탐색 > 너비 우선 탐색` 처럼 상하위가 잡혀 있어
-  집계 단위를 자유롭게 고를 수 있다.
-- **한국어 네이티브**이고 국내 코딩테스트 문헌과 어휘가 일치한다.
-- **유지보수 부담이 없다.**
+- **Complete.** A hand-rolled list of 17 was missing KMP, LIS, Fenwick tree, topological
+  sort, and combinatorics entirely.
+- **Hierarchical.** Parent/child relations like `그래프 이론 > 그래프 탐색 > 너비 우선 탐색`
+  are in place, so the aggregation granularity can be chosen freely.
+- **Korean-native**, matching the vocabulary of Korean coding-test literature.
+- **Zero maintenance burden.**
 
-> 백준 온라인 저지는 2026년 5월 서비스를 종료했다. 그러나 **solved.ac API는 살아 있고
-> 태그 어휘와 계층 정보를 계속 제공한다** (2026-08-04 실측: 태그 목록 180종, 문제 조회 정상).
-> 우리에게 필요한 것은 채점기가 아니라 분류 어휘이므로 종료의 영향을 받지 않는다.
-> 다만 외부 의존이므로 **어휘 목록을 `.ps/tag-vocab.json` 에 스냅샷으로 고정**해 두고,
-> solved.ac가 사라져도 태깅과 집계가 계속 동작하게 한다.
+> Baekjoon Online Judge shut down in May 2026. However, **the solved.ac API is still alive
+> and keeps serving the tag vocabulary and hierarchy** (measured 2026-08-04: tag list of
+> 180, problem lookup normal). What we need is a classification vocabulary, not a judge, so
+> the shutdown does not affect us. Still, it is an external dependency, so **the vocabulary
+> is pinned as a snapshot in `.ps/tag-vocab.json`** so tagging and aggregation keep working
+> even if solved.ac disappears.
 
 ```
-GET https://solved.ac/api/v3/tag/list?page=N        어휘 전량 (180종)
+GET https://solved.ac/api/v3/tag/list?page=N        full vocabulary (180 tags)
 ```
 
-Cloudflare 챌린지 때문에 서버의 순수 HTTP 클라이언트로는 막힌다. 어휘 수집은
-**브라우저 컨텍스트에서 1회 수행**해 스냅샷을 만든 뒤, 이후로는 로컬 파일만 읽는다.
+The Cloudflare challenge blocks the server's plain HTTP client. Vocabulary collection is
+done **once in a browser context** to produce the snapshot; afterwards only the local file
+is read.
 
-한 문제에 복수 태그를 허용한다. 태깅되지 않은 문제는 `tags: []` 로 두고,
-`stats` 집계 시 "미태깅"으로 따로 센다 — 조용히 빠뜨리지 않는다.
+Multiple tags per problem are allowed. Untagged problems keep `tags: []`, and `stats`
+aggregation counts them separately as "untagged" — nothing is silently dropped.
 
-MCP 도구 `tag_problem(lessonId, tags[])` 로 되먹인다.
+Feedback flows in through the MCP tool `tag_problem(lessonId, tags[])`.
 
-### 5.4 프로그래머스 자체 지표 캡처
+### 5.4 Capturing Programmers' own metrics
 
-프로그래머스도 자체 스킬 리포트를 운영한다. 우리 분석의 교차 검증용으로 함께 보관한다.
+Programmers also runs its own skill report. We keep it alongside as a cross-check for our
+analysis.
 
 ```
 GET /api/v1/school/challenges/users/       {rank, score, solvedChallengesCount}
 GET /api/v2/ai/skill-reports/status        {lastReport, submissionsCount, reportCreatable}
 ```
 
-`.ps/pg-metrics.jsonl` 에 하루 1회 스냅샷으로 남긴다. 레이팅·랭킹의 시계열이
-우리 기록과 독립적인 대조군이 된다.
+Snapshot once a day into `.ps/pg-metrics.jsonl`. The rating/ranking time series becomes a
+control group independent of our records.
 
-### 5.5 Obsidian 열람 계층
+### 5.5 Obsidian viewing layer
 
-`ps-records` 는 **Obsidian vault 로 바로 열리게** 만든다. 별도 GUI 를 개발하지 않는다.
+`ps-records` is built to **open directly as an Obsidian vault.** No separate GUI is
+developed.
 
-**근거**: 우리 데이터는 이미 절반이 마크다운이다. Obsidian + Dataview 플러그인이면
-표·필터·정렬·집계가 전부 공짜로 생긴다. 자체 대시보드를 만들면 그것도 유지보수 대상이 된다.
+**Rationale**: half of our data is already Markdown. With Obsidian plus the Dataview plugin,
+tables, filters, sorting, and aggregation all come for free. A homegrown dashboard would be
+one more thing to maintain.
 
-#### 원본과 파생의 분리
+#### Separating source from derived
 
-JSONL 이 **원본(source of truth)** 이고 마크다운은 **파생**이다. 서버가 JSONL 에서
-마크다운을 생성한다. 이중화가 어긋나지 않게 하려면 **누가 쓰는 파일인지**를 갈라야 한다.
+The JSONL is the **source of truth**; the Markdown is **derived**. The server generates the
+Markdown from the JSONL. To keep the duplication from drifting, the split must be by
+**who writes the file.**
 
 ```
 problems/120804-두-수의-곱-구하기/
-├── README.md         ← 서버 생성. 매번 덮어쓴다. 사람이 고쳐도 다음 기록에 사라짐
-├── notes.md          ← 오답 노트. AI·사람이 append. 서버가 절대 건드리지 않음
+├── README.md         ← server-generated. Overwritten every time; human edits vanish on the next record
+├── notes.md          ← retrospective notes. AI/humans append; the server never touches it
 ├── Solution.java
 ├── SolutionTest.java
 ├── meta.json
 └── attempts/
 ```
 
-**서버가 쓰는 파일과 사람이 쓰는 파일을 한 파일에 섞지 않는다.** 마커로 영역을 나누는
-방식은 결국 깨진다.
+**Server-written files and human-written files are never mixed in one file.** Splitting a
+file into marker-delimited regions eventually breaks.
 
-#### README.md 의 frontmatter
+#### README.md frontmatter
 
-Dataview 가 읽을 수 있게 구조화한다.
+Structured so Dataview can read it.
 
 ```markdown
 ---
@@ -540,269 +565,285 @@ nextReview: 2026-10-03
 
 #프로그래머스 #Lv0 #구현
 
-## 시도 이력
-| # | 시각 | verdict | 점수 | 경과 |
+## Attempt history
+| # | Time | verdict | Score | Elapsed |
 |---|---|---|---|---|
 | 1 | 14:09 | WRONG | 1.4 | 8m12s |
 | 2 | 14:23 | PASS | 100.0 | 14m07s |
 
-## 문제
+## Problem
 …
 ```
 
-태그를 **Obsidian 태그(`#구현`)로도 노출**한다. 그래프 뷰에서 유형별 클러스터가 눈에 보이고,
-`[[…]]` 링크로 같은 태그 문제끼리 연결된다.
+Tags are also exposed **as Obsidian tags (`#구현`)**. Type clusters become visible in the
+graph view, and `[[…]]` links connect problems sharing a tag.
 
-#### 서버가 생성하는 대시보드 노트
+#### Server-generated dashboard notes
 
-vault 루트에 Dataview 쿼리를 담은 노트를 만든다. 데이터가 아니라 **쿼리**를 생성하므로
-기록이 늘어도 갱신이 필요 없다.
+The vault root gets notes containing Dataview queries. Since what is generated is the
+**query**, not the data, the notes never need updating as records grow.
 
 ````markdown
 <!-- _weakness.md -->
-## 태그별 첫 제출 통과율
+## First-submission pass rate by tag
 ```dataview
-TABLE length(rows) AS 문제수,
-      round(100 * length(filter(rows.attempts, (a) => a = 1)) / length(rows)) AS "1트 통과율(%)"
+TABLE length(rows) AS Problems,
+      round(100 * length(filter(rows.attempts, (a) => a = 1)) / length(rows)) AS "First-try pass rate (%)"
 FROM "problems"
 GROUP BY tags
-SORT 문제수 DESC
+SORT Problems DESC
 ```
 
-## 통과했지만 느린 문제
+## Passed but slow
 ```dataview
-TABLE level, tags, maxRunTime AS "최대 실행시간(ms)"
+TABLE level, tags, maxRunTime AS "Max runtime (ms)"
 FROM "problems"
 WHERE verdict = "PASS" AND slowFlag = true
 SORT maxRunTime DESC
 ```
 ````
 
-생성할 노트:
+Notes to generate:
 
-| 노트 | 내용 |
+| note | contents |
 |---|---|
-| `_dashboard.md` | 최근 제출 · 진행 중 문제 · 오늘 통계 |
-| `_weakness.md` | 태그별 통과율 · verdict 분포 |
-| `_review.md` | 복습 큐 (`nextReview` 기준 정렬) |
-| `_warmup.md` | 재활성화 진단 결과 — 살아있음/흐릿함/죽음 |
-| `_exam.md` | 기출 세트 진행 현황 |
+| `_dashboard.md` | recent submissions · problems in progress · today's stats |
+| `_weakness.md` | pass rate by tag · verdict distribution |
+| `_review.md` | review queue (sorted by `nextReview`) |
+| `_warmup.md` | reactivation diagnosis results — alive / fuzzy / dead |
+| `_exam.md` | past-exam set progress |
 
-#### 어느 저장소에 무엇이 들어가는가
+#### Which repository holds what
 
-**Obsidian vault 는 `ps-records` 다.** 사용자가 여는 폴더가 곧 기록 저장소다.
+**The Obsidian vault is `ps-records`.** The folder the user opens is the record repository.
 
-| | `programmers-tracker` (공개) | `ps-records` (개인) |
+| | `programmers-tracker` (public) | `ps-records` (personal) |
 |---|---|---|
-| 마크다운 생성 로직 | ✅ `adapter/store` | — |
-| Dataview 쿼리 템플릿 | ✅ 리소스로 내장 | — |
-| 생성된 `README.md` · 대시보드 노트 | — | ✅ |
-| `.obsidian/` 설정 | — | ✅ |
-| **Obsidian 으로 여는 대상** | — | ✅ |
+| Markdown generation logic | ✅ `adapter/store` | — |
+| Dataview query templates | ✅ bundled as resources | — |
+| generated `README.md` · dashboard notes | — | ✅ |
+| `.obsidian/` settings | — | ✅ |
+| **what gets opened in Obsidian** | — | ✅ |
 
-서버는 *만드는 쪽*, `ps-records` 는 *보는 쪽*이다. 쿼리 템플릿은 서버에 내장하고
-서버가 `ps-records` 루트에 노트를 써넣는다 — 사용자가 Obsidian 설정을 직접 만들 필요가 없다.
+The server is the *producer* side; `ps-records` is the *viewer* side. Query templates are
+bundled into the server, and the server writes the notes into the `ps-records` root — the
+user never has to build the Obsidian setup by hand.
 
-`ps-records/.obsidian/` 도 함께 커밋한다. 다른 사람이 자기 `ps-records` 를 만들 때
-서버가 초기 설정을 생성해 준다. 필수 플러그인은 **Dataview 하나**뿐이다.
+`ps-records/.obsidian/` is committed too. When someone else creates their own `ps-records`,
+the server generates the initial configuration. The only required plugin is **Dataview.**
 
 ```
-ps-records/                    ← 이 폴더를 Obsidian vault 로 연다
-├── .obsidian/                 서버가 초기 생성 (Dataview 활성화)
-├── _dashboard.md              서버 생성
+ps-records/                    ← open this folder as the Obsidian vault
+├── .obsidian/                 server-generated on init (enables Dataview)
+├── _dashboard.md              server-generated
 ├── _weakness.md
 ├── _review.md
 ├── _warmup.md
 ├── _exam.md
 ├── problems/
-└── log/submissions.jsonl      Obsidian 은 무시, MCP 가 읽는다
+└── log/submissions.jsonl      ignored by Obsidian, read over MCP
 ```
 
-> Obsidian 이 없어도 무방하다. `README.md` 는 GitHub 에서도 그대로 렌더링되고,
-> MCP 로 AI 가 읽는 경로는 JSONL 이라 영향받지 않는다. **Obsidian 은 선택적 열람 수단이지
-> 의존 대상이 아니다.**
+> Obsidian is entirely optional. `README.md` renders as-is on GitHub, and the path AIs read
+> over MCP is the JSONL, which is unaffected. **Obsidian is an optional viewing layer, not a
+> dependency.**
 
-### 5.6 이 데이터로 답할 수 있는 질문
+### 5.6 Questions this data can answer
 
-| 질문 | 사용 필드 |
+| question | fields used |
 |---|---|
-| 주로 **어떻게** 죽는가 (논리 오류 / 시간초과 / 실수) | `verdict` 분포 |
-| **첫 제출 통과율** — 실전에서 가장 중요한 지표 | `attempt == 1 && verdict == PASS` |
-| 유형별 약점 | `tags` × `verdict` (`part` 아님 — 5.3 참고) |
-| 난이도 대비 소요 시간 | `elapsedSec` × `level` |
-| 힌트 의존도 추이 | `hintLevel` 시계열 |
-| **반복하는 실수** | `diffFromPrev` 를 AI가 읽음 |
-| 안 건드린 유형 | 카탈로그 689개 대조 |
+| **How** do I usually die (logic error / timeout / slip-up) | `verdict` distribution |
+| **First-submission pass rate** — the metric that matters most in real exams | `attempt == 1 && verdict == PASS` |
+| Weakness by type | `tags` × `verdict` (not `part` — see 5.3) |
+| Time spent vs. difficulty | `elapsedSec` × `level` |
+| Hint-dependence trend | `hintLevel` time series |
+| **Recurring mistakes** | AI reads `diffFromPrev` |
+| Untouched types | compare against the 689-problem catalog |
 
-마지막 항목은 이미 실증됐다. 현재 91문제 중 46개가 SQL이고, 알고리즘 쪽은
-**DFS/BFS · 탐욕법 · 힙 · 그래프가 통째로 비어 있다.**
+The last item is already proven: of the current 91 problems, 46 are SQL, and on the
+algorithm side **DFS/BFS, greedy, heap, and graph are entirely empty.**
 
-## 6. 분석 기능
+## 6. Analysis features
 
-서버는 지표를 계산해 내놓고, 해석은 AI가 한다. 각 기능은 MCP 도구로 노출된다.
+The server computes metrics and hands them over; interpretation is the AI's job. Each
+feature is exposed as an MCP tool.
 
-우선순위는 **P1 = 데이터가 적어도 즉시 유용**, **P2 = 수십 건 쌓인 뒤 의미가 생김** 이다.
+Priorities: **P1 = immediately useful even with little data**, **P2 = becomes meaningful
+after dozens of records.**
 
-### 6.1 기출 세트 실전 모드 (P1)
+### 6.1 Past-exam set mode (P1)
 
-`partTitle` 은 약점 축으로는 못 쓰지만 **기업 × 시기 축으로는 완벽하다.**
-프로그래머스의 최대 자산이 여기 있다 — 기업별 기출이 세트 단위로 보존돼 있다.
-
-```
-카카오                98문제 / 15개 시기 세트
-프로그래머스 자체대회      42문제
-PCCP · PCCE 자격증     28문제
-Summer/Winter Coding  15문제
-현대모비스 · Dev-Matching · 팁스타운  15문제
-                      ─────────
-                      198문제
-```
-
-세트는 실전 구성 그대로다:
+`partTitle` is useless as a weakness axis but **perfect as a company × period axis.**
+Programmers' greatest asset lives here — company exam sets preserved as sets.
 
 ```
-2023 KAKAO BLIND RECRUITMENT   7문제   레벨 1/2/2/3/3/3/4
-2022 KAKAO BLIND RECRUITMENT   7문제   레벨 1/2/2/2/3/3/3
-2018 KAKAO BLIND RECRUITMENT  12문제   레벨 1/1/2/2/2/2/2/2/2/3/3/4
+Kakao                                     98 problems / 15 period sets
+Programmers' own contests                 42 problems
+PCCP · PCCE certification                 28 problems
+Summer/Winter Coding                      15 problems
+Hyundai Mobis · Dev-Matching · Tipstown   15 problems
+                                          ─────────
+                                          198 problems
 ```
 
-**세트 단위 타이머 모드**를 제공한다. 세트를 시작하면 전체 타이머가 돌고, 문제별
-소요시간이 따로 기록된다. 실전 탈락은 실력보다 **시간 배분**에서 나는 경우가 많은데,
-"3번에서 90분을 쓰고 4·5번을 못 봤다" 같은 사실은 세트로 풀어야만 드러난다.
+Sets keep their real exam composition:
+
+```
+2023 KAKAO BLIND RECRUITMENT   7 problems   levels 1/2/2/3/3/3/4
+2022 KAKAO BLIND RECRUITMENT   7 problems   levels 1/2/2/2/3/3/3
+2018 KAKAO BLIND RECRUITMENT  12 problems   levels 1/1/2/2/2/2/2/2/2/3/3/4
+```
+
+A **set-level timer mode** is provided. Starting a set runs an overall timer while
+per-problem time is recorded separately. Real-exam failures often come from **time
+allocation** rather than skill, and facts like "spent 90 minutes on #3 and never saw #4
+and #5" only surface when solving as a set.
 
 `exam_start(partTitle)` / `exam_status()` / `exam_finish()`
 
-### 6.2 기업 출제 성향 분석 (P1)
+### 6.2 Company question-style profiling (P1)
 
-AI 태깅 결과를 기업 × 시기로 집계하면 **그 기업이 뭘 내는지**가 나온다.
-프로그래머스도 제공하지 않는 정보이며, 지원 기업이 정해졌을 때 학습 우선순위를 직접 정한다.
+Aggregating the AI-tagging results by company × period reveals **what each company asks.**
+Programmers itself does not provide this, and once target companies are decided it directly
+sets the study priorities.
 
 ```
-카카오 98문제 태그 분포 → 상위 유형과 연도별 추이
+Tag distribution over Kakao's 98 problems → top types and year-over-year trend
 ```
 
 `company_profile(company?)`
 
-### 6.3 재활성화 진단 (P0 — 가장 먼저)
+### 6.3 Reactivation diagnosis (P0 — first)
 
-**전제**: 사용자는 2024년에 Gold 103문제를 풀었으나(우선순위 큐 평균 Gold II,
-세그먼트 트리 평균 Gold I) 이후 장기 공백이 있어 상당 부분을 잊은 상태다.
+**Premise**: the user solved 103 Gold problems in 2024 (priority queue averaging Gold II,
+segment tree averaging Gold I) but has since had a long gap and forgotten much of it.
 
-이 사실이 복습 큐의 전제를 무너뜨린다. "마지막 통과일 기준"으로 계산하면
-**과거 문제 전부가 즉시 만기**가 되어 우선순위가 나오지 않는다. 시작점이 필요하다.
+This fact breaks the premise of the review queue. Computing from "last pass date" makes
+**every past problem instantly overdue**, producing no priorities. A starting point is
+needed.
 
-지식이 **소실된 것이 아니라 비활성화**된 상태이므로, 처음 배우는 것보다 회복이 훨씬 빠르다.
-따라서 새 문제를 푸는 것보다 **잊은 정도를 먼저 측정**하는 편이 효율적이다.
+The knowledge is **deactivated, not lost**, so recovery is far faster than first-time
+learning. It is therefore more efficient to **measure how much was forgotten first** than
+to solve new problems.
 
-#### 절차
+#### Procedure
 
-1. 과거에 통과한 문제를 태그별로 대표 1~2개씩 선정한다 (`.ps/tag-vocab.json` 기준)
-2. 서버가 **기존 코드를 백업**한 뒤 프로그래머스 에디터를 초기화한다
-3. 사용자가 코드를 안 보고 다시 푼다 — 타이머 작동
-4. 결과를 과거 기록과 대조해 3분류한다
+1. Pick 1–2 representative previously-passed problems per tag (based on
+   `.ps/tag-vocab.json`)
+2. The server **backs up the existing code**, then resets the Programmers editor
+3. The user re-solves without looking at the code — timer running
+4. Compare the result against the past record and classify three ways
 
 ```
-살아있음  1회 통과 · 과거 대비 소요시간 1.5배 이내
-흐릿함    2~3회 시도 또는 소요시간 2배 이상 또는 힌트 1~2단계
-죽음      4회 이상 · 힌트 3단계 이상 · 미통과
+Alive   passed on the 1st try · elapsed time within 1.5× of the past record
+Fuzzy   2–3 attempts, or 2×+ elapsed time, or hint level 1–2
+Dead    4+ attempts · hint level 3+ · did not pass
 ```
 
-이 지도가 **실제 학습 우선순위**가 된다. 태그별 통과율만으로는
-"한 번도 안 해본 것"과 "했는데 잊은 것"이 구분되지 않는데, 이 둘은 처방이 전혀 다르다.
+This map becomes **the actual study priority list.** Pass rate by tag alone cannot separate
+"never tried" from "did it but forgot", and those two call for entirely different
+prescriptions.
 
-#### 에디터 초기화
+#### Editor reset
 
-프로그래머스는 푼 문제를 열면 과거 코드가 그대로 남아 있어 그냥은 다시 풀 수 없다.
-`reset` 액션으로 초기 골격으로 되돌린다.
+Opening a solved problem on Programmers shows the old code, so it cannot simply be
+re-solved. The `reset` action restores the initial skeleton.
 
 ```js
 channel.perform("reset")   →   handleReset { initialCodes }
 ```
 
-> **주의**: `reset` 은 프로그래머스에 저장된 코드를 지운다. 서버가
-> `problems/<문제>/attempts/` 에 백업을 확보한 뒤에만 실행한다. 백업 없이 초기화하면
-> 과거 풀이가 복구 불가능하게 소실된다. 미검증 액션이므로 구현 시 실측 확인이 필요하다.
+> **Warning**: `reset` erases the code saved on Programmers. Run it only after the server
+> has secured a backup under `problems/<problem>/attempts/`. Resetting without a backup
+> loses the past solution irrecoverably. It is an unverified action, so implementation must
+> confirm it empirically.
 
 `warmup_plan(perTag?)` / `warmup_reset(lessonId)` / `warmup_report()`
 
-### 6.4 복습 큐 (P1)
+### 6.4 Review queue (P1)
 
-"옛날에 푼 문제를 다시 푼다"의 실체는 유사도 검색이 아니라 **간격 반복**이다.
-프로그래머스는 "풀었다"만 알지만 우리는 **어떻게** 풀었는지를 안다.
+"Re-solving old problems" is in substance **spaced repetition**, not similarity search.
+Programmers only knows "solved"; we know **how** it was solved.
 
 ```
-확신도 = f(시도 횟수, 힌트 단계, 소요시간, 기대 대비 성과)
-다음 복습일 = 마지막 통과일 + g(확신도)
+confidence = f(attempt count, hint level, elapsed time, performance vs. expectation)
+next review date = last pass date + g(confidence)
 
-  1번에 힌트 없이 10분  → 확신도 높음 → 60일 후
-  5번 틀리고 3단계 힌트  → 확신도 낮음 → 3일 후
+  1st try, no hints, 10 min          → high confidence → 60 days later
+  5 wrong tries, level-3 hints       → low confidence  → 3 days later
 ```
 
-전부 정확한 계산이며 벡터 검색이 필요 없다. `review_queue(limit?)`
+All of it is exact computation; no vector search required. `review_queue(limit?)`
 
-### 6.5 통과했지만 느린 문제 큐 (P1)
+### 6.5 Passed-but-slow queue (P1)
 
-`run_time` 이 테스트케이스별로 온다. **통과가 끝이 아니다.** 같은 태그·레벨 문제 대비
-현저히 느린 통과는 출제 의도를 비켜간 신호다.
+`run_time` arrives per testcase. **Passing is not the end.** A pass that is markedly slower
+than same-tag/same-level problems signals missing the intended solution.
 
-기존 기록에서 이미 잡힌다:
+Existing records already catch it:
 
-| 문제 | 실행시간 | 정황 |
+| problem | runtime | likely cause |
 |---|---:|---|
-| 더 맵게 (Lv2) | 1636.97 ms | 우선순위 큐 문제인데 매 반복 정렬로 추정 |
-| 전화번호 목록 (Lv2) | 371.72 ms | 해시 문제인데 정렬 + 비교로 추정 |
+| 더 맵게 (Lv2) | 1636.97 ms | priority-queue problem, presumably re-sorting every iteration |
+| 전화번호 목록 (Lv2) | 371.72 ms | hash problem, presumably sort + compare |
 
-실전에서 효율성 테스트가 붙으면 그대로 탈락한다. `slow_passes(threshold?)`
+With efficiency tests in a real exam, this is an outright fail. `slow_passes(threshold?)`
 
-### 6.6 기대 대비 성과 (P2)
+### 6.6 Performance vs. expectation (P2)
 
-카탈로그의 `acceptanceRate` 로 난이도를 보정한다. 정답률 91% 문제를 5번에 푼 것과
-정답률 4% 문제를 2번에 푼 것은 전혀 다른 성취인데 둘 다 `PASS` 로만 남는다.
-
-```
-기대 시도 횟수 ≈ f(acceptanceRate, level)
-성과 = 기대 시도 / 실제 시도        1보다 크면 기대 이상
-```
-
-`level` 1~5 보다 훨씬 정밀한 축이며 문제 추천의 난이도 조절에도 그대로 쓴다.
-
-### 6.7 실패 테스트케이스 번호 추적 (P2)
-
-프로그래머스는 테스트케이스 내용을 공개하지 않지만 **어느 번호가 실패했는지는 알려준다.**
-여러 제출에 걸쳐 교집합을 추적하면 정보가 된다.
+The catalog's `acceptanceRate` corrects for difficulty. Solving a 91%-acceptance problem in
+5 tries and a 4%-acceptance problem in 2 tries are completely different achievements, yet
+both are recorded merely as `PASS`.
 
 ```
-1차: 3,7,9,12,14 실패   →   2차: 9,14   →   3차: 14
+expected attempts ≈ f(acceptanceRate, level)
+performance = expected attempts / actual attempts        > 1 means above expectation
 ```
 
-끝까지 남는 번호가 특정 엣지 케이스다. AI에게 "14번만 실패하는데 어떤 반례인가"를
-물으면 추론 가능하다. 단일 제출로는 안 보이고 이력이 쌓여야 보인다.
+A far more precise axis than `level` 1–5, and reused as-is for difficulty control in
+problem recommendation.
+
+### 6.7 Tracking failed testcase numbers (P2)
+
+Programmers does not disclose testcase contents but **does reveal which numbers failed.**
+Tracking the intersection across submissions turns that into information.
+
+```
+1st: 3,7,9,12,14 fail   →   2nd: 9,14   →   3rd: 14
+```
+
+The number that survives to the end is a specific edge case. Asking an AI "only #14 keeps
+failing — what counterexample is this?" makes it inferable. Invisible in a single
+submission; only visible once history accumulates.
 
 `stuck_testcases(lessonId)`
 
-### 6.8 언어 선택 실험 (P2)
+### 6.8 Language-choice experiment (P2)
 
-실전에서 Java로 볼지 Kotlin으로 볼지는 실제 의사결정이다. Kotlin은 코드가 짧아 시간을
-아끼지만 익숙하지 않으면 실수가 는다. 같은 레벨 구간에서 **언어별 첫 제출 통과율과
-소요시간**을 비교하면 데이터로 답이 나온다. 우리 기록으로만 알 수 있다.
+Whether to take the real exam in Java or Kotlin is a genuine decision. Kotlin is shorter
+and saves time, but unfamiliarity breeds mistakes. Comparing **first-submission pass rate
+and elapsed time per language** within the same level band answers it with data. Only our
+records can tell.
 
 `stats(groupBy: "language")`
 
-### 6.9 오답 노트 자동 생성 (P1)
+### 6.9 Auto-generated retrospective notes (P1)
 
-문제를 통과하는 순간, AI가 그 문제의 **전체 시도 이력과 diff** 를 읽고 한 문단으로
-요약해 `README.md` 에 덧붙인다.
+The moment a problem passes, an AI reads the problem's **entire attempt history and diffs**
+and appends a one-paragraph summary to `README.md`.
 
-> 1차에서 `n=1` 경계를 놓쳤고, 2차는 시간초과라 `HashMap` 으로 교체했다. 3차 통과.
-> 반복 패턴: 경계값을 먼저 확인하지 않음.
+> Missed the `n=1` boundary in attempt 1; attempt 2 timed out, so switched to `HashMap`.
+> Passed on attempt 3. Recurring pattern: boundary values not checked first.
 
-복습 큐와 결합하면 **다시 풀기 전에 그때의 나를 먼저 읽게 된다.**
-서버는 훅만 제공하고 요약 생성은 AI가 한다. `append_retro(lessonId, text)`
+Combined with the review queue, **you read your past self before re-solving.**
+The server only provides the hook; the AI generates the summary.
+`append_retro(lessonId, text)`
 
-### 6.10 개념 선행 관계 (P2)
+### 6.10 Concept prerequisites (P2)
 
-"DP에 약하다"의 진짜 원인이 그 앞의 재귀·완전탐색일 수 있다. solved.ac 태그 계층에
-학습 순서를 얹은 고정 그래프를 `.ps/concept-graph.json` 에 둔다.
+The real cause of "weak at DP" may be the recursion/brute-force that precedes it. A fixed
+graph layering learning order onto the solved.ac tag hierarchy lives in
+`.ps/concept-graph.json`.
 
 ```
 완전탐색 → 재귀 → 다이나믹 프로그래밍
@@ -810,86 +851,92 @@ channel.perform("reset")   →   handleReset { initialCodes }
 그래프 탐색 → 최단 경로 → 데이크스트라
 ```
 
-노드 수십 개짜리 고정 데이터이므로 그래프 DB가 필요 없다.
+Fixed data with a few dozen nodes — no graph DB needed.
 
-### 6.11 채택하지 않은 것 — 벡터 DB
+### 6.11 What was rejected — vector DB
 
-현 규모(문제 689개, 예상 제출 2,000건 이하)에서 전체 임베딩은 4MB 남짓이며 정확
-탐색이 밀리초에 끝난다. 근사 최근접 탐색으로 정확도를 희생할 이유가 없다.
+At the current scale (689 problems, under 2,000 expected submissions) the full embedding
+set is around 4 MB and exact search finishes in milliseconds. There is no reason to
+sacrifice accuracy for approximate nearest-neighbor search.
 
-더 근본적으로, **코딩테스트 문제는 표면 서사와 실제 유형이 의도적으로 분리**되어 있다.
-"택배 상자 싣기"와 "회의실 배정"은 지문이 안 닮았지만 둘 다 그리디+정렬이고,
-"미로 탈출"과 "미로 만들기"는 지문이 닮았지만 유형이 다르다. **지문 임베딩은 정확히
-반대 방향을 잡는다.** AI 태깅이 더 정확한 유사도 축이다.
+More fundamentally, **coding-test problems deliberately decouple surface narrative from
+actual type.** "택배 상자 싣기" and "회의실 배정" read nothing alike yet are both
+greedy+sorting; "미로 탈출" and "미로 만들기" read alike yet differ in type. **Statement
+embeddings point in exactly the wrong direction.** AI tagging is the more accurate
+similarity axis.
 
-원본 텍스트(문제 본문·코드·에러·diff)를 모두 보존하므로 필요해지면 나중에 인덱스를
-만들면 된다. 벡터가 실제로 필요해지는 시점은 외부 문제은행을 합쳐 수만 건을 다루거나,
-자연어 회고가 수백 건 쌓여 의미 검색이 필요할 때다.
+All original text (problem statements, code, errors, diffs) is preserved, so an index can
+be built later if ever needed. Vectors become genuinely necessary only when merging
+external problem banks into tens of thousands of items, or when hundreds of natural-language
+retrospectives require semantic search.
 
-## 7. MCP 인터페이스
+## 7. MCP interface
 
-전송은 **Streamable HTTP**. stdio는 프로세스당 하나라 상주 서버와 맞지 않는다.
-stdio만 지원하는 클라이언트를 위해 얇은 브리지를 함께 제공한다.
+Transport is **Streamable HTTP**. stdio is one-per-process, which does not fit a resident
+server. A thin bridge is shipped alongside for stdio-only clients.
 
 ```
-[조회]
-  list_problems(level?, part?, tag?, status?)  689문제 카탈로그
-  get_problem(lessonId)                        문제 본문 + 내 모든 시도
-  submissions(since?, verdict?, tag?)          제출 이력
-  attempt_diff(lessonId, from, to)             시도 간 diff
-  stats(groupBy)                               verdict · 태그 · 언어별 집계
+[Query]
+  list_problems(level?, part?, tag?, status?)  catalog of 689 problems
+  get_problem(lessonId)                        problem statement + all my attempts
+  submissions(since?, verdict?, tag?)          submission history
+  attempt_diff(lessonId, from, to)             diff between attempts
+  stats(groupBy)                               aggregation by verdict · tag · language
 
-[재활성화]  ← 6.3 · 가장 먼저 쓰는 도구
-  warmup_plan(perTag?)                         태그별 재점검 대상 선정   P0
-  warmup_reset(lessonId)                       코드 백업 후 에디터 초기화 P0
-  warmup_report()                              살아있음 / 흐릿함 / 죽음  P0
+[Reactivation]  ← 6.3 · the first tools to use
+  warmup_plan(perTag?)                         pick re-check targets per tag   P0
+  warmup_reset(lessonId)                       back up code, then reset editor P0
+  warmup_report()                              alive / fuzzy / dead            P0
 
-[분석]  ← 6장
-  review_queue(limit?)                         복습 큐          6.4  P1
-  slow_passes(threshold?)                      통과했지만 느림   6.5  P1
-  performance(lessonId?)                       기대 대비 성과    6.6  P2
-  stuck_testcases(lessonId)                    막힌 케이스 번호  6.7  P2
-  company_profile(company?)                    기업 출제 성향    6.2  P1
+[Analysis]  ← §6
+  review_queue(limit?)                         review queue        6.4  P1
+  slow_passes(threshold?)                      passed but slow     6.5  P1
+  performance(lessonId?)                       vs. expectation     6.6  P2
+  stuck_testcases(lessonId)                    stuck case numbers  6.7  P2
+  company_profile(company?)                    company tendencies  6.2  P1
 
-[실전 모드]  ← 6.1
-  exam_start(partTitle)                        세트 타이머 시작
-  exam_status()                                남은 문제 · 경과
-  exam_finish()                                결과 + 시간 배분 리포트
+[Exam mode]  ← 6.1
+  exam_start(partTitle)                        start the set timer
+  exam_status()                                remaining problems · elapsed
+  exam_finish()                                results + time-allocation report
 
-[쓰기]
-  tag_problem(lessonId, tags[])                AI 태깅 되먹임    5.3
-  untagged(limit?)                             미태깅 문제 목록
-  append_retro(lessonId, text)                 오답 노트 추가    6.9
-  mark_hint(lessonId, level)                   힌트 해금 기록
-  push()                                       GitHub 동기화
+[Write]
+  tag_problem(lessonId, tags[])                AI tagging feedback  5.3
+  untagged(limit?)                             list untagged problems
+  append_retro(lessonId, text)                 append retro note    6.9
+  mark_hint(lessonId, level)                   record hint unlock
+  push()                                       GitHub sync
 
-[리소스]
+[Resources]
   ps://problem/{lessonId}
   ps://submissions/recent
   ps://stats/weakness
   ps://exam/current
 ```
 
-**모든 분석 도구는 숫자와 원본만 돌려준다.** "왜 그런가"의 해석은 AI가 한다.
+**Every analysis tool returns only numbers and raw data.** The "why" interpretation is done
+by the AI.
 
-`stats` 는 숫자만 낸다. 해석은 AI가 `attempt_diff` 와 원본 코드를 읽고 한다.
+`stats` emits numbers only. Interpretation is done by an AI reading `attempt_diff` and the
+original code.
 
-### 힌트 해금 규칙
+### Hint unlock rules
 
-4단계로 나누고, **다음 단계는 직전 단계 이후 제출이 1회 이상 있어야 열린다.**
+Four levels, and **the next level opens only after at least one submission since the
+previous level.**
 
-1. 접근 방향만
-2. 써야 할 자료구조 / 알고리즘 이름
-3. 의사코드
-4. 전체 풀이
+1. Approach direction only
+2. Name of the data structure / algorithm to use
+3. Pseudocode
+4. Full solution
 
-`mark_hint` 로 기록하며, "몇 단계까지 갔는지"가 그대로 실력 지표가 된다.
-서버는 단계 상태만 관리하고 힌트 내용은 AI가 생성한다.
+Recorded via `mark_hint`; "how far the hints went" is itself a skill indicator.
+The server manages only the level state; hint content is generated by the AI.
 
-## 8. 센서 확장
+## 8. Sensor extension
 
-역할은 하나 — **"지금 이 문제를 보고 있다"를 알린다.** 코드도 결과도 만지지 않고
-GitHub도 모른다.
+It has one job — **announce "this problem is being viewed right now."** It touches neither
+code nor results, and knows nothing about GitHub.
 
 ```js
 // content script: school.programmers.co.kr/learn/courses/30/lessons/*
@@ -909,77 +956,83 @@ const notify = () => fetch("http://localhost:8080/watch", {
 });
 
 notify();
-setInterval(notify, 30_000);   // heartbeat — 서버 재시작 대비
+setInterval(notify, 30_000);   // heartbeat — survives server restarts
 ```
 
-권한은 `school.programmers.co.kr` 페이지 접근과 localhost 요청뿐이다.
+Its only permissions are access to `school.programmers.co.kr` pages and localhost requests.
 
-## 9. 엣지 케이스
+## 9. Edge cases
 
-| 상황 | 처리 |
+| situation | handling |
 |---|---|
-| 서버가 꺼진 채로 제출 | 놓친다. 서버 시작 시 solved 목록 diff로 **부분 복구**(코드·실패는 복구 불가) |
-| 페이지 열자마자 즉시 실행 | 구독은 1초 내 완료. 코드 작성에 훨씬 오래 걸리므로 실질 위험 없음 |
-| 같은 문제 연속 제출 | 프로그래머스가 캐시 응답 후 `error`를 낸다. 서버는 `error`도 레코드로 남긴다 |
-| 여러 문제 동시에 열기 | LRU 8개까지 동시 구독 |
-| 언어 탭 변경 | `codesKey` 변경 → 확장이 재통보 |
-| 쿠키 만료 | `reject_subscription` 감지 → 재추출 → 실패 시 재로그인 안내 |
-| 통과 못 한 문제 | 매일 23:00 백업 push + 수동 `push()` |
+| submitting while the server is down | Missed. On server start, diff the solved list for **partial recovery** (code and failures unrecoverable) |
+| running immediately after opening the page | Subscription completes within 1 s. Writing code takes far longer, so no practical risk |
+| back-to-back submissions of the same problem | Programmers serves a cached response then emits `error`. The server records the `error` too |
+| several problems open at once | up to 8 concurrent subscriptions (LRU) |
+| switching the language tab | `codesKey` changes → extension re-notifies |
+| cookie expiry | detect `reject_subscription` → re-extract → on failure, tell the user to log in again |
+| problems never passed | daily 23:00 backup push + manual `push()` |
 
-## 10. 테스트 전략
+## 10. Test strategy
 
-- **Judge/Capture**: 실제 프로그래머스에 붙는 통합 테스트. Lv0 문제로 5개 verdict를
-  모두 재현한다 (PASS / WRONG / TIMEOUT / RUNTIME_ERROR / COMPILE_ERROR).
-  프로토콜 문서 15절의 검증 로그가 기대값의 근거다.
-- **Recorder**: 캡처한 실제 메시지 스트림을 픽스처로 고정하고 단위 테스트.
-  알고리즘·SQL 양쪽 포맷을 모두 포함한다.
-- **GitSync**: 임시 저장소 대상 단위 테스트.
-- **MCP**: 도구별 계약 테스트.
+- **Judge/Capture**: integration tests against real Programmers. Reproduce all 5 verdicts
+  on Lv0 problems (PASS / WRONG / TIMEOUT / RUNTIME_ERROR / COMPILE_ERROR).
+  The verification log in protocol doc §15 is the basis for expected values.
+- **Recorder**: pin captured real message streams as fixtures and unit-test.
+  Cover both algorithm and SQL formats.
+- **GitSync**: unit tests against a temporary repository.
+- **MCP**: contract tests per tool.
 
-## 11. 구현 순서
+## 11. Implementation order
 
-1. **Kotlin WebSocket 클라이언트로 구독·수신 재현** — 유일한 미검증 가정.
-   Python으로만 확인했으므로 가장 먼저 깬다.
-2. 쿠키 추출 (Chrome Cookies SQLite + Keychain)
-3. Capture + verdict 판별 + `run` 시 코드 저장 여부 검증
-4. Recorder — 디렉터리·JSONL·diff·러너 생성
-5. Watcher + 센서 확장
+1. **Reproduce subscribe/receive with a Kotlin WebSocket client** — the only unverified
+   assumption. Confirmed only with Python, so break this first.
+2. Cookie extraction (Chrome Cookies SQLite + Keychain)
+3. Capture + verdict classification + verifying whether code is saved on `run`
+4. Recorder — directories · JSONL · diff · runner generation
+5. Watcher + sensor extension
 6. GitSync
-7. MCP 노출
-8. BaekjoonHub 제거
+7. MCP exposure
+8. Remove BaekjoonHub
 
-1~4까지만 되면 이미 기록이 쌓이기 시작한다. **데이터 축적을 최대한 앞당기는 순서다.**
+With just 1–4, records already start accumulating. **The order maximizes how early data
+accumulation begins.**
 
-## 12. 확정된 결정
+## 12. Finalized decisions
 
-| 항목 | 결정 |
+| item | decision |
 |---|---|
-| 스택 | Kotlin + Spring Boot |
-| 채점 연동 | 수동 관찰 (ActionCable 구독) |
-| 코드 작성 위치 | 프로그래머스 웹 편집기 |
-| 디버깅 | 사용자가 IntelliJ에서 직접. **디버거 MCP는 붙이지 않는다** |
-| 힌트 | 4단계 해금, 제출해야 다음 단계 |
-| 기록 저장소 | `ps-records` — 개인 데이터, 비공개 |
-| 서버 소스 | `programmers-tracker` — 공개 예정 |
-| 커밋 | `submit` 마다 1개 (`run`은 커밋하지 않음) |
-| push | 문제 통과 시 + 매일 23:00 백업 |
-| 쿠키 | 브라우저 저장소에서 자동 추출 |
+| stack | Kotlin + Spring Boot |
+| grading integration | passive observation (ActionCable subscription) |
+| where code is written | the Programmers web editor |
+| debugging | the user, directly in IntelliJ. **No debugger MCP** |
+| hints | 4-level unlock; must submit to open the next level |
+| record repository | `ps-records` — personal data, private |
+| server source | `programmers-tracker` — to be public |
+| commits | 1 per `submit` (`run` is not committed) |
+| push | on problem pass + daily 23:00 backup |
+| cookie | auto-extracted from the browser store |
 
-### 디버거 MCP를 붙이지 않는 이유
+### Why no debugger MCP
 
-[Debugger MCP Server](https://plugins.jetbrains.com/plugin/29233-debugger-mcp-server) 로
-AI가 중단점·스텝·변수 검사를 조종하는 것이 기술적으로 가능하다. 그러나 디버깅을 원한
-이유가 "내가 디버그를 찍고 싶어서"였다. AI가 디버거를 몰면 디버깅을 배우는 게 아니라
-외주를 주는 것이 되고, 이는 **자동완성을 끄기로 한 판단과 정면으로 어긋난다.**
+With the [Debugger MCP Server](https://plugins.jetbrains.com/plugin/29233-debugger-mcp-server)
+it is technically possible for an AI to drive breakpoints, stepping, and variable
+inspection. But the reason for wanting debugging was "I want to set the breakpoints
+myself." If an AI drives the debugger, debugging is outsourced rather than learned, which
+**directly contradicts the decision to turn autocomplete off.**
 
-되돌릴 수 없는 결정이 아니다. 나중에 필요하면 별도 MCP 서버로 붙이면 된다.
+Not an irreversible decision — if needed later, it can be attached as a separate MCP
+server.
 
-## 13. 미해결 · 가정
+## 13. Open questions · assumptions
 
-- **Kotlin에서 동일 동작** — Python으로만 검증. 구현 1단계에서 확인.
-- **`run` 시 코드 자동저장 여부** — 미검증. 실패 시 확장이 CodeMirror 값을 함께 전송.
-- 효율성 테스트가 있는 문제의 `scores` 2항목 형태 — 미유발
-- 메모리 초과 verdict — 미유발
-- 프로그래머스 레이트리밋의 정확한 규칙 — 미확인
-- 프로그래머스 UI/API 변경 시 파손 가능성. 식별자 추출은 `data-*` 속성에 의존하므로
-  마크업 변경에 취약하다. 실패 시 명확한 오류를 남기고 조용히 잘못 기록하지 않는다.
+- **Identical behavior in Kotlin** — verified only with Python. Confirm in implementation
+  step 1.
+- **Whether code is auto-saved on `run`** — unverified. On failure, the extension sends the
+  CodeMirror value along.
+- The 2-entry `scores` shape for problems with efficiency tests — never triggered
+- A memory-limit-exceeded verdict — never triggered
+- The exact rules of Programmers' rate limiting — unconfirmed
+- Breakage risk on Programmers UI/API changes. Identifier extraction depends on `data-*`
+  attributes and is fragile to markup changes. On failure, emit a clear error and never
+  silently record wrong data.

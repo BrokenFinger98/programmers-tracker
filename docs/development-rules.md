@@ -1,137 +1,140 @@
-# programmers-tracker — 코딩 컨벤션
+# programmers-tracker — Coding Conventions
 
-> **헌법 부속 문서.** [`CLAUDE.md`](../CLAUDE.md) 가 *무엇을 금지/결정* 하는지라면,
-> 본 문서는 *코드를 어떻게 쓰는지* 의 규칙집이다. 새 `.kt` 작성·수정 시 **항상** 따른다.
+> **Companion to the constitution.** If [`CLAUDE.md`](../CLAUDE.md) says *what is forbidden/decided*,
+> this document is the rulebook for *how to write the code*. **Always** follow it when writing or
+> modifying `.kt` files.
 >
 > Last updated: 2026-08-04
 
 ---
 
-## 핵심 5원칙 (전역)
+## Core 5 Principles (global)
 
-`~/.claude/CLAUDE.md` 팀 표준을 승계한다.
+Inherited from the `~/.claude/CLAUDE.md` team standards.
 
-1. 한 메서드 = 한 일, 최대 10줄
-2. `else` 금지, early return
-3. primitive·collection 은 도메인 객체로 (→ §4 VO)
-4. getter 보다 행위 메서드
-5. 상속보다 합성
+1. One method = one job, max 10 lines
+2. No `else`, early return
+3. Wrap primitives · collections in domain objects (→ §4 VO)
+4. Behavior methods over getters
+5. Composition over inheritance
 
-Kotlin 파일은 Effective Kotlin 원칙을 적용한다 — `val` 우선, 널 안전성, `data class`,
-범위 함수, `sealed class`.
+Kotlin files apply Effective Kotlin principles — prefer `val`, null safety, `data class`,
+scope functions, `sealed class`.
 
 ---
 
-## 1. 패키지 구조 — 위치가 역할을 말한다
+## 1. Package Structure — location tells the role
 
 ```
 com.brokenfinger.tracker/
-  protocol/         ← 프로그래머스 프로토콜을 아는 유일한 곳
+  protocol/         ← the only place that knows the Programmers protocol
     ActionCableClient.kt
     ChannelIdentifier.kt
-    message/          수신 메시지 DTO (프로토콜 필드명 그대로)
-    parse/            DTO → 도메인 변환
-  domain/           ← 프로토콜을 모른다
+    message/          incoming message DTOs (protocol field names as-is)
+    parse/            DTO → domain conversion
+  domain/           ← knows nothing about the protocol
     Submission.kt  Verdict.kt  Attempt.kt  Tag.kt
-    calc/             순수 계산기 (§3 Functional Core)
-  application/      ← 응용 서비스 · Result DTO
+    calc/             pure calculators (§3 Functional Core)
+  application/      ← application services · Result DTOs
   adapter/
-    web/              HTTP 컨트롤러 (센서 확장용 /watch)
-    mcp/              MCP 도구 · 리소스
-    store/            파일 저장 (JSONL · 디렉터리)
+    web/              HTTP controllers (/watch for the sensor extension)
+    mcp/              MCP tools · resources
+    store/            file storage (JSONL · directories)
     git/              GitSync
 ```
 
-클래스 접미사는 Spring 관례를 유지한다 — `XxxController` · `XxxService` · `XxxRepository`.
+Class suffixes keep the Spring convention — `XxxController` · `XxxService` · `XxxRepository`.
 
-의존 방향은 `adapter → application → domain` 이며 `protocol → domain` 은 `parse` 에서만 일어난다.
-**`domain` 은 어떤 것도 import 하지 않는다.**
+The dependency direction is `adapter → application → domain`, and `protocol → domain` happens only in `parse`.
+**`domain` imports nothing.**
 
 ---
 
-## 2. 프로토콜 의존 격리 — 최우선 규칙
+## 2. Protocol Dependency Isolation — top-priority rule
 
-### 2.1 한 곳에 가둔다
+### 2.1 Confine it to one place
 
-`domain` 의 어떤 클래스도 `testcaseId` / `testcase_id` 같은 프로토콜 필드명을 알아서는 안 된다.
-프로토콜이 바뀌면 `protocol/parse` 만 고치면 되도록 유지한다.
+No class in `domain` may know protocol field names like `testcaseId` / `testcase_id`.
+Keep it so that when the protocol changes, only `protocol/parse` needs fixing.
 
-**근거**: 알고리즘 문제는 camelCase(`testcaseId`), SQL 문제는 snake_case(`testcase_id`)를 쓴다.
-이 비대칭을 도메인까지 끌고 올라가면 모든 계층이 오염된다.
+**Rationale**: algorithm problems use camelCase (`testcaseId`), SQL problems use snake_case (`testcase_id`).
+Drag this asymmetry up into the domain and every layer gets contaminated.
 
-### 2.2 모든 프로토콜 필드는 nullable 이다
+### 2.2 Every protocol field is nullable
 
-실측으로 확인된 사실이다. 낙관적으로 모델링하면 런타임에 터진다.
+This is a measured fact. Model optimistically and it blows up at runtime.
 
 ```kotlin
-// ❌ 실측 반례가 있다
+// ❌ measured counterexamples exist
 data class TestcaseMessage(val runTime: String, val memorySize: Long)
 
 // ✅
 data class TestcaseMessage(
-    val testcaseId: Long?,      // SQL 은 testcase_id 로 온다
+    val testcaseId: Long?,      // SQL sends testcase_id
     val passed: Boolean?,
-    val msg: String?,           // SQL run 응답에서 null 관측
-    val runTime: String?,       // 런타임에러·시간초과 시 null
+    val msg: String?,           // null observed in SQL run responses
+    val runTime: String?,       // null on runtime error · timeout
     val memorySize: Long?,
 )
 ```
 
-| 필드 | null 이 되는 조건 |
+| Field | When it becomes null |
 |---|---|
-| `runTime`, `memorySize` | 런타임 에러 · 컴파일 에러 · 시간 초과 |
-| `msg` | SQL `run` 응답 |
-| `finish` 메시지 자체 | **SQL 은 보내지 않는다** |
-| `scores`, `isNewRating` | SQL 전체 |
+| `runTime`, `memorySize` | Runtime error · compile error · timeout |
+| `msg` | SQL `run` response |
+| the `finish` message itself | **SQL never sends it** |
+| `scores`, `isNewRating` | All of SQL |
 
-### 2.3 모르는 것은 버리지 않고 남긴다
+### 2.3 Keep what you don't recognize instead of dropping it
 
 ```kotlin
 sealed interface SubmitMessage {
     data class Testcase(...) : SubmitMessage
     data class Result(...) : SubmitMessage
-    data class Unknown(val type: String, val raw: JsonObject) : SubmitMessage  // 필수
+    data class Unknown(val type: String, val raw: JsonObject) : SubmitMessage  // required
 }
 ```
 
-`Unknown` 은 경고 로그를 남기고 원본 JSON 그대로 레코드에 보존한다.
+`Unknown` leaves a warning log and preserves the original JSON as-is in the record.
 
-### 2.4 원본을 항상 보존한다
+### 2.4 Always preserve the original
 
-파싱 결과만 저장하면 나중에 재해석할 수 없다. 수신 메시지 원본을 함께 남긴다
-(`attempts/00N.raw.jsonl`). 디스크는 싸고, 사라진 데이터는 복구할 수 없다.
+Store only parse results and you can never reinterpret later. Keep the original incoming messages
+alongside (`attempts/00N.raw.jsonl`). Disk is cheap; lost data is unrecoverable.
 
 ---
 
-## 3. Functional Core — 판정·집계는 순수 계산기로
+## 3. Functional Core — verdicts and aggregation as pure calculators
 
-**불변식·판정·집계 로직은 I/O 를 모르는 순수 클래스**로 작성한다.
-입력 = 메모리 스냅샷(파라미터), 출력 = 판정 결과. 파일·네트워크·git 참조 금지.
+**Write invariant, verdict, and aggregation logic as pure classes that know no I/O.**
+Input = in-memory snapshot (parameters), output = the verdict result. No file · network · git references.
 
-대상:
+Targets:
 
-| 계산기 | 입력 | 출력 |
+| Calculator | Input | Output |
 |---|---|---|
-| `VerdictResolver` | 제출 메시지 + 직전 run 레코드 | `Verdict` 5종 |
-| `ConfidenceCalculator` | 시도 횟수·힌트 단계·소요시간 | 확신도 → 다음 복습일 |
-| `PerformanceScorer` | acceptanceRate · level · 실제 시도 | 기대 대비 성과 |
-| `StuckTestcaseFinder` | 제출 이력 | 끝까지 실패한 케이스 번호 |
-| `SlowPassDetector` | runTime + 동일 태그·레벨 분포 | 느린 통과 여부 |
+| `VerdictResolver` | Submit messages + the preceding run record | 5 `Verdict` kinds |
+| `ConfidenceCalculator` | Attempt count · hint stage · time spent | Confidence → next review date |
+| `PerformanceScorer` | acceptanceRate · level · actual attempts | Performance vs. expectation |
+| `StuckTestcaseFinder` | Submission history | Case numbers that failed to the end |
+| `SlowPassDetector` | runTime + same-tag/level distribution | Whether the pass was slow |
 
-**서비스는 조립·저장만 한다.** 데이터를 모아 계산기에 넘기고, 결과로 저장/커밋을 실행한다.
-판정 도중 파일을 읽지 않는다 — 스냅샷 선로드가 강제된다.
+**Services only assemble and store.** They gather data, hand it to the calculators, and execute
+storage/commits with the results. No file reads mid-verdict — snapshot preloading is forced.
 
-효과:
-- mock 0 단위 테스트 — 경계값 전수 검증 가능
-- 같은 계산기를 실시간 캡처와 과거 데이터 재분석이 공유 → 드리프트 원천 차단
+Effects:
+- Mock-0 unit tests — exhaustive boundary-value verification possible
+- Live capture and historical re-analysis share the same calculators → drift eliminated at the source
 
-❌ 반례: 서비스 안 인라인 판정. 단위 테스트 불가, 재분석 경로에서 재사용 불가.
+❌ Counterexample: inline verdict logic inside a service. Not unit-testable, not reusable from the
+re-analysis path.
 
 ---
 
-## 4. 값 객체 · 검증 시점 분리
+## 4. Value Objects · Separated Validation Timing
 
-의미 있는 값은 raw String 금지 → VO. `data class`, 생성 시 검증, 행위 메서드 보유.
+Meaningful values must not stay raw Strings → VO. `data class`, validated at creation, carries
+behavior methods.
 
 ```kotlin
 @JvmInline value class LessonId(val value: Long)
@@ -139,116 +142,117 @@ sealed interface SubmitMessage {
 @JvmInline value class CodesKey(val value: String)
 ```
 
-`ChallengeableId` 와 `CodesKey` 는 **반드시 다른 타입**이어야 한다. 둘 다 Long/String 이면
-바꿔 넣어도 컴파일이 통과하는데, 그 혼동이 실제로 리버스 엔지니어링 단계에서
-반복 실패를 일으켰다 (프로토콜 문서 3장).
+`ChallengeableId` and `CodesKey` **must be different types**. If both were Long/String,
+swapping them would still compile — and that confusion actually caused repeated failures
+during the reverse-engineering phase (protocol doc ch. 3).
 
-### 검증 시점 분리 (receive-first)
+### Separated validation timing (receive-first)
 
-**입력 경계는 엄격, 외부에서 받은 값은 관용적으로** 다룬다.
+**Strict at input boundaries, lenient with values received from outside.**
 
 ```kotlin
-// 우리가 만드는 값 — 엄격. 위반 시 throw
+// values we create — strict. Throws on violation
 fun from(raw: String): Tag
 
-// 프로토콜·저장소에서 읽은 값 — 관용. 절대 throw 하지 않는다
+// values read from the protocol/storage — lenient. NEVER throws
 fun ofReceived(raw: String?): Tag?
 ```
 
-**근거**: 프로그래머스가 새 값을 보내기 시작했을 때 파싱이 throw 하면 그 제출 기록이
-통째로 유실된다. 기록 유실이 검증 실패보다 훨씬 큰 손해다. 관용적으로 받아
-`Unknown` 으로 남기고 경고한다.
+**Rationale**: if parsing throws when Programmers starts sending a new value, that submission record
+is lost wholesale. Losing a record is a far greater loss than failing validation. Receive leniently,
+keep it as `Unknown`, and warn.
 
 ---
 
-## 5. 정적 팩토리 네이밍
+## 5. Static Factory Naming
 
-| 접두 | 의미 | 예 |
+| Prefix | Meaning | Example |
 |---|---|---|
-| `of` | 값·구성요소로부터 생성 | `ChannelIdentifier.of(lessonId, challengeableId, lang)` |
-| `from` | **타입 변환** (다른 타입 → 이 타입) | `Submission.from(message)` · `SubmissionRecord.from(submission)` |
-| `ofReceived` | 외부 수신값에서 관용 생성 (throw 금지) | `Verdict.ofReceived(msg)` |
-| `toXxx` | 이 객체 → 다른 타입 (인스턴스 메서드) | `submission.toRecord()` |
+| `of` | Create from values/components | `ChannelIdentifier.of(lessonId, challengeableId, lang)` |
+| `from` | **Type conversion** (another type → this type) | `Submission.from(message)` · `SubmissionRecord.from(submission)` |
+| `ofReceived` | Lenient creation from an externally received value (never throws) | `Verdict.ofReceived(msg)` |
+| `toXxx` | This object → another type (instance method) | `submission.toRecord()` |
 
-생성자 직접 호출보다 팩토리를 우선한다.
+Prefer factories over direct constructor calls.
 
 ---
 
-## 6. 테스트
+## 6. Tests
 
-### 6.1 3계층 분할
+### 6.1 3-layer split
 
-| 계층 | 대상 | 인프라 | 위치 |
+| Layer | Target | Infrastructure | Location |
 |---|---|---|---|
-| **Unit** | 도메인 모델 · 순수 계산기 | **mock 0개** | `test/domain/**` |
-| **Layer** | 파서 · 서비스 · 컨트롤러 | 픽스처 / MockK | `test/protocol/**`, `test/application/**` |
-| **Integration** | 실제 프로그래머스 접속 | 세션 쿠키 | `test/integration/**` |
+| **Unit** | Domain models · pure calculators | **0 mocks** | `test/domain/**` |
+| **Layer** | Parsers · services · controllers | Fixtures / MockK | `test/protocol/**`, `test/application/**` |
+| **Integration** | Real Programmers connection | Session cookie | `test/integration/**` |
 
-### 6.2 실측 메시지를 픽스처로 고정한다
+### 6.2 Pin measured messages as fixtures
 
-프로토콜 파서는 **실제로 캡처한 메시지**로 테스트한다. 손으로 지어낸 JSON 은
-우리가 상상한 프로토콜을 검증할 뿐이다.
+Protocol parsers are tested with **actually captured messages**. Hand-written JSON only
+verifies the protocol we imagined.
 
 ```
 src/test/resources/fixtures/
-  algorithm-pass.jsonl        120804 · 16/16 · 레이팅 1371→1372
-  algorithm-wrong.jsonl       120803 · 1/16 · 부분점수 1.4
-  algorithm-timeout.jsonl     120805 · 시간 초과 · 87초
-  algorithm-runtime.jsonl     120810 · 런타임 에러
-  algorithm-compile.jsonl     120820 · 컴파일 에러
-  sql-pass.jsonl              131528 · snake_case · finish 없음
-  sql-run.jsonl               131528 · returned_rows 이중 인코딩
+  algorithm-pass.jsonl        120804 · 16/16 · rating 1371→1372
+  algorithm-wrong.jsonl       120803 · 1/16 · partial score 1.4
+  algorithm-timeout.jsonl     120805 · timeout · 87 s
+  algorithm-runtime.jsonl     120810 · runtime error
+  algorithm-compile.jsonl     120820 · compile error
+  sql-pass.jsonl              131528 · snake_case · no finish
+  sql-run.jsonl               131528 · returned_rows double-encoded
 ```
 
-각 픽스처는 [프로토콜 문서](programmers-protocol.md) 15장 검증 로그의 실제 캡처다.
+Each fixture is a real capture from the [protocol doc](programmers-protocol.md) ch. 15 verification log.
 
-### 6.3 실패 경로 테스트 필수
+### 6.3 Failure-path tests required
 
-**verdict 5종을 전부 커버**한다. 성공 케이스만 두지 않는다.
-`Unknown` 메시지 · 식별자 추출 실패 · 쿠키 만료 · 구독 거부도 테스트한다.
+**Cover all 5 verdicts.** Never keep only success cases.
+Also test `Unknown` messages · identifier extraction failure · cookie expiry · subscription rejection.
 
-### 6.4 픽스처는 object-mother
+### 6.4 Fixtures are object-mothers
 
-테스트 객체는 빌더 함수로 만든다. 인라인 생성자 반복 금지.
+Build test objects with builder functions. No repeated inline constructors.
 
 ```kotlin
 // support/fixtures/SubmissionFixtures.kt
 fun aSubmission(verdict: Verdict = Verdict.PASS, attempt: Int = 1) = ...
 fun aTestcase(passed: Boolean = true, runTime: String? = "0.01") = ...
 
-// 사용 — 변경 필드만 named-param override
+// usage — named-param override of only the changed fields
 val timeout = aSubmission(verdict = Verdict.TIMEOUT)
 ```
 
-새 도메인 타입 도입 시 `*Fixtures.kt` 에 `aXxx()` 빌더부터 추가하고 그것으로 테스트를 쓴다.
+When introducing a new domain type, add an `aXxx()` builder to `*Fixtures.kt` first and write the
+tests with it.
 
-### 6.5 통합 테스트
+### 6.5 Integration tests
 
-- 기본 비활성 (`@Tag("integration")`), 로컬에서 명시적으로만 실행
-- 세션 쿠키가 없으면 **skip — 실패가 아니다**
-- CI 에서는 돌리지 않는다
-- Lv0 문제 대상으로만 (계정 기록에 영향 최소화)
+- Disabled by default (`@Tag("integration")`), run explicitly and locally only
+- No session cookie → **skip — that is not a failure**
+- Never run in CI
+- Only against Lv0 problems (minimize impact on the account record)
 
 ---
 
-## 7. 개인 데이터 취급
+## 7. Personal Data Handling
 
-### 7.1 절대 커밋하지 않는 것
+### 7.1 Never commit
 
 ```gitignore
-.harness/state/goal.md      # 개인 작업 상태
+.harness/state/goal.md      # personal work state
 .ps/session
 .ps/cookies*
 *.local.yml
 application-local.yml
 ```
 
-기록은 별도 저장소 `ps-records` 에 남긴다. 이 저장소에는 어떤 풀이 기록도 들어가지 않는다.
+Records go to the separate `ps-records` repository. No solving record of any kind enters this repository.
 
-### 7.2 자격증명 마스킹
+### 7.2 Credential masking
 
-세션 쿠키는 메모리에만 둔다. `SessionProvider` 하나로 다루는 코드를 제한하고,
-밖으로는 값 클래스만 넘긴다.
+Session cookies live in memory only. Confine the code that handles them to a single `SessionProvider`,
+and pass only the value class outward.
 
 ```kotlin
 @JvmInline
@@ -258,32 +262,33 @@ value class SessionCookie(private val raw: String) {
 }
 ```
 
-### 7.3 테스트 픽스처 정제
+### 7.3 Test fixture scrubbing
 
-실측 메시지를 픽스처로 쓰되 이메일·사용자 ID·랭킹은 치환한다.
-`surveyUrl`·`finishModalLink` 같은 개인 식별 가능 경로도 마찬가지다.
+Use measured messages as fixtures, but substitute emails · user IDs · rankings.
+Same for personally identifiable paths like `surveyUrl` · `finishModalLink`.
 
 ---
 
-## 8. 외부 의존은 스냅샷으로 고정
+## 8. External Dependencies Pinned as Snapshots
 
-우리가 통제하지 못하는 데이터는 로컬에 복제한 뒤 그것만 읽는다.
+Data we do not control is replicated locally, and only the replica is read.
 
-| 대상 | 스냅샷 | 갱신 |
+| Target | Snapshot | Refresh |
 |---|---|---|
-| solved.ac 태그 어휘 180종 | `.ps/tag-vocab.json` | 수동 |
-| 프로그래머스 문제 카탈로그 689개 | `.ps/catalog.json` | 하루 1회 |
+| solved.ac tag vocabulary, 180 tags | `.ps/tag-vocab.json` | Manual |
+| Programmers problem catalog, 689 problems | `.ps/catalog.json` | Once a day |
 
-**근거**: 백준 온라인 저지가 2026년 5월 종료했다. solved.ac API 는 아직 살아 있으나
-언제까지일지 알 수 없다.
+**Rationale**: Baekjoon Online Judge shut down in May 2026. The solved.ac API is still alive,
+but no one knows for how long.
 
-**외부 서비스가 전부 사라져도 핵심 기능(캡처·기록·분석)은 동작해야 한다.**
+**Even if every external service disappears, the core features (capture · record · analysis) must
+keep working.**
 
 ---
 
-## 9. 공개 저장소로서의 규칙
+## 9. Rules as a Public Repository
 
-### 9.1 하드코딩 금지
+### 9.1 No hardcoding
 
 ```yaml
 tracker:
@@ -293,50 +298,51 @@ tracker:
   browser: ${TRACKER_BROWSER:chrome}
 ```
 
-### 9.2 플랫폼 종속은 인터페이스 뒤로
+### 9.2 Platform dependence behind interfaces
 
 ```kotlin
 interface SessionProvider { fun cookie(): SessionCookie }
 
-class MacChromeSessionProvider : SessionProvider   // Keychain 복호화
-class ManualFileSessionProvider : SessionProvider  // 폴백 — 모든 플랫폼
+class MacChromeSessionProvider : SessionProvider   // Keychain decryption
+class ManualFileSessionProvider : SessionProvider  // fallback — all platforms
 ```
 
-**수동 파일 폴백은 선택이 아니라 필수다.** 자동 추출이 안 되는 환경에서도
-프로젝트가 쓸모없어지지 않아야 한다.
+**The manual-file fallback is not optional — it is required.** The project must not become useless
+in environments where automatic extraction does not work.
 
-### 9.3 프로그래머스에 대한 예의
+### 9.3 Courtesy toward Programmers
 
-README 에 명시한다.
+State in the README:
 
-- **개인 학습 기록용**이며 본인 계정에만 사용한다
-- **자동 제출 기능을 제공하지 않는다** — 제출은 사용자가 브라우저에서 직접 하고,
-  서버는 결과를 관찰해 기록할 뿐이다
-- 서버가 보내는 요청은 채널 구독·문제 페이지 조회·카탈로그 조회뿐이며
-  모두 브라우저가 하는 것과 같은 수준이다
-- 카탈로그 폴링은 하루 1회를 넘기지 않는다
-- 프로그래머스가 중단을 요청하면 따른다
+- This tool is **for personal learning records** and is used only on your own account
+- **It provides no auto-submission** — the user submits directly in the browser,
+  and the server merely observes and records the results
+- The only requests the server sends are channel subscription · problem page fetch · catalog fetch,
+  all at the same level as what a browser does
+- Catalog polling never exceeds once per day
+- If Programmers asks us to stop, we comply
 
-> 비공개 프로토콜을 이용하는 도구를 공개 배포하는 것은 개인이 자기 계정에 쓰는 것과
-> 성격이 다르다. 위 원칙을 지키면 실질적 문제는 없다고 보지만, 최종 판단과 책임은
-> 배포자에게 있다. 라이선스에 면책 조항을 포함한다.
-
----
-
-## 10. 스타일
-
-- `.editorconfig` 의 ktlint 규칙을 **작성 시점에** 맞춘다 (사후 `ktlintFormat` churn 최소화)
-- import ordering(알파벳), chain-method-continuation, function-signature wrapping, max-line-length
-- 완료 전 `./scripts/check.sh` exit 0 필수
+> Publicly distributing a tool that uses a private protocol is different in nature from an individual
+> using it on their own account. We believe there is no practical problem if the principles above are
+> kept, but the final judgment and responsibility rest with the distributor. The license includes a
+> disclaimer.
 
 ---
 
-## 11. 커밋 · 브랜치
+## 10. Style
 
-- 브랜치: `feat/` · `fix/` · `docs/` · `refactor/` · `test/`
-- 커밋 메시지는 영어 Conventional Commits
-- **프로토콜 관련 변경은 반드시 근거를 남긴다.** 실측 결과나 프로토콜 문서 절을 인용한다.
-  6개월 뒤 "왜 이렇게 했지"에 답할 수 있어야 한다.
+- Match the ktlint rules in `.editorconfig` **at write time** (minimize after-the-fact `ktlintFormat` churn)
+- Import ordering (alphabetical), chain-method-continuation, function-signature wrapping, max-line-length
+- `./scripts/check.sh` must exit 0 before completion
+
+---
+
+## 11. Commits · Branches
+
+- Branches: `feat/` · `fix/` · `docs/` · `refactor/` · `test/`
+- Commit messages are English Conventional Commits
+- **Protocol-related changes must leave evidence.** Cite measured results or a protocol-doc section.
+  Six months later, "why did we do it this way" must be answerable.
 
 ```
 fix(protocol): treat result_lesson_challenge as terminal for SQL
@@ -349,13 +355,16 @@ Verified 2026-08-04 on lesson 131528. See docs/programmers-protocol.md §6.
 
 ---
 
-## 12. 문서
+## 12. Documentation
 
-- `README.md` — 무엇을 해결하는가, 설치, 5분 안에 첫 기록 남기기
-- `CLAUDE.md` — 헌법 (금지·게이트·state 운영)
-- `docs/programmers-protocol.md` — 프로토콜 리버스 엔지니어링 결과
-- `docs/development-rules.md` — 이 문서
-- `docs/superpowers/specs/` — 설계 문서
+- `README.md` — what this solves, installation, first record within 5 minutes
+- `CLAUDE.md` — the constitution (forbidden list · gates · state operations)
+- `docs/programmers-protocol.md` — protocol reverse-engineering results
+- `docs/development-rules.md` — this document
+- `docs/superpowers/specs/` — design documents
 - `LICENSE` — MIT
 
-한국어로 쓴다. 대상 사용자가 한국 취업준비생이다.
+All committed artifacts are written in English — docs, comments, commit messages,
+wiki pages, user-facing tool output. Rationale and accepted costs: see the ADR
+[[decisions/2026-08-04-english-only-artifacts]].
+(Reversed 2026-08-04; was Korean-first for Korean job-seekers.)

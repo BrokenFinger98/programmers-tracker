@@ -2,48 +2,50 @@
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [아키텍처, 벡터db, YAGNI]
+tags: [architecture, vector-db, YAGNI]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md]
 ---
 
-# 벡터 DB · 그래프 DB 기각
+# Vector DB · graph DB rejected
 
-## 맥락
-"유사도 검사나 벡터 DB, 지식 그래프를 쓰면 더 효과적이지 않을까"라는 제안.
+## Context
+The suggestion: "wouldn't similarity search, a vector DB, or a knowledge graph be more effective?"
 
-## 검토한 선택지
-- **A. 벡터 DB 도입** — 문제 지문·코드를 임베딩해 유사 문제 검색
-- **B. 그래프 DB 도입** — 개념 간 선행 관계를 그래프로
-- **C. 둘 다 기각, 데이터만 보존**
+## Options considered
+- **A. Adopt a vector DB** — embed problem statements and code for similar-problem search
+- **B. Adopt a graph DB** — model prerequisite relations between concepts as a graph
+- **C. Reject both, just preserve the data**
 
-## 결정
+## Decision
 **C.**
 
-## 이유
-**규모 미달**: 문제 689개, 예상 제출 2,000건 이하. 전체 임베딩이 4MB 남짓이고 정확
-탐색이 밀리초에 끝난다. 근사 최근접 탐색으로 정확도를 희생할 이유가 없다.
+## Rationale
+**Below scale threshold**: 689 problems, fewer than 2,000 expected submissions. All
+embeddings fit in ~4 MB and exact search finishes in milliseconds. There is no reason to
+sacrifice accuracy for approximate nearest-neighbor search.
 
-**더 근본적으로 임베딩이 잘못된 축을 잡는다.** 코딩테스트 문제는 표면 서사와 실제 유형이
-**의도적으로 분리**되어 있다.
+**More fundamentally, embeddings capture the wrong axis.** In coding-test problems, the
+surface narrative and the actual problem type are **deliberately decoupled**.
 
-| 문제 A | 문제 B | 지문 유사도 | 실제 유형 |
+| Problem A | Problem B | Statement similarity | Actual type |
 |---|---|---|---|
-| 택배 상자 싣기 | 회의실 배정 | 낮음 | 둘 다 그리디+정렬 |
-| 미로 탈출 | 미로 만들기 | 높음 | BFS vs 구현 |
+| Loading delivery boxes | Assigning meeting rooms | Low | Both greedy + sorting |
+| Maze escape | Maze construction | High | BFS vs. implementation |
 
-출제자가 일부러 서사를 갈아끼우므로 지문 임베딩은 정확히 반대로 작동한다.
-**AI 태깅이 더 정확한 유사도 축**이다.
+Since problem setters intentionally swap out the narrative, statement embeddings work
+exactly backwards. **AI tagging is the more accurate similarity axis.**
 
-개념 선행 관계는 노드 수십 개짜리 고정 그래프이므로 JSON 파일로 충분하다.
+Concept prerequisite relations form a fixed graph of a few dozen nodes, so a JSON file suffices.
 
-## 받아들인 비용
-- 외부 문제은행을 합쳐 수만 건을 다루게 되면 재검토가 필요하다
-- 자연어 회고가 수백 건 쌓이면 의미 검색이 아쉬울 수 있다
+## Accepted costs
+- If external problem banks are merged and we reach tens of thousands of items, revisit
+- If free-text retrospectives accumulate into the hundreds, semantic search may be missed
 
-→ 원본 텍스트(문제 본문·코드·에러·diff)를 모두 보존하므로 **필요해지면 나중에 인덱스를
-만들면 된다.** 인덱스는 언제든 재생성 가능하지만 안 남긴 데이터는 복구할 수 없다.
+→ Since all original text (problem statements · code · errors · diffs) is preserved,
+**an index can be built later if needed.** Indexes can always be regenerated; data never
+recorded cannot be recovered.
 
-## 결과
-_해당 없음_
+## Outcome
+_Not applicable_

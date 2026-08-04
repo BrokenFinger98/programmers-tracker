@@ -2,42 +2,46 @@
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [기록체계, 위키, 단일화]
+tags: [record-keeping, wiki, consolidation]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 결정 기록은 위키 ADR 단일 권위
+# Decision records: wiki ADRs are the single authority
 
-## 맥락
-결정이 `.harness/state/decisions.md`(요약 append)와 `wiki/decisions/`(상세 ADR) 두 곳에
-쓰이고 있었다. 운영 첫날 실측: state 6건 vs 위키 5건 — **하루 만에 발산했다**
-("저장소 2개" 결정이 위키에 없었다). 어긋난 두 기록은 어느 쪽이 진실인지 알 수 없게 한다.
+## Context
+Decisions were being written in two places: `.harness/state/decisions.md` (summary append)
+and `wiki/decisions/` (detailed ADRs). Measured on day one of operation: 6 entries in state
+vs 5 in the wiki — **they diverged within a single day** (the "two repos" decision was
+missing from the wiki). Two records that disagree make it impossible to know which is true.
 
-## 검토한 선택지
-- **A. 2단 유지** — state 는 요약 인덱스, 위키는 상세 (원설계)
-- **B. decisions.md 폐지** — 위키 ADR 이 유일한 권위
-- **C. 위키 결정 페이지 폐지** — state 파일만
+## Options considered
+- **A. Keep both tiers** — state as a summary index, wiki as detail (original design)
+- **B. Retire decisions.md** — wiki ADRs are the sole authority
+- **C. Retire wiki decision pages** — state file only
 
-## 결정
-**B.** `.harness/state/decisions.md` 를 삭제하고 `docs/llm-wiki/wiki/decisions/`
-(1건 1파일)만 남긴다. 세션 시작 시의 요약 스캔은 `index.md` 의 Decisions 절
-(1결정 1줄)이 대신한다 — ingest 가 어차피 유지하는 파일이라 동기화 부담이 없다.
+## Decision
+**B.** Delete `.harness/state/decisions.md` and keep only `docs/llm-wiki/wiki/decisions/`
+(one decision per file). The session-start summary scan is replaced by the Decisions section
+of `index.md` (one line per decision) — a file ingest maintains anyway, so there is no
+synchronization burden.
 
-## 이유
-이중 쓰기는 반드시 발산한다(첫날 실측). 프로토콜 사실을 `docs/programmers-protocol.md`
-한 곳에만 두는 기존 원칙(위키 스키마 §5.1)의 일반화다: **한 사실은 한 곳에, 나머지는 참조.**
-C 는 위키의 이중 목적(개발 기억 + 포트폴리오, 스키마 §0)을 버리게 되어 기각.
+## Rationale
+Double-writing always diverges (measured on day one). This generalizes the existing
+principle of keeping protocol facts only in `docs/programmers-protocol.md` (wiki schema
+§5.1): **one fact in one place; everything else references it.**
+C was rejected because it abandons the wiki's dual purpose (development memory +
+portfolio, schema §0).
 
-state 의 역할은 재정의된다 — **state = 위치**(goal·progress: 어디까지 왔나),
-**위키 = 지식**(무엇을 왜 결정했나).
+The state files' role is redefined — **state = position** (goal · progress: how far we
+have come), **wiki = knowledge** (what was decided and why).
 
-## 받아들인 비용
-- 세션 시작 시 결정 전문이 아니라 제목만 스캔하게 된다. 충돌이 의심되면 해당 ADR 을
-  한 번 더 열어야 한다 (1단계 추가)
-- ADR 작성이 append 한 줄보다 무겁다 → 게이트는 존재만 검사하고 품질은 리뷰가 맡아
-  stub ADR 로 시작하는 것을 허용한다
+## Accepted costs
+- At session start, only decision titles are scanned rather than full texts. If a conflict
+  is suspected, the ADR must be opened one extra time (one added step)
+- Writing an ADR is heavier than appending one line → the gate checks existence only,
+  review owns quality, and starting with a stub ADR is allowed
 
-## 결과
-_구현 후 갱신 — parity 대조(5건 상위집합 확인) 후 decisions.md 삭제._
+## Outcome
+_Update after implementation — decisions.md deleted after a parity check (5 entries confirmed as a superset)._

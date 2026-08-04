@@ -2,47 +2,52 @@
 type: decision
 project: programmers-tracker
 author: BrokenFinger98
-tags: [기록체계, 위키, 계층화]
+tags: [record-keeping, wiki, layering]
 created: 2026-08-04
 updated: 2026-08-04
 sources: [raw/sessions/2026-08-04-record-keeping-design.md]
 ---
 
-# 전역/프로젝트 위키는 3계층으로 분리한다
+# Global and project wikis split into 3 layers
 
-## 맥락
-개인 PC 전역 위키(`~/Desktop/llm-wiki`)와 이 레포의 위키(`docs/llm-wiki/`)가 병존한다.
-"위키가 두 군데로 분리되고, 프로젝트 작업이 개인 위키에 안 쌓이는 것 아닌가"라는 우려.
+## Context
+A personal global wiki (`~/Desktop/llm-wiki`) and this repo's wiki (`docs/llm-wiki/`)
+coexist. The concern: "doesn't the wiki split in two, with project work no longer
+accumulating in the personal wiki?"
 
-## 검토한 선택지
-- **A. 전역 단일화** — 프로젝트 위키 폐지, 전역에 몰기
-- **B. 프로젝트 단일화** — 전역 폐지
-- **C. 3계층 분리** — raw=개인 PC(자동) / 1차 증류=레포 위키 / 2차 증류=전역 위키
+## Options considered
+- **A. Consolidate globally** — retire the project wiki, put everything in the global one
+- **B. Consolidate in the project** — retire the global wiki
+- **C. 3-layer split** — raw = personal PC (automatic) / 1st distillation = repo wiki / 2nd distillation = global wiki
 
-## 결정
-**C.** 같은 내용의 중복이 아니라 **계층이 다른** 배치다:
-raw(모든 세션 원문) → 1차 증류(프로젝트 결정·개념) → 2차 증류(범프로젝트 일반화).
+## Decision
+**C.** This is not duplication of the same content but placement at **different layers**:
+raw (full text of every session) → 1st distillation (project decisions · concepts) →
+2nd distillation (cross-project generalization).
 
-## 이유
-프로젝트 위키가 레포 안이어야 하는 4근거 — ① 포트폴리오(위키 스키마 §0 이중 목적),
-② 클론하면 지식+워크플로우가 같이 옴, ③ push 게이트가 성립(같은 레포여야 기계 검증),
-④ 지식의 수명이 코드와 같음. A 는 이 넷을 모두 잃고, 전역 위키는 raw 원문·타 프로젝트
-기록이 섞여 있어 **공개 목적지가 될 수 없다**(구조적).
+## Rationale
+Four reasons the project wiki must live inside the repo — ① portfolio (wiki schema §0
+dual purpose), ② cloning brings knowledge + workflow together, ③ the push gate only works
+this way (machine verification requires the same repo), ④ the knowledge has the same
+lifespan as the code. A loses all four, and the global wiki mixes raw session text with
+records from other projects, so **it cannot be a publication target** (structurally).
 
-"개인 PC 에 안 쌓인다"는 우려는 사실이 아님을 실측으로 확인: 전역 SessionEnd/PreCompact
-아카이브 훅은 user-level 이라 cwd 무관 발화한다. 2026-08-04 이 세션의 실제 transcript 로
-훅을 실행해 전역 inbox 에 551k 파일이 생기는 것을 확인했다. **raw 는 계속 전역에 쌓인다.**
+The "nothing accumulates on the personal PC" concern was measured to be false: the global
+SessionEnd/PreCompact archive hooks are user-level and fire regardless of cwd. On
+2026-08-04 we ran the hook against this session's actual transcript and confirmed a 551k
+file landing in the global inbox. **Raw keeps accumulating globally.**
 
-원칙은 [[decisions/2026-08-04-decisions-live-in-wiki]] 와 동일: 한 사실은 한 곳에,
-나머지는 참조.
+The principle is the same as [[decisions/2026-08-04-decisions-live-in-wiki]]: one fact in
+one place; everything else references it.
 
-## 받아들인 비용
-- 전역에서 프로젝트 지식을 찾으려면 레지스트리(전역 위키에 프로젝트당 1페이지)가
-  필요하다 — 전역 위키 정비는 별건으로 유예
-- **프로젝트 위키에 raw 원문 반입 금지가 절대 규칙이 된다** — 세션 원문에는 쿠키·이메일이
-  흐르고 이 레포는 public 이다
-- 전역 리마인더 훅이 이 레포에서 오작동 넛지가 되므로 가드가 필요하다 — 훅은 설정 계층 간
-  merge 되어 프로젝트에서 끌 수 없고, **전역 스크립트의 자진 후퇴가 유일한 방법**
+## Accepted costs
+- Finding project knowledge from the global side requires a registry (one page per project
+  in the global wiki) — global wiki cleanup deferred as separate work
+- **Bringing raw session text into the project wiki becomes an absolute prohibition** —
+  session transcripts carry cookies and emails, and this repo is public
+- The global reminder hook becomes a misfiring nudge in this repo and needs a guard —
+  hooks merge across settings layers and cannot be disabled per-project;
+  **voluntary retreat by the global script is the only way**
 
-## 결과
-_구현 후 갱신._
+## Outcome
+_Update after implementation._
