@@ -1,14 +1,14 @@
-# 자격증명 — 예외 없음
+# Credentials — no exceptions
 .ps/session
 .ps/cookies*
 *.local.yml
 application-local.yml
 .env
 
-# 개인 작업 상태 (progress 는 커밋한다)
+# Personal work state (progress IS committed)
 .harness/state/goal.md
 
-# 빌드
+# Build
 build/
 .gradle/
 out/
