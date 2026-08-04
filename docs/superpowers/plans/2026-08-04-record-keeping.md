@@ -149,8 +149,10 @@ Z40="0000000000000000000000000000000000000000"
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ -z "${local_ref:-}" ] && continue
 
-  # 브랜치만 게이트한다 — 태그·notes 는 통과
-  case "$local_ref" in
+  # 브랜치만 게이트한다 — 태그·notes 는 통과.
+  # remote_ref 기준이어야 한다: local_ref 는 refspec 소스 리터럴이라
+  # `git push origin HEAD` 시 "HEAD" 로 온다 (실측 — E2E S1).
+  case "$remote_ref" in
     refs/heads/*) ;;
     *) continue ;;
   esac
