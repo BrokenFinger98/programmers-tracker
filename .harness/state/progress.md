@@ -29,6 +29,17 @@ Spec `docs/superpowers/specs/2026-08-04-record-keeping-design.md` (8958fe4).
 - SessionStart hook `.claude/hooks/inject-state.sh` — re-injects state·index (compact recovery) + idempotent hooksPath install
 - 4 new ADRs · 1 raw session · global reminder guard (outside the repo, applied separately)
 
+## [2026-08-04] Phase 0.8 — Dev workflow installed ✅
+
+Issue-first squash-merge flow (issue #4, branch `chore/4-dev-workflow`). ADR
+`docs/llm-wiki/wiki/decisions/2026-08-04-issue-first-squash-flow.md`.
+
+- Project skills `/issue` · `/commit` · `/pull-request` (GitHub-adapted, shadow the global GitLab versions in-repo)
+- CLAUDE.md: mandatory Development Flow section + 2 Forbidden entries (no direct main commits, English-only artifacts)
+- development-rules §11: branch naming `<type>/<issue#>-<slug>` + chore/ prefix, squash-only PRs
+- Community docs: CONTRIBUTING.md, issue forms (bug/feature), PR template, README Contributing section
+- Repo settings (coordinator): labels, squash-only + auto-delete, main branch protection with `enforce_admins`
+
 ## [2026-08-04] Phase 1 — Implementation ⏳
 
 See the implementation order in `docs/superpowers/specs/…-design.md` §11. Start from #1 (reproduce Kotlin WebSocket subscription).
