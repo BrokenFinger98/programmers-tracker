@@ -1,18 +1,21 @@
 ---
 name: wiki-query
-description: 이 레포의 Wiki(docs/llm-wiki)에서 과거 결정·진행·노하우를 검색해 출처와 함께 답한다. 사용자가 "전에 뭐 정했지/왜 이렇게 했지/우리 ~ 결정" 등 과거 맥락을 물을 때 사용.
+description: Search this repo's Wiki (docs/llm-wiki) for past decisions, progress, and know-how, and answer with sources. Use when the user asks about past context — "what did we decide before / why did we do it this way / our decision on ~".
 ---
 
 # wiki-query
 
-Wiki 경로: **이 레포의 `docs/llm-wiki/`**. 질문은 인자로 받는다.
+Wiki path: **this repo's `docs/llm-wiki/`**. The question comes as an argument.
 
-## 절차
-1. **카탈로그 탐색** — `docs/llm-wiki/index.md` 를 읽어 관련 페이지를 찾는다.
-2. **페이지 로드** — 관련 페이지와 그것이 `[[링크]]` 로 연결한 페이지들을 읽는다.
-3. **프로토콜 질문이면** — `docs/programmers-protocol.md` 를 함께 읽는다. 사실관계의 유일한 출처다.
-4. **답변** — 종합해 **출처 인용과 함께** 답한다. 핵심 주장 뒤에 `(wiki/concepts/foo.md)` 형식 근거.
-5. **되먹임** — 답변 중 새로 종합·발견한 가치 있는 내용은 스키마대로 페이지 생성/보강 + `log.md` 기록.
-6. 관련 내용이 **없으면** 솔직히 "위키에 기록 없음"이라 하고 `wiki-ingest` 적재를 제안한다.
+## Process
+1. **Browse the catalog** — read `docs/llm-wiki/index.md` to find relevant pages.
+2. **Load pages** — read the relevant pages plus the pages they connect via `[[links]]`.
+3. **For protocol questions** — also read `docs/programmers-protocol.md`. It is the single source of facts.
+4. **Answer** — synthesize and answer **with source citations**. Back each key claim with
+   evidence in the form `(wiki/concepts/foo.md)`.
+5. **Feed back** — if the answer produced valuable new synthesis or findings, create/extend
+   pages per the schema + record in `log.md`.
+6. If there is **nothing** relevant, say honestly "no record in the wiki" and suggest
+   ingesting via `wiki-ingest`.
 
-근거 없는 추측을 단정하지 않는다. 위키에 있는 것과 없는 것을 구분해 말한다.
+Never assert unfounded speculation. Distinguish what is in the wiki from what is not.
