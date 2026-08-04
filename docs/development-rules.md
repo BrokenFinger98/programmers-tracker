@@ -339,7 +339,10 @@ State in the README:
 
 ## 11. Commits · Branches
 
-- Branches: `feat/` · `fix/` · `docs/` · `refactor/` · `test/`
+- Branches: `<type>/<issue#>-<slug>` — types `feat/` · `fix/` · `docs/` ·
+  `refactor/` · `test/` · `chore/` (e.g. `feat/12-actioncable-client`).
+  Created by `/issue` from a fresh `main`; no `#` in branch names.
+- PRs: always squash-merged to `main`; the branch is deleted on merge.
 - Commit messages are English Conventional Commits
 - **Protocol-related changes must leave evidence.** Cite measured results or a protocol-doc section.
   Six months later, "why did we do it this way" must be answerable.
