@@ -7,12 +7,12 @@
 
 ## ⚡ 세션 시작 시 — 사용자에게 답하기 전에
 
-**1. state 3종을 이 순서로 읽는다.** 맥락 없이 요청부터 처리하지 않는다.
+**1. 세션 훅이 아래 3개를 주입한다. 주입이 안 보이면 이 순서로 직접 읽는다.** 맥락 없이 요청부터 처리하지 않는다.
 
 ```
 .harness/state/goal.md        현재 목표. "결정 대기" 면 후보 제시부터
 .harness/state/progress.md    단계별 현황
-.harness/state/decisions.md   의사결정 이력 — 요청이 충돌하면 그 자리에서 확인
+docs/llm-wiki/index.md        Decisions 절 스캔 — 요청이 기존 결정과 충돌하면 해당 ADR 열람
 ```
 
 **2. 프로토콜 관련 작업이면** `docs/programmers-protocol.md` 를 읽는다.
@@ -54,7 +54,7 @@
 
 ## Architecture (불변 결정)
 
-변경 시 PR + `.harness/state/decisions.md` 갱신.
+변경 시 PR + `docs/llm-wiki/wiki/decisions/` ADR 추가.
 
 | 영역 | 결정 | 근거 |
 |---|---|---|
@@ -132,6 +132,8 @@
 - 새 production `.kt` 마다 **같은 PR 안에 새 test `.kt`** (TDD 짝)
 - 프로토콜 파서 변경 시 **실측 픽스처 테스트** 통과
 - `.harness/state/progress.md` 갱신분이 같은 브랜치에 포함
+- 의사결정이 있었던 브랜치는 같은 브랜치에 **wiki ADR** — push 게이트(`.githooks/pre-push`)가
+  위키 변경 없는 push 를 차단한다 (예외는 커밋 트레일러 `Wiki-Skip: <사유>`)
 - 프로토콜 관련 변경은 커밋 본문에 **실측 근거 또는 프로토콜 문서 절 인용**
 
 ---
@@ -139,12 +141,13 @@
 ## State 파일 운영
 
 `.harness/state/` 는 **세션 밖 기억**이다. 대화가 끊겨도 작업을 재개할 수 있게 한다.
+**state = 위치**(어디까지 왔나), **위키 = 지식**(무엇을 왜 결정했나 — `docs/llm-wiki/`).
 
 ### 세션 진입 시 — 항상 이 순서
 
 1. `state/goal.md` — 현재 목표. "결정 대기" 면 후보 제시 후 결정부터
 2. `state/progress.md` — 단계별 현황
-3. `state/decisions.md` — 의사결정 이력. 요청이 이전 결정과 **충돌하면 그 자리에서 확인**
+3. `docs/llm-wiki/index.md` — Decisions 절 스캔. 요청이 이전 결정과 **충돌하면 해당 ADR 확인**
 
 이 3개가 대화의 시작점이다. **맥락 없이 요청부터 처리하지 않는다.**
 
@@ -153,7 +156,7 @@
 | 시점 | 행동 |
 |---|---|
 | 작업 시작 | 3개 파일 순차 읽기 |
-| 설계 결정 | `decisions.md` 에 *왜* (이유·대안·근거) append |
+| 설계 결정 | wiki ADR 신설 — `docs/llm-wiki/wiki/decisions/<날짜>-<slug>.md` (1건 1파일) |
 | 단계 완료 | `progress.md` 갱신 (✅ + 커밋 해시 + 산출물) |
 | 새 단계 진입 | `goal.md` 완전히 덮어쓰기 — 이전 내용은 progress 로 흡수 |
 | 충돌 시 | **실제 코드 > state 파일** (state 가 낡았을 가능성) |
@@ -167,7 +170,7 @@
 1. **변경 파일 목록** — `git diff --stat`
 2. **실행한 테스트 명**과 결과
 3. **`state/progress.md` 갱신분**
-4. **새 `decisions.md` entry** (의사결정 발생 시)
+4. **새 wiki ADR** (의사결정 발생 시 — `docs/llm-wiki/wiki/decisions/`)
 5. **남은 위험** — *완료* 가 아니라 *남은 risk*. 없으면 "no remaining risk" 명시
 
 **미완 작업을 완료로 보고하지 않는다.** 막힌 곳은 막힌 곳으로 보고한다.

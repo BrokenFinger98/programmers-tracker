@@ -777,7 +777,7 @@ parity 는 계획 단계에서 완료 — 5건 전부 대응 ADR 이 상위집�
 - [ ] **Step 1: 참조가 남았는지 최종 확인**
 
 ```bash
-grep -rn "decisions\.md" --include="*.md" . | grep -v "^./docs/superpowers" | grep -v "^./docs/llm-wiki" || echo CLEAN
+grep -rn "decisions\.md" --include="*.md" . | grep -v "docs/superpowers" | grep -v "docs/llm-wiki" || echo CLEAN
 ```
 
 Expected: `CLEAN` (스펙·플랜·위키 안의 역사 서술은 남아도 된다 — 살아있는 참조만 없으면 된다)
