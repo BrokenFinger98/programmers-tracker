@@ -1,0 +1,23 @@
+# 자격증명 — 예외 없음
+.ps/session
+.ps/cookies*
+*.local.yml
+application-local.yml
+.env
+
+# 개인 작업 상태 (progress·decisions 는 커밋한다)
+.harness/state/goal.md
+
+# 빌드
+build/
+.gradle/
+out/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
