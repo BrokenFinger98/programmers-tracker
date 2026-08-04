@@ -59,5 +59,20 @@ See the implementation order in `docs/superpowers/specs/…-design.md` §11. Sta
   - Gradle: default `test` excludes `@Tag("integration")`; new `integrationTest` task
   - ADR [[decisions/2026-08-04-test-environment]] (no Spring in layer tests ·
     integrationTest split · fixture-file enforcement) + dev-rules §6 amended
-- ⏳ Step 3/3 — WebSocket client: real subscribe/receive against Programmers
-  (the "actually connected at least once" gate is still OPEN — nothing verified live yet)
+- ⏳ Step 3/3 — ActionCable client implemented; **live verification still OPEN**
+  - `protocol` package: `ActionCableClient` (Ktor CIO glue, headers per doc §10,
+    engine requestTimeout disabled for the 87 s timeout verdict §13.5) over a
+    `RawSocket` seam; pure `SubscriptionProtocol` routing (welcome→subscribe,
+    ping ignored, confirm/broadcast→`CableEvent` with raw text preserved,
+    reject→`SubscriptionRejectedException`); `CableCommand.subscribe` byte-for-byte
+    against captures; `CableEndpoint` (env-overridable §9.1 defaults)
+  - Session handling: `SessionCookie` (masked toString, §7.2) + `SessionProvider`
+    + `ManualFileSessionProvider` (`TRACKER_SESSION_FILE`, default `~/.ps/session`;
+    bare value or full Cookie header). Chrome auto-extraction = separate issue
+  - Live entry: `./gradlew liveObserve -Pobserve="algorithm 120804 14643 java"`
+    — subscribes and logs every frame with raw JSON; cookie never printed
+  - 27 new tests (6 classes), fixture-driven incl. fake-socket loop tests
+  - ADR [[decisions/2026-08-04-ktor-websocket-client]]; gates check/test/build all 0
+  - ❗ Constitution gate: "actually connected at least once" NOT yet satisfied —
+    human must run `liveObserve` against real Programmers and trigger run/submit
+    from the browser; only then may issue #6 be called done

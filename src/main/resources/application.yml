@@ -4,3 +4,10 @@ server:
 spring:
   application:
     name: programmers-tracker
+
+# Measured protocol facts as defaults (protocol doc §1, §10); overridable per dev rules §9.1.
+tracker:
+  cable:
+    url: ${TRACKER_CABLE_URL:wss://ws.programmers.co.kr:443/cable}
+    origin: ${TRACKER_CABLE_ORIGIN:https://school.programmers.co.kr}
+  session-file: ${TRACKER_SESSION_FILE:~/.ps/session}

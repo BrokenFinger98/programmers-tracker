@@ -21,10 +21,21 @@ repositories {
     mavenCentral()
 }
 
+// LiveObserveKt adds a second main function; the boot jar keeps the Spring entry point.
+springBoot {
+    mainClass.set("com.brokenfinger.tracker.TrackerApplicationKt")
+}
+
+val ktorVersion = "3.5.2"
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    // Coroutine-native WebSocket client (ADR 2026-08-04-ktor-websocket-client).
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
+    implementation("io.ktor:ktor-client-websockets:$ktorVersion")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("io.kotest:kotest-assertions-core:6.2.3")
@@ -37,6 +48,16 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("integration")
     }
+}
+
+// Live-verification entry for issue #6 — subscribes to a real Programmers channel and
+// logs every received frame. Usage: ./gradlew liveObserve -Pobserve="algorithm 120804 14643 java"
+tasks.register<JavaExec>("liveObserve") {
+    description = "Connects to the real Programmers cable and logs every received frame."
+    group = "verification"
+    mainClass.set("com.brokenfinger.tracker.protocol.LiveObserveKt")
+    classpath = sourceSets.main.get().runtimeClasspath
+    args = (project.findProperty("observe") as String?)?.split(" ")?.filter { it.isNotBlank() } ?: emptyList()
 }
 
 tasks.register<Test>("integrationTest") {
