@@ -14,6 +14,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[decisions/2026-08-04-wiki-push-gate]] — Push gate forces distillation (native pre-push)
 - 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — Global/project wikis split into 3 layers
 - 2026-08-04 [[decisions/2026-08-04-english-only-artifacts]] — All work artifacts in English
+- 2026-08-04 [[decisions/2026-08-04-issue-first-squash-flow]] — Issue-first flow, squash-only merges
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits
@@ -30,3 +31,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 ## Sources
 - 2026-08-04 [[sources/2026-08-04-protocol-reverse-engineering-and-design]]
 - 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
+- 2026-08-04 [[sources/2026-08-04-oss-workflow]]

@@ -115,6 +115,10 @@ Reject on sight. Even if the user explicitly requests it, **explain the reason f
   are only done once they have actually been connected at least once
 - ❌ **Guess-based debugging** — modifying code without logs or reproduction
 - ❌ **Modifying files outside the task scope** — no mixing unrelated refactoring into one PR
+- ❌ **Commits or pushes directly to `main`** — everything goes through an issue
+  and a squash-merged PR (branch protection enforces this server-side)
+- ❌ **Non-English committed artifacts** — docs, comments, commit messages, wiki
+  pages, user-facing tool output
 
 ---
 
@@ -137,6 +141,23 @@ Additional gates:
   (`.githooks/pre-push`) blocks pushes without wiki changes (escape hatch: commit trailer
   `Wiki-Skip: <reason>`)
 - Protocol-related changes cite **measured evidence or a protocol-doc section** in the commit body
+
+---
+
+## Development Flow (mandatory)
+
+Every change — including docs — follows:
+
+```
+/issue  →  <type>/<issue#>-<slug>  →  work  →  /commit  →  /pull-request  →  squash merge (branch auto-deleted)
+```
+
+- No work without an issue; no commits directly on `main` (server-enforced)
+- Branch types: `feat/` `fix/` `docs/` `refactor/` `test/` `chore/`
+- Use the project skills `/issue`, `/commit`, `/pull-request` — they encode this
+  repo's gates (measured evidence for protocol changes, TDD pairing, wiki gate)
+- All committed artifacts are English (see development-rules §12 and the ADR
+  `2026-08-04-english-only-artifacts`)
 
 ---
 

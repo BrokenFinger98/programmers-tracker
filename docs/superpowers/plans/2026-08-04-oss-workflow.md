@@ -663,25 +663,37 @@ opening a public issue.
 - [ ] **Step 2: `.github/ISSUE_TEMPLATE/bug_report.yml`**
 
 ```yaml
+# NOTE: block style on purpose — flow mappings broke YAML parsing here
+# (commas/`?` inside prose split flow entries; caught by coordinator review).
 name: Bug report
 description: Something broke
 labels: [bug]
 body:
   - type: textarea
     id: symptom
-    attributes: { label: Symptom, description: What happens, including exact messages/output }
-    validations: { required: true }
+    attributes:
+      label: Symptom
+      description: What happens, including exact messages/output
+    validations:
+      required: true
   - type: textarea
     id: reproduce
-    attributes: { label: Reproduce, description: Steps; for protocol issues include lesson id + date observed }
-    validations: { required: true }
+    attributes:
+      label: Reproduce
+      description: Steps; for protocol issues include the lesson id and the date observed
+    validations:
+      required: true
   - type: textarea
     id: expected
-    attributes: { label: Expected }
-    validations: { required: true }
+    attributes:
+      label: Expected
+    validations:
+      required: true
   - type: input
     id: env
-    attributes: { label: Environment, placeholder: "OS / JDK / browser" }
+    attributes:
+      label: Environment
+      placeholder: OS / JDK / browser
 ```
 
 - [ ] **Step 3: `.github/ISSUE_TEMPLATE/feature_request.yml`**
@@ -693,15 +705,22 @@ labels: [enhancement]
 body:
   - type: textarea
     id: problem
-    attributes: { label: Problem, description: What concrete problem does this solve for a user recording their solving history? }
-    validations: { required: true }
+    attributes:
+      label: Problem
+      description: What concrete problem does this solve for a user recording their solving history?
+    validations:
+      required: true
   - type: textarea
     id: proposal
-    attributes: { label: Proposal }
-    validations: { required: true }
+    attributes:
+      label: Proposal
+    validations:
+      required: true
   - type: textarea
     id: alternatives
-    attributes: { label: Alternatives considered, description: Including "do nothing" — why is that not enough? }
+    attributes:
+      label: Alternatives considered
+      description: Including "do nothing" — why is that not enough?
 ```
 
 - [ ] **Step 4: `.github/ISSUE_TEMPLATE/config.yml`**

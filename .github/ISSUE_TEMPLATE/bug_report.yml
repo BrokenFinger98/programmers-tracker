@@ -1,0 +1,29 @@
+name: Bug report
+description: Something broke
+labels: [bug]
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What happens, including exact messages/output
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduce
+      description: Steps; for protocol issues include the lesson id and the date observed
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: OS / JDK / browser
