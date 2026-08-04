@@ -1,0 +1,6 @@
+server:
+  port: ${TRACKER_PORT:8080}
+
+spring:
+  application:
+    name: programmers-tracker
