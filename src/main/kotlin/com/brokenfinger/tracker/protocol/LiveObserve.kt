@@ -54,7 +54,7 @@ private fun exitWithUsage(): Nothing {
     println("  Example: ./gradlew liveObserve -Pobserve=\"algorithm 120804 14643 java\"")
     println("  Identifiers come from the problem page: URL path (lessonId) and the")
     println("  data-challengeable-id / data-challengeable-type attributes (protocol doc §3).")
-    println("  Session cookie: paste your _session_production value into ~/.ps/session")
+    println("  Session cookie: paste your _session_production value into .ps/session")
     println("  (or point TRACKER_SESSION_FILE elsewhere). The value is never printed.")
     exitProcess(1)
 }

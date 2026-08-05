@@ -33,7 +33,10 @@ class ManualFileSessionProvider(val path: Path) : SessionProvider {
 
     companion object {
         private const val SESSION_FILE_ENV = "TRACKER_SESSION_FILE"
-        private const val DEFAULT_PATH = "~/.ps/session"
+
+        // Project-local by design: distributed users find `.ps/` next to the tool, and the
+        // repo's .gitignore shields it. Override with TRACKER_SESSION_FILE for other layouts.
+        private const val DEFAULT_PATH = ".ps/session"
 
         fun fromEnvironment(env: (String) -> String? = System::getenv): ManualFileSessionProvider =
             ManualFileSessionProvider(expandHome(env(SESSION_FILE_ENV) ?: DEFAULT_PATH))

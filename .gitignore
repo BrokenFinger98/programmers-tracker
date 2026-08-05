@@ -1,6 +1,6 @@
 # Credentials — no exceptions
-.ps/session
-.ps/cookies*
+.ps/*
+!.ps/.gitkeep
 *.local.yml
 application-local.yml
 .env

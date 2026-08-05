@@ -67,11 +67,19 @@ class ManualFileSessionProviderTest {
     }
 
     @Test
-    fun `fromEnvironment defaults to the home session file with tilde expanded`() {
+    fun `fromEnvironment defaults to the project-local session file`() {
         val provider = ManualFileSessionProvider.fromEnvironment { null }
 
+        provider.path shouldBe Path.of(".ps/session")
+    }
+
+    @Test
+    fun `fromEnvironment still expands a tilde in the override`() {
+        val provider = ManualFileSessionProvider.fromEnvironment { name ->
+            "~/elsewhere/session".takeIf { name == "TRACKER_SESSION_FILE" }
+        }
+
         provider.path.toString() shouldStartWith System.getProperty("user.home")
-        provider.path.toString() shouldContain ".ps"
     }
 
     private fun sessionFile(content: String): Path = dir.resolve("session").also { Files.writeString(it, content) }

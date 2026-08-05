@@ -10,4 +10,4 @@ tracker:
   cable:
     url: ${TRACKER_CABLE_URL:wss://ws.programmers.co.kr:443/cable}
     origin: ${TRACKER_CABLE_ORIGIN:https://school.programmers.co.kr}
-  session-file: ${TRACKER_SESSION_FILE:~/.ps/session}
+  session-file: ${TRACKER_SESSION_FILE:.ps/session}
