@@ -1,10 +1,11 @@
 package com.brokenfinger.tracker.adapter.cable
 
 import com.brokenfinger.tracker.application.ChannelCapture
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEvent
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
-import com.brokenfinger.tracker.support.fixtures.anAlgorithmIdentifier
+import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.matchers.shouldBe
 import io.mockk.coVerify
 import io.mockk.every
@@ -38,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger
  *   took a CI runner past ten minutes.
  */
 class CableChannelSubscriberTest {
-    private val identifier = anAlgorithmIdentifier()
+    private val channel = anAlgorithmChannel()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @AfterEach
@@ -52,8 +53,8 @@ class CableChannelSubscriberTest {
             neverEnding()
         }
 
-        subscriber.subscribe(identifier)
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
+        subscriber.subscribe(channel)
         awaitAtLeast(opened, 1)
 
         opened.get() shouldBe 1
@@ -74,9 +75,9 @@ class CableChannelSubscriberTest {
             }
         }
 
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
         awaitAtLeast(started, 1)
-        subscriber.unsubscribe(identifier)
+        subscriber.unsubscribe(channel)
         awaitAtLeast(cancelled, 1)
 
         cancelled.get() shouldBe 1
@@ -95,7 +96,7 @@ class CableChannelSubscriberTest {
             emptyFlow()
         }
 
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
 
         awaitAtLeast(opened, 2)
     }
@@ -108,7 +109,7 @@ class CableChannelSubscriberTest {
             flow<CableEvent> { throw IllegalStateException("socket died") }
         }
 
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
 
         awaitAtLeast(opened, 2)
     }
@@ -122,7 +123,7 @@ class CableChannelSubscriberTest {
             neverEnding()
         }
 
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
 
         awaitAtLeast(opened, 2)
     }
@@ -134,7 +135,7 @@ class CableChannelSubscriberTest {
         val reconnects = AtomicInteger()
         val subscriber = subscriberOver(capture = capture, attempts = reconnects) { emptyFlow() }
 
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
         awaitAtLeast(reconnects, 1)
 
         coVerify(atLeast = 1) { capture.connectionLost() }
@@ -145,8 +146,8 @@ class CableChannelSubscriberTest {
         val alive = AtomicInteger()
         val subscriber = subscriberOver { channel -> failingOrLive(channel, alive) }
 
-        subscriber.subscribe(anAlgorithmIdentifier(lessonId = FAILING))
-        subscriber.subscribe(anAlgorithmIdentifier(lessonId = HEALTHY))
+        subscriber.subscribe(anAlgorithmChannel(lessonId = FAILING))
+        subscriber.subscribe(anAlgorithmChannel(lessonId = HEALTHY))
 
         awaitAtLeast(alive, 1)
     }
@@ -158,7 +159,7 @@ class CableChannelSubscriberTest {
         }
     }
 
-    private fun failingOrLive(channel: ChannelIdentifier, alive: AtomicInteger): Flow<CableEvent> = flow {
+    private fun failingOrLive(channel: ChannelKey, alive: AtomicInteger): Flow<CableEvent> = flow {
         if (channel.lessonId.value == FAILING) throw IllegalStateException("socket died")
         alive.incrementAndGet()
         delay(FOREVER_MS)
@@ -170,10 +171,12 @@ class CableChannelSubscriberTest {
         deadline: Duration = Duration.ofSeconds(30),
         capture: ChannelCapture = mockk(relaxed = true),
         attempts: AtomicInteger = AtomicInteger(),
-        observation: (ChannelIdentifier) -> Flow<CableEvent>,
+        observation: (ChannelKey) -> Flow<CableEvent>,
     ): CableChannelSubscriber {
         val client = mockk<ActionCableClient>()
-        every { client.observe(any(), any()) } answers { observation(firstArg()) }
+        // The subscriber is handed a key and must build the wire form itself, so the stub
+        // unwraps what it was actually called with rather than assuming the two match.
+        every { client.observe(any(), any()) } answers { observation(firstArg<ChannelIdentifier>().key) }
         return CableChannelSubscriber(
             client = client,
             sessions = mockk(relaxed = true),

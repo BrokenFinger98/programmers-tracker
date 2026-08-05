@@ -1,8 +1,8 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.ProblemKind
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
-import com.brokenfinger.tracker.support.fixtures.anAlgorithmIdentifier
+import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -62,7 +62,7 @@ class WatchServiceTest {
     @Test
     fun `a channel with a live grading is never evicted`() {
         fillEverySlot()
-        registry.markActive(identifierOf(120801))
+        registry.markActive(channelOf(120801))
 
         service.watch(aCommand(lessonId = 120999))
 
@@ -73,7 +73,7 @@ class WatchServiceTest {
     @Test
     fun `saturation fails loudly and changes no subscription`() {
         fillEverySlot()
-        (1..8).forEach { registry.markActive(identifierOf(120800L + it)) }
+        (1..8).forEach { registry.markActive(channelOf(120800L + it)) }
 
         shouldThrow<WatchCapacityExceededException> { service.watch(aCommand(lessonId = 120999)) }
 
@@ -85,7 +85,7 @@ class WatchServiceTest {
         subscriber.calls.clear()
     }
 
-    private fun identifierOf(lessonId: Long) = anAlgorithmIdentifier(lessonId = lessonId)
+    private fun channelOf(lessonId: Long) = anAlgorithmChannel(lessonId = lessonId)
 
     private fun aCommand(lessonId: Long) = WatchCommand(
         lessonId = lessonId,
@@ -108,12 +108,12 @@ class WatchServiceTest {
     private class RecordingSubscriber : ChannelSubscriber {
         val calls = mutableListOf<String>()
 
-        override fun subscribe(identifier: ChannelIdentifier) {
-            calls += "subscribe:${identifier.lessonId.value}"
+        override fun subscribe(channel: ChannelKey) {
+            calls += "subscribe:${channel.lessonId.value}"
         }
 
-        override fun unsubscribe(identifier: ChannelIdentifier) {
-            calls += "unsubscribe:${identifier.lessonId.value}"
+        override fun unsubscribe(channel: ChannelKey) {
+            calls += "unsubscribe:${channel.lessonId.value}"
         }
     }
 

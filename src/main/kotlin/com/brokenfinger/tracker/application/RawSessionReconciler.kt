@@ -1,6 +1,6 @@
 package com.brokenfinger.tracker.application
 
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.message.ActionCableFrame
 import com.brokenfinger.tracker.protocol.message.SubmitMessage
 import com.brokenfinger.tracker.protocol.parse.StoredChannel
@@ -66,7 +66,7 @@ class RawSessionReconciler(
         return ReconcileReport(recorded = 1, skippedLines = skipped)
     }
 
-    private fun replayed(channel: ChannelIdentifier, lines: List<String>): SessionReplay {
+    private fun replayed(channel: ChannelKey, lines: List<String>): SessionReplay {
         val replay = SessionReplay(channel)
         // Stops at the terminal frame exactly as the live path does: what follows one belongs
         // to no grading, and folding it in would make a replay differ from the capture.
@@ -74,7 +74,7 @@ class RawSessionReconciler(
         return replay
     }
 
-    private fun captureOf(session: RawSession, channel: ChannelIdentifier, replay: SessionReplay) = SettledCapture(
+    private fun captureOf(session: RawSession, channel: ChannelKey, replay: SessionReplay) = SettledCapture(
         session = replay.settle(),
         rawSessionId = session.id,
         lessonId = session.lessonId,
@@ -98,9 +98,9 @@ class RawSessionReconciler(
         Duration.between(startedAt, clock.instant()).seconds.coerceAtLeast(0)
 
     /** The channel is stored only in the ActionCable envelope — see [StoredChannel] for why. */
-    private fun channelOf(lines: List<String>): ChannelIdentifier? = lines.asSequence()
+    private fun channelOf(lines: List<String>): ChannelKey? = lines.asSequence()
         .mapNotNull { broadcastOf(it)?.identifier }
-        .mapNotNull { StoredChannel.ofReceived(it) }
+        .mapNotNull { StoredChannel.ofReceived(it)?.key }
         .firstOrNull()
 
     /**
@@ -144,7 +144,7 @@ data class ReconcileReport(
  * One stored session being replayed through the same assembler a live capture uses, so the
  * verdict a reconciled record carries is the verdict the socket loop would have produced.
  */
-private class SessionReplay(channel: ChannelIdentifier) {
+private class SessionReplay(channel: ChannelKey) {
     private val assembler = GradingSessionAssembler.of(channel)
 
     /** The stored line that ended the stream — the basis the capture key is derived from. */

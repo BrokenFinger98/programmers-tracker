@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemKind
@@ -8,12 +9,11 @@ import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TerminationRule
 import com.brokenfinger.tracker.domain.calc.VerdictResolver
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.message.SubmitMessage
 import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 
 /**
- * Accumulates the frames broadcast on one channel identifier and settles them into a
+ * Accumulates the frames broadcast on one channel and settles them into a
  * [GradingSession]. One instance observes one grading; it is not thread-safe and is not
  * reused across gradings.
  *
@@ -102,9 +102,7 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
          * caller's job (design §3.3), and an unbound session simply reports the weaker
          * verdict rather than guessing.
          */
-        fun of(channel: ChannelIdentifier, boundErrorText: String? = null) = GradingSessionAssembler(
-            GradingMessageMapper.problemKindOf(channel.type),
-            boundErrorText,
-        )
+        fun of(channel: ChannelKey, boundErrorText: String? = null) =
+            GradingSessionAssembler(channel.kind, boundErrorText)
     }
 }

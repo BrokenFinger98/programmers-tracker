@@ -1,5 +1,9 @@
 package com.brokenfinger.tracker.protocol
 
+import com.brokenfinger.tracker.domain.ChallengeableId
+import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.LessonId
+import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.protocol.message.ActionCableFrame
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import io.kotest.assertions.throwables.shouldThrow
@@ -9,8 +13,9 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Test
 
 class ChannelIdentifierTest {
-    private val algorithmIdentifier =
-        ChannelIdentifier.of(ChallengeableType.ALGORITHM, LessonId(120804), ChallengeableId(14643), "java")
+    private val algorithmIdentifier = ChannelIdentifier.from(
+        ChannelKey.of(LessonId(120804), ChallengeableId(14643), ProblemKind.ALGORITHM, "java"),
+    )
 
     // ActionCable keys broadcasts by the exact identifier string (protocol doc §4).
     @Test
@@ -27,8 +32,9 @@ class ChannelIdentifierTest {
 
     @Test
     fun `routes sql problems to the database channel and matches capture`() {
-        val identifier =
-            ChannelIdentifier.of(ChallengeableType.DATABASE, LessonId(131528), ChallengeableId(2778), "mysql")
+        val identifier = ChannelIdentifier.from(
+            ChannelKey.of(LessonId(131528), ChallengeableId(2778), ProblemKind.DATABASE, "mysql"),
+        )
         identifier.asJson() shouldBe capturedIdentifier("sql-pass.jsonl")
     }
 
@@ -45,25 +51,8 @@ class ChannelIdentifierTest {
     }
 
     @Test
-    fun `rejects non-positive lesson id`() {
-        shouldThrow<IllegalArgumentException> { LessonId(0) }
-    }
-
-    @Test
-    fun `rejects non-positive challengeable id`() {
-        shouldThrow<IllegalArgumentException> { ChallengeableId(-1) }
-    }
-
-    @Test
     fun `rejects blank codes key`() {
         shouldThrow<IllegalArgumentException> { CodesKey(" ") }
-    }
-
-    @Test
-    fun `rejects blank language`() {
-        shouldThrow<IllegalArgumentException> {
-            ChannelIdentifier.of(ChallengeableType.ALGORITHM, LessonId(120804), ChallengeableId(14643), " ")
-        }
     }
 
     // The §3 trap: sending the codes key as challengeable_id silently breaks result finalization.

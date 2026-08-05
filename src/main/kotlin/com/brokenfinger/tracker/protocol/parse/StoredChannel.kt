@@ -1,9 +1,10 @@
 package com.brokenfinger.tracker.protocol.parse
 
-import com.brokenfinger.tracker.protocol.ChallengeableId
+import com.brokenfinger.tracker.domain.ChallengeableId
+import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.LessonId
 import com.brokenfinger.tracker.protocol.ChallengeableType
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
-import com.brokenfinger.tracker.protocol.LessonId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -49,12 +50,17 @@ object StoredChannel {
 
     // Every value is demanded rather than defaulted: the constructors reject a missing one,
     // which is the throw this method turns into a null the caller can act on.
-    private fun channelOf(fields: JsonObject): ChannelIdentifier = ChannelIdentifier.of(
-        ChallengeableType.from(fields.string(CHALLENGEABLE_TYPE).orEmpty()),
-        LessonId(fields.long(LESSON_ID) ?: ABSENT),
-        ChallengeableId(fields.long(CHALLENGEABLE_ID) ?: ABSENT),
-        fields.string(LANGUAGE).orEmpty(),
+    private fun channelOf(fields: JsonObject): ChannelIdentifier = ChannelIdentifier.from(
+        ChannelKey.of(
+            LessonId(fields.long(LESSON_ID) ?: ABSENT),
+            ChallengeableId(fields.long(CHALLENGEABLE_ID) ?: ABSENT),
+            kindOf(fields),
+            fields.string(LANGUAGE).orEmpty(),
+        ),
     )
+
+    private fun kindOf(fields: JsonObject) =
+        GradingMessageMapper.problemKindOf(ChallengeableType.from(fields.string(CHALLENGEABLE_TYPE).orEmpty()))
 
     // The identifier itself is never logged — it carries which problem a learner was solving
     // (dev rules §7). The reason alone is what tells us the protocol moved.

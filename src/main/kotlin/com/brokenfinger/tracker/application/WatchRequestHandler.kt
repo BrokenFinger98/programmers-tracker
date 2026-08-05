@@ -9,8 +9,8 @@ package com.brokenfinger.tracker.application
  * live gradings pinned) and translates its [WatchResult] onto this port:
  * `Started`/`AlreadyWatching` → [WatchOutcome], `Saturated` →
  * [WatchCapacityExceededException]. That translation is the point of the port rather than
- * an accident of it — `WatchResult.Started` carries a `ChannelIdentifier`, and a protocol
- * type must not reach the web adapter (dev rules §2.1).
+ * an accident of it — `WatchResult.Started` carries the evicted `ChannelKey`, which is
+ * bookkeeping the web adapter has no use for and should not have to name.
  */
 interface WatchRequestHandler {
     /**

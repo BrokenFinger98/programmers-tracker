@@ -1,7 +1,7 @@
 package com.brokenfinger.tracker.application
 
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
-import com.brokenfinger.tracker.support.fixtures.anAlgorithmIdentifier
+import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -22,7 +22,7 @@ class SubscriptionRegistryTest {
         registry.watch(channel(1), at(0))
 
         registry.watch(channel(1), at(30)) shouldBe WatchResult.AlreadyWatching
-        registry.snapshot().map { it.identifier } shouldContainExactly listOf(channel(1))
+        registry.snapshot().map { it.channel } shouldContainExactly listOf(channel(1))
     }
 
     @Test
@@ -49,7 +49,7 @@ class SubscriptionRegistryTest {
 
         registry.watch(channel(9), at(100))
 
-        val watched = registry.snapshot().map { it.identifier }
+        val watched = registry.snapshot().map { it.channel }
         watched.size shouldBe 8
         watched.contains(channel(1)) shouldBe false
         watched.contains(channel(9)) shouldBe true
@@ -61,7 +61,7 @@ class SubscriptionRegistryTest {
         registry.markActive(channel(1))
 
         registry.watch(channel(9), at(100)) shouldBe WatchResult.Started(evicted = channel(2))
-        registry.snapshot().map { it.identifier }.contains(channel(1)) shouldBe true
+        registry.snapshot().map { it.channel }.contains(channel(1)) shouldBe true
     }
 
     @Test
@@ -79,7 +79,7 @@ class SubscriptionRegistryTest {
 
         registry.watch(channel(9), at(100))
 
-        registry.snapshot().map { it.identifier } shouldContainExactly (1..8).map { channel(it) }
+        registry.snapshot().map { it.channel } shouldContainExactly (1..8).map { channel(it) }
     }
 
     @Test
@@ -120,7 +120,7 @@ class SubscriptionRegistryTest {
         registry.markActive(channel(1))
 
         registry.unwatch(channel(1)) shouldBe true
-        registry.snapshot().map { it.identifier } shouldContainExactly listOf(channel(2))
+        registry.snapshot().map { it.channel } shouldContainExactly listOf(channel(2))
     }
 
     @Test
@@ -132,7 +132,7 @@ class SubscriptionRegistryTest {
 
         val snapshot = registry.snapshot()
 
-        snapshot.map { it.identifier } shouldContainExactly listOf(channel(2), channel(1))
+        snapshot.map { it.channel } shouldContainExactly listOf(channel(2), channel(1))
         snapshot.map { it.pinned } shouldContainExactly listOf(true, false)
         snapshot.first().lastHeartbeat shouldBe at(10)
     }
@@ -149,8 +149,7 @@ class SubscriptionRegistryTest {
         return registry
     }
 
-    private fun channel(n: Int): ChannelIdentifier =
-        anAlgorithmIdentifier(lessonId = 120800L + n, challengeableId = 14600L + n)
+    private fun channel(n: Int): ChannelKey = anAlgorithmChannel(lessonId = 120800L + n, challengeableId = 14600L + n)
 
     private fun at(second: Long): Instant = Instant.EPOCH.plusSeconds(second)
 }

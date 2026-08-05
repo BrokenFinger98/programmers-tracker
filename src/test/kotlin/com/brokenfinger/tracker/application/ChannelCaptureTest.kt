@@ -3,18 +3,18 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.CaptureKey
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.protocol.CableEvent
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
 import com.brokenfinger.tracker.support.fixtures.aCableEvent
-import com.brokenfinger.tracker.support.fixtures.aSqlIdentifier
+import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.aTerminalFrame
-import com.brokenfinger.tracker.support.fixtures.anAlgorithmIdentifier
+import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import com.brokenfinger.tracker.support.fixtures.cableEvents
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -144,7 +144,7 @@ class ChannelCaptureTest {
     // A database submit never sends finish; waiting for one hangs forever (protocol doc §6).
     @Test
     fun `a database submit settles at result_lesson_challenge`() {
-        val sql = aSqlIdentifier()
+        val sql = aSqlChannel()
 
         consume(capture(sql), cableEvents("sql-pass.jsonl", sql))
 
@@ -234,7 +234,7 @@ class ChannelCaptureTest {
     // Harness ------------------------------------------------------------------------------
 
     private fun capture(
-        channel: ChannelIdentifier = anAlgorithmIdentifier(),
+        channel: ChannelKey = anAlgorithmChannel(),
         store: RecordStore = JsonlRecordStore.under(root),
     ): ChannelCapture {
         registry.watch(channel, NOW)

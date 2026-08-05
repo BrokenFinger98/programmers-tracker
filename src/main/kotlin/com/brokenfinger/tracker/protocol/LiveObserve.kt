@@ -1,5 +1,9 @@
 package com.brokenfinger.tracker.protocol
 
+import com.brokenfinger.tracker.domain.ChallengeableId
+import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.LessonId
+import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
@@ -22,11 +26,13 @@ fun main(args: Array<String>) {
 internal fun parseTarget(args: Array<String>): ChannelIdentifier? {
     if (args.size != 4) return null
     return runCatching {
-        ChannelIdentifier.of(
-            ChallengeableType.from(args[0]),
-            LessonId(args[1].toLong()),
-            ChallengeableId(args[2].toLong()),
-            args[3],
+        ChannelIdentifier.from(
+            ChannelKey.of(
+                LessonId(args[1].toLong()),
+                ChallengeableId(args[2].toLong()),
+                GradingMessageMapper.problemKindOf(ChallengeableType.from(args[0])),
+                args[3],
+            ),
         )
     }.getOrNull()
 }

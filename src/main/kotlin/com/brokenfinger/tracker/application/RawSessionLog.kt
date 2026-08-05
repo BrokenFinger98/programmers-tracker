@@ -18,8 +18,8 @@ import java.time.Instant
 interface RawSessionLog {
     /**
      * Opens a live session for the given lesson and returns its identity. The lesson
-     * number is a naming input only — typing it as the protocol's `LessonId` would make
-     * this layer depend on the protocol package (dev rules §1).
+     * number is a naming input only — a directory name, not an identity — so it stays a
+     * plain [Long] rather than a `LessonId` this port would have nothing to do with.
      */
     fun start(lessonId: Long): RawSessionId
 

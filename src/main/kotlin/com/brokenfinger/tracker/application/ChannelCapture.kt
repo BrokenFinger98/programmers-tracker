@@ -1,8 +1,8 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.protocol.CableEvent
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.message.SubmitMessage
 import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 import org.slf4j.LoggerFactory
@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory
  * arrival order.
  */
 class ChannelCapture(
-    private val channel: ChannelIdentifier,
+    private val channel: ChannelKey,
     private val rawLog: RawSessionLog,
     private val registry: SubscriptionRegistry,
     private val writer: RecordWriter,
@@ -146,7 +146,7 @@ class ChannelCapture(
 
     // The registry is bookkeeping and a grading is not: a channel it has already forgotten
     // must not cost us the verdict currently arriving on it.
-    private fun bookkeeping(change: (ChannelIdentifier) -> Unit) {
+    private fun bookkeeping(change: (ChannelKey) -> Unit) {
         runCatching { change(channel) }
             .onFailure { logger.warn("Subscription bookkeeping is out of sync for lesson {}", lessonId()) }
     }

@@ -1,6 +1,6 @@
 package com.brokenfinger.tracker.application
 
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
+import com.brokenfinger.tracker.domain.ChannelKey
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -10,7 +10,7 @@ sealed interface WatchResult {
      * A new subscription opened. [evicted] — when present — was dropped to make room and the
      * caller must unsubscribe it on the socket; the registry only owns the bookkeeping.
      */
-    data class Started(val evicted: ChannelIdentifier?) : WatchResult
+    data class Started(val evicted: ChannelKey?) : WatchResult
 
     /** Already subscribed; recency refreshed and nothing else done (design §4.1 idempotence). */
     data object AlreadyWatching : WatchResult
@@ -20,7 +20,7 @@ sealed interface WatchResult {
 }
 
 /** One watched channel as the diagnostics view sees it. */
-data class WatchedChannel(val identifier: ChannelIdentifier, val lastHeartbeat: Instant, val pinned: Boolean) {
+data class WatchedChannel(val channel: ChannelKey, val lastHeartbeat: Instant, val pinned: Boolean) {
     internal fun heartbeatAt(now: Instant) = copy(lastHeartbeat = now)
 
     internal fun activated() = copy(pinned = true)
@@ -50,41 +50,41 @@ data class WatchedChannel(val identifier: ChannelIdentifier, val lastHeartbeat: 
  * are immutable and replaced wholesale, so a reader never observes a half-updated one.
  */
 class SubscriptionRegistry(private val capacity: Int = DEFAULT_CAPACITY) {
-    private val watched = ConcurrentHashMap<ChannelIdentifier, WatchedChannel>()
+    private val watched = ConcurrentHashMap<ChannelKey, WatchedChannel>()
 
     init {
         require(capacity > 0) { "capacity must be positive: $capacity" }
     }
 
     /** Opens a subscription, or refreshes one we already hold. */
-    fun watch(identifier: ChannelIdentifier, now: Instant): WatchResult {
-        val existing = watched[identifier]
+    fun watch(channel: ChannelKey, now: Instant): WatchResult {
+        val existing = watched[channel]
         if (existing != null) return refresh(existing, now)
-        if (watched.size < capacity) return admit(identifier, now, evicted = null)
+        if (watched.size < capacity) return admit(channel, now, evicted = null)
         val victim = evictionVictim() ?: return WatchResult.Saturated
-        watched.remove(victim.identifier)
-        return admit(identifier, now, victim.identifier)
+        watched.remove(victim.channel)
+        return admit(channel, now, victim.channel)
     }
 
     /** Pins the channel against eviction — a grading session is running on it. */
-    fun markActive(identifier: ChannelIdentifier) = replace(identifier) { it.activated() }
+    fun markActive(channel: ChannelKey) = replace(channel) { it.activated() }
 
     /** Releases the pin once the session reached a terminal frame or its timeout. */
-    fun markSettled(identifier: ChannelIdentifier) = replace(identifier) { it.settled() }
+    fun markSettled(channel: ChannelKey) = replace(channel) { it.settled() }
 
     /** Drops the subscription; `false` means there was nothing to drop. */
-    fun unwatch(identifier: ChannelIdentifier): Boolean = watched.remove(identifier) != null
+    fun unwatch(channel: ChannelKey): Boolean = watched.remove(channel) != null
 
     /** Diagnostics view, oldest heartbeat first — the order eviction would follow. */
     fun snapshot(): List<WatchedChannel> = watched.values.sortedBy { it.lastHeartbeat }
 
     private fun refresh(existing: WatchedChannel, now: Instant): WatchResult {
-        watched[existing.identifier] = existing.heartbeatAt(now)
+        watched[existing.channel] = existing.heartbeatAt(now)
         return WatchResult.AlreadyWatching
     }
 
-    private fun admit(identifier: ChannelIdentifier, now: Instant, evicted: ChannelIdentifier?): WatchResult {
-        watched[identifier] = WatchedChannel(identifier, now, pinned = false)
+    private fun admit(channel: ChannelKey, now: Instant, evicted: ChannelKey?): WatchResult {
+        watched[channel] = WatchedChannel(channel, now, pinned = false)
         return WatchResult.Started(evicted)
     }
 
@@ -92,10 +92,10 @@ class SubscriptionRegistry(private val capacity: Int = DEFAULT_CAPACITY) {
     private fun evictionVictim(): WatchedChannel? =
         watched.values.filterNot { it.pinned }.minByOrNull { it.lastHeartbeat }
 
-    private fun replace(identifier: ChannelIdentifier, change: (WatchedChannel) -> WatchedChannel) {
-        val current = watched[identifier]
-            ?: error("Not watching lesson ${identifier.lessonId.value}: registry out of sync with the socket")
-        watched[identifier] = change(current)
+    private fun replace(channel: ChannelKey, change: (WatchedChannel) -> WatchedChannel) {
+        val current = watched[channel]
+            ?: error("Not watching lesson ${channel.lessonId.value}: registry out of sync with the socket")
+        watched[channel] = change(current)
     }
 
     companion object {
