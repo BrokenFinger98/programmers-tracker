@@ -888,3 +888,25 @@ pass.
 The gap the measurement found. Closing it needs a mechanism that survives a filesystem with
 no locks — a heartbeat marker aged out by mtime is the candidate — and that is a separate
 decision, not a quiet addition to this one.
+
+## [2026-08-06] LICENSE — the file three documents already cited ✅
+
+Issue #48, branch `chore/48-license`. Merge of #44 is `43bde0f`.
+
+There was no `LICENSE`. `find . -iname 'license*'` returned nothing and GitHub reported none,
+while the README ended with a "## License / MIT" section, development-rules §12 listed
+`LICENSE — MIT` among the project's documents, and §9.3 rested part of the
+public-distribution argument on *"the license includes a disclaimer."*
+
+Without the file the repository is **all rights reserved** by default: every reader following
+"Issues and PRs are welcome" would be contributing to something they had no rights to use,
+and anyone cloning it had no permission to run it — the opposite of what a public tool means.
+
+Standard MIT text, unmodified. Modifying it would break license detection and stop it being
+MIT in any useful sense, and the standard "AS IS, WITHOUT WARRANTY OF ANY KIND" clause is
+exactly the disclaimer §9.3 relies on. The private-protocol caveat is a usage point rather
+than a warranty one and already lives in the README's principles section, so the README's
+License heading now links the file and says which document carries which.
+
+Copyright holder is the GitHub handle. Swap it for a legal name if preferred — it is a
+one-line edit and nothing depends on the string.
