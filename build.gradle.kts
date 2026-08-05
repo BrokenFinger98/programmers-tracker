@@ -65,6 +65,7 @@ kover {
             excludes {
                 classes("com.brokenfinger.tracker.TrackerApplicationKt")
                 classes("com.brokenfinger.tracker.protocol.LiveObserveKt")
+                classes("com.brokenfinger.tracker.protocol.LiveCodeFetchKt")
             }
         }
     }
@@ -101,6 +102,33 @@ val verifyEveryTestClassRan =
                 "these test classes declare @Test but produced no results, so they never ran: " +
                     missing.joinToString()
             }
+        }
+    }
+
+// The threshold deferred in `2026-08-05-ci-guard-scoping`, now that domain/calc exists.
+// Scoped to the pure calculators on purpose: they decide verdicts, they have no I/O to make
+// coverage hard, and an unexercised branch there is the silent-wrong-data failure the
+// constitution ranks worst. A global number would only invite tests that execute code
+// without asserting anything.
+//
+// Read from the XML report rather than a Kover rule because Kover's verification rules
+// cannot be narrowed to one package, and a project-wide number would measure the wrong thing.
+val verifyCalculatorCoverage =
+    tasks.register("verifyCalculatorCoverage") {
+        description = "Fails when branch coverage of domain/calc falls below the threshold."
+        dependsOn(tasks.named("koverXmlReport"))
+        val report = layout.buildDirectory.file("reports/kover/report.xml")
+        val minimum = 95
+        val watched = "com/brokenfinger/tracker/domain/calc"
+        doLast {
+            val xml = report.get().asFile
+            check(xml.isFile) { "no Kover XML report at $xml" }
+            val percent = branchCoverageOf(xml.readText(), watched)
+                ?: error("Kover report has no package $watched — was it renamed, or did its tests stop running?")
+            check(percent >= minimum) {
+                "branch coverage of $watched is $percent%, below the $minimum% these calculators must hold"
+            }
+            logger.lifecycle("domain/calc branch coverage: $percent%")
         }
     }
 
@@ -141,4 +169,19 @@ tasks.register<Test>("integrationTest") {
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     shouldRunAfter(tasks.test)
+}
+
+/**
+ * Branch-covered percentage of one package in a Kover XML report, or null when the package
+ * is absent. Reads the package's own counter rather than summing classes, so a class added
+ * later is included without touching this.
+ */
+fun branchCoverageOf(xml: String, packagePath: String): Int? {
+    val packageBlock = Regex("""<package name="$packagePath">(.*?)</package>""", RegexOption.DOT_MATCHES_ALL)
+        .find(xml)?.groupValues?.get(1) ?: return null
+    val counter = Regex("""<counter type="BRANCH" missed="(\d+)" covered="(\d+)"/>""")
+        .findAll(packageBlock).lastOrNull() ?: return 100
+    val missed = counter.groupValues[1].toInt()
+    val covered = counter.groupValues[2].toInt()
+    return if (missed + covered == 0) 100 else covered * 100 / (missed + covered)
 }

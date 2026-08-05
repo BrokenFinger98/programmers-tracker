@@ -83,7 +83,15 @@ calculators those thresholds would protect — `domain/calc` — do not exist ye
 
 ## Outcome
 
-Recorded 2026-08-05 with #14. Negative-tested at authoring time: a planted realistic cookie
+Recorded 2026-08-05 with #14. **The deferred coverage threshold landed in #32**, once
+`domain/calc` existed: branch coverage of the pure calculators must hold 95% and is at 100%.
+It is read from the Kover XML rather than expressed as a Kover rule, because Kover's
+verification rules cannot be narrowed to a single package and a project-wide number would
+measure exactly the thing this ADR refused to chase.
+
+#32 also added a repeatability job — the suite three times, no build cache — for the reason
+this ADR did not anticipate: the guards were sound but the *tests* were not always
+deterministic, and two failures passed locally every time before failing in CI. Negative-tested at authoring time: a planted realistic cookie
 literal and a planted Korean comment each fail `scripts/guards.sh`, while the clean tree
 passes. Related: [[decisions/2026-08-04-test-environment]] ·
 [[concepts/assumption-vs-measurement]].
