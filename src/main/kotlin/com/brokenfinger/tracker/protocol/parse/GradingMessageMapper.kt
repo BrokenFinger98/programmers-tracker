@@ -23,12 +23,6 @@ import org.slf4j.LoggerFactory
 object GradingMessageMapper {
     private val logger = LoggerFactory.getLogger(GradingMessageMapper::class.java)
 
-    // `result` ends an algorithm run and is listed in the bundle's type catalog
-    // (protocol doc §8), but it has never been captured — so [SubmitMessage] declines to
-    // invent a shape for it and keeps it as Unknown. Recognising the name here is what lets
-    // that cell terminate at all, while the raw JSON stays intact for the day it is measured.
-    private const val UNCAPTURED_RESULT = "result"
-
     fun problemKindOf(type: ChallengeableType): ProblemKind = when (type) {
         ChallengeableType.ALGORITHM -> ProblemKind.ALGORITHM
         ChallengeableType.DATABASE -> ProblemKind.DATABASE
@@ -40,8 +34,10 @@ object GradingMessageMapper {
         is SubmitMessage.Finish -> TerminalKind.FINISH
         is SubmitMessage.ResultLessonChallenge -> TerminalKind.RESULT_LESSON_CHALLENGE
         is SubmitMessage.Error -> TerminalKind.ERROR
-        is SubmitMessage.Unknown -> uncapturedResultTerminal(message.type)
-        is SubmitMessage.Start, is SubmitMessage.TestGroup, is SubmitMessage.Testcase -> null
+        is SubmitMessage.Result -> TerminalKind.RESULT
+        is SubmitMessage.Unknown, is SubmitMessage.Start,
+        is SubmitMessage.TestGroup, is SubmitMessage.Testcase,
+        -> null
     }
 
     /**
@@ -52,7 +48,7 @@ object GradingMessageMapper {
         is SubmitMessage.Testcase -> gradedCase(message)
         is SubmitMessage.Finish -> gradedCase(message)
         is SubmitMessage.Start, is SubmitMessage.TestGroup, is SubmitMessage.ResultLessonChallenge,
-        is SubmitMessage.Error, is SubmitMessage.Unknown,
+        is SubmitMessage.Result, is SubmitMessage.Error, is SubmitMessage.Unknown,
         -> null
     }
 
@@ -65,7 +61,7 @@ object GradingMessageMapper {
         is SubmitMessage.Start -> message.testcaseIds.orEmpty()
         is SubmitMessage.TestGroup -> message.testcaseIds.orEmpty()
         is SubmitMessage.Testcase, is SubmitMessage.ResultLessonChallenge, is SubmitMessage.Finish,
-        is SubmitMessage.Error, is SubmitMessage.Unknown,
+        is SubmitMessage.Result, is SubmitMessage.Error, is SubmitMessage.Unknown,
         -> emptyList()
     }
 
@@ -81,17 +77,16 @@ object GradingMessageMapper {
         is SubmitMessage.Testcase -> message.action
         is SubmitMessage.ResultLessonChallenge -> message.action
         is SubmitMessage.Finish -> message.action
+        is SubmitMessage.Result -> message.action
         is SubmitMessage.Error -> message.action
         is SubmitMessage.Unknown -> null
     }
 
-    private fun uncapturedResultTerminal(type: String?): TerminalKind? {
-        if (type != UNCAPTURED_RESULT) return null
-        return TerminalKind.RESULT
-    }
-
+    // A submit frame carries `testcaseId`; a run frame carries a 0-based `index` instead
+    // (protocol doc §7, fixtures/algorithm-run-pass.jsonl). Both identify a case within one
+    // session, and a session is either a run or a submit — never both.
     private fun gradedCase(message: SubmitMessage.Testcase): TestcaseResult? {
-        val id = message.testcaseId ?: return declined("testcase")
+        val id = message.testcaseId ?: message.index?.toLong() ?: return declined("testcase")
         return TestcaseResult(id, message.passed, message.msg, message.runTime, message.memorySize)
     }
 

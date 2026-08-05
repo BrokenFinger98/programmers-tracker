@@ -16,6 +16,20 @@ verbatim — failure classification depends on them (protocol doc section 7).
 | `sql-pass.jsonl` | §6, §15 #7 — lesson 131528, snake_case fields, **no `finish` frame** | |
 | `sql-run.jsonl` | §6, §15 #8 — `returned_rows` double-encoded, `msg` explicitly null | |
 | `algorithm-run-error.jsonl` | §7 run path, §15 #12–13 — HTML-escaped compiler output / stack trace | |
+| `algorithm-run-pass.jsonl` | **Our own live capture**, lesson 120804, 2026-08-04 and reproduced 2026-08-05 (issues #6, #10) | the only fixture not transcribed from the protocol doc — see below |
+
+### `algorithm-run-pass.jsonl` — provenance
+
+Every other fixture is transcribed from the protocol document. This one was captured by
+this project's own client during the issue #6 live verification and reproduced byte-alike
+after the Spring Boot 4 upgrade (#10), because the protocol document records the run
+success *sequence* (§10) without a frame-level transcript of the terminal `result`.
+
+It is the measured evidence for three things the fixtures otherwise could not test:
+
+- the algorithm **run** path terminates at `result`, not `finish`
+- run testcases identify themselves by **`index`** (0-based), not `testcaseId`
+- testcases arrive **out of order** — `index 1` precedes `index 0` in this capture
 
 ## Scrubbing (development-rules §7.3)
 

@@ -28,6 +28,7 @@ class GradingMessageMapperTest {
     private val sqlSubmit = FixtureLoader.messages("sql-pass.jsonl")
     private val sqlRun = FixtureLoader.messages("sql-run.jsonl")
     private val algorithmRunError = FixtureLoader.messages("algorithm-run-error.jsonl")
+    private val algorithmRunPass = FixtureLoader.messages("algorithm-run-pass.jsonl")
 
     @Test
     fun `maps the two channel types onto the two problem kinds`() {
@@ -60,12 +61,30 @@ class GradingMessageMapperTest {
         GradingMessageMapper.terminalKindOf(algorithmSubmit[2]).shouldBeNull()
     }
 
-    // `result` is in the bundle's type catalog (protocol doc §8) and is the algorithm-run
-    // terminal, but it has never been captured — so it has no fixture and the message parser
-    // keeps it as Unknown. Recognising it by name is what lets that cell terminate at all.
+    // Measured in fixtures/algorithm-run-pass.jsonl — our own live capture (issues #6, #10).
+    // Before that capture existed the parser kept this frame as Unknown and the mapper had to
+    // recognise it by name; it is now a first-class message.
     @Test
-    fun `the uncaptured result frame is still recognised as a terminal kind`() {
-        GradingMessageMapper.terminalKindOf(anUnmeasuredFrame("result")) shouldBe TerminalKind.RESULT
+    fun `the run result frame is the algorithm run terminal`() {
+        GradingMessageMapper.terminalKindOf(algorithmRunPass.last()) shouldBe TerminalKind.RESULT
+    }
+
+    @Test
+    fun `a run testcase identifies itself by index instead of testcaseId`() {
+        val cases = algorithmRunPass.mapNotNull { GradingMessageMapper.testcaseOf(it) }
+
+        cases.map { it.id } shouldBe listOf(1L, 0L)
+        cases.all { it.passed == true } shouldBe true
+    }
+
+    @Test
+    fun `the run result frame carries no per-case row of its own`() {
+        GradingMessageMapper.testcaseOf(algorithmRunPass.last()).shouldBeNull()
+    }
+
+    @Test
+    fun `a run stream reports the run action`() {
+        GradingMessageMapper.actionOf(algorithmRunPass.first()) shouldBe GradingAction.RUN
     }
 
     @Test

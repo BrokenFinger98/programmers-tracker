@@ -33,6 +33,23 @@ class GradingSessionAssemblerTest {
         session.testcases.map { it.id } shouldContainExactly listOf(154893L, 154894L)
     }
 
+    /**
+     * The run success path, end to end. This cell terminates at `result` rather than
+     * `finish`, its cases identify themselves by 0-based `index`, and in this capture
+     * index 1 genuinely arrived before index 0 — measured in our own live verification
+     * (fixtures/algorithm-run-pass.jsonl, issues #6 and #10).
+     */
+    @Test
+    fun `an algorithm run that passed is judged from its result frame`() {
+        val session = anAssembledSession("algorithm-run-pass.jsonl")
+
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.PASS
+        session.action shouldBe GradingAction.RUN
+        session.kind shouldBe ProblemKind.ALGORITHM
+        session.testcases.map { it.id } shouldContainExactly listOf(0L, 1L)
+    }
+
     @Test
     fun `a partially scored submit is judged wrong from the failing testcase`() {
         val session = anAssembledSession("algorithm-wrong.jsonl")
