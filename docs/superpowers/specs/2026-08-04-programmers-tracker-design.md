@@ -147,7 +147,7 @@ sequenceDiagram
     X->>S: POST /watch<br/>lessonId · challengeableId · type · language · codesKey
     S->>C: subscribe (identifier)
     C-->>S: confirm_subscription
-    Note over S,C: From this point the server is listening<br/>30 s heartbeat guards against restarts
+    Note over S,C: From this point the server is listening<br/>30 s heartbeat guards against restarts<br/>confirmation is NOT identifier validation
 
     rect rgba(59,130,246,0.08)
         Note over U,D: Run code — repeated section
@@ -155,9 +155,12 @@ sequenceDiagram
         W->>C: perform("run", codes)
         C-->>W: start · testcase · result
         C-->>S: same messages broadcast
+        S->>D: append every frame to .ps/raw (hot path)
+        Note right of S: stage 1 — must never block or fail<br/>this append is the commit point
+        S->>D: write record with verdict
         S->>W: GET lesson page
         W-->>S: saved code
-        S->>D: update JSONL + Solution.java
+        S->>D: attach code + update Solution
         Note right of S: run is never committed<br/>the only source of errorText
     end
 
@@ -170,13 +173,14 @@ sequenceDiagram
     rect rgba(34,197,94,0.08)
         Note over U,G: Submit
         U->>W: Click "제출 후 채점하기" (Submit and Grade)
-        W->>C: perform("submit", codes)
-        C-->>S: start · test_group · testcase×N · result · finish
-        Note over S: 150 s timeout<br/>a timeout grading run measured 87 s
+        W->>C: start · test_group · testcase×N · result · finish
+        S->>D: append every frame to .ps/raw (hot path)
+        Note over S: terminal frame per action × type<br/>150 s timeout, a timeout run measured 87 s
+        S->>D: attempts/00N + record with verdict
         S->>W: GET lesson page
         W-->>S: saved code
-        S->>D: attempts/00N + JSONL + diff
-        S->>G: commit
+        S->>D: attach code + diff
+        S->>G: commit (separate retryable step)
         alt passed
             S->>G: push
         else not passed
@@ -185,20 +189,45 @@ sequenceDiagram
     end
 ```
 
+**Stage ordering is load-bearing** ([[decisions/2026-08-05-capture-pipeline-stages]]).
+The verdict is unrecoverable — Programmers has no submission-history API, so a result not
+captured at that moment is lost forever (protocol §11) — while the code can be fetched
+again later. Recording therefore never waits on CodeFetch: frames are appended raw as they
+arrive, the record is written the moment the session terminates, and code is attached
+afterward. A failed CodeFetch leaves `codePending` on an otherwise complete record instead
+of discarding a grading result. Git is likewise a separate reconciliation step; a commit
+failure never fails a capture ([[decisions/2026-08-05-write-serialization]]).
+
 ### 3.3 Verdict classification
 
 The `submit` response alone cannot distinguish a compile error from a runtime error. The key
 is consulting the immediately preceding `run` record and promoting the verdict.
 
+**Outcome and verdict are separate dimensions** ([[decisions/2026-08-05-failure-taxonomy]]).
+A verdict says the judge reached a conclusion; an outcome says whether we observed one.
+Mixing them would let a grading we failed to observe dilute the statistics of gradings we did.
+
+| Outcome | Meaning |
+|---|---|
+| `JUDGED` | A terminal frame arrived and the message matched a known verdict |
+| `INCOMPLETE` | Timeout, disconnect, or eviction before a terminal frame — raw frames kept, record marked partial |
+| `UNKNOWN` | Terminal frame arrived but the failure message matches nothing known |
+
+`UNKNOWN` is not hypothetical: a memory-limit-exceeded verdict has never been triggered, so
+its `msg` string is unknown (protocol §14). Coercing it into the nearest verdict is exactly
+the silent-wrong-data failure the constitution ranks worst. This mirrors `Unknown(type, raw)`
+in the protocol layer (development-rules §2.3) one level up.
+
 ```mermaid
 flowchart TB
-    START(["result_lesson_challenge received"]) --> PASSED{"passed<br/>== true ?"}
+    START(["terminal frame received"]) --> PASSED{"passed<br/>== true ?"}
     PASSED -->|yes| VPASS["PASS"]
     PASSED -->|no| MSG{"msg pattern of the<br/>failed testcase"}
 
     MSG -->|"실패 (0.01ms, 75.3MB)"| VWRONG["WRONG<br/>runTime present"]
     MSG -->|"실패 (시간 초과)"| VTIME["TIMEOUT<br/>runTime null"]
-    MSG -->|"실패 (런타임 에러)"| PREV{"errorText present in the<br/>previous run record?"}
+    MSG -->|"실패 (런타임 에러)"| PREV{"errorText from a<br/>bound run record?"}
+    MSG -->|"no known pattern"| VUNK["UNKNOWN<br/>never coerced"]
 
     PREV -->|no| VRT["RUNTIME_ERROR"]
     PREV -->|yes| KIND{"shape of errorText"}
@@ -210,17 +239,24 @@ flowchart TB
     VTIME --> REC
     VRT --> REC
     VCE --> REC
+    VUNK --> REC
 
     classDef ok fill:#f0fdf4,stroke:#22c55e,color:#14532d
     classDef bad fill:#fef2f2,stroke:#ef4444,color:#7f1d1d
     classDef warn fill:#fffbeb,stroke:#f59e0b,color:#78350f
     class VPASS ok
     class VWRONG,VRT,VCE bad
-    class VTIME warn
+    class VTIME,VUNK warn
 ```
 
 `errorText` is only obtainable via the `run` path and arrives HTML-escaped
 (`<br/>`, `&quot;`, `&#39;`). Unescape it first, then classify by shape.
+
+**The promotion is bound, not merely "previous".** A `run` record qualifies only when it is
+the same problem and language **and** its code hash matches the submitted code (or, when no
+hash is available, it falls inside a bounded recency window). Without that constraint a run
+from forty minutes and ten edits ago would attach its compiler output and promote an
+unrelated submit to `COMPILE_ERROR`.
 
 ### Why passive observation
 
@@ -250,11 +286,32 @@ Receives `POST /watch` and opens a subscription for that channel.
 ```
 
 - The channel is chosen by `challengeableType`: `algorithm` → `Challenge::AlgorithmChannel`,
-  `database` → `Challenge::DatabaseChannel`
-- Concurrent subscriptions are capped at **LRU 8**. Beyond that, the oldest is closed first.
+  `database` → `Challenge::DatabaseChannel`. Any other value is rejected with an explicit
+  error — never guessed.
+- Concurrent subscriptions are capped at **LRU 8**, evicted by **last heartbeat**, and a
+  subscription with a live grading session is **pinned against eviction**. When every slot is
+  pinned, `/watch` fails loudly rather than silently declining to observe
+  ([[decisions/2026-08-05-failure-taxonomy]]). Evicting mid-grading would lose a result
+  permanently, and "oldest" was previously undefined against a heartbeat that touches every
+  open tab every 30 s.
 - The extension sends a heartbeat every 30 seconds, so subscriptions recover automatically
-  after a server restart.
+  after a server restart. **`/watch` is therefore idempotent**: a repeat for an identifier
+  that is already subscribed refreshes recency and does nothing else. Re-subscribing on every
+  heartbeat would duplicate records.
+- The payload is validated (all five fields present, numeric ids parseable, known
+  `challengeableType`), and the endpoint has an explicit error contract. The extension sends
+  DOM `data-*` values, which are strings and can vanish when Programmers changes markup —
+  identifier extraction failure must surface, never substitute a default (CLAUDE.md).
 - Switching the language tab changes `codesKey`, so the extension re-sends.
+- **`confirm_subscription` does not validate the identifier.** A wrong `challengeable_id` is
+  still confirmed and still runs testcases; the only signal is a generic
+  `내부적인 오류가 발생했습니다` much later (protocol §3 — the trap behind four consecutive
+  failures during reverse engineering). Identifiers are validated independently of the
+  subscription, and that generic error is surfaced as a probable identifier mismatch rather
+  than recorded as a judging outcome.
+- The endpoint binds to **localhost only and requires a local token**. This process holds a
+  live session cookie and can push to GitHub; a container that binds `0.0.0.0` would expose
+  that to the whole network.
 
 ### 4.2 Capture
 
@@ -262,13 +319,36 @@ Connects over WebSocket to `wss://ws.programmers.co.kr:443/cable` and holds the 
 
 - Subprotocol `actioncable-v1-json`
 - Headers: `Cookie: _session_production=…`, `Origin: https://school.programmers.co.kr`
-- `{"type":"ping"}` is ignored
-- **Termination condition: receiving `finish` OR `result_lesson_challenge`.**
-  SQL never sends `finish`, so waiting only for `finish` hangs forever.
+- **Every received frame is appended raw before anything else** — stage 1 of
+  [[decisions/2026-08-05-capture-pipeline-stages]]. The hot path does no parsing decisions,
+  no network calls and no derived writes, because that append is the commit point for data
+  that cannot be recovered any other way.
+- **Termination is an (action × type) matrix**, not one condition:
+
+  | | `submit` | `run` |
+  |---|---|---|
+  | `algorithm` | `finish` | `result` |
+  | `database` (SQL) | `result_lesson_challenge` | `finish` |
+
+  SQL never sends `finish` **on submit**, so waiting only for `finish` hangs forever — but it
+  does send one on `run` (protocol §5–§7). `error` terminates any cell: an identical
+  resubmission returns a cached result and then `error` within a second (protocol §13.2), and
+  a run error ends the stream at `error` (protocol §7). Treating `error` as non-terminal is
+  what previously made "record the error too" unreachable. For algorithm submits
+  `result_lesson_challenge` arrives *before* `finish`; the late `finish` is absorbed into the
+  same session rather than starting a new one.
 - **150-second timeout.** A timeout-verdict grading run measured 87 seconds. Capping at 60
-  seconds would cut off a legitimate timeout verdict mid-grade.
+  seconds would cut off a legitimate timeout verdict mid-grade. On firing, the session is
+  recorded with outcome `INCOMPLETE` and its raw frames kept — never silently dropped.
 - `testcase` messages arrive out of order due to parallel grading. Sort by `testcaseId`
-  before saving.
+  before saving, and **check completeness** against the expected count from
+  `test_group.testcaseIds` / `start.testcase_ids`. Sorting alone assumes every testcase
+  arrived; a slow one would otherwise vanish from the summary without a trace.
+- **`{"type":"ping"}` drives liveness detection.** It arrives every 3 seconds (protocol §4).
+  Absence beyond a bounded multiple means the connection is dead: reconnect with backoff,
+  re-subscribe the entire active set, log the gap window loudly, and mark sessions that were
+  open at disconnect as `INCOMPLETE`. Anything broadcast during a gap is lost permanently
+  (protocol §11), so the gap must be visible rather than inferred later.
 - Field naming is camelCase for algorithm (`testcaseId`) and snake_case for SQL
   (`testcase_id`). The parser accepts both.
 
@@ -277,21 +357,39 @@ Connects over WebSocket to `wss://ws.programmers.co.kr:443/cable` and holds the 
 `_session_production` is HttpOnly and unreadable from JS. The server reads it
 **directly from the browser's cookie store.**
 
-- macOS: Chrome `Cookies` SQLite + Keychain decryption
+- macOS: Chrome `Cookies` SQLite + Keychain decryption. The manual-file provider
+  (project-local `.ps/session`) is the mandatory cross-platform fallback, not an optional
+  extra (development-rules §9.2)
 - A one-time Keychain access permission prompt appears on first use
-- On detecting expiry (`reject_subscription` on subscribe), re-extract; if that fails, log a
-  message telling the user to log in again
+- **Expiry is one auth state observed at two boundaries.** The original detector —
+  `reject_subscription` on subscribe — is an **unmeasured assumption**: the protocol document
+  never observed that message. A login redirect on the CodeFetch GET is an equally valid
+  expiry signal, and expiry can happen mid-session while a subscription is already open. Both
+  boundaries feed one auth state; re-extraction attempts are bounded, and on exhaustion the
+  user is told to log in again ([[decisions/2026-08-05-failure-taxonomy]])
 - The cookie value lives only in memory — never written to disk or logs
 
 ### 4.4 CodeFetch
 
-The broadcast carries no source code. Immediately after receiving a result, fetch the problem
-page and pull out the saved code.
+The broadcast carries no source code. After the record is written, fetch the problem page and
+pull out the saved code.
 
 ```
 GET /learn/courses/30/lessons/{lessonId}?language={lang}   (auth required)
   → <input data-type="code" value="<my saved code>">
 ```
+
+**CodeFetch is a late attachment, never a precondition** — stage 3 of
+[[decisions/2026-08-05-capture-pipeline-stages]]. It has an explicit timeout and bounded
+retries; on failure the record persists with `codePending` and is retried later. Responses
+that are not the expected page are handled distinctly: a login redirect feeds the auth state
+(§4.3), a 429 backs off (Programmers' rate-limit rules are unverified — protocol §14), and a
+missing `<input data-type="code">` marks the fetch failed rather than storing an empty string.
+
+> **Accepted race**: code is autosaved while editing (protocol §10), so a fetch that happens
+> after the result can return code the user has since edited. The window cannot be closed
+> under passive observation, so the stored code is defined as **a snapshot at fetch time**,
+> and a hash comparison against the previous fetch at least makes drift detectable.
 
 > **Unverified assumption**: we measured that code is saved on `submit`, but did not confirm
 > whether it is also saved on `run`. If it is not, a `run` capture would pick up the previous
@@ -308,20 +406,52 @@ Verdict classification rules (protocol doc §7):
 | `WRONG` | failed + `msg` contains a runtime (`실패 (0.01ms, 75.3MB)`) |
 | `TIMEOUT` | `msg == "실패 (시간 초과)"` |
 | `RUNTIME_ERROR` | `msg == "실패 (런타임 에러)"` |
-| `COMPILE_ERROR` | same as above, but **promoted when the preceding `run` returned a full compile-error text** |
+| `COMPILE_ERROR` | same as above, but **promoted when a bound `run` record returned a full compile-error text** |
+| *(no match)* | outcome `UNKNOWN` — never coerced into a neighbouring verdict (§3.3) |
 
 The `submit` response alone cannot distinguish a compile error from a runtime error — both
 arrive as `"실패 (런타임 에러)"`. Only the `run` path yields the actual error text, and
-`msg` is HTML-escaped, so it needs unescaping plus `<br/>` → `\n` replacement.
+`msg` is HTML-escaped, so it needs unescaping plus `<br/>` → `\n` replacement. The promotion
+is bound by problem, language and code identity (§3.3), not merely by recency.
+
+**All derived writes are serialized on one confined writer**
+([[decisions/2026-08-05-write-serialization]]). Up to 8 subscriptions can complete at once
+against one JSONL and one git index, so the Recorder runs inside a single-parallelism
+dispatcher while session assembly stays on per-session coroutines — the socket read loop is
+never blocked by a write.
+
+**`log/submissions.jsonl` is the single authority for `attempt`.** The counter is restored
+from it at startup and allocated inside the writer; `attempts/NNN.*` names are derived from
+that number. Deriving it from a directory scan would be both a race and a second source of
+truth. Read-modify-write state (`.ps/timers.json`, `.ps/hints.json`) is written temp-then-
+atomically-replaced, and readers must tolerate a torn final JSONL line.
+
+**Records carry a capture key** derived from the terminal frame, because Programmers issues
+no submission id (protocol §11) and `(lessonId, action, attempt)` is not unique for `run`
+(§5.1 — runs keep the previous submit's number). The writer drops duplicates, which a
+reconnect re-subscribe or a heartbeat repeat can otherwise produce.
 
 ### 4.6 GitSync
 
 - **1 `submit` = 1 commit.** Wrong-answer commits pile up as-is — that *is* the learning
-  record. `run` is never committed (it only lands in the JSONL).
+  record. `run` is never committed as its own commit; because `run` does update
+  `Solution.java` and the JSONL, **staging is path-scoped** so a submit commit carries what
+  it means to carry rather than whatever a run left behind.
+- **Git is a separate, retryable reconciliation step, not part of the write path**
+  ([[decisions/2026-08-05-write-serialization]]). "Commit whatever is uncommitted" is
+  idempotent, so a failure is retried rather than lost. `index.lock` may be held by a process
+  that is not ours — IntelliJ, a terminal, an Obsidian git plugin — so contention is expected
+  and backed off. **A git failure never fails a capture.**
 - **Push timing: when the problem passes.** The whole attempt history of a problem goes up
-  at once.
+  at once. Note that `git push` moves the whole branch, so a pass on one problem also pushes
+  pending commits for others; "never pushed until solved" describes the trigger, not a
+  per-problem scope.
 - **Backup trigger**: problems never solved are never pushed, so push un-pushed commits
-  daily at 23:00 (Asia/Seoul), plus allow manual runs via MCP `push()`.
+  daily at 23:00 (Asia/Seoul), plus allow manual runs via MCP `push()`. A missed run (machine
+  asleep) is caught up at the next start rather than skipped.
+- **The record repository is locked exclusively at startup.** Serializing writes inside one
+  process says nothing about a second process, and a Docker container plus a local run is a
+  realistic double-writer. A second instance refuses to start rather than corrupting records.
 
 Commit message format:
 
@@ -341,16 +471,17 @@ ps-records/
 ├── problems/
 │   └── 120804-두-수의-곱-구하기/
 │       ├── README.md            problem statement + examples
-│       ├── Solution.java        latest code (updated on every run/submit)
+│       ├── Solution.java        latest code per language (updated on every run/submit)
 │       ├── SolutionTest.java    server-generated runner — for IntelliJ debugging
 │       ├── meta.json            identifiers · level · partTitle · acceptanceRate
 │       └── attempts/
-│           ├── 001.java  001.json
-│           ├── 002.java  002.json
-│           └── 003.java  003.json
+│           ├── 001.java  001.json  001.raw.jsonl
+│           ├── 002.java  002.json  002.raw.jsonl
+│           └── 003.sql   003.json  003.raw.jsonl
 ├── log/
 │   └── submissions.jsonl        every submission, one line each
 └── .ps/
+    ├── raw/                     live session frames, before a session completes
     ├── catalog.json             cached catalog of 689 problems
     ├── timers.json              per-problem start times
     └── hints.json               per-problem hint unlock level
@@ -358,6 +489,23 @@ ps-records/
 
 `attempts/` is the heart of this design. **The diff between 001 → 002 is precisely "what
 was missed".**
+
+**Raw frames move, they do not start here.** While a session is live its problem directory
+and attempt number do not exist yet, so frames are appended to
+`.ps/raw/<ts>-<lessonId>.jsonl` and the file moves to `attempts/00N.raw.jsonl` once the
+session completes ([[decisions/2026-08-05-capture-pipeline-stages]]). `.ps/raw/` is therefore
+also the crash-recovery work list: whatever is still there at startup is an unprocessed
+session.
+
+**Attempt numbering.** The number comes from `log/submissions.jsonl` (§4.5), never from
+scanning `attempts/`. Numbering is per problem and monotonic across languages, so the
+sequence reads as the problem's chronological history; the file extension records which
+language each attempt used. `diffFromPrev` is computed against **the previous attempt in the
+same language** — diffing Java against SQL would be noise, not "what was missed".
+
+**Directory naming** is derived from the lesson id plus a slug of the title, and the lesson
+id alone is the identity: if Programmers renames a problem the directory is not renamed, so
+history never splits in two.
 
 ### How run and submit are handled differently
 
@@ -404,20 +552,41 @@ payload carried in the `run` message's `start`. No need to parse the problem-sta
   "sincePrevSec": 312,                   // since the previous submission
   "hintLevel": 0,                        // 0 = none seen, 1–4
 
-  "verdict": "TIMEOUT",
+  "captureKey": "a3f1…",                 // derived from the terminal frame · dedup key
+  "outcome": "JUDGED",                   // JUDGED | INCOMPLETE | UNKNOWN
+  "verdict": "TIMEOUT",                  // null unless outcome == JUDGED
   "score": {"user": "0.0", "perfect": "100.0"},
   "testcases": [
     {"id": 154911, "passed": false, "msg": "실패 (시간 초과)",
      "runTime": null, "memorySize": null}
   ],
-  "tcSummary": {"total": 16, "passed": 0, "failed": 16},
+  "tcSummary": {"total": 16, "passed": 0, "failed": 16, "complete": true},
   "rating": {"old": 1372, "new": 1372, "changed": false},
 
+  "rawPath": "problems/120804-…/attempts/002.raw.jsonl",
   "codePath": "problems/120804-…/attempts/002.java",
+  "codePending": false,                  // true when CodeFetch has not succeeded yet
   "diffFromPrev": "@@ -3,1 +3,1 @@\n-        return num1 * num2;\n+        long r = 0; …",
   "errorText": null                      // full compiler/stack-trace text obtained from run
 }
 ```
+
+Five fields exist because of the 2026-08-05 review:
+
+- **`captureKey`** — Programmers issues no submission id (protocol §11) and
+  `(lessonId, action, attempt)` is not unique for `run`, so dedup needs a key of our own.
+- **`outcome`** — separates "the judge concluded" from "we observed a conclusion"; `verdict`
+  is meaningful only for `JUDGED` (§3.3).
+- **`tcSummary.complete`** — records whether the observed testcase count matched the expected
+  one, so a partially observed grading can never masquerade as a full one.
+- **`rawPath`** — the original frames stay reachable from the record, which is what makes
+  re-analysis possible (development-rules §2.4).
+- **`codePending`** — a record whose verdict is durable but whose code attachment has not
+  succeeded yet. Consumers must tolerate it.
+
+For SQL problems `score`, `rating` and per-testcase `runTime`/`memorySize` are structurally
+absent (protocol §6), so they are null rather than zero — a zero would silently enter
+averages.
 
 ### 5.3 Problem-type tags — AI tagging
 
@@ -965,13 +1134,23 @@ Its only permissions are access to `school.programmers.co.kr` pages and localhos
 
 | situation | handling |
 |---|---|
-| submitting while the server is down | Missed. On server start, diff the solved list for **partial recovery** (code and failures unrecoverable) |
-| running immediately after opening the page | Subscription completes within 1 s. Writing code takes far longer, so no practical risk |
-| back-to-back submissions of the same problem | Programmers serves a cached response then emits `error`. The server records the `error` too |
-| several problems open at once | up to 8 concurrent subscriptions (LRU) |
-| switching the language tab | `codesKey` changes → extension re-notifies |
-| cookie expiry | detect `reject_subscription` → re-extract → on failure, tell the user to log in again |
+| submitting while the server is down | Missed, permanently. The solved-list diff detects only that *something* passed — never fabricate a record from it (see below) |
+| running immediately after opening the page | Subscription completed in 0.43 s when measured (protocol §10). The risk is the returning-tab and restart windows, not typing speed |
+| back-to-back submissions of the same problem | Programmers serves a cached response then emits `error` (protocol §13.2). `error` is a terminal frame, so the session ends and is recorded with outcome `UNKNOWN` |
+| several problems open at once | up to 8 concurrent subscriptions, evicted by last heartbeat, active sessions pinned (§4.1) |
+| switching the language tab | `codesKey` changes → extension re-notifies; `/watch` is idempotent |
+| cookie expiry | one auth state observed at both the subscribe and CodeFetch boundaries (§4.3) |
+| connection drops mid-grading | ping absence detects it; reconnect + re-subscribe; open sessions become `INCOMPLETE` and the gap is logged (§4.2) |
+| grading never terminates | 150 s timeout → `INCOMPLETE` with raw frames kept (§4.2) |
+| a second server instance starts | refused — the record repository is locked exclusively (§4.6) |
 | problems never passed | daily 23:00 backup push + manual `push()` |
+
+**On "partial recovery": the solved list is a detector, not a source.** It reveals that a
+problem became solved while we were not listening, and nothing else — no code, no verdict, no
+attempt, no timestamp. Synthesizing a record from it would inject a fabricated PASS with a
+fabricated time into every metric that depends on first-try rate, elapsed time and review
+scheduling. The gap is therefore surfaced to the user as a known blind spot, and no record is
+written. Recording nothing is bad; recording something wrong is worse (CLAUDE.md).
 
 ## 10. Test strategy
 

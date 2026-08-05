@@ -95,3 +95,32 @@ Full-stack review with the user (session 2026-08-05). ADRs:
   tactical only; development-rules §1 amended
 - Queued follow-up issues: ① SB 4.1.0 + JVM 25 upgrade + constitution amendment
   (stack table, Role "job-seeker" premise fix), ② Docker startup + bootstrap guide
+
+## [2026-08-05] Design revision from the adversarial review ⏳
+
+Issue #8, branch `docs/8-capture-design-revision`. Full adversarial review of the
+communication inventory (2 inbound · 4 outbound · 3 local I/O) against measured
+protocol facts. Two of my earlier claims were wrong and are corrected in-spec:
+`reject_subscription` was never observed (design relied on it), and termination is an
+(action × type) matrix — SQL sends `finish` on run, just not on submit.
+
+- 3 ADRs: [[decisions/2026-08-05-capture-pipeline-stages]] ·
+  [[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-05-failure-taxonomy]]
+- Design §3.2 sequence: raw-append first, record on termination, CodeFetch as a late
+  retryable attachment (was: recording gated on CodeFetch — one failed HTTP call
+  destroyed an unrecoverable verdict)
+- Design §3.3: outcome (JUDGED/INCOMPLETE/UNKNOWN) separated from verdict; bounded
+  errorText promotion
+- §4.1 Watcher: LRU pinning + heartbeat-ordered eviction, /watch idempotency +
+  validation, subscription ≠ identifier validation, localhost bind + token
+- §4.2 Capture: termination matrix, error/timeout terminal, ping watchdog + reconnect,
+  testcase completeness check
+- §4.3 cookie: single auth state at both boundaries; §4.4 CodeFetch: late attachment,
+  codePending, accepted edit race
+- §4.5 Recorder: confined single writer, JSONL as attempt authority, atomic replace,
+  capture key; §4.6 GitSync: separate retryable reconciliation, path-scoped staging,
+  push-scope correction, exclusive repo lock
+- §5.1 layout: `.ps/raw/` → `attempts/00N.raw.jsonl`, multi-language/SQL rule;
+  §5.2 record: captureKey · outcome · tcSummary.complete · rawPath · codePending
+- §9 edge cases rewritten; "partial recovery" downgraded to a detector — never
+  synthesize a record from the solved list
