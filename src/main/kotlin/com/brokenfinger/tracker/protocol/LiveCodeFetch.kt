@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
     val lessonId = args[0].toLongOrNull() ?: return usage()
     val cookie = ManualFileSessionProvider.fromEnvironment().cookie()
 
-    KtorPageSource(cookie.headerValue()).use { pages ->
+    KtorPageSource { cookie.headerValue() }.use { pages ->
         val fetcher = ProblemPageCodeFetcher(cookie, pages = pages)
         report(runBlocking { fetcher.fetch(lessonId, args[1]) })
     }

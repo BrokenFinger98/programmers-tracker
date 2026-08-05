@@ -16,6 +16,7 @@ import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import com.brokenfinger.tracker.support.fixtures.anObservedFrame
 import com.brokenfinger.tracker.support.fixtures.observedFrames
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -185,6 +186,39 @@ class ChannelCaptureTest {
         records().last().verdict shouldBe Verdict.RUNTIME_ERROR
     }
 
+    // Stage 3 hand-off -----------------------------------------------------------------------
+
+    @Test
+    fun `a settled grading is handed to stage 3, which is what makes its files appear`() {
+        val attached = mutableListOf<SubmissionRecord>()
+
+        consume(capture(attachment = recording(attached)), "algorithm-pass.jsonl")
+
+        attached.single().verdict shouldBe Verdict.PASS
+    }
+
+    @Test
+    fun `a duplicate is dropped before stage 3, because it has no record of its own`() {
+        val attached = mutableListOf<SubmissionRecord>()
+        val capture = capture(attachment = recording(attached))
+
+        consume(capture, "algorithm-pass.jsonl")
+        consume(capture, "algorithm-pass.jsonl")
+
+        attached shouldHaveSize 1
+    }
+
+    /** The verdict is already durable; a fetch that blew up may not take the record with it. */
+    @Test
+    fun `an attachment that throws costs files, not the record and not the stream`() {
+        val capture = capture(attachment = { error("the page fetch blew up") })
+
+        consume(capture, "algorithm-pass.jsonl")
+        consume(capture, "algorithm-wrong.jsonl")
+
+        records().map { it.verdict } shouldContainExactly listOf(Verdict.PASS, Verdict.WRONG)
+    }
+
     // Failure paths ------------------------------------------------------------------------
 
     @Test
@@ -232,12 +266,18 @@ class ChannelCaptureTest {
 
     // Harness ------------------------------------------------------------------------------
 
+    private fun recording(into: MutableList<SubmissionRecord>) = RecordAttachment {
+        into += it
+        AttachOutcome.ATTACHED
+    }
+
     private fun capture(
         channel: ChannelKey = anAlgorithmChannel(),
         store: RecordStore = JsonlRecordStore.under(root),
+        attachment: RecordAttachment = RecordAttachment { AttachOutcome.DEFERRED },
     ): ChannelCapture {
         registry.watch(channel, NOW)
-        return ChannelCapture(channel, rawLog, registry, writerOf(store), FixedTimer(ELAPSED_SEC))
+        return ChannelCapture(channel, rawLog, registry, writerOf(store), FixedTimer(ELAPSED_SEC), attachment)
     }
 
     private fun writerOf(store: RecordStore) = RecordWriter.of(

@@ -614,3 +614,40 @@ still 100%.
 - **The runner generator is not built.** It needs the example testcases the `run` `start`
   frame carries inline, and those are not currently carried through to the record. Its own
   issue rather than a guess
+
+## [2026-08-05] Stage 3 wired — fetched code becomes files ⏳
+
+Issue #36, branch `feat/36-attach-code-artifacts`. 549 tests, all five gates exit 0,
+calculator coverage still 100%.
+
+`CodeFetch` (#20) and the artifact generators (#34) are now connected. A settled grading
+runs through `RecordWriter` (stage 2) and then `CodeAttachment` (stage 3), which fetches the
+saved code and writes `Solution.<ext>`, `attempts/NNN.<ext>`, the diff and the README.
+
+- **A fetch failure never touches the record.** `Unauthenticated`, `RateLimited`,
+  `Unavailable` and a fetcher that *throws* all leave the stored line byte-identical with
+  `codePending` still true and not one file written — four failure-path tests, one per branch
+- **`codePending` is cleared by appending a corrected record**, not by editing the line.
+  `RecordHistory` resolves the newest line per capture key, in the first line's position.
+  ADR: [[decisions/2026-08-05-code-pending-correction-append]]. Both indexes the writer
+  restores at startup are pinned by tests — the attempt counter (highest wins, a repeat
+  cannot raise it) and the dedup index (a set the repeat collapses into, so a raw-log replay
+  is still dropped)
+- **Stage 3 shares stage 2's dispatcher**, wired as one `writerDispatcher` bean and proven by
+  `CodeAttachmentSerializationTest`: 16 concurrent write-then-attach chains, peak concurrency
+  inside the derived-write section is 1. The *fetch* is deliberately outside it — a page round
+  trip held in the single writer thread would stall every other grading behind the network
+- **Startup retries what is still pending**, in one runner after the raw-session
+  reconciliation so records that pass recovers get their code in the same boot. Repeat-safe:
+  an attached record is no longer pending, and the pass stops at the first `BLOCKED` outcome
+  rather than asking an expired session the same question once per record
+
+### Not done, and not claimed
+
+- **No auth-state holder exists**, so `Unauthenticated` is logged at ERROR under an `AUTH`
+  marker and blocks the pass. It does not feed a shared state the subscription path can read,
+  because there is nothing to feed yet — inventing one was out of scope
+- **Not verified against Programmers.** Every test doubles the fetcher; `liveCodeFetch` still
+  needs a cookie and a browser. "Implemented" is not "measured"
+- Attaching a `run` may fetch code from a later edit — the autosave race the pipeline ADR
+  already accepts as honest rather than fixable

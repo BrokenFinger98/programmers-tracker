@@ -20,6 +20,8 @@ tracker:
     url: ${TRACKER_CABLE_URL:wss://ws.programmers.co.kr:443/cable}
     origin: ${TRACKER_CABLE_ORIGIN:https://school.programmers.co.kr}
   session-file: ${TRACKER_SESSION_FILE:.ps/session}
+  # The problem page, the only place the user's saved code can be read from (protocol doc §10).
+  page-base: ${TRACKER_PAGE_BASE:https://school.programmers.co.kr}
   # Where records are written. Kept out of this repository entirely — solving records
   # belong in ps-records (CLAUDE.md), and the default must not be a developer's path.
   record-repo: ${TRACKER_RECORD_REPO:~/ps-records}
