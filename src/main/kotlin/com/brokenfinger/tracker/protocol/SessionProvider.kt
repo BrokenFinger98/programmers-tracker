@@ -41,9 +41,12 @@ class ManualFileSessionProvider(val path: Path) : SessionProvider {
         fun fromEnvironment(env: (String) -> String? = System::getenv): ManualFileSessionProvider =
             ManualFileSessionProvider(expandHome(env(SESSION_FILE_ENV) ?: DEFAULT_PATH))
 
+        // A leading tilde only, by concatenation: replaceFirst would rewrite a tilde
+        // anywhere in the string, and a Windows short path contains one
+        // (C:\Users\RUNNER~1\AppData\Local\Temp). Measured in CI 2026-08-06.
         private fun expandHome(raw: String): Path {
             if (!raw.startsWith("~")) return Path.of(raw)
-            return Path.of(raw.replaceFirst("~", System.getProperty("user.home")))
+            return Path.of(System.getProperty("user.home") + raw.removePrefix("~"))
         }
     }
 }

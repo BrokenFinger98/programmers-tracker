@@ -736,3 +736,29 @@ and a reconnect replay would then record the same grading twice.
 
 Not wired and not claimed: the #34 artifacts still have no producer, so a submit commit
 carries only the log and the raw frames; nothing has run against a real record repository.
+
+### The Windows failure on #41, and what it really was
+
+CI failed on Windows only. The message was worth reading in full rather than guessing at:
+
+```
+Illegal char <:> at index 16: C:\Users\RUNNERC:\Users\runneradmin1\AppData\Local\Temp\/...
+```
+
+The configured path was a Windows temp directory, and Windows temp directories are 8.3 short
+paths: `C:\Users\RUNNER~1\AppData\Local\Temp`. Home-directory expansion used
+`replaceFirst("~", home)`, which rewrites a tilde **anywhere** in the string — so it spliced
+the home directory into the middle of the path.
+
+Two defects in one line, both mine, both invisible on macOS and Linux:
+
+- `replaceFirst` matched a tilde that was not a home marker
+- its replacement is a regex replacement, where a backslash is an escape character, and every
+  Windows home directory is full of them
+
+Fixed with a single `ConfiguredPath.of` used by all three call sites (two configurations had
+copied the same line, and `ManualFileSessionProvider` had it too), and a test whose
+Windows-short-path case fails on the old implementation — verified by restoring it.
+
+Third time the three-OS matrix has paid for itself, and the second time the real cause was
+only readable from the uploaded test report rather than the job log.

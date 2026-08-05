@@ -48,8 +48,7 @@ class GitConfiguration {
     @Bean
     fun backupSchedule(backup: DailyBackup) = BackupSchedule(backup)
 
-    private fun recordRoot(recordRepo: String): Path =
-        Path.of(recordRepo.replaceFirst("~", System.getProperty("user.home")))
+    private fun recordRoot(recordRepo: String): Path = ConfiguredPath.of(recordRepo)
 }
 
 /**

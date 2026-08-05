@@ -130,8 +130,7 @@ class CaptureConfiguration {
         captureFor = { channel: ChannelKey -> ChannelCapture(channel, rawLog, registry, writer, timer) },
     )
 
-    private fun recordRoot(recordRepo: String): Path =
-        Path.of(recordRepo.replaceFirst("~", System.getProperty("user.home")))
+    private fun recordRoot(recordRepo: String): Path = ConfiguredPath.of(recordRepo)
 }
 
 /** Wraps the observation scope so Spring can cancel it on shutdown rather than leaking jobs. */
