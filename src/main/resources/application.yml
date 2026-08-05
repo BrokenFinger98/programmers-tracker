@@ -47,3 +47,11 @@ tracker:
     # (the extension heartbeats every 30 s — a per-run token would 401 every heartbeat).
     token: ${TRACKER_WATCH_TOKEN:}
     token-file: ${TRACKER_WATCH_TOKEN_FILE:.ps/watch-token}
+  mcp:
+    # POST /mcp reads the whole solving history, so it is guarded by the SAME token as
+    # /watch above — one process, one local credential. What is configured here is only
+    # the DNS-rebinding defence the MCP specification requires: browsers that may call the
+    # endpoint, as a comma-separated list of origins. Empty means none, which is what a
+    # native MCP client needs (it sends no Origin at all) and what keeps a page the user
+    # merely visited from being rebound onto loopback.
+    allowed-origins: ${TRACKER_MCP_ALLOWED_ORIGINS:}

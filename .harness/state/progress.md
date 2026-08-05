@@ -967,3 +967,72 @@ Proved by making it fail, from a fresh clone of the branch rather than the worki
 The semantic half is not mechanised and deliberately not faked with a keyword list — "the
 README says MCP works and MCP does not" stays a review responsibility. That is the argument
 for the single table.
+
+## [2026-08-06] The MCP read slice — the expose half finally exists ⏳
+
+Issue #46, branch `feat/46-mcp-read-slice`. ADR
+[[decisions/2026-08-06-mcp-read-slice]]. `docs/mcp.md` is the user-facing page.
+
+`POST /mcp`, Streamable HTTP, three read-only tools — `submissions(since?, verdict?)`,
+`get_problem(lessonId)`, `stats(groupBy)`. The README's MCP row flips from `designed · §7`
+to `built`, which is the one-row edit the #47 table was shaped to make possible.
+
+### The three decisions, and which were measured
+
+**Library.** Hand-rolled JSON-RPC on the MVC stack, zero new dependencies. Not chosen by
+taste: the Spring AI 2.0.0 starter was added to this build and `runtimeClasspath` resolved,
+which is what [[concepts/bom-version-shadowing]] cost us the last time we trusted release
+notes. It resolves cleanly and pins `spring-boot-starter-web:4.1.0` — our exact version, so
+Boot 4.1 compatibility is real. What killed it is one measurement:
+`io.modelcontextprotocol.sdk:mcp-core:2.0.0` declares protocol versions up to
+`2025-11-25` and no further, so the SDK does **not** implement the current revision. "Let
+the library own the protocol" is false when the library is a revision behind — we would
+write the modern era anyway, on top of ~30 artifacts including Reactor and Jackson 3.
+
+**Protocol revision.** Read from the spec, not from memory, and it had moved:
+**`2026-07-28`** removed `initialize`, sessions, the GET stream and `ping`, made MCP
+stateless, and added mandatory `server/discover`, per-request `_meta`, `resultType`, and
+header/body agreement. The spec itself defines a **dual-era** server, and its compatibility
+matrix settles it: modern-only fails every client shipping today, legacy-only is a revision
+behind on arrival. So both — `2026-07-28`, plus `2025-11-25`/`2025-06-18` by handshake.
+
+**Authorization.** The same token as `/watch`, deliberately: one process, one credential,
+and this endpoint answers with the whole solving history so the bar cannot be lower. Plus
+`Origin` validation, which MCP makes a MUST — the allowlist is empty, so any request
+carrying an `Origin` is refused.
+
+### Honest note on how this was built
+
+**The production code was written before the tests on this branch.** That is a TDD
+violation and it is recorded as one rather than described as anything else. All 12
+production files have a paired test file now, failure paths included, but the ordering was
+wrong and saying otherwise would be the exact defect — an artifact claiming a property the work
+does not have — that #44, #47 and #48 were about.
+
+Writing them afterwards still found three real bugs, which is the argument for writing them
+first: the keyless `stats` bucket outranked real verdicts when its count was highest (a
+model reading entry one would be told the most common verdict is "nothing"); records
+sharing a timestamp came back oldest-first inside a list documented as newest-first; and
+`.jsonPrimitive` on a member of the wrong JSON type threw, turning a malformed request into
+a 500.
+
+### Finding against #47
+
+`README.md`'s architecture-diagram caption pointed at the *What works today* table and then
+restated its answer in prose — "the sensor, the diffs and the MCP exposure do not". So
+flipping MCP was two edits, not one, in the document whose ADR
+[[decisions/2026-08-06-one-place-carries-tense]] exists to prevent exactly that. The
+enumeration after the semicolon is dropped; the pointer stays. The rule caught its own
+first violation within an hour of being written, which is the best evidence it earns its
+keep.
+
+### Remaining
+
+- **A log line the store cannot parse is invisible to the client.** It is dropped with a
+  server-side warning, and a count assembled above `RecordStore.read()` would under-report —
+  a number that reads like a measurement but is not one. Closing it needs a port change.
+- **No pagination.** `submissions` with no arguments returns the whole log.
+- **Never spoken to a real MCP client.** Verified against the specification and over the
+  real endpoint by contract test; not against Claude Desktop or Cursor.
+- `WatchToken` and `tracker.watch.token` are now narrower than their role. Naming debt,
+  recorded rather than silently fixed in an unrelated PR.
