@@ -20,7 +20,8 @@ import java.time.ZoneOffset
 class WatchServiceTest {
     private val registry = SubscriptionRegistry()
     private val subscriber = RecordingSubscriber()
-    private val service = WatchService(registry, subscriber, SteppingClock())
+    private val timer = RecordingTimer()
+    private val service = WatchService(registry, subscriber, timer, SteppingClock())
 
     @Test
     fun `a first watch subscribes and reports that it started`() {
@@ -30,6 +31,14 @@ class WatchServiceTest {
     }
 
     /** The extension re-posts every 30 s per open tab (design §4.1). */
+    /** Without this the clock never starts and every record reports a measured-looking 0. */
+    @Test
+    fun `watching starts the problem timer`() {
+        service.watch(aCommand(lessonId = 120804))
+
+        timer.started shouldContainExactly listOf(120804L)
+    }
+
     @Test
     fun `a repeat watch refreshes without touching the socket`() {
         service.watch(aCommand(lessonId = 120804))
@@ -85,6 +94,16 @@ class WatchServiceTest {
         language = "java",
         codesKey = "49598",
     )
+
+    private class RecordingTimer : ProblemTimer {
+        val started = mutableListOf<Long>()
+
+        override fun elapsedSecOf(lessonId: Long): Long = 0
+
+        override fun startIfAbsent(lessonId: Long) {
+            started += lessonId
+        }
+    }
 
     private class RecordingSubscriber : ChannelSubscriber {
         val calls = mutableListOf<String>()

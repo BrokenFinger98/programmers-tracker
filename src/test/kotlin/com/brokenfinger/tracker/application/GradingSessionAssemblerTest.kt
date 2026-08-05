@@ -50,6 +50,16 @@ class GradingSessionAssemblerTest {
         session.testcases.map { it.id } shouldContainExactly listOf(0L, 1L)
     }
 
+    /**
+     * A run promises its work as the example testcases on `start`, never as `testcase_ids`.
+     * Checking only for ids filed every run as unverified — a systematically misleading flag
+     * on the most common action (measured end to end 2026-08-05, issue #23).
+     */
+    @Test
+    fun `a run is complete when every announced example reported back`() {
+        anAssembledSession("algorithm-run-pass.jsonl").testcasesComplete shouldBe true
+    }
+
     @Test
     fun `a partially scored submit is judged wrong from the failing testcase`() {
         val session = anAssembledSession("algorithm-wrong.jsonl")

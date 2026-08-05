@@ -29,6 +29,10 @@ import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 class GradingSessionAssembler private constructor(private val kind: ProblemKind, private val boundErrorText: String?) {
     private val frames = mutableListOf<SubmitMessage>()
     private val announcedIds = linkedSetOf<Long>()
+
+    // A run announces a count rather than ids, so completeness is checked against whichever
+    // of the two the stream actually promised.
+    private var announcedCount: Int? = null
     private val testcases = linkedMapOf<Long, TestcaseResult>()
     private var action: GradingAction? = null
     private var terminal: TerminalKind? = null
@@ -40,6 +44,7 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
         action = action ?: GradingMessageMapper.actionOf(message)
         errorText = errorText ?: GradingMessageMapper.errorTextOf(message)
         announcedIds += GradingMessageMapper.announcedTestcaseIds(message)
+        announcedCount = announcedCount ?: GradingMessageMapper.announcedTestcaseCount(message)
         GradingMessageMapper.testcaseOf(message)?.let { testcases[it.id] = it }
         markTerminal(message)
     }
@@ -73,13 +78,19 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
         return Outcome.JUDGED
     }
 
+    /** Unverifiable is not the same as verified: with nothing promised, this stays false. */
+    private fun isComplete(): Boolean {
+        if (announcedIds.isNotEmpty()) return testcases.keys.containsAll(announcedIds)
+        return announcedCount?.let { testcases.size >= it } ?: false
+    }
+
     private fun sessionOf(outcome: Outcome, verdict: Verdict?, graded: List<TestcaseResult>) = GradingSession(
         kind = kind,
         action = action,
         outcome = outcome,
         verdict = verdict,
         testcases = graded,
-        testcasesComplete = announcedIds.isNotEmpty() && testcases.keys.containsAll(announcedIds),
+        testcasesComplete = isComplete(),
         errorText = errorText,
         frames = frames.toList(),
     )

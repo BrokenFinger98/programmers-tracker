@@ -38,6 +38,11 @@ extra["kotlin.version"] = libs.versions.kotlin.get()
 
 dependencies {
     implementation(libs.spring.boot.starter.web)
+    // Spring reads Kotlin method parameters through kotlin-reflect. It arrives transitively
+    // on the TEST classpath via spring-boot-starter-test, so slice tests pass without it
+    // while the running application throws ClassNotFoundException from every
+    // @ExceptionHandler — measured 2026-08-05 by starting the server (#23).
+    implementation(libs.kotlin.reflect)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
@@ -73,6 +78,8 @@ kover {
 val verifyEveryTestClassRan =
     tasks.register("verifyEveryTestClassRan") {
         description = "Fails when a test class produced no result file — usually a non-Unit test method."
+        // Run explicitly after a FULL suite (scripts/test.sh, CI), never as finalizedBy: a
+        // filtered run legitimately leaves most classes without results.
         val sources = fileTree("src/test/kotlin") { include("**/*.kt") }
         val resultsDir = layout.buildDirectory.dir("test-results/test")
         inputs.files(sources)
@@ -99,7 +106,6 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("integration")
     }
-    finalizedBy(verifyEveryTestClassRan)
 }
 
 // Live-verification entry for issue #6 — subscribes to a real Programmers channel and
