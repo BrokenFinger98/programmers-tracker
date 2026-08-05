@@ -1,2 +1,9 @@
 docs/llm-wiki/log.md merge=union
 docs/llm-wiki/index.md merge=union
+
+# Measured protocol captures are byte-exact evidence, not source text. Git's line-ending
+# translation would let the checkout platform decide what our evidence says — on Windows
+# (core.autocrlf=true by default, including CI runners) the raw newlines inside a captured
+# `value` attribute become CRLF and the capture no longer matches what Programmers served.
+src/test/resources/fixtures/** -text
+

@@ -435,3 +435,32 @@ Entries 9~11 were intentional failing submissions, so those problems remain unso
 Entry 14 upgrades the algorithm-`run` terminal and the run testcase shape from
 bundle-derived (§8) to measured. The frames are kept verbatim as
 `src/test/resources/fixtures/algorithm-run-pass.jsonl`.
+
+### 15.1 Does `run` save the code? — measured 2026-08-05 (issue #20)
+
+Yes. The saved code on the problem page changed only after `run` was pressed.
+
+| Step | Saved-code SHA-256 | Size |
+|---|---|---|
+| Baseline | `f7a5375…` | 98 chars, 5 lines |
+| After editing in the browser, **before** `run` | `f7a5375…` — unchanged | 98 chars, 5 lines |
+| After pressing `run` | `22c9725…` | 123 chars, 6 lines |
+
+Method: `GET /learn/courses/30/lessons/120804?language=java` while authenticated, reading
+`<input data-type="code">` and hashing it (`./gradlew liveCodeFetch`). Lesson 120804,
+algorithm, Java.
+
+**Confirming trial (same session): no time-based autosave.** The code was edited again and
+then left alone, with `run` never pressed:
+
+| Step | Saved-code SHA-256 |
+|---|---|
+| Immediately after the second edit | `22c9725…` — the value `run` had saved |
+| **After 3 minutes with no `run`** | `22c9725…` — still unchanged |
+
+This eliminates the debounce hypothesis rather than merely making it unlikely: a debounce
+short enough to explain the first trial's save would also have fired during these three
+idle minutes, and none did. `run` is therefore the cause.
+
+Still unmeasured: SQL problems, and other languages. The mechanism is very unlikely to
+differ, but it has not been observed.

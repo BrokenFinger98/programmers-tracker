@@ -391,10 +391,15 @@ missing `<input data-type="code">` marks the fetch failed rather than storing an
 > under passive observation, so the stored code is defined as **a snapshot at fetch time**,
 > and a hash comparison against the previous fetch at least makes drift detectable.
 
-> **Unverified assumption**: we measured that code is saved on `submit`, but did not confirm
-> whether it is also saved on `run`. If it is not, a `run` capture would pick up the previous
-> code. Verify in implementation step 1; if it fails, fall back to **the extension sending
-> the CodeMirror value along** (requires MAIN-world injection).
+> **Resolved 2026-08-05 (protocol doc §15.1): `run` does save the code.** Measured on lesson
+> 120804 — the saved code was unchanged after editing and changed only after `run` was
+> pressed. The CodeMirror fallback (MAIN-world injection) is therefore **not needed**, which
+> removes the most invasive part of the sensor extension.
+>
+> A confirming trial eliminated the time-based-autosave hypothesis: after a second edit the
+> saved code stayed unchanged for three idle minutes, and a debounce short enough to explain
+> the first trial would have fired in that window. What remains unmeasured is SQL and other
+> languages.
 
 ### 4.5 Recorder
 
