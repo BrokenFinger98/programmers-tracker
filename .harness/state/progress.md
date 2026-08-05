@@ -588,3 +588,29 @@ this project's failures so far were things a green build did not catch.
 
 The threshold is deliberately not a target to optimise — it exists to catch an unexercised
 branch in the code that decides verdicts.
+
+## [2026-08-05] Recorder derived artifacts ⏳
+
+Issue #34, branch `feat/34-derived-artifacts`. 483 tests, gates all 0, calculator coverage
+still 100%.
+
+- `CodeArtifacts` — `Solution.<ext>` refreshed on both run and submit; `attempts/NNN.<ext>`
+  only for a submit that owns a number; a hand-written LCS unified diff against **the
+  previous attempt in the same language**, selected from the submission log because that is
+  the single authority and because `mysql` and `oracle` share the `.sql` extension. Returns
+  null rather than diffing against nothing for a first attempt, a missing file, or unchanged
+  code — a diff against an empty file would report the whole solution as added. Capped at
+  400 lines, and inputs over 2000 lines yield null instead of an expensive table
+- `ProblemReadme` — overwritten whole every time, byte-identical across regenerations, and
+  proven by test to leave `notes.md` untouched. **Missing data degrades honestly**: with
+  today's records the title is empty, so the frontmatter key is omitted entirely and the
+  heading falls back to the lesson id. It never invents a name
+
+### Not done, and not claimed
+
+- **Nothing calls these yet.** Writing `Solution.<ext>` needs the fetched code, and stage 3
+  (CodeFetch → attach) is still unwired — `codePending` is `true` on every record. Follow-up
+  issue: wire the attachment and then these generators
+- **The runner generator is not built.** It needs the example testcases the `run` `start`
+  frame carries inline, and those are not currently carried through to the record. Its own
+  issue rather than a guess
