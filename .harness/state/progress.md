@@ -762,3 +762,64 @@ Windows-short-path case fails on the old implementation — verified by restorin
 
 Third time the three-OS matrix has paid for itself, and the second time the real cause was
 only readable from the uploaded test report rather than the job log.
+
+## [2026-08-06] Runnable image + bootstrap guide ✅
+
+Issue #43, branch `chore/43-docker-bootstrap`. 542 tests, all gates 0, calculator coverage 100%.
+ADR [[decisions/2026-08-06-container-network-posture]].
+
+The README promised a first record in five minutes and nothing delivered it — a new user had
+to infer the whole setup from source. Now: `Dockerfile` (multi-stage, JVM 25, nothing
+user-specific baked in), `compose.yaml` (records and `.ps` bind-mounted, cookie as a
+read-only compose secret), `.env.example`, and `docs/bootstrap.md`.
+
+`docs/bootstrap.md` rather than a README section, and the README got a six-line quickstart
+that links to it. The README's job is "should I use this"; a walkthrough covering cookie
+extraction, the watch token, uid mapping and git credentials is 200 lines and would bury the
+pitch it sits in front of.
+
+### The finding: a bind address in a container is not the control it looks like
+
+`application.yml` binds `127.0.0.1` and says why — this process holds a live session cookie
+and can push to GitHub. Carried into a container that mechanism inverts: a container has its
+own network namespace, `-p` forwards to its **eth0**, never to its loopback, so a faithfully
+loopback-bound container is unreachable from the browser extension that is `/watch`'s only
+caller. It would boot, pass a health check, and be useless.
+
+Resolved by restating the property instead of applying the rule: the property is "not
+reachable from the LAN", and in a container the **publish** address delivers it. compose
+binds `0.0.0.0` inside the namespace and publishes `127.0.0.1:8080:8080`. The application
+default is untouched, so native runs stay loopback and the `0.0.0.0` never leaves the one
+file where the loopback publish makes it safe.
+
+The rejected option is the interesting one. Keeping the loopback bind and telling users to
+set `TRACKER_BIND_ADDRESS=0.0.0.0` themselves *looks* safer, but it puts that setting on the
+happy path of the getting-started guide — where users would learn it and carry it to a native
+run, which genuinely does open `/watch` to the LAN. Documentation teaches.
+
+CI asserts the distinction rather than describing it: the docker job starts the image twice,
+both published to host loopback, and requires the default-bind container to be **unreachable**
+and the `0.0.0.0` one reachable. A compose comment cannot fail a build.
+
+### Verified by running it, not by reading it
+
+Boots in ~1.0 s; `/` → 404, `/watch` untokened → 401, healthcheck `healthy`; the `.ps` mount
+receives `watch-token` at `rw-------`; the compose secret is genuinely read-only (write
+refused); git resolves an identity against `/records` at a foreign uid, so the system-level
+`safe.directory` works. Two defects the run caught that reading would not have: the temurin
+base already owns uid 1000 (`useradd` exits 4), and a numeric `user:` override leaves `HOME`
+at `/` so every mounted credential goes unread — hence the explicit `ENV HOME`.
+
+### The exclusive record-repository lock does not exist
+
+[[decisions/2026-08-05-write-serialization]] decision 5 says the record repository is locked
+exclusively at startup, and names "container plus a local run" as the double-writer it exists
+for. There is no `FileLock` or equivalent anywhere in `src/main/kotlin` — the decision was
+recorded and never implemented. Shipping a container makes the predicted scenario trivially
+reachable, so the gap is now larger than when it was written. Out of #43's scope, stated in
+the ADR and in the guide's "what you cannot do yet" rather than papered over, and filed as
+**#44** so it is tracked rather than merely noted.
+
+Also still missing and now stated plainly for users: no browser extension exists in this
+repository, so problems must be registered by hand with a `curl` to `/watch` — documented,
+including the DevTools snippet that produces the body.

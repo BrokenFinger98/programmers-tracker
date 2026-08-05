@@ -25,6 +25,29 @@ The learning signal is in the failures, but the record keeps only successes. Thi
 
 ---
 
+## Get started
+
+You need Docker, a Programmers login, and a git repository of your own to keep the records in.
+
+```bash
+git clone https://github.com/BrokenFinger98/programmers-tracker.git
+cd programmers-tracker
+
+cp -R template/ps-records ~/ps-records && git -C ~/ps-records init   # your records — yours, and separate
+mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session
+
+cp .env.example .env    # set TRACKER_RECORD_REPO, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
+docker compose up -d
+```
+
+**[→ Full walkthrough: `docs/bootstrap.md`](docs/bootstrap.md)** — where to find the cookie,
+how the `/watch` token works, what a working install looks like, and what is genuinely
+missing today. Read it; the five lines above will not get you a record on their own.
+
+The server also runs natively on a JDK 25 (`./gradlew bootRun`) — the guide covers both.
+
+---
+
 ## How it works
 
 ```
@@ -79,10 +102,14 @@ The full protocol story: [`docs/programmers-protocol.md`](docs/programmers-proto
 ```
 programmers-tracker/            (this repository)
 ├── CLAUDE.md                   development constitution — prohibitions · quality gates · state operations
+├── Dockerfile                  multi-stage image — JVM 25, no configuration baked in
+├── compose.yaml                mounts your records and your cookie; publishes to loopback only
+├── .env.example                copy to .env — the settings that have no default
 ├── .claude/commands/           project-scoped wiki commands
 ├── .githooks/                  push gate — blocks pushes without wiki records
 ├── .harness/state/             out-of-session memory (goal · progress)
 ├── docs/
+│   ├── bootstrap.md              setup walkthrough — start here to run it
 │   ├── programmers-protocol.md   protocol reverse engineering (measured evidence)
 │   ├── development-rules.md      coding conventions
 │   ├── llm-wiki/                 development process records

@@ -86,6 +86,113 @@ jobs:
             echo "::endgroup::"
           done
 
+  # The image has to boot, and the network posture it ships with has to be the one the
+  # ADR describes. Both are asserted rather than described, because a compose comment
+  # cannot fail a build and this is exactly the nuance a later reader "simplifies".
+  #
+  # UBUNTU ONLY, AND THAT IS A DECISION. The gates job runs on all three operating
+  # systems because the tool resolves paths on all three; Docker does not need the same
+  # treatment. The macOS and Windows runners have no native Docker daemon — they need a
+  # nested VM, which makes an image build several times slower and measurably flakier.
+  # A Linux image is a Linux image whichever host built it, so the extra two jobs would
+  # buy a longer, less reliable pipeline and no additional signal. Deliberately NOT
+  # folded into the `gates` matrix for the same reason.
+  docker:
+    name: docker image boots (ubuntu only — see comment)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build the image
+        run: docker build -t programmers-tracker:ci .
+
+      # A record repository and a state directory, the way a user would mount them.
+      - name: Prepare the mounts
+        run: |
+          set -e
+          mkdir -p "$RUNNER_TEMP/records" "$RUNNER_TEMP/state"
+          git -C "$RUNNER_TEMP/records" init -q
+
+      # The image ships the application default, which is a loopback bind. Inside a
+      # container namespace that makes the published port unreachable — the property this
+      # step pins. If someone drops `server.address` from application.yml, the container
+      # becomes reachable here and this fails.
+      - name: A default-bind container is NOT reachable through a published port
+        run: |
+          set -e
+          docker run -d --name tracker-default -p 127.0.0.1:18080:8080 \
+            --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/records":/records -v "$RUNNER_TEMP/state":/app/.ps \
+            programmers-tracker:ci
+          for _ in $(seq 1 60); do
+            docker logs tracker-default 2>&1 | grep -q "Started TrackerApplication" && break
+            sleep 2
+          done
+          docker logs tracker-default 2>&1 | grep -q "Started TrackerApplication" \
+            || { echo "the container never finished starting"; docker logs tracker-default; exit 1; }
+          if curl -sS -m 5 -o /dev/null http://127.0.0.1:18080/; then
+            echo "REGRESSION: the published port served a request at the default bind."
+            echo "The in-container bind is no longer loopback — see the ADR"
+            echo "2026-08-06-container-network-posture before changing this."
+            exit 1
+          fi
+          echo "unreachable at the default bind, as expected"
+
+      # What compose actually runs. Reachable, still guarded by the token, and healthy.
+      - name: A 0.0.0.0-bind container serves, and /watch still refuses an untokened call
+        run: |
+          set -e
+          docker run -d --name tracker-exposed -e TRACKER_BIND_ADDRESS=0.0.0.0 \
+            -p 127.0.0.1:18081:8080 --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/records":/records -v "$RUNNER_TEMP/state":/app/.ps \
+            programmers-tracker:ci
+          for _ in $(seq 1 60); do
+            curl -sS -m 5 -o /dev/null http://127.0.0.1:18081/ && break
+            sleep 2
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/)" = "404" \
+            || { echo "the server is not answering HTTP"; docker logs tracker-exposed; exit 1; }
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/watch \
+            -H 'Content-Type: application/json' -d '{}')" = "401" \
+            || { echo "/watch answered an untokened call with something other than 401"; exit 1; }
+
+      - name: The HEALTHCHECK reports healthy
+        run: |
+          set -e
+          for _ in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' tracker-exposed)" = "healthy" ] && exit 0
+            sleep 5
+          done
+          echo "health never reached healthy: $(docker inspect -f '{{.State.Health.Status}}' tracker-exposed)"
+          docker inspect -f '{{json .State.Health}}' tracker-exposed
+          exit 1
+
+      # Catches an interpolation or schema error in compose.yaml without starting it. The
+      # values are throwaway; the point is that every required variable is declared. All
+      # of them are our own literals or runner paths — no event-supplied text, per the
+      # note at the top of this file.
+      - name: compose.yaml resolves
+        env:
+          TRACKER_RECORD_REPO: ${{ runner.temp }}/records
+          TRACKER_STATE_DIR: ${{ runner.temp }}/state
+          TRACKER_SESSION_FILE: ${{ runner.temp }}/state/session
+          GIT_AUTHOR_NAME: ci
+          GIT_AUTHOR_EMAIL: ci@example.invalid
+        run: |
+          set -e
+          touch "$TRACKER_SESSION_FILE"
+          docker compose config --quiet
+          # The loopback prefix on the publish address is the whole control (ADR
+          # 2026-08-06-container-network-posture). Assert it survived.
+          docker compose config | grep -q 'published: "8080"'
+          docker compose config | grep -q 'host_ip: 127.0.0.1'
+
+      - name: Container logs
+        if: always()
+        run: |
+          docker logs tracker-default 2>&1 | tail -40
+          docker logs tracker-exposed 2>&1 | tail -40
+
   # Rules CLAUDE.md states that the compiler cannot enforce. The same script runs
   # locally, so CI and a developer's machine can never disagree.
   guards:
