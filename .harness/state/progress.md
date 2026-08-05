@@ -485,3 +485,30 @@ different reason than the one recorded.
 - Issue #29: `protocol/parse` must hand `application` domain-level grading events, so a
   renamed message or field cannot reach `GradingSessionAssembler`. The violation that
   matters most is the one that survives longest
+
+## [2026-08-05] Protocol dependency direction settled ⏳
+
+Issue #24, branch `refactor/24-protocol-dependency-direction`. ADR
+[[decisions/2026-08-05-protocol-dependency-direction]].
+
+Counting the imports split the disagreement in two, which is what made it decidable:
+
+- **Identity** (`ChannelIdentifier`, `LessonId`, `ChallengeableId`, `ChallengeableType`),
+  9 imports — does **not** violate what §2.1 protects. A change to the identifier's JSON
+  touches `asJson()` and nothing in `application`
+- **Messages** (`SubmitMessage`, `CableEvent`, `ActionCableFrame`, the mappers), 9 imports —
+  violates it squarely: a renamed message reaches `GradingSessionAssembler`, i.e. the
+  verdict path
+
+So the rule was right about messages and over-strict about identity, and both workers who
+disagreed in #22 were each half right about a codebase that was inconsistent.
+
+**Landed here (decision 1)**: `LessonId`/`ChallengeableId` moved to `domain`, new
+`domain/ChannelKey` is the identity, `protocol/ChannelIdentifier` is the wire form built
+from it. `asJson()` output confirmed unchanged by the byte-for-byte test and the
+`StoredChannel` round-trip over all nine captures — it is the ActionCable broadcast key, so
+a changed byte breaks subscription silently. 451 tests before and after.
+
+**Split out as #29 (decision 2)**: messages reach `application` as domain events. Kept
+separate on purpose — it touches verdict resolution, and inside a rename-heavy diff a
+reviewer could not see it.
