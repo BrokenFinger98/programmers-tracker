@@ -64,6 +64,12 @@ With no defined source there is both a race and a reconciliation ambiguity.
 5. **The record repository is locked exclusively at startup.** In-process serialization
    says nothing about a second process, and the Docker decision makes "container plus a
    local run" a realistic double-writer.
+   *Outcome (2026-08-06, #44)*: implemented as a `FileChannel.tryLock` inside `.git/` —
+   see [[decisions/2026-08-06-record-repository-lock]], which also carries the measurement
+   showing the lock is **not** enforced on a Docker Desktop bind mount. That ADR reconciles
+   this decision with the *Options considered* line below that rejects `FileChannel.lock`:
+   the rejection is about per-write serialization, this decision is about per-process
+   exclusion, and the two scopes want opposite answers.
 6. **Records carry a capture key** derived from the terminal frame, because Programmers
    supplies no submission id (protocol §11) and `(lessonId, action, attempt)` is not
    unique for `run` (design §5.1 — runs keep the previous submit's number). The writer

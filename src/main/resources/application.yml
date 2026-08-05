@@ -23,6 +23,11 @@ tracker:
   # Where records are written. Kept out of this repository entirely — solving records
   # belong in ps-records (CLAUDE.md), and the default must not be a developer's path.
   record-repo: ${TRACKER_RECORD_REPO:~/ps-records}
+  # One instance per record repository, enforced with an OS file lock taken at startup
+  # (ADR 2026-08-05-write-serialization decision 5). A container and a native run on the
+  # same bind mount are two writers, and the second refuses to start. Off only for a
+  # filesystem that cannot lock at all — then nothing enforces it, so run exactly one.
+  record-repo-lock: ${TRACKER_RECORD_REPO_LOCK:true}
   # Live session frames, before a grading settles and its file moves into attempts/.
   raw-dir: ${TRACKER_RAW_DIR:.ps/raw}
   timers-file: ${TRACKER_TIMERS_FILE:.ps/timers.json}

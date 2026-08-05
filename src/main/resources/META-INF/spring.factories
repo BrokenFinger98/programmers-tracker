@@ -1,0 +1,5 @@
+# Spring Boot finds FailureAnalyzers here and nowhere else — an analyzer missing from this
+# file is silently ignored, and the only symptom is the stack trace it existed to replace.
+# There is a test asserting this registration for exactly that reason.
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.brokenfinger.tracker.adapter.store.RecordRepositoryLockedFailureAnalyzer

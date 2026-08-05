@@ -823,3 +823,68 @@ the ADR and in the guide's "what you cannot do yet" rather than papered over, an
 Also still missing and now stated plainly for users: no browser extension exists in this
 repository, so problems must be registered by hand with a `curl` to `/watch` — documented,
 including the DevTools snippet that produces the body.
+
+## [2026-08-06] The exclusive record-repository lock ⏳
+
+Issue #44, branch `fix/44-record-repo-lock`. 559 tests, all four gates 0.
+ADR [[decisions/2026-08-06-record-repository-lock]].
+
+[[decisions/2026-08-05-write-serialization]] decision 5 had asserted since 2026-08-05 that
+the record repository is locked exclusively at startup. Nothing implemented it, so the wiki
+claimed a safety property the code did not have — and #43 shipped the container that makes
+"compose up while bootRun is alive" a two-line accident.
+
+Now `RecordRepositoryLock`: `FileChannel.tryLock`, taken during bean instantiation and held
+for the process lifetime, with the refusal rendered as Spring Boot's APPLICATION FAILED TO
+START block rather than a stack trace. Both of `tryLock`'s refusals are handled — `null` for
+another process, `OverlappingFileLockException` for the same JVM — because handling only the
+first makes same-JVM tests pass while proving nothing.
+
+### The placement is the design
+
+`CommandLineGitSync.reconcile` is `git add --all`. A lock file at the record-repository root
+would be committed and pushed to a public records repository, so the lock lives in `.git/`,
+which git never tracks. A records directory with no `.git` falls back to the root — nothing
+there can commit it — and the window that leaves (a run, then `git init`, then a run) is shut
+from both ends: the root file is deleted once a `.git` exists, and the name is in the
+template `.gitignore`. The test asserts on what git actually committed, not on the ignore rule.
+
+### The measurement that changed what this issue delivers
+
+Four probes, each a real second process running the real boot jar:
+
+| Case | Second instance |
+|---|---|
+| Two native JVMs, same records directory | refused, exit 1, no Tomcat, formatted block |
+| Two processes in one container, records on overlayfs | refused |
+| Two processes in one container, records on a host bind mount | **started** |
+| Host JVM + container, same host bind mount | **started** |
+
+**Docker Desktop for macOS does not honour POSIX record locks on a bind mount**, and it fails
+silently — `tryLock` returns a lock that excludes nobody, with no `IOException`, so neither
+the refusal nor the escape hatch fires. The overlayfs case proves the JVM and the Linux side
+are fine; the boundary is the virtualised filesystem. The headline scenario on macOS is
+therefore still unprotected, which `docs/bootstrap.md` now says in those words instead of
+implying the lock fixed it. A native Linux host plus a container is expected to work for the
+same reason overlayfs does and is **unverified** — nothing here could test it.
+
+### A test wrote to `~/ps-records`, which is a user's real record repository
+
+Found by the coordinator during this issue, not by the suite. The new Spring-context test
+configured its paths with `SpringApplication.setDefaultProperties`, which sits *below*
+`application.yml` in Spring's precedence order — so every override was silently ignored, the
+context booted against the shipped default `~/ps-records`, and it created that directory in a
+home directory. On a real machine that is a solving history reconciled with `git add --all`.
+
+Fixed with command-line arguments (`--tracker.record-repo=…`), and the class is now guarded
+rather than the instance: `scripts/no-home-writes.sh` runs a command and fails if a
+home-directory default appeared, wired into the CI gates job on all three platforms. Proved
+by reintroducing the bug once and watching it fire. The test also asserts
+`refused.recordRoot == records`, so a boot that reaches a different repository can no longer
+pass.
+
+### Still open
+
+The gap the measurement found. Closing it needs a mechanism that survives a filesystem with
+no locks — a heartbeat marker aged out by mtime is the candidate — and that is a separate
+decision, not a quiet addition to this one.

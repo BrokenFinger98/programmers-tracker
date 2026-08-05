@@ -40,8 +40,12 @@ jobs:
       - name: ktlint
         run: ./gradlew ktlintCheck --no-daemon
 
+      # Wrapped rather than run directly: no test may write to a home-directory default,
+      # and the wrapper is what makes that a failure instead of a surprise in someone's
+      # home directory. `shell: bash` because the Windows runner defaults to pwsh.
       - name: test (unit + layer only — integration never runs in CI)
-        run: ./gradlew test verifyEveryTestClassRan --no-daemon
+        shell: bash
+        run: ./scripts/no-home-writes.sh ./gradlew test verifyEveryTestClassRan --no-daemon
 
       - name: build
         run: ./gradlew build -x test --no-daemon

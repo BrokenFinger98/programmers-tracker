@@ -33,6 +33,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationRunner
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.DependsOn
 import java.nio.file.Path
 import java.time.Clock
 
@@ -70,7 +71,13 @@ class CaptureConfiguration {
     fun problemTimer(@Value("\${tracker.timers-file}") timersFile: String, clock: Clock): ProblemTimer =
         FileProblemTimer(AtomicStateFile(Path.of(timersFile)), clock)
 
+    /**
+     * Depends on the lock by name rather than by argument: this is the first bean that reads
+     * the record repository (it restores the attempt counter from `submissions.jsonl`), and
+     * a writer built for a repository we were refused should never exist at all.
+     */
     @Bean
+    @DependsOn(RecordRepositoryConfiguration.LOCK_BEAN)
     fun recordWriter(
         layout: RecordLayout,
         rawLog: RawSessionLog,
