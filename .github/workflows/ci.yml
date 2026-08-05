@@ -41,7 +41,7 @@ jobs:
         run: ./gradlew ktlintCheck --no-daemon
 
       - name: test (unit + layer only — integration never runs in CI)
-        run: ./gradlew test --no-daemon
+        run: ./gradlew test verifyEveryTestClassRan --no-daemon
 
       - name: build
         run: ./gradlew build -x test --no-daemon

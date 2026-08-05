@@ -18,9 +18,14 @@ import java.time.Clock
 class WatchService(
     private val registry: SubscriptionRegistry,
     private val subscriber: ChannelSubscriber,
+    private val timer: ProblemTimer,
     private val clock: Clock = Clock.systemUTC(),
 ) : WatchRequestHandler {
     override fun watch(command: WatchCommand): WatchOutcome {
+        // The extension's first report is the only moment we learn a problem was opened, so
+        // it is the only place the clock can start. Without this every record carries
+        // elapsedSec 0 — a measured-looking zero, which is worse than an absent value.
+        timer.startIfAbsent(command.lessonId)
         val identifier = identifierOf(command)
         return outcomeOf(identifier, registry.watch(identifier, clock.instant()))
     }

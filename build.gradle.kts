@@ -38,6 +38,11 @@ extra["kotlin.version"] = libs.versions.kotlin.get()
 
 dependencies {
     implementation(libs.spring.boot.starter.web)
+    // Spring reads Kotlin method parameters through kotlin-reflect. It arrives transitively
+    // on the TEST classpath via spring-boot-starter-test, so slice tests pass without it
+    // while the running application throws ClassNotFoundException from every
+    // @ExceptionHandler — measured 2026-08-05 by starting the server (#23).
+    implementation(libs.kotlin.reflect)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
@@ -64,6 +69,40 @@ kover {
         }
     }
 }
+
+// A JUnit test method whose expression body returns something other than Unit is silently
+// NOT RUN — no error, no skip notice, nothing. A test that never runs is indistinguishable
+// from a test that passes, which is how eight CodeFetch tests reached main looking green in
+// #21 without ever executing. This makes the invisible case visible: every test class in the
+// source tree must produce a result file.
+val verifyEveryTestClassRan =
+    tasks.register("verifyEveryTestClassRan") {
+        description = "Fails when a test class produced no result file — usually a non-Unit test method."
+        // Depends on `test` rather than merely following it on the command line: without
+        // this the check can run against an empty results directory and report every class
+        // as missing. It passed locally only because a previous run had left results behind
+        // — the exact stale-state false pass this task exists to catch, committed by the
+        // task itself (measured in CI, #23).
+        dependsOn(tasks.test)
+        val sources = fileTree("src/test/kotlin") { include("**/*.kt") }
+        val resultsDir = layout.buildDirectory.dir("test-results/test")
+        inputs.files(sources)
+        doLast {
+            val declared = sources.files
+                .filter { it.readText().contains("@Test") }
+                .map { it.nameWithoutExtension }
+                .toSortedSet()
+            val ran = (resultsDir.get().asFile.listFiles() ?: emptyArray())
+                .filter { it.name.endsWith(".xml") }
+                .map { it.nameWithoutExtension.substringAfterLast('.') }
+                .toSortedSet()
+            val missing = declared - ran
+            check(missing.isEmpty()) {
+                "these test classes declare @Test but produced no results, so they never ran: " +
+                    missing.joinToString()
+            }
+        }
+    }
 
 // Default test task = unit + layer only; integration runs live against Programmers
 // and is opt-in via the separate integrationTest task (ADR 2026-08-04-test-environment).

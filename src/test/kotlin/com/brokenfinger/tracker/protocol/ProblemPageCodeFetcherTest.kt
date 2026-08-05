@@ -17,7 +17,7 @@ class ProblemPageCodeFetcherTest {
     private val page = readFixture("lesson-page-saved-code.html")
 
     @Test
-    fun `a served page yields the saved code`() = runBlocking {
+    fun `a served page yields the saved code`() = runBlocking<Unit> {
         val fetcher = fetcherReturning(PageResponse(200, page))
 
         fetcher.fetch(120804, "java") shouldBe CodeFetch.Fetched(
@@ -32,7 +32,7 @@ class ProblemPageCodeFetcherTest {
     }
 
     @Test
-    fun `the request carries the lesson and language of the problem`() = runBlocking {
+    fun `the request carries the lesson and language of the problem`() = runBlocking<Unit> {
         var requested = ""
         val fetcher = ProblemPageCodeFetcher(aFakeCookie(), pageBase = "https://example.test") { url ->
             requested = url
@@ -46,28 +46,28 @@ class ProblemPageCodeFetcherTest {
     }
 
     @Test
-    fun `a login redirect is reported as unauthenticated rather than as a missing page`() = runBlocking {
+    fun `a login redirect is reported as unauthenticated rather than as a missing page`() = runBlocking<Unit> {
         val fetcher = fetcherReturning(PageResponse(302, "", location = "/users/sign_in"))
 
         fetcher.fetch(120804, "java") shouldBe CodeFetch.Unauthenticated
     }
 
     @Test
-    fun `a rate-limit response is its own outcome so the caller can back off`() = runBlocking {
+    fun `a rate-limit response is its own outcome so the caller can back off`() = runBlocking<Unit> {
         val fetcher = fetcherReturning(PageResponse(429, ""))
 
         fetcher.fetch(120804, "java") shouldBe CodeFetch.RateLimited
     }
 
     @Test
-    fun `a page without a code input never yields an empty solution`() = runBlocking {
+    fun `a page without a code input never yields an empty solution`() = runBlocking<Unit> {
         val fetcher = fetcherReturning(PageResponse(200, "<html><body>nothing here</body></html>"))
 
         fetcher.fetch(120804, "java").shouldBeInstanceOf<CodeFetch.Unavailable>()
     }
 
     @Test
-    fun `an unexpected status is unavailable, not a crash`() = runBlocking {
+    fun `an unexpected status is unavailable, not a crash`() = runBlocking<Unit> {
         val fetcher = fetcherReturning(PageResponse(500, "boom"))
 
         fetcher.fetch(120804, "java").shouldBeInstanceOf<CodeFetch.Unavailable>()
@@ -75,7 +75,7 @@ class ProblemPageCodeFetcherTest {
 
     /** Dev rules §7.2 — the cookie must not surface in any message, at any level. */
     @Test
-    fun `the failure reason never contains the session value`() = runBlocking {
+    fun `the failure reason never contains the session value`() = runBlocking<Unit> {
         val planted = "synthetic-value-for-this-test"
         val fetcher = ProblemPageCodeFetcher(aFakeCookie(planted), pageBase = "https://example.test") {
             PageResponse(500, "boom")
@@ -87,7 +87,7 @@ class ProblemPageCodeFetcherTest {
     }
 
     @Test
-    fun `a transport failure is unavailable rather than a thrown exception`() = runBlocking {
+    fun `a transport failure is unavailable rather than a thrown exception`() = runBlocking<Unit> {
         val fetcher = ProblemPageCodeFetcher(aFakeCookie(), pageBase = "https://example.test") {
             throw java.io.IOException("connection reset")
         }

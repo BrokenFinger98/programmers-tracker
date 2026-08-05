@@ -337,3 +337,67 @@ Fixing it means giving the registry a domain-level channel key and moving assemb
 protocol contact behind a port — a real refactor across two merged features. Mixing that
 into this branch would violate the same constitution clause that forbids unrelated
 refactoring in one PR, so it gets its own issue.
+
+## [2026-08-05] Cable capture wired — the first end-to-end record ⏳
+
+Issue #23, branch `feat/23-cable-capture`. **A browser click now produces a durable record
+with no human step in between.** Measured three times against the real judge.
+
+- `ChannelCapture` (worker A) — raw append first, one assembler per grading, registry pinned
+  while a grading is live, bound `errorText` scoped per channel and expired once consumed
+- `ConnectionLiveness` + `FileProblemTimer` (worker B) — deadline 5 x the measured 3 s ping
+  = 15 s (shorter reconnects on ordinary jitter; longer will not fit detection plus backoff
+  inside a grading measured at 87 s), backoff 1/2/4/8/16/30 s capped
+- `CableChannelSubscriber` + `CaptureConfiguration` (coordinator) — one socket per watched
+  channel on a supervisor scope, cancelled on eviction, cancelled with the context
+
+### Three defects only running the app could find
+
+1. **`kotlin-reflect` was missing at runtime** — present on the test classpath via
+   `spring-boot-starter-test`, absent from `runtimeClasspath`. Thirteen `@WebMvcTest` slice
+   tests were green while the real server threw `ClassNotFoundException` from every
+   `@ExceptionHandler`, turning 401 and 400 into 500. Exactly the failure the
+   "mock-only completion is forbidden" rule exists for.
+2. **The problem timer was never started** — `/watch` is the only moment we learn a problem
+   was opened, and nothing called `startIfAbsent`. Every record carried `elapsedSec 0`: not
+   an absent value but a measured-looking zero, the same trap as filling SQL scores with 0.
+3. **`tcSummary.complete` was always false for runs** — a run announces its work as the
+   example testcases inline on `start` and never sends `testcase_ids`, so an id-only check
+   had nothing to compare against. Systematically misleading on the most common action.
+   Now checked against whichever the stream actually promised, while "promised nothing"
+   still yields false — unverifiable is not verified.
+
+### Measured end to end (lesson 120804, algorithm, java)
+
+| Pass | Result |
+|---|---|
+| 1 | record written, frames preserved, testcases sorted despite arriving 1 then 0, `elapsedSec 0` (defect 2) |
+| 2 | `elapsedSec 143` after wiring the timer, `complete false` (defect 3) |
+| 3 | `verdict PASS`, `elapsedSec 317`, `tcSummary.complete true` |
+
+### The guard failed twice, both times my error
+
+First it fired on every `--tests` filtered run, naming 43 innocent classes, so it became an
+explicit task instead of a `finalizedBy`. Then CI failed on all three operating systems with
+**all 44** classes named: the task had no dependency on `test`, so it read an empty results
+directory. It had passed locally only because a previous run's result files were still
+lying there — a stale-state false pass, which is precisely the class of defect the task
+exists to catch, committed by the task itself.
+
+Now `dependsOn(tasks.test)`, and verified from a genuinely clean state
+(`clean` then `--no-build-cache`) rather than against a dirty workspace.
+
+### Also fixed: a guard that cried wolf
+
+`verifyEveryTestClassRan` failed on any `--tests` filtered run, naming 43 innocent classes.
+Filter detection through Gradle internals did not work, so it became an explicit task run by
+`scripts/test.sh` and CI after a full suite. A guard that fires on correct usage gets
+disabled, and then it defends nothing.
+
+### Still open
+
+- Ping watchdog and reconnect are **built but not attached** — `ConnectionLiveness` has no
+  caller yet. The socket still dies silently after ~30 minutes
+- Startup reconciliation of orphaned `.ps/raw` sessions
+- `title` is empty on records: no catalog source is wired, and an empty string is honest
+  where a placeholder would not be

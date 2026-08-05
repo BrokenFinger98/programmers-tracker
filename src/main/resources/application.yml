@@ -20,6 +20,12 @@ tracker:
     url: ${TRACKER_CABLE_URL:wss://ws.programmers.co.kr:443/cable}
     origin: ${TRACKER_CABLE_ORIGIN:https://school.programmers.co.kr}
   session-file: ${TRACKER_SESSION_FILE:.ps/session}
+  # Where records are written. Kept out of this repository entirely — solving records
+  # belong in ps-records (CLAUDE.md), and the default must not be a developer's path.
+  record-repo: ${TRACKER_RECORD_REPO:~/ps-records}
+  # Live session frames, before a grading settles and its file moves into attempts/.
+  raw-dir: ${TRACKER_RAW_DIR:.ps/raw}
+  timers-file: ${TRACKER_TIMERS_FILE:.ps/timers.json}
   watch:
     # Local authorization for POST /watch. Loopback is shared with every other process on
     # the machine, so the bind above is not authorization by itself. There is no default

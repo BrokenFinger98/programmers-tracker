@@ -106,6 +106,72 @@ confusing string mismatch.
 This is also the clearest argument yet for the three-OS matrix: the bug is invisible on the
 developer's machine by construction.
 
+## A test that never runs looks exactly like a test that passes
+
+The most expensive instance of this theme was self-inflicted. A Kotlin test method written
+as an expression body — `fun \`x\`() = runBlocking { ... }` — returns whatever the last
+expression returns. When that is not `Unit`, **JUnit does not run the method and does not
+say so**: no error, no skip notice, no entry in the report.
+
+Eight `ProblemPageCodeFetcher` tests reached `main` that way in #20/#21, through a green
+three-OS CI run, having never executed once. Among them was the test asserting that the
+session cookie never appears in a failure message. The PR claimed "failure paths tested".
+That claim was false, and nothing in the pipeline could tell.
+
+They pass now that they run — the production code was right all along. **That is what makes
+this failure mode dangerous rather than merely embarrassing**: nothing was broken, so nothing
+drew attention, and the same silence would have covered a test that genuinely failed.
+
+The guard is structural rather than a habit: a Gradle verification task, run as
+`finalizedBy` on `test`, fails when a class declaring `@Test` produces no result file. It
+was negative-tested by reintroducing the defect. Counting assertions or trusting a green
+build cannot detect an absence; only comparing *what should have run* against *what did* can.
+
+## The classpath your tests run on is not the one your users get
+
+Issue #23 found the sharpest version of this yet, and only by starting the server.
+
+`POST /watch` returned **500 to everything** — including the paths whose whole purpose was
+to return 401 and 400. The cause was `kotlin-reflect`: Spring reads Kotlin method parameters
+through it, and it was on `testRuntimeClasspath` (pulled in transitively by
+`spring-boot-starter-test`) but **not** on `runtimeClasspath`. Thirteen `@WebMvcTest` slice
+tests exercised the error contract and passed, while every `@ExceptionHandler` in the running
+application died with `ClassNotFoundException`.
+
+No amount of additional testing *in that environment* could have found it. The tests were not
+wrong and the code was not wrong; **the environment the tests ran in was not the environment
+the code would run in**, and that difference was invisible from inside either one.
+
+This is the concrete reason behind the constitution's rule that features whose essence is
+external interaction are done only once they have actually been connected. It reads like
+caution about protocols. It is really about classpaths, configuration, wiring, and everything
+else a test harness quietly supplies on your behalf.
+
+Two more defects surfaced in the same session for the same reason — a timer nobody started,
+so every record carried a measured-looking `elapsedSec 0`, and a completeness flag that was
+structurally false for the most common action. Both were invisible to a green suite of 422
+tests. **Running it once found three defects that 422 tests could not.**
+
+## Verifying a guard against a dirty workspace
+
+The task written to catch silently-skipped tests was itself verified wrongly, twice.
+
+The second time is the instructive one. `verifyEveryTestClassRan` compares the test classes
+in the source tree against the result files on disk. It passed locally and failed in CI on
+all three operating systems, reporting **every** class as never having run — because it had
+no dependency on `test` and read an empty results directory. Locally it had read result files
+left behind by an earlier run.
+
+So the check "passed" by measuring **stale state**, which is the same failure it was written
+to detect. A verification that can succeed without the thing it verifies having happened is
+not a verification.
+
+The general form: **a guard must be tested from the state it is meant to protect**, not from
+whatever state the workspace happens to be in. For anything reading build output that means
+`clean` and `--no-build-cache`; for anything reading a checkout it means a fresh clone or an
+equivalent. "It passed on my machine" is a statement about a machine's history as much as
+about the code — and history is exactly what a stale artifact preserves.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -117,6 +183,8 @@ developer's machine by construction.
   close observed on 2026-08-05 was deliberately **not** written into the protocol doc,
   because its cause (server idle timeout? NAT? sleep?) was never established — see
   [[concepts/actioncable-broadcast-observation]].
+- Trust a test only after seeing it fail once. Green is not evidence that a check exists —
+  it is equally consistent with the check being absent.
 - Before writing "we cannot exclude X", ask what one more trial would cost. If X is a
   timing hypothesis, the trial is usually "do nothing and wait".
 - When a live run produces frames, transcribe them into a fixture in the same change —

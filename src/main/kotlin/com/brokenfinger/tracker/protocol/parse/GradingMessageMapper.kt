@@ -65,6 +65,19 @@ object GradingMessageMapper {
         -> emptyList()
     }
 
+    /**
+     * How many cases the stream promised, when it promised a count instead of ids.
+     *
+     * A `run` announces its work as the example testcases inline on `start` (protocol doc §7,
+     * `fixtures/algorithm-run-pass.jsonl`) and never sends `testcase_ids`. Without this the
+     * completeness check has nothing to compare against and every run is filed as unverified
+     * — a systematically misleading flag on the most common action there is.
+     */
+    fun announcedTestcaseCount(message: SubmitMessage): Int? = when (message) {
+        is SubmitMessage.Start -> message.exampleTestcases?.size
+        else -> null
+    }
+
     /** Full error text of a run-path failure, unescaped here so no caller has to (§7). */
     fun errorTextOf(message: SubmitMessage): String? {
         if (message !is SubmitMessage.Error) return null
