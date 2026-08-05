@@ -48,6 +48,18 @@ Class suffixes keep the Spring convention — `XxxController` · `XxxService` ·
 The dependency direction is `adapter → application → domain`, and `protocol → domain` happens only in `parse`.
 **`domain` imports nothing.**
 
+This layout is **hexagonal (ports & adapters) with orthodox-hybrid port rules** — see
+[[decisions/2026-08-05-hexagonal-architecture]]:
+
+- **Outbound (driven) dependencies are always ports** (`RecordStore`, `GitSync`,
+  `CodeFetcher`, `SessionProvider`, `RawSocket`, …) — cookie-gated integration tests
+  force test doubles for all of them anyway.
+- **Inbound use-case interfaces only where two consumers share the use case**
+  (web + MCP). One consumer → plain application service, no interface.
+- No speculative interfaces ("might need it later" is not a reason).
+- Async is layered per [[decisions/2026-08-05-backend-stack]]: inbound = Spring MVC on
+  virtual threads; outbound observation = coroutines + Ktor, confined to `protocol`.
+
 ---
 
 ## 2. Protocol Dependency Isolation — top-priority rule

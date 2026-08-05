@@ -64,5 +64,16 @@ timeout verdict alone takes ~87 s (protocol doc §13.5).
 ## Outcome
 
 Implemented in `protocol/ActionCableClient.kt` behind the `RawSocket` seam;
-subscribe-frame construction and envelope routing are fixture-tested. Live
-verification against the real cable is pending the human-run `liveObserve` check.
+subscribe-frame construction and envelope routing are fixture-tested.
+
+**Live-verified 2026-08-04** on lesson 120804 (algorithm, challengeable 14643):
+`liveObserve` received `confirm_subscription` in 0.42 s and then all four broadcast
+frames of a browser-triggered `run` (start → testcase ×2 → result 2/2 passed) —
+the client observed a browser-fired grading run end to end with only the cookie.
+
+One landmine surfaced on first launch: Spring Boot's dependency management pins
+`kotlinx-coroutines-bom` to 1.8.1, silently downgrading the runtime jar below the
+1.11.0 that Ktor 3.5.2 bytecode needs — the client died at connect time with
+`NoSuchMethodError: BuildersKt.runBlockingK$default`. Fixed by setting
+`extra["kotlin-coroutines.version"] = "1.11.0"` in `build.gradle.kts`; the override
+must survive any future Spring Boot upgrade or the WebSocket client breaks again.
