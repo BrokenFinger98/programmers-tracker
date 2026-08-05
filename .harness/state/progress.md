@@ -401,3 +401,34 @@ disabled, and then it defends nothing.
 - Startup reconciliation of orphaned `.ps/raw` sessions
 - `title` is empty on records: no catalog source is wired, and an empty string is honest
   where a placeholder would not be
+
+## [2026-08-05] Watchdog, reconnect, and startup reconciliation ⏳
+
+Issue #27, branch `feat/27-watchdog-reconnect`. 451 tests, gates all 0.
+
+- `CableChannelSubscriber` now **retries observation until the channel is unsubscribed**, and
+  treats three endings identically: an exception, a flow that simply completes (the measured
+  ~30-minute silent close), and silence past the deadline. Each reconnect logs the gap
+  loudly — a silent gap is the failure this exists to prevent
+- `ChannelCapture.connectionLost()` settles an in-flight grading as INCOMPLETE with frames
+  kept, rather than waiting for a result that is never re-sent
+- `RawSessionReconciler` + `StoredChannel` (worker) — startup picks up whatever a crash left
+  in `.ps/raw`; wired as an `ApplicationRunner`
+- Backoff is injected in tests, so reconnection is observed by counting attempts rather than
+  by spending 30 seconds waiting for one
+
+### Measured protocol fact found while building recovery
+
+Across all nine fixtures: an algorithm **submit**'s inner messages carry no
+`challengeable_type` and no `language` (language appears only on
+`result_lesson_challenge`), while algorithm **run** and all SQL messages do carry the type.
+So the envelope `identifier` is the **only** source of problem family and language — in
+exactly the crash-mid-grading case recovery exists for. Recorded as protocol doc §15.2, and
+`ChannelIdentifier.asJson()` gained a round-trip-tested inverse.
+
+### Worth noting about the dedup proof
+
+The worker proved duplicate-freedom by **delegation rather than a second mechanism**: it
+reconciles once, asserts the session is still on the work list (so the second pass is not
+vacuous), then reconciles again with a freshly constructed `RecordWriter` that rebuilt its
+key index from the log on disk — the actual restart case — and gets zero new records.

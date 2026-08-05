@@ -10,6 +10,7 @@ import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
 import com.brokenfinger.tracker.application.ProblemTimer
 import com.brokenfinger.tracker.application.RawSessionLog
+import com.brokenfinger.tracker.application.RawSessionReconciler
 import com.brokenfinger.tracker.application.RecordWriter
 import com.brokenfinger.tracker.application.SubscriptionRegistry
 import com.brokenfinger.tracker.protocol.ActionCableClient
@@ -22,7 +23,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.ApplicationRunner
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.nio.file.Path
@@ -77,6 +81,22 @@ class CaptureConfiguration {
     )
 
     /**
+     * Picks up whatever a crash left behind. `.ps/raw` is the durable queue, so an
+     * unprocessed session there is a grading we captured but never recorded — and it can
+     * never be re-broadcast (protocol §11). Runs once at boot; dedup makes it safe if the
+     * session was in fact already recorded.
+     */
+    @Bean
+    fun reconcileOrphanedSessions(reconciler: RawSessionReconciler) = ApplicationRunner {
+        val report = runBlocking { reconciler.reconcile() }
+        logger.info("Startup reconciliation: {}", report)
+    }
+
+    @Bean
+    fun rawSessionReconciler(rawLog: RawSessionLog, writer: RecordWriter, timer: ProblemTimer) =
+        RawSessionReconciler(rawLog, writer, timer)
+
+    /**
      * Observation runs on a supervisor job so one channel's failure cannot cancel the
      * others — every grading the survivors would have seen is unrecoverable (protocol §11).
      */
@@ -92,9 +112,14 @@ class CaptureConfiguration {
         rawLog: RawSessionLog,
         writer: RecordWriter,
         timer: ProblemTimer,
-    ): ChannelSubscriber = CableChannelSubscriber(client, sessions, scope.scope) { channel: ChannelIdentifier ->
-        ChannelCapture(channel, rawLog, registry, writer, timer)
-    }
+    ): ChannelSubscriber = CableChannelSubscriber(
+        client = client,
+        sessions = sessions,
+        scope = scope.scope,
+        captureFor = { channel: ChannelIdentifier -> ChannelCapture(channel, rawLog, registry, writer, timer) },
+    )
+
+    private val logger = LoggerFactory.getLogger(CaptureConfiguration::class.java)
 
     private fun recordRoot(recordRepo: String): Path =
         Path.of(recordRepo.replaceFirst("~", System.getProperty("user.home")))

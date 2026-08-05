@@ -436,6 +436,24 @@ Entry 14 upgrades the algorithm-`run` terminal and the run testcase shape from
 bundle-derived (§8) to measured. The frames are kept verbatim as
 `src/test/resources/fixtures/algorithm-run-pass.jsonl`.
 
+### 15.2 Where problem family and language actually live — measured 2026-08-05 (issue #27)
+
+Checked across all nine fixtures while building crash recovery:
+
+| Stream | `challengeable_type` / `challengeable_id` on inner messages | `language` |
+|---|---|---|
+| Algorithm **submit** | **absent** | only on `result_lesson_challenge` |
+| Algorithm **run** | present | absent |
+| SQL (both actions) | present on every message | absent |
+
+So for an algorithm submit the **ActionCable envelope `identifier` is the only source** of
+problem family and language — and that is exactly the stream a crash-mid-grading recovery
+has to rebuild. Anything that reconstructs a session from stored frames must read the
+envelope, not the payload.
+
+`ChannelIdentifier.asJson()` gained an inverse for this (`StoredChannel.ofReceived`), tested
+round-trip byte-for-byte because ActionCable keys broadcasts by that exact string (§4).
+
 ### 15.1 Does `run` save the code? — measured 2026-08-05 (issue #20)
 
 Yes. The saved code on the problem page changed only after `run` was pressed.
