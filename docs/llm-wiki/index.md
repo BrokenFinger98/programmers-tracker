@@ -15,6 +15,10 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[decisions/2026-08-04-global-project-wiki-split]] — Global/project wikis split into 3 layers
 - 2026-08-04 [[decisions/2026-08-04-english-only-artifacts]] — All work artifacts in English
 - 2026-08-04 [[decisions/2026-08-04-issue-first-squash-flow]] — Issue-first flow, squash-only merges
+- 2026-08-05 [[decisions/2026-08-05-backend-stack]] — JVM 25 · Spring Boot 4.x · MVC+VT inbound · coroutines+Ktor outbound
+- 2026-08-05 [[decisions/2026-08-05-hexagonal-architecture]] — Hexagonal (orthodox-hybrid ports) + Functional Core, DDD tactical only
+- 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
+- 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits

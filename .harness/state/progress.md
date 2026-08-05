@@ -43,3 +43,55 @@ Issue-first squash-merge flow (issue #4, branch `chore/4-dev-workflow`). ADR
 ## [2026-08-04] Phase 1 — Implementation ⏳
 
 See the implementation order in `docs/superpowers/specs/…-design.md` §11. Start from #1 (reproduce Kotlin WebSocket subscription).
+
+### Issue #6 — Kotlin ActionCable client (`feat/6-actioncable-client`)
+
+- ✅ Step 1/3 — Gradle Kotlin DSL project skeleton (1c7b58a)
+- ✅ Step 2/3 — Protocol frame DTOs + lenient parsing (commit: see branch)
+  - 8 measured fixtures extracted from protocol doc §4–§8/§15 into
+    `src/test/resources/fixtures/*.jsonl` (scrubbed per dev-rules §7.3)
+  - `protocol` package: `ActionCableFrame` envelope (welcome/ping/confirm/reject/
+    broadcast/Unknown/Malformed), `SubmitMessage` sealed DTOs (all fields nullable,
+    camelCase+snake_case, `Unknown(type, raw)` + warning log), `LessonId`/
+    `ChallengeableId`/`CodesKey` value classes + `ChannelIdentifier.of` (byte-for-byte
+    identifier match verified against captures)
+  - 42 new tests (5 classes) — plain JUnit5 + Kotest, fixture-loaded via `FixtureLoader`
+  - Gradle: default `test` excludes `@Tag("integration")`; new `integrationTest` task
+  - ADR [[decisions/2026-08-04-test-environment]] (no Spring in layer tests ·
+    integrationTest split · fixture-file enforcement) + dev-rules §6 amended
+- ⏳ Step 3/3 — ActionCable client implemented; **live verification still OPEN**
+  - `protocol` package: `ActionCableClient` (Ktor CIO glue, headers per doc §10,
+    engine requestTimeout disabled for the 87 s timeout verdict §13.5) over a
+    `RawSocket` seam; pure `SubscriptionProtocol` routing (welcome→subscribe,
+    ping ignored, confirm/broadcast→`CableEvent` with raw text preserved,
+    reject→`SubscriptionRejectedException`); `CableCommand.subscribe` byte-for-byte
+    against captures; `CableEndpoint` (env-overridable §9.1 defaults)
+  - Session handling: `SessionCookie` (masked toString, §7.2) + `SessionProvider`
+    + `ManualFileSessionProvider` (`TRACKER_SESSION_FILE`, default project-local
+    `.ps/session`; bare value or full Cookie header). Chrome auto-extraction = separate issue
+  - Live entry: `./gradlew liveObserve -Pobserve="algorithm 120804 14643 java"`
+    — subscribes and logs every frame with raw JSON; cookie never printed
+  - 27 new tests (6 classes), fixture-driven incl. fake-socket loop tests
+  - ADR [[decisions/2026-08-04-ktor-websocket-client]]; gates check/test/build all 0
+  - ✅ **Live verification passed 2026-08-05**: `liveObserve` on lesson 120804
+    received `confirm_subscription` (0.42 s) and all 4 broadcast frames of a
+    browser-triggered run (start → testcase ×2 → result 2/2). Constitution gate
+    "actually connected at least once" satisfied.
+  - Found+fixed in live run: Spring Boot BOM downgraded kotlinx-coroutines to 1.8.1
+    under Ktor 3.5.2 (`NoSuchMethodError` at connect) → `kotlin-coroutines.version`
+    override to 1.11.0 in build.gradle.kts
+  - Session file default moved to project-local `.ps/session` (+ `.ps/.gitkeep`,
+    gitignore restructure) per 2026-08-05 discussion
+
+## [2026-08-05] Backend stack + architecture settled ✅
+
+Full-stack review with the user (session 2026-08-05). ADRs:
+[[decisions/2026-08-05-backend-stack]] · [[decisions/2026-08-05-hexagonal-architecture]].
+
+- JVM 25 + Spring Boot 4.x (3.5 hit OSS EOL 2026-06-30 — measured via EOL sources
+  + Maven metadata); MVC + virtual threads inbound, coroutines+Ktor outbound only
+- WebFlux rejected (MCP Streamable works on the MVC transport; ~1-5 concurrent agents)
+- Architecture named: hexagonal, orthodox-hybrid ports + Functional Core, DDD
+  tactical only; development-rules §1 amended
+- Queued follow-up issues: ① SB 4.1.0 + JVM 25 upgrade + constitution amendment
+  (stack table, Role "job-seeker" premise fix), ② Docker startup + bootstrap guide
