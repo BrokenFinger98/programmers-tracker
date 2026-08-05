@@ -301,3 +301,39 @@ A confirming trial then eliminated the debounce hypothesis instead of leaving it
 a second edit the saved code stayed unchanged for three idle minutes, and any debounce short
 enough to explain the first trial would have fired in that window. Remaining unmeasured:
 SQL and other languages.
+
+## [2026-08-05] Watcher — /watch and the subscription registry ⏳
+
+Issue #22, branch `feat/22-watcher`. Orchestrated (A registry, B web adapter, in parallel).
+367 tests, gates check/test/build/guards all 0.
+
+- `SubscriptionRegistry` — LRU 8 evicting by **oldest last-heartbeat among unpinned entries
+  only**; a live grading is never evicted; all-pinned returns `Saturated` and leaves the
+  registry untouched so the caller fails loudly. Idempotent repeat returns `AlreadyWatching`
+  and refreshes recency only
+- `WatchController` — hand-parsed body accepting both the string and number form of the ids
+  (the extension sends DOM `data-*`, which are strings), unknown `challengeableType`
+  rejected explicitly, one error-body shape for every failure, 400/401/503, no stack trace
+  and no credential echoed. Token defaults to generate-and-persist rather than off or a
+  hardcoded value. `server.address` pinned to `127.0.0.1`
+- `WatchService` — turns registry decisions into subscription changes; an eviction
+  unsubscribes **before** the newcomer subscribes, so the cap is never briefly exceeded
+
+**Descoped honestly**: the `ChannelSubscriber` bean is `UnconnectedChannelSubscriber`, which
+logs the intent and observes nothing. `/watch` tracking is real and tested; the socket is
+not attached. Issue #23 does that, and it pulls in the whole frame path
+(assembler → writer, ping watchdog, reconnect, raw reconciliation).
+
+### Architectural violation found, deliberately not fixed here
+
+`application` imports `protocol` — `GradingSessionAssembler` (#16) and now
+`SubscriptionRegistry`. Development-rules §1 states the direction as
+`adapter → application → domain` with `protocol → domain` only in `parse`, so
+`application → protocol` is backwards and slipped through review in #16. Worker A followed
+that de-facto precedent while worker B's `WatchCommand` asserted the opposite rule, which is
+how the inconsistency surfaced.
+
+Fixing it means giving the registry a domain-level channel key and moving assembly's
+protocol contact behind a port — a real refactor across two merged features. Mixing that
+into this branch would violate the same constitution clause that forbids unrelated
+refactoring in one PR, so it gets its own issue.
