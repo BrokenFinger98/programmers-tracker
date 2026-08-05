@@ -545,3 +545,26 @@ uninterpreted, not which.
 **Measured**: zero `protocol` imports remain under `application` — production *and* tests,
 not just `message`/`parse` — and 451 tests before and after, the same captures driving the
 same five verdicts. check · test · build · guards all exit 0.
+
+## [2026-08-05] Protocol messages stop at the boundary ⏳
+
+Issue #29, branch `refactor/29-domain-grading-events`. Decision 2 of
+[[decisions/2026-08-05-protocol-dependency-direction]]. 451 tests before and after, gates 0.
+
+**`application/` now imports nothing from `protocol` at all** — identity went in #24,
+messages here. A renamed Programmers message can no longer reach verdict resolution.
+
+- `domain/GradingFrameFacts` — the seven orthogonal facts one frame contributes. The worker
+  argued against a sealed event hierarchy and was right: one frame carries several at once
+  (an algorithm `start` names the action, announces a count, and opens the grading), so an
+  event-per-frame type would have mirrored `SubmitMessage` one-to-one and kept the coupling
+  under a new name. ADR: [[decisions/2026-08-05-grading-facts-not-events]]
+- `application/ObservedFrame` (wire text + facts) keeps stage 1 intact — the raw append still
+  happens before any interpretation, verified in `ChannelCapture`
+- `GradingSession.frames` holds facts rather than messages, justified in its KDoc: the
+  verbatim original is already on disk before a session settles, so a second in-memory copy
+  would be a weaker archive easy to mistake for the real one
+
+The ADR's honest note is worth keeping: `protocol/parse` imports `application` for the port,
+as `ProblemPageCodeFetcher` already does — consumer-declared ports are the shape here, but
+"`protocol` imports nothing upward" was never literally true.
