@@ -1,11 +1,11 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
-import com.brokenfinger.tracker.protocol.message.SubmitMessage
 
 /**
  * What one grading stream on one channel amounted to.
@@ -14,10 +14,6 @@ import com.brokenfinger.tracker.protocol.message.SubmitMessage
  * the outcome says whether a conclusion was observed, the verdict says what it was. A
  * grading we failed to observe must never dilute the statistics of the ones we did, so
  * [verdict] is null for every outcome other than [Outcome.JUDGED].
- *
- * [frames] carries every message accepted, in arrival order and including the ones nothing
- * recognised — storing only the interpretation would make later reinterpretation impossible
- * (dev rules §2.4).
  */
 data class GradingSession(
     val kind: ProblemKind,
@@ -33,5 +29,19 @@ data class GradingSession(
     val testcasesComplete: Boolean,
     /** Run-path error text, already unescaped — the input that later promotes a submit. */
     val errorText: String?,
-    val frames: List<SubmitMessage>,
+    /**
+     * What every accepted frame said, in arrival order, including the frames nothing
+     * recognised — those contribute an empty record and still hold their position, so a
+     * stream that was only partly interpreted is visible as such.
+     *
+     * It holds the **facts, not the wire text**, and the reason is that the wire text is
+     * already somewhere better. Stage 1 appends each frame to the raw log before any of this
+     * runs, and the record points at that file (`SettledCapture.rawSessionId`,
+     * `SubmissionRecord.rawPath`), so dev rules §2.4 — keep the original, reinterpretation
+     * stays possible — is satisfied by bytes on disk that outlive the process. A second copy
+     * in memory would add no durability, only a weaker archive for a caller to mistake for
+     * the real one. Facts are also the only form that keeps message types out of
+     * `application` at all ([[decisions/2026-08-05-protocol-dependency-direction]]).
+     */
+    val frames: List<GradingFrameFacts>,
 )

@@ -125,16 +125,16 @@ class GradingSessionAssemblerTest {
     // belongs to the same grading, not to a new one (design §4.2).
     @Test
     fun `a late finish after result_lesson_challenge is absorbed into the same session`() {
-        val messages = FixtureLoader.messages("algorithm-pass.jsonl")
+        val frames = FixtureLoader.facts("algorithm-pass.jsonl")
         val assembler = anAssembler()
 
-        messages.take(5).forEach(assembler::accept)
+        frames.take(5).forEach(assembler::accept)
         val beforeFinish = assembler.hasTerminated()
-        assembler.accept(messages[5])
+        assembler.accept(frames[5])
 
         beforeFinish shouldBe false
         assembler.hasTerminated() shouldBe true
-        assembler.settle().frames shouldContainExactly messages
+        assembler.settle().frames shouldContainExactly frames
     }
 
     // An error ends every cell (protocol doc §7, §13.2) and its text is what later promotes

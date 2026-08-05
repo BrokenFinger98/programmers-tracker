@@ -1,9 +1,6 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.ChannelKey
-import com.brokenfinger.tracker.protocol.message.ActionCableFrame
-import com.brokenfinger.tracker.protocol.message.SubmitMessage
-import com.brokenfinger.tracker.protocol.parse.StoredChannel
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -38,6 +35,7 @@ class RawSessionReconciler(
     private val rawLog: RawSessionLog,
     private val writer: RecordWriter,
     private val timer: ProblemTimer,
+    private val frames: FrameReader,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     /** Reconciles every orphaned session, oldest first. An empty work list is a no-op. */
@@ -67,7 +65,7 @@ class RawSessionReconciler(
     }
 
     private fun replayed(channel: ChannelKey, lines: List<String>): SessionReplay {
-        val replay = SessionReplay(channel)
+        val replay = SessionReplay(channel, frames)
         // Stops at the terminal frame exactly as the live path does: what follows one belongs
         // to no grading, and folding it in would make a replay differ from the capture.
         lines.takeWhile { !replay.hasTerminated() }.forEach { replay.feed(it) }
@@ -97,11 +95,12 @@ class RawSessionReconciler(
     private fun waitedSince(startedAt: Instant): Long =
         Duration.between(startedAt, clock.instant()).seconds.coerceAtLeast(0)
 
-    /** The channel is stored only in the ActionCable envelope — see [StoredChannel] for why. */
-    private fun channelOf(lines: List<String>): ChannelKey? = lines.asSequence()
-        .mapNotNull { broadcastOf(it)?.identifier }
-        .mapNotNull { StoredChannel.ofReceived(it)?.key }
-        .firstOrNull()
+    /**
+     * The channel is stored only in the ActionCable envelope, and reading that envelope is
+     * the [FrameReader]'s job — the measurement behind it lives with the implementation.
+     */
+    private fun channelOf(lines: List<String>): ChannelKey? =
+        lines.asSequence().mapNotNull { frames.channelOf(it) }.firstOrNull()
 
     /**
      * Decoded with replacement rather than reported: a crash can tear a line in the middle of
@@ -141,10 +140,11 @@ data class ReconcileReport(
 }
 
 /**
- * One stored session being replayed through the same assembler a live capture uses, so the
- * verdict a reconciled record carries is the verdict the socket loop would have produced.
+ * One stored session being replayed through the same reader and the same assembler a live
+ * capture uses, so the verdict a reconciled record carries is the verdict the socket loop
+ * would have produced.
  */
-private class SessionReplay(channel: ChannelKey) {
+private class SessionReplay(channel: ChannelKey, private val frames: FrameReader) {
     private val assembler = GradingSessionAssembler.of(channel)
 
     /** The stored line that ended the stream — the basis the capture key is derived from. */
@@ -155,8 +155,8 @@ private class SessionReplay(channel: ChannelKey) {
         private set
 
     fun feed(line: String) {
-        val broadcast = broadcastOf(line) ?: return skip(line)
-        assembler.accept(SubmitMessage.ofReceived(broadcast.message))
+        val facts = frames.factsOf(line) ?: return skip(line)
+        assembler.accept(facts)
         if (hasTerminated()) terminalFrame = terminalFrame ?: line
     }
 
@@ -175,6 +175,3 @@ private class SessionReplay(channel: ChannelKey) {
         val logger = LoggerFactory.getLogger(SessionReplay::class.java)
     }
 }
-
-private fun broadcastOf(line: String): ActionCableFrame.Broadcast? =
-    ActionCableFrame.ofReceived(line) as? ActionCableFrame.Broadcast

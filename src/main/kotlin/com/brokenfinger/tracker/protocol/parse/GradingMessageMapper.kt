@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.protocol.parse
 
 import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TerminalKind
 import com.brokenfinger.tracker.domain.TestcaseResult
@@ -11,10 +12,10 @@ import org.slf4j.LoggerFactory
 /**
  * The one crossing from the wire format to the domain (dev rules §2.1).
  *
- * Everything above this object sees [TestcaseResult], [TerminalKind] and [GradingAction];
- * nothing above it may learn that a testcase id is spelled `testcaseId` on an algorithm
- * stream and `testcase_id` on a database one. When Programmers renames a field, this file
- * and [SubmitMessage] are the whole blast radius.
+ * Everything above this object sees [GradingFrameFacts] — [TestcaseResult], [TerminalKind]
+ * and [GradingAction] — and nothing above it may learn that a testcase id is spelled
+ * `testcaseId` on an algorithm stream and `testcase_id` on a database one. When Programmers
+ * renames a field, this file and [SubmitMessage] are the whole blast radius.
  *
  * Mapping is lenient throughout: a frame it cannot interpret yields null, never a default
  * and never an exception. The frame itself is still preserved by the caller, so a null here
@@ -27,6 +28,21 @@ object GradingMessageMapper {
         ChallengeableType.ALGORITHM -> ProblemKind.ALGORITHM
         ChallengeableType.DATABASE -> ProblemKind.DATABASE
     }
+
+    /**
+     * Everything one message contributes to a grading, read in a single pass. This is the
+     * form `application` consumes ([[decisions/2026-08-05-protocol-dependency-direction]]
+     * decision 2); above this call nothing knows that message *types* exist at all.
+     */
+    fun factsOf(message: SubmitMessage) = GradingFrameFacts(
+        action = actionOf(message),
+        terminalKind = terminalKindOf(message),
+        testcase = testcaseOf(message),
+        announcedTestcaseIds = announcedTestcaseIds(message),
+        announcedTestcaseCount = announcedTestcaseCount(message),
+        errorText = errorTextOf(message),
+        startsGrading = message is SubmitMessage.Start,
+    )
 
     fun actionOf(message: SubmitMessage): GradingAction? = GradingAction.ofReceived(rawActionOf(message))
 
