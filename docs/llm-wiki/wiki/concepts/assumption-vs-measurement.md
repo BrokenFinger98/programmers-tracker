@@ -63,6 +63,29 @@ verification output is evidence with a half-life: it proves something today and 
 unreachable next week. Transcribing it into `src/test/resources/fixtures/` is what turns
 an observation into something the build can defend.
 
+## Settling a question instead of hedging it
+
+Recording a caveat is honest, but it is not the same as answering. Issue #20 shows the
+difference, on a question the design had carried unanswered since Phase 0: **does `run`
+save the code?** If it does not, every `run` record silently attaches the *previous* code.
+
+The first trial looked conclusive — baseline hash, unchanged after editing, changed after
+pressing `run` — but it could not distinguish "`run` saved it" from "a debounced autosave
+happened to fire in that window". The tempting move is to write the caveat down and move on.
+
+The better move cost three minutes: edit again, then **wait without running**. The saved
+code was still unchanged.
+
+That converts a hedge into an elimination, and the reason is worth naming: **a debounce
+short enough to explain the first trial would have fired during the second.** The second
+trial was not more data — it was the trial that made the first one interpretable. When a
+confound is a timing hypothesis, the experiment that kills it is usually to remove the
+action and keep the time.
+
+The payoff was not academic. With `run` confirmed as the saver, design §4.4's fallback —
+the extension injecting itself into the page's main world to read the editor buffer —
+became unnecessary, deleting the most invasive component of the planned sensor.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -74,6 +97,8 @@ an observation into something the build can defend.
   close observed on 2026-08-05 was deliberately **not** written into the protocol doc,
   because its cause (server idle timeout? NAT? sleep?) was never established — see
   [[concepts/actioncable-broadcast-observation]].
+- Before writing "we cannot exclude X", ask what one more trial would cost. If X is a
+  timing hypothesis, the trial is usually "do nothing and wait".
 - When a live run produces frames, transcribe them into a fixture in the same change —
   not "later". The protocol document's verification log records *that* it happened; the
   fixture is what keeps it testable.
