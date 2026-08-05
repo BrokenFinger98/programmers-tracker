@@ -706,3 +706,33 @@ ADR: [[decisions/2026-08-06-wire-git-into-the-pipeline]].
 - **Never run against a real record repository**, only temporary ones. The Spring context test
   now redirects every path into a scratch directory: booting runs the startup reconciliation,
   and `git add --all` against a developer's own `~/ps-records` would commit their pending work
+
+## [2026-08-06] GitSync wired ⏳
+
+Issue #41, branch `feat/41-wire-gitsync`. 537 tests, all gates 0, calculator coverage 100%.
+ADR [[decisions/2026-08-06-wire-git-into-the-pipeline]].
+
+Written specifically to stop a pattern: this was the third capability in a row to land with
+no caller (artifacts #34, GitSync #39, and `ConnectionLiveness` before it). Unwired code is
+indistinguishable from working code until someone looks.
+
+- `RecordWriter` commits inside the same `withContext(writerDispatcher)` section as the
+  append — a second writer beside the confined one is exactly what that decision prevents
+- `StartupReconciliation` sequences raw-session recovery, then `git.reconcile()`, then the
+  backup catch-up. **The order is load-bearing**: reconcile first and it misses the records
+  the sessions were about to write
+- `DailyBackup` compares an injected clock against a persisted instant, so a 23:00 slept
+  through is caught up at the next start. Only a push that landed is recorded, so a failed
+  one leaves the day due
+- A fresh install with no git repository is detected once and skipped thereafter — failing
+  every commit forever would bury every other message
+
+### The subtle one the worker found
+
+The writer guards the git call with `runCatching` even though the port promises not to throw
+— not defensive habit. The record is already durable at that point, so an escaping exception
+would take the **capture key** down with it (`write()` removes the key when its body throws)
+and a reconnect replay would then record the same grading twice.
+
+Not wired and not claimed: the #34 artifacts still have no producer, so a submit commit
+carries only the log and the raw frames; nothing has run against a real record repository.
