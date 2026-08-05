@@ -13,3 +13,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-04] ingest | OSS workflow session record → 2 created (raw 1 · source 1), 2 ADR sources corrected
 
 ## [2026-08-05] ingest | design review + stack upgrade session → 4 created (raw 1 · concept 2 · source 1), 2 updated (broadcast-observation, index)
+
+## [2026-08-05] ingest | CI guard scoping decision → 1 created (ADR)
