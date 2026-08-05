@@ -3,6 +3,7 @@ kotlin = "2.4.10"
 springBoot = "4.1.0"
 springDependencyManagement = "1.1.7"
 ktlint = "14.2.0"
+kover = "0.9.9"
 
 # Kept as plain versions because they are ALSO forced onto Spring Boot's BOM in
 # build.gradle.kts — see the override block there for why.
@@ -36,3 +37,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "springDependencyManagement" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
