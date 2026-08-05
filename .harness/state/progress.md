@@ -161,3 +161,28 @@ Two consequences:
 2. `ActionCableClient` currently ends a session with **zero signal**. Anything broadcast
    after that point is lost forever (protocol §11) and nothing in the logs would say so.
    The Capture implementation issue must add the close/gap log and the ping watchdog.
+
+## [2026-08-05] GitHub Actions CI ⏳
+
+Issue #14, branch `chore/14-github-actions-ci`. Landed before implementation so the first
+feature PR meets a working pipeline instead of a wall of new failures.
+
+- `.github/workflows/ci.yml` — 3 jobs: `gates` (ktlint/test/build on ubuntu · macOS ·
+  windows), `guards`, `coverage`. Concurrency cancels superseded runs; permissions are
+  read-only; no event-supplied text reaches a shell
+- `scripts/guards.sh` — constitution rules nothing else enforces, runnable locally:
+  integration tests excluded from the default task and never invoked by a workflow;
+  no tracked `.ps/` contents, records, or session-cookie-shaped strings; English-only
+  scoped to Kotlin comments
+- Kover added report-only. Threshold deferred until `domain/calc` exists — a gate over an
+  empty package is dead config
+- Negative-tested: planting a realistic cookie literal and a Korean comment makes
+  `guards.sh` exit 1; a clean tree exits 0
+
+**Guard-design note.** The first cut of the secret check fired on
+`_session_production=fake-value-for-tests` in `SessionCookieTest`. Narrowed to opaque
+hex/base64 runs of 24+ characters, so synthetic placeholders (which carry hyphens) pass
+while a real credential or an unscrubbed fixture is caught. Similarly the English-only
+check is deliberately narrow: Korean string literals are legitimate measured protocol data
+(`실패 (시간 초과)`), so a blanket Hangul grep would fire on fixtures, the protocol doc and
+the design doc.

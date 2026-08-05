@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.kover)
 }
 
 group = "com.brokenfinger"
@@ -46,6 +47,20 @@ dependencies {
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
+}
+
+// Coverage is report-only for now. A threshold belongs on domain/calc once the pure
+// calculators exist — a gate over an empty package is dead config, and a global
+// threshold rewards test-gaming rather than covering the failure branches that matter.
+kover {
+    reports {
+        filters {
+            excludes {
+                classes("com.brokenfinger.tracker.TrackerApplicationKt")
+                classes("com.brokenfinger.tracker.protocol.LiveObserveKt")
+            }
+        }
+    }
 }
 
 // Default test task = unit + layer only; integration runs live against Programmers
