@@ -910,3 +910,60 @@ License heading now links the file and says which document carries which.
 
 Copyright holder is the GitHub handle. Swap it for a legal name if preferred — it is a
 one-line edit and nothing depends on the string.
+
+## [2026-08-06] The README claimed features that do not exist ⏳
+
+Issue #47, branch `docs/47-honest-readme`. Merge of #48 is `cdcecbc`.
+
+Nine claims in the README were false against `src/main/kotlin` — MCP in the opening sentence
+and again in the comparison table, saved failing code and attempt diffs (`CodeFetcher`,
+`CodeArtifacts` and `ProblemReadme` are all written and none is wired), the sensor and MCP
+boxes of the architecture diagram, all seven analysis bullets, a catalog fetch that does not
+exist, `.claude/commands/` after the directory became `.claude/skills/`, and a structure block
+saying the server creates the record repository four sections after *Get started* has the user
+create it. Every entry in the issue's table was re-verified against the tree; all nine held.
+
+### The shape, not the wording
+
+The banner was never the problem. Status was asserted in **nine places**, so keeping the
+document true needed an audit rather than an edit — which is why all nine drifted. Now
+`README.md` carries build status in exactly one section, *What works today*, as a table of
+capability → `built` / `designed · §n`. Everything after it is written in design tense: the
+architecture diagram is captioned as the design, the comparison table compares what the two
+tools are built to do, and the analysis bullets are *what the record is designed to tell you*.
+None of them needs editing when a feature lands.
+
+The test is #46, queued behind this: it flips one cell from `designed · §7` to `built`.
+
+`CONTRIBUTING.md`: **JDK 21 → 25** (a contributor following it failed the build before writing
+a line), the job-seeker line replaced with the maintainer's time budget, the #50 warning that
+renaming a CI job leaves `main` unmergeable, and the documentation rule as a contributor
+obligation. `CLAUDE.md` deliberately untouched — the constitution is the owner's call.
+
+### The guard, and the two traps that shaped it
+
+`scripts/guards.sh` check 4: every repository path a **maintained** document names must exist.
+It would have caught `.claude/commands/` and the missing `LICENSE` the day each was written.
+
+Both narrowings came from measurement rather than taste. An unanchored scan of fenced blocks
+over all 67 tracked Markdown files finds 190 path-shaped strings, **121 of which do not
+exist — 64% false positives**, because tree diagrams are relative to something (a Java package,
+a problem directory, `ps-records/`). The fix is one rule: a block is walked only when its first
+line names a directory this repository actually has. And the corpus is mostly *dated records* —
+`docs/llm-wiki/raw/` is declared immutable — so a guard that walked them would eventually
+demand an edit we promised never to make. Scope is `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`,
+`docs/*.md`.
+
+Under those rules, over all 67 files: **34 paths judged, 0 false positives.** Existence is
+decided from git's index rather than the working tree, so a dirty workspace cannot make it
+pass. `guard:planned` opts out one line.
+
+Proved by making it fail, from a fresh clone of the branch rather than the working tree:
+`.claude/commands/` fires, a broken `[MIT](LICENCE.md)` fires, the same path marked
+`guard:planned` passes, and `~/ps-records`, URLs, anchors and `<placeholder>` paths never fire.
+
+### Remaining
+
+The semantic half is not mechanised and deliberately not faked with a keyword list — "the
+README says MCP works and MCP does not" stays a review responsibility. That is the argument
+for the single table.

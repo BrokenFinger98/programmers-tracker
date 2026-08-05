@@ -1,9 +1,13 @@
 # programmers-tracker
 
-A local server that records your Programmers solving process **completely, per submission**, and
-exposes it over MCP so any AI can diagnose weaknesses, recommend problems, and manage reviews.
+A local server that watches your Programmers grading stream and records **every `run` and
+every `submit` — failures included** — into a git repository you own.
 
-> ⚠️ Under development. Design and protocol reverse engineering are complete; implementation is in progress.
+> **Status: Phase 1, mid-build.** The design and the protocol reverse engineering are
+> finished. The capture half is built; the analysis half is not.
+> **[What works today](#what-works-today) is the only section of this file that states what
+> is implemented.** Everything after it describes the design, and that table says which
+> parts of the design exist.
 
 ---
 
@@ -25,6 +29,37 @@ The learning signal is in the failures, but the record keeps only successes. Thi
 
 ---
 
+## What works today
+
+Install it now and this is what you get. Section numbers point at the
+[design document](docs/superpowers/specs/2026-08-04-programmers-tracker-design.md); nothing
+marked *designed* exists in `src/`.
+
+| | State |
+|---|---|
+| Capture every `run` and `submit` on a watched problem, live from the grading stream | **built** |
+| Five measured verdicts — pass · wrong · timeout · runtime error · compile error | **built** |
+| A grading we could not classify stays `UNKNOWN` instead of being filed as a neighbour | **built** |
+| Per-testcase results, attempt number, time spent | **built** |
+| The original frames kept verbatim beside the record | **built** |
+| Records written to your own git repository — committed, pushed on a pass, backed up daily | **built** |
+| One instance per record repository, enforced at startup | **built** (with a measured macOS caveat — [`bootstrap.md`](docs/bootstrap.md)) |
+| Telling the server which problem you are on | **built** — one `curl` per problem |
+| A browser sensor that tells it for you | designed · §8 |
+| The failing code stored alongside the record | designed · §4.4 |
+| A per-problem page, and diffs between attempts | designed · §5.1 · §5.5 |
+| Problem titles and tags from a catalog | designed · §5.3 |
+| MCP server — Claude · Cursor · a local LLM reading the records | designed · §7 |
+| Weakness by tag · review queue · passed-but-slow · per-company profiles | designed · §6 |
+
+Two consequences of that table are worth stating outright, because they change what the first
+hour with this tool feels like: **you register each problem by hand** (and again after a
+restart or a language-tab switch — a submission on an unregistered problem is lost), and
+**the code you wrote is not saved yet** — the record carries the grading, not the source.
+[`docs/bootstrap.md`](docs/bootstrap.md) walks the whole gap.
+
+---
+
 ## Get started
 
 You need Docker, a Programmers login, and a git repository of your own to keep the records in.
@@ -41,14 +76,14 @@ docker compose up -d
 ```
 
 **[→ Full walkthrough: `docs/bootstrap.md`](docs/bootstrap.md)** — where to find the cookie,
-how the `/watch` token works, what a working install looks like, and what is genuinely
-missing today. Read it; the five lines above will not get you a record on their own.
+how the `/watch` token works, and what a working install looks like. Read it; the five lines
+above will not get you a record on their own.
 
 The server also runs natively on a JDK 25 (`./gradlew bootRun`) — the guide covers both.
 
 ---
 
-## How it works
+## How it is designed to work
 
 ```
 Programmers web          ← browse · search · write · run · submit stays right here
@@ -62,8 +97,12 @@ Programmers web          ← browse · search · write · run · submit stays ri
                               └─ MCP exposure ──▶ Claude · Cursor · local LLM
 ```
 
-**The server sends nothing to Programmers.** It subscribes to the same channel and only listens;
-code is fetched from the problem page. Submission is done by the user, directly in the browser.
+That is the full design. The table above says which of those boxes exist today — the
+subscription, the verdict resolution and the recording do; the sensor, the diffs and the MCP
+exposure do not.
+
+**The server sends nothing to Programmers.** It subscribes to the same channel and only listens.
+Submission is done by the user, directly in the browser.
 
 Programmers grading is not REST but **Rails ActionCable WebSocket**, and we exploit the fact that
 every client subscribed to the same channel receives identical messages.
@@ -73,19 +112,24 @@ The full protocol story: [`docs/programmers-protocol.md`](docs/programmers-proto
 
 ## How it differs from existing tools
 
+What the two tools are built to do. For what is implemented, the table above is the authority.
+
 | | BaekjoonHub | programmers-tracker |
 |---|---|---|
-| When it records | Accepted only | **Every `run` · `submit`** |
-| Failing code | ✗ | ✅ |
-| Attempt count · time spent | ✗ | ✅ |
-| Failure type distinction | ✗ | ✅ wrong / timeout / runtime / compile |
-| Per-testcase results | DOM scraping | **Original stream** |
-| Diff between attempts | ✗ | ✅ |
-| AI analysis | ✗ | ✅ MCP |
+| What triggers a record | An accepted submission | Every `run` and every `submit` |
+| Failures | Never recorded — it structurally cannot | The whole point |
+| Where the data comes from | Scraping the results page | The grading stream itself |
+| Per-testcase detail | Whatever the page renders | Every testcase frame, kept verbatim |
+| Failure type | — | wrong · timeout · runtime · compile |
+| Attempt count · time spent | — | Recorded per submission |
+| Code, diffs, AI analysis | — | Designed on top of that record |
 
 ---
 
-## What you get to know
+## What the record is designed to tell you
+
+The capture format exists to answer these. They are §6 of the design; the table above tracks
+which have been built.
 
 - **How** you mostly die — logic errors, timeouts, or simple mistakes
 - **First-submission pass rate** — the metric that matters most in the real thing
@@ -100,12 +144,12 @@ The full protocol story: [`docs/programmers-protocol.md`](docs/programmers-proto
 ## Structure
 
 ```
-programmers-tracker/            (this repository)
+.                               (this repository)
 ├── CLAUDE.md                   development constitution — prohibitions · quality gates · state operations
 ├── Dockerfile                  multi-stage image — JVM 25, no configuration baked in
 ├── compose.yaml                mounts your records and your cookie; publishes to loopback only
 ├── .env.example                copy to .env — the settings that have no default
-├── .claude/commands/           project-scoped wiki commands
+├── .claude/skills/             project-scoped skills (issue · commit · pull-request · wiki)
 ├── .githooks/                  push gate — blocks pushes without wiki records
 ├── .harness/state/             out-of-session memory (goal · progress)
 ├── docs/
@@ -114,12 +158,14 @@ programmers-tracker/            (this repository)
 │   ├── development-rules.md      coding conventions
 │   ├── llm-wiki/                 development process records
 │   └── superpowers/specs/        design documents
+├── scripts/                    check · test · build · guards — CI runs these same files
 ├── src/                        Kotlin + Spring Boot
 └── template/ps-records/        initial structure of the record repository
-
-ps-records/                     (separate repository — created by the server)
-└── open it as an Obsidian vault for a GUI over dashboards · weakness analysis · review queue
 ```
+
+Your records live in a **separate repository that you create** (`cp -R template/ps-records …`
+in *Get started* above) and the server only writes into it. Open it as an Obsidian vault once
+the derived pages of §5.5 exist.
 
 > Once after cloning: `git config core.hooksPath .githooks` — activates the push gate.
 > Claude Code sets this up automatically via a session-start hook.
@@ -131,9 +177,10 @@ ps-records/                     (separate repository — created by the server)
 - This tool is **for personal learning records** and is used only on your own account
 - **It provides no auto-submission.** The user submits directly in the browser;
   the server merely observes and records the results
-- The only requests the server sends are channel subscription · problem page fetch · catalog fetch,
-  all at the same level as what a browser does
-- Catalog polling never exceeds once per day
+- Today the server sends Programmers exactly one kind of request: the channel subscription.
+  The design adds two more, both at the level of what a browser already does — a problem-page
+  fetch to recover the code you wrote (§4.4), and a catalog fetch for problem titles and tags
+  (§5.3) that never polls more than once a day
 - If Programmers asks us to stop, we comply
 
 Since this tool uses a private protocol, the judgment and responsibility for using it rest with the user.
