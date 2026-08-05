@@ -614,3 +614,57 @@ still 100%.
 - **The runner generator is not built.** It needs the example testcases the `run` `start`
   frame carries inline, and those are not currently carried through to the record. Its own
   issue rather than a guess
+
+## [2026-08-05] GitSync for the record repository ⏳
+
+Issue #39, branch `feat/39-gitsync`. 509 tests (26 new), gates all 0, calculator coverage
+still 100%.
+
+- `application/GitSync` — outbound port whose contract is that **nothing throws** and every
+  method is safe to call again: `commitSubmission` (one submit, one commit, path-scoped),
+  `reconcile` (commit whatever is uncommitted, no-op on a clean tree), `push`
+- `adapter/git/CommandLineGitSync` — the git CLI, not JGit. Retries **only** `index.lock`
+  contention (5 attempts, 100/200/400/800 ms, injected `waitFor`); every other failure
+  returns at once with git's own words in the log and waits for the next reconciliation.
+  ADR: [[decisions/2026-08-05-git-retry-scope]]
+- `adapter/git/CommitMessage` — design §4.6 subject, degrading honestly: no level drops the
+  `[LvN]` bracket, an empty title falls back to the lesson id as `ProblemReadme` does. That
+  is the normal case today, not an edge one
+- Tested against **real temporary repositories** and a local bare remote — a hand-made
+  `.git/index.lock` proves the retry (two attempts fail, the lock is deleted inside the
+  injected wait, the third succeeds), and a `notes.md` left both dirty and staged proves the
+  commit carries only its own paths. Mutation-checked: dropping the pathspec, the run guard
+  or the contention branch fails exactly the four tests that claim them
+
+### Not done, and not claimed
+
+- **Nothing calls it.** No caller commits a record yet; wiring belongs with stage 3
+- **The 23:00 backup run is not scheduled.** The entry point (`reconcile` + `push`) exists,
+  the schedule does not — deliberately out of scope for this issue
+- **Never run against a real record repository**, only temporary ones
+
+## [2026-08-06] GitSync ⏳
+
+Issue #39, branch `feat/39-gitsync`. 509 tests, gates all 0, calculator coverage 100%.
+
+- Outbound `GitSync` port with a git-CLI implementation and the §4.6 commit subject
+- **Retry scope decided and recorded** ([[decisions/2026-08-05-git-retry-scope]]): only
+  `index.lock` contention is retried. A non-fast-forward, a directory that is not a
+  repository and a pathspec matching nothing cannot heal by waiting, and retrying them
+  spends a capture's time pretending they might
+- Contention proven with a hand-made `.git/index.lock`: two attempts fail, the lock is
+  removed from inside the injected wait, the third succeeds. A lock that never clears gives
+  up without throwing
+- Path-scoped staging proven the hard way — `notes.md` left both dirty **and staged by
+  another actor**, and the submit commit still contains only the solution file while
+  `notes.md` stays staged. An editor's git integration stages files exactly that way
+- Not wired: nothing calls it yet, and the 23:00 backup scheduler is deliberately out of
+  scope; `reconcile()` and `push()` are exposed
+
+### Guardrail refined mid-run
+
+"Never merge a change to an ADR" turned out to be unworkable: the wiki push gate requires
+every branch with decisions to carry one, so the rule would block everything. The
+distinction that actually matters is **contract change versus elaboration** — #36 is held
+because it changes what `submissions.jsonl` means, while #39 merges because its ADR fills in
+retry semantics inside a decision already accepted.
