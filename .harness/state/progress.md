@@ -432,3 +432,19 @@ The worker proved duplicate-freedom by **delegation rather than a second mechani
 reconciles once, asserts the session is still on the work list (so the second pass is not
 vacuous), then reconciles again with a freshly constructed `RecordWriter` that rebuilt its
 key index from the log on disk — the actual restart case — and gets zero new records.
+
+### CI broke twice on this branch, both times on my test design
+
+**ubuntu**: `silence beyond the deadline` asserted after a fixed 250 ms wait against a 60 ms
+deadline. Fine on an idle laptop, flaky on a loaded runner. Now it waits for the behaviour
+(polling a counter under a 10 s ceiling) instead of sleeping a guess — the timeout only
+bounds a genuine failure.
+
+**windows, cancelled past ten minutes**: worse and entirely mine. `waitFor = {}` removed the
+backoff, so against a flow that ends immediately the retry loop became a **busy spin** — and
+each test built a `CoroutineScope` it never cancelled, so those spins outlived their tests
+and burned CPU for the rest of the suite. Five such tests, one runner pinned.
+
+Two rules now stated in the test class itself: **await the behaviour, never sleep for it**,
+and **cancel every scope** when the thing under test loops forever by design. Verified by
+running the class three times (stable) and the full suite in 5 s.

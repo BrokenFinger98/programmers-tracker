@@ -5,18 +5,21 @@ import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEvent
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmIdentifier
-import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
@@ -25,11 +28,21 @@ import java.util.concurrent.atomic.AtomicInteger
  * Only the subscription lifecycle is this class's business — what a frame *means* belongs to
  * [ChannelCapture] and is tested there.
  *
- * No test waits out a backoff: the wait is injected, so reconnection is observed by counting
- * attempts rather than by spending their duration.
+ * Two rules keep these tests fast and stable, both learned the hard way (#27):
+ *
+ * - **Reconnection is awaited, never slept for.** The wait between attempts is injected and
+ *   completes a signal, so a test finishes the moment the behaviour happens instead of after
+ *   a fixed delay that is too short on a loaded runner and wasted everywhere else.
+ * - **Every scope is cancelled.** The retry loop is infinite by design; a scope left running
+ *   spins for the rest of the suite. An earlier version of this file did exactly that and
+ *   took a CI runner past ten minutes.
  */
 class CableChannelSubscriberTest {
     private val identifier = anAlgorithmIdentifier()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @AfterEach
+    fun stopObserving() = scope.cancel()
 
     @Test
     fun `subscribing twice holds a single observation`() = runBlocking<Unit> {
@@ -41,16 +54,18 @@ class CableChannelSubscriberTest {
 
         subscriber.subscribe(identifier)
         subscriber.subscribe(identifier)
-        delay(SETTLE_MS)
+        awaitAtLeast(opened, 1)
 
         opened.get() shouldBe 1
     }
 
     @Test
     fun `unsubscribing cancels the observation so an evicted channel stops being watched`() = runBlocking<Unit> {
+        val started = AtomicInteger()
         val cancelled = AtomicInteger()
         val subscriber = subscriberOver {
             flow<CableEvent> {
+                started.incrementAndGet()
                 try {
                     delay(FOREVER_MS)
                 } finally {
@@ -60,9 +75,9 @@ class CableChannelSubscriberTest {
         }
 
         subscriber.subscribe(identifier)
-        delay(SETTLE_MS)
+        awaitAtLeast(started, 1)
         subscriber.unsubscribe(identifier)
-        delay(SETTLE_MS)
+        awaitAtLeast(cancelled, 1)
 
         cancelled.get() shouldBe 1
     }
@@ -81,9 +96,8 @@ class CableChannelSubscriberTest {
         }
 
         subscriber.subscribe(identifier)
-        delay(SETTLE_MS)
 
-        opened.get() shouldBeGreaterThan 1
+        awaitAtLeast(opened, 2)
     }
 
     @Test
@@ -95,34 +109,33 @@ class CableChannelSubscriberTest {
         }
 
         subscriber.subscribe(identifier)
-        delay(SETTLE_MS)
 
-        opened.get() shouldBeGreaterThan 1
+        awaitAtLeast(opened, 2)
     }
 
     /** Silence past the deadline is failure, not calm — the client must not wait forever. */
     @Test
     fun `silence beyond the deadline ends the attempt and reconnects`() = runBlocking<Unit> {
         val opened = AtomicInteger()
-        val subscriber = subscriberOver(deadline = Duration.ofMillis(60)) {
+        val subscriber = subscriberOver(deadline = Duration.ofMillis(50)) {
             opened.incrementAndGet()
             neverEnding()
         }
 
         subscriber.subscribe(identifier)
-        delay(SETTLE_MS)
 
-        opened.get() shouldBeGreaterThan 1
+        awaitAtLeast(opened, 2)
     }
 
     /** A grading in flight when the socket drops must settle, never wait for a result. */
     @Test
     fun `a dropped connection tells the capture so an open grading settles`() = runBlocking<Unit> {
         val capture = mockk<ChannelCapture>(relaxed = true)
-        val subscriber = subscriberOver(capture = capture) { emptyFlow() }
+        val reconnects = AtomicInteger()
+        val subscriber = subscriberOver(capture = capture, attempts = reconnects) { emptyFlow() }
 
         subscriber.subscribe(identifier)
-        delay(SETTLE_MS)
+        awaitAtLeast(reconnects, 1)
 
         coVerify(atLeast = 1) { capture.connectionLost() }
     }
@@ -134,9 +147,15 @@ class CableChannelSubscriberTest {
 
         subscriber.subscribe(anAlgorithmIdentifier(lessonId = FAILING))
         subscriber.subscribe(anAlgorithmIdentifier(lessonId = HEALTHY))
-        delay(SETTLE_MS)
 
-        alive.get() shouldBeGreaterThan 0
+        awaitAtLeast(alive, 1)
+    }
+
+    /** Waits for the behaviour itself; the timeout only bounds a genuine failure. */
+    private suspend fun awaitAtLeast(counter: AtomicInteger, target: Int) {
+        withTimeout(PATIENCE_MS) {
+            while (counter.get() < target) delay(POLL_MS)
+        }
     }
 
     private fun failingOrLive(channel: ChannelIdentifier, alive: AtomicInteger): Flow<CableEvent> = flow {
@@ -150,6 +169,7 @@ class CableChannelSubscriberTest {
     private fun subscriberOver(
         deadline: Duration = Duration.ofSeconds(30),
         capture: ChannelCapture = mockk(relaxed = true),
+        attempts: AtomicInteger = AtomicInteger(),
         observation: (ChannelIdentifier) -> Flow<CableEvent>,
     ): CableChannelSubscriber {
         val client = mockk<ActionCableClient>()
@@ -157,18 +177,23 @@ class CableChannelSubscriberTest {
         return CableChannelSubscriber(
             client = client,
             sessions = mockk(relaxed = true),
-            scope = CoroutineScope(Dispatchers.Default),
+            scope = scope,
             silenceDeadline = deadline,
-            // The schedule is ConnectionLiveness's business and tested there; skipping the
-            // wait lets reconnection be observed without spending its duration.
-            waitFor = {},
+            // The schedule belongs to ConnectionLiveness and is tested there. Here the wait is
+            // replaced by a short yield: skipping it entirely turns the retry loop into a busy
+            // spin that outlives the test.
+            waitFor = {
+                attempts.incrementAndGet()
+                delay(POLL_MS)
+            },
             captureFor = { capture },
         )
     }
 
     private companion object {
-        const val SETTLE_MS = 250L
         const val FOREVER_MS = 60_000L
+        const val POLL_MS = 5L
+        const val PATIENCE_MS = 10_000L
         const val FAILING = 120001L
         const val HEALTHY = 120002L
     }
