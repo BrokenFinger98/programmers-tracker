@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.GradingFrameFacts
+import com.brokenfinger.tracker.domain.SubmissionRecord
 import org.slf4j.LoggerFactory
 
 /**
@@ -17,6 +18,8 @@ import org.slf4j.LoggerFactory
  *
  * Everything after that append is allowed to fail: a write that throws costs one record and
  * never the subscription, since the frames are still on disk and more gradings will follow.
+ * The same holds one step further along — a record that lands is handed to [RecordAttachment]
+ * for its code, and a failure there costs files a later pass can write again.
  *
  * What arrives here is an [ObservedFrame] — the wire text to append, plus the facts
  * `protocol/parse` read out of it. No message type reaches this far
@@ -31,6 +34,7 @@ class ChannelCapture(
     private val registry: SubscriptionRegistry,
     private val writer: RecordWriter,
     private val timer: ProblemTimer,
+    private val attachment: RecordAttachment,
 ) {
     private var live: LiveGrading? = null
 
@@ -100,8 +104,20 @@ class ChannelCapture(
     // Logged, never rethrown: the verdict is unrecoverable but this write is not — it is
     // retryable from the raw log — and the next grading on this channel still needs us.
     private suspend fun record(rawSessionId: RawSessionId, session: GradingSession, terminalFrame: String?) {
-        runCatching { writer.write(captureOf(rawSessionId, session, terminalFrame)) }
+        val written = runCatching { writer.write(captureOf(rawSessionId, session, terminalFrame)) }
             .onFailure { logger.error("Lesson {} settled but was not recorded; its frames are kept", lessonId(), it) }
+            .getOrNull() ?: return
+        attach(written)
+    }
+
+    /**
+     * Stage 3, once the verdict is durable. A failure here costs files that can be written
+     * again from a page that still holds the code (protocol doc §10), so it is absorbed and
+     * left to the startup retry pass — never allowed back onto the capture path.
+     */
+    private suspend fun attach(record: SubmissionRecord) {
+        runCatching { attachment.attach(record) }
+            .onFailure { logger.warn("Lesson {} was recorded but its code was not attached", lessonId(), it) }
     }
 
     private fun captureOf(rawSessionId: RawSessionId, session: GradingSession, terminalFrame: String?) = SettledCapture(
