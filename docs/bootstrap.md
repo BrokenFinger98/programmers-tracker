@@ -306,13 +306,13 @@ if the machine was asleep).
 
 Stated plainly, because finding these out by trial is worse.
 
-- **There is no browser extension in this repository.** The design has one and the README
-  describes it, but it is not written. Step 6 is the manual stand-in for it, which means:
-  you must register each problem by hand, re-register after a language-tab switch and after
-  every server restart, and if you forget, that submission is lost. This is the single
-  biggest gap between the tool as documented and the tool as it exists.
+- **There is no browser extension in this repository.** The design has one (§8); it is not
+  written. Step 6 is the manual stand-in for it, which means: you must register each problem
+  by hand, re-register after a language-tab switch and after every server restart, and if
+  you forget, that submission is lost. This is the single biggest gap between the tool as
+  designed and the tool as it exists.
 - **No MCP server.** The record repository is written correctly and you can open it as an
-  Obsidian vault, but the "expose it to an AI" half of the README does not exist yet.
+  Obsidian vault, but the "expose it to an AI" half of the design does not exist yet.
 - **Pushing from the container needs credentials you must supply.** There is no sane default
   and none is invented. `compose.yaml` carries two commented mounts — your SSH key, or a git
   credential store — and you choose. Over SSH, add GitHub to your host's

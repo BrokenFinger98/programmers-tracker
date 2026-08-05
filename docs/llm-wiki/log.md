@@ -39,3 +39,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-05] ingest | missing data must look missing → 0 created, 1 updated (assumption-vs-measurement)
 
 ## [2026-08-06] ingest | read the failure, do not pattern-match it → 0 created, 1 updated (assumption-vs-measurement)
+
+## [2026-08-06] ingest | honest README + markdown path guard (#47) → 2 created (ADRs), 1 updated (index)

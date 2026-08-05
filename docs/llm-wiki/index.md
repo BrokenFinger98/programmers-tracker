@@ -27,6 +27,8 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-06 [[decisions/2026-08-06-wire-git-into-the-pipeline]] — The commit rides with the writer; the daily backup asks rather than fires
 - 2026-08-06 [[decisions/2026-08-06-container-network-posture]] — In a container the publish address is the control, not the bind address
 - 2026-08-06 [[decisions/2026-08-06-record-repository-lock]] — Exclusive record-repo lock lives in `.git/`; measured not to hold on a Docker Desktop bind mount
+- 2026-08-06 [[decisions/2026-08-06-one-place-carries-tense]] — The README states build status in one table; everything else is design tense
+- 2026-08-06 [[decisions/2026-08-06-markdown-paths-must-exist]] — Path guard over maintained docs only; tree blocks anchored to a real directory
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
 
