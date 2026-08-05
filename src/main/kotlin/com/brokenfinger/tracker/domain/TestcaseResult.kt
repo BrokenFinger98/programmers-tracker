@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.domain
 
+import kotlinx.serialization.Serializable
+
 /**
  * One graded testcase as the domain sees it.
  *
@@ -7,6 +9,7 @@ package com.brokenfinger.tracker.domain
  * (protocol doc §5–§7): timing and memory are absent on runtime error, compile error and
  * timeout, and database gradings never report them at all.
  */
+@Serializable
 data class TestcaseResult(
     val id: Long,
     val passed: Boolean?,

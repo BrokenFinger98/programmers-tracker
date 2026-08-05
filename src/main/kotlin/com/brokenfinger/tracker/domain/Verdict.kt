@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.domain
 
+import kotlinx.serialization.Serializable
+
 /**
  * What the judge concluded about a grading. All five kinds are measured
  * (protocol doc §7).
@@ -8,6 +10,7 @@ package com.brokenfinger.tracker.domain
  * verdict is expressed as `null` and carried by [Outcome]. A failure message we have
  * never measured must never be coerced into a neighbouring verdict.
  */
+@Serializable
 enum class Verdict {
     PASS,
     WRONG,
