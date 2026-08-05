@@ -67,6 +67,29 @@ about *what a rule means*, the rule is what needs attention, not the code. This 
 issue #24 with both options written out, rather than a silent third convention invented
 during integration.
 
+## Tests for things that loop forever
+
+Three CI failures in a row on this project came from test design, not from the code under
+test, and two of them share a cause: the thing being tested is **designed never to finish**.
+
+A reconnecting subscriber loops until cancelled. Testing it invites two mistakes:
+
+- **Sleeping for the behaviour instead of awaiting it.** `delay(250)` then assert is a guess
+  about a machine's speed; it passes locally and fails on a loaded runner. Poll for the
+  condition under a generous ceiling instead — then the timeout bounds only genuine failure
+  rather than defining the pass.
+- **Removing the wait without bounding the loop.** Injecting `waitFor = {}` to skip a
+  30-second backoff turns the retry into a busy spin. Combined with a `CoroutineScope` the
+  test never cancels, the spin outlives its test and burns CPU for the remainder of the
+  suite — five such tests took a CI runner past ten minutes.
+
+The pair of rules: **await the behaviour, never sleep for it**, and **cancel every scope**
+when the subject loops by design. Both belong in the test class's own documentation, because
+the next person to add a case there will reach for exactly the same shortcuts.
+
+A useful check before pushing: run the class three times and time the whole suite. A test
+that leaks work shows up as a suite that gets slower, not as a test that fails.
+
 ## What supervision is actually for
 
 Workers reported their own gaps honestly and usefully: #16's worker flagged that the
