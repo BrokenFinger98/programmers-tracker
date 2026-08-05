@@ -1,0 +1,73 @@
+package com.brokenfinger.tracker.application
+
+import com.brokenfinger.tracker.domain.CaptureKey
+import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.TestcaseSummary
+import java.time.OffsetDateTime
+
+/**
+ * A grading that has already settled, together with everything the writer cannot work out
+ * for itself — stage 2's input ([[decisions/2026-08-05-capture-pipeline-stages]]).
+ *
+ * The values that are *not* here are as deliberate as the ones that are. Catalog metadata,
+ * the problem timer and the code attachment all arrive on their own schedules; inventing
+ * them at write time would file guesses next to a measured verdict, which is the silent
+ * wrong data the constitution ranks as the worst outcome. They stay at their record
+ * defaults until the stage that owns them fills them in.
+ */
+data class SettledCapture(
+    val session: GradingSession,
+    /** The raw log this grading was assembled from — still the durable copy of its frames. */
+    val rawSessionId: RawSessionId,
+    val lessonId: Long,
+    val title: String,
+    val language: String,
+    /** Time on this problem, measured by whoever owns the timer, never by the writer. */
+    val elapsedSec: Long,
+    /**
+     * The frame that ended the stream, exactly as received. Null when none arrived — a
+     * timeout or a disconnect — and the key then falls back to [rawSessionId], which a
+     * replay of the same raw log repeats exactly.
+     */
+    val terminalFrame: String? = null,
+) {
+    /**
+     * The action this grading was requested with. Throws when the stream announced none:
+     * substituting a default would file a run under a submit's number and corrupt the
+     * sequence silently. The frames are already durable, so this costs a record, not data.
+     */
+    fun action(): GradingAction = requireNotNull(session.action) { "grading of lesson $lessonId announced no action" }
+
+    /** Our own identity for this grading — the dedup index's key (dev rules §5, design §5.2). */
+    fun captureKey(): CaptureKey = CaptureKey.of(lessonId, action(), keyBasis())
+
+    /**
+     * Whether this grading's frames belong in an attempt file. Only a submit that owns a
+     * number does; a run keeps the previous submit's number and creates no `attempts/NNN.*`
+     * files at all (design §5.1).
+     */
+    fun movesRaw(attempt: Int): Boolean = action() == GradingAction.SUBMIT && attempt > AttemptAuthority.NONE
+
+    fun toRecord(ts: OffsetDateTime, attempt: Int, key: CaptureKey, rawPath: String) = SubmissionRecord(
+        ts = ts,
+        lessonId = lessonId,
+        title = title,
+        language = language,
+        action = action(),
+        attempt = attempt,
+        elapsedSec = elapsedSec,
+        captureKey = key,
+        outcome = session.outcome,
+        verdict = session.verdict,
+        testcases = session.testcases,
+        tcSummary = TestcaseSummary.of(session.testcases, session.testcasesComplete),
+        rawPath = rawPath,
+        // The verdict is durable the moment this line is written; the code is fetched
+        // afterwards and its failure is never this record's failure (design §5.2).
+        codePending = true,
+        errorText = session.errorText,
+    )
+
+    private fun keyBasis(): String = terminalFrame?.takeIf { it.isNotBlank() } ?: rawSessionId.value
+}
