@@ -192,6 +192,36 @@ This is the same instinct as refusing to write `elapsedSec 0` for an unstarted t
 verdict for an unrecognised failure message: **a value that looks measured is worse than no
 value**, because only the second one prompts anyone to go and measure it.
 
+## Read the failure, do not pattern-match it
+
+A Windows-only CI failure on #41 showed `InvalidPathException` in the job log and nothing
+else. That is enough to start guessing — and three plausible guesses (a colon in a URL, a
+config key resolving wrongly, a temp file named with an instant) were all wrong.
+
+The uploaded test report carried the actual message:
+
+```
+Illegal char <:> at index 16: C:\Users\RUNNERC:\Users\runneradmin1\AppData\Local\Temp\/...
+```
+
+Which names the cause outright: a Windows temp directory is an 8.3 short path containing a
+tilde (`C:\Users\RUNNER~1\AppData\Local\Temp`), and home-directory expansion written as
+`replaceFirst("~", home)` rewrites a tilde **anywhere** in the string.
+
+Two lessons, and the second is the reusable one:
+
+- **The job log truncates stack traces; the uploaded report does not.** `gh run download`
+  costs one command and answers what several rounds of guessing could not. Reach for it
+  first, not after.
+- **The same one-line idiom had been copied to three call sites.** Fixing where CI pointed
+  would have left two. A defect found in a copied line is a prompt to grep for the idiom, not
+  just to patch the instance.
+
+Third time the three-OS matrix has caught something invisible on the developer's machine —
+after git rewriting a fixture's line endings and a guard reading stale results. All three
+were environment differences rather than logic errors, which is exactly the class a single
+machine cannot show you.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a

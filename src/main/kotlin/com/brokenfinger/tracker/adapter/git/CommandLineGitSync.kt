@@ -28,17 +28,45 @@ import java.util.concurrent.TimeUnit
  *
  * Waiting is injected so the retry schedule is testable without sleeping, the same shape
  * `CableChannelSubscriber` uses for reconnect.
+ *
+ * **A fresh install has a records directory and no repository at all.** That is a
+ * configuration fact, not a transient failure: it is answered once, said once, and then every
+ * git call is skipped for the lifetime of this instance. Failing each commit forever and
+ * logging each one would bury every other message the tool has to say, and the records
+ * themselves are written either way.
  */
 class CommandLineGitSync(
     private val root: Path,
     private val waitFor: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GitSync {
+    /**
+     * Asked once, on the first git call rather than at construction — the composition root
+     * builds this before the user has any chance to fix it, and a lazy answer keeps the
+     * message next to the work it stopped. `by lazy` is synchronized, so concurrent first
+     * calls still ask once.
+     */
+    private val isRepository: Boolean by lazy { detectRepository() }
+
     override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean =
-        neverThrowing("commit") { commitScoped(record, paths) }
+        inRepository("commit") { commitScoped(record, paths) }
 
-    override fun reconcile(): Boolean = neverThrowing("reconcile") { commitEverything() }
+    override fun reconcile(): Boolean = inRepository("reconcile") { commitEverything() }
 
-    override fun push(): Boolean = neverThrowing("push") { pushed() }
+    override fun push(): Boolean = inRepository("push") { pushed() }
+
+    private fun inRepository(what: String, action: () -> Boolean): Boolean {
+        if (!isRepository) return false
+        return neverThrowing(what, action)
+    }
+
+    // `rev-parse` is git's own answer to the question and covers what a `.git` directory test
+    // does not: a worktree whose `.git` is a file, and a records directory nested inside some
+    // other repository, which would otherwise commit records into a repository nobody meant.
+    private fun detectRepository(): Boolean {
+        if (runCatching { git(listOf("rev-parse", "--git-dir")).succeeded() }.getOrDefault(false)) return true
+        logger.warn(NOT_A_REPOSITORY, root)
+        return false
+    }
 
     // A run owns no attempt number and no commit of its own (design §4.6); its edits to the
     // solution file ride along with the next submit or the next reconciliation.
@@ -180,6 +208,11 @@ class CommandLineGitSync(
     companion object {
         /** What a reconciliation commit says: these files were left behind, not chosen. */
         const val RECONCILE_MESSAGE = "chore: reconcile uncommitted records"
+
+        /** Said once per process, so it stays readable instead of drowning every other line. */
+        const val NOT_A_REPOSITORY =
+            "{} is not a git repository, so records are written but never committed. " +
+                "Run `git init` there and restart to keep a history — this is said only once."
 
         /**
          * Four retries and then the next reconciliation takes over. An external lock holder

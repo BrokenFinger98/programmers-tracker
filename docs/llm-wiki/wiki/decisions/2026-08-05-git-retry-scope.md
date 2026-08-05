@@ -108,3 +108,4 @@ Implemented 2026-08-05 in `adapter/git/CommandLineGitSync` + `adapter/git/Commit
 behind `application/GitSync` (#39), with 26 tests over real temporary repositories and a
 local bare remote. **Nothing is wired yet**: no caller commits, and the 23:00 backup run
 (design §4.6) is not scheduled — the entry point exists, the schedule does not.
+**Wired 2026-08-06 in #41** — see [[decisions/2026-08-06-wire-git-into-the-pipeline]].

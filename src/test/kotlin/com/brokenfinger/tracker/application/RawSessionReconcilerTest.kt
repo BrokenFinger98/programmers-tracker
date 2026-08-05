@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
+import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -225,6 +226,8 @@ class RawSessionReconcilerTest {
         rawLog = rawLog,
         rawAttemptPath = AttemptRawPath(RecordLayout(root)::rawAttemptFile),
         recordRoot = root,
+        git = aQuietGitSync(),
+        submissionLog = RecordLayout(root).submissionLog(),
         clock = clock,
         writerDispatcher = Dispatchers.Unconfined,
     )

@@ -1,14 +1,20 @@
 package com.brokenfinger.tracker.adapter.git
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -218,6 +224,51 @@ class CommandLineGitSyncTest {
         sync().push() shouldBe true
 
         subjects(at = remote).size shouldBe 2
+    }
+
+    // A records directory with no repository in it ------------------------------------------
+
+    /**
+     * A fresh install has a directory and nothing else. That is a configuration fact rather
+     * than a transient failure, so it is answered once and said once: failing every commit for
+     * the life of the process and logging each one would bury every other message.
+     */
+    @Test
+    fun `a records directory that is no repository is reported exactly once`() {
+        val fresh = Files.createDirectories(base.resolve("fresh-install"))
+        val sync = CommandLineGitSync(fresh) { }
+
+        val heard = warningsWhile {
+            repeat(3) { sync.commitSubmission(aWrongSubmit(), listOf(fresh.resolve("Solution.java"))) shouldBe false }
+            sync.reconcile() shouldBe false
+            sync.push() shouldBe false
+        }
+
+        heard.size shouldBe 1
+        heard.single() shouldContain "not a git repository"
+    }
+
+    /** Asked once means once: a repository created afterwards is not noticed, and says so. */
+    @Test
+    fun `a directory that becomes a repository later is still left alone, and quietly`() {
+        val fresh = Files.createDirectories(base.resolve("fresh-install"))
+        val sync = CommandLineGitSync(fresh) { }
+        sync.reconcile() shouldBe false
+
+        git("init", "-b", "main", at = fresh)
+        Files.writeString(fresh.resolve("note.md"), "the user fixed it while we were running")
+
+        warningsWhile { sync.reconcile() shouldBe false } shouldContainExactly emptyList()
+        git("status", "--porcelain", at = fresh).trim() shouldBe "?? note.md"
+    }
+
+    /** What this class said while [action] ran. Logback is what the application logs through. */
+    private fun warningsWhile(action: () -> Unit): List<String> {
+        val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+        runCatching(action).also { logger.detachAppender(appender) }.getOrThrow()
+        return appender.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
     }
 
     private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor)
