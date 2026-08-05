@@ -26,6 +26,8 @@ ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.re
 
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+# @WebMvcTest left the starter in Boot 4 — it now ships in its own module.
+spring-boot-webmvc-test = { module = "org.springframework.boot:spring-boot-webmvc-test" }
 
 kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }

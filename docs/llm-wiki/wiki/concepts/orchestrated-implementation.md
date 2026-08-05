@@ -49,6 +49,24 @@ token. The commit existed; only the provenance was broken.
 The recovery is to verify the artifacts directly and then close the task with an explicit
 recovery note — never to describe a report that never arrived as if it had.
 
+## 4. Disagreeing workers are a detector for undecided rules
+
+On #22 two workers read the same documents and reached opposite conclusions. One keyed the
+subscription registry by a `protocol` type from inside `application`; the other wrote in a
+KDoc that `application` must not depend on `protocol`. Both were defensible: the first
+followed a precedent already merged in #16, the second followed `development-rules` §1 as
+written.
+
+Neither was wrong about the codebase — **the codebase was inconsistent**, and had been since
+#16 passed review. A single author would very likely have picked one reading and stayed
+consistent with themselves, and the contradiction would have kept compiling.
+
+Two independent readers of the same rules are therefore a cheap consistency check on the
+rules themselves. When workers disagree about *style*, that is noise; when they disagree
+about *what a rule means*, the rule is what needs attention, not the code. This one became
+issue #24 with both options written out, rather than a silent third convention invented
+during integration.
+
 ## What supervision is actually for
 
 Workers reported their own gaps honestly and usefully: #16's worker flagged that the

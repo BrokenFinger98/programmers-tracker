@@ -45,6 +45,8 @@ dependencies {
     implementation(libs.ktor.client.websockets)
 
     testImplementation(libs.spring.boot.starter.test)
+    // The one Spring slice the test-environment ADR allows: web controllers.
+    testImplementation(libs.spring.boot.webmvc.test)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
 }

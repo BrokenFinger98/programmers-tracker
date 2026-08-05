@@ -1,5 +1,9 @@
 server:
   port: ${TRACKER_PORT:8080}
+  # Loopback only, deliberately. This process holds a live session cookie in memory and can
+  # push to the record repository; a bind on 0.0.0.0 (the Spring default, and what a
+  # container gives you for free) would offer /watch to everything on the LAN. Design §4.1.
+  address: ${TRACKER_BIND_ADDRESS:127.0.0.1}
 
 spring:
   application:
@@ -16,3 +20,11 @@ tracker:
     url: ${TRACKER_CABLE_URL:wss://ws.programmers.co.kr:443/cable}
     origin: ${TRACKER_CABLE_ORIGIN:https://school.programmers.co.kr}
   session-file: ${TRACKER_SESSION_FILE:.ps/session}
+  watch:
+    # Local authorization for POST /watch. Loopback is shared with every other process on
+    # the machine, so the bind above is not authorization by itself. There is no default
+    # token value and no way to switch the check off: left empty, the server generates one
+    # on first start and persists it owner-only at token-file, so it survives restarts
+    # (the extension heartbeats every 30 s — a per-run token would 401 every heartbeat).
+    token: ${TRACKER_WATCH_TOKEN:}
+    token-file: ${TRACKER_WATCH_TOKEN_FILE:.ps/watch-token}
