@@ -105,10 +105,34 @@ That is exactly the layout `compose.yaml` ships, so on macOS the headline scenar
 plus a local run — remains unprotected. It is stated in `docs/bootstrap.md` next to the
 warning that was already there, rather than quietly implied to be fixed.
 
-**Unverified, and labelled as such** ([[concepts/assumption-vs-measurement]]): a native Linux
-host plus a container, where the bind mount is a real filesystem on the shared kernel. It is
-*expected* to work for the same reason the overlayfs case does, but nothing here measured it.
-Windows and network filesystems are likewise unverified.
+### The Linux row, measured by accident an hour later
+
+The row above marked *expected but unverified* — a native Linux host, where the bind mount is
+a real filesystem on the shared kernel — got measured immediately, and not on purpose. CI's
+docker job starts two containers to compare bind addresses, and both mounted the same records
+directory. With the lock in place **the second refused to start**, failing the job:
+
+```
+The record repository /records is already held by another programmers-tracker
+instance, which is holding /records/.git/.programmers-tracker.lock.
+```
+
+| Case | Second instance | Verdict |
+|---|---|---|
+| Two containers, same **host bind mount**, ubuntu-latest runner | **refused** | works |
+
+So the mechanism is sound and the boundary really is Docker Desktop's virtualised filesystem,
+not containers or bind mounts as such. The CI failure was the feature working, and the fix was
+to the test — one records directory per container, since those two steps are about network
+posture. A dedicated step now asserts the refusal deliberately, so the measurement is
+permanent rather than accidental.
+
+Worth keeping as a lesson about what "unverified" is worth: this one was labelled honestly
+rather than assumed, and an hour later the evidence arrived from a direction nobody planned.
+Had the assumption been written as fact, the CI failure would have read as a bug in the lock.
+
+**Still unverified**: a native Linux host running a JVM *outside* any container against the
+same mount (only container-to-container was observed), Windows, and network filesystems.
 
 ## What the lock does not cover
 
