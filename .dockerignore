@@ -1,0 +1,26 @@
+# Everything the build context does not need. Two entries here are not about speed:
+#
+# - `.ps/` holds the session cookie and the /watch token. A build context is copied into
+#   the daemon and anything COPYed lands in an image layer, where `docker history` can
+#   read it back out of a published image. It must never be in the context at all.
+# - `.git/` carries every credential that was ever committed and then removed.
+.ps/
+.git/
+
+# Build outputs — the image builds its own, and a host-built `build/` for another
+# architecture would silently shadow it.
+build/
+.gradle/
+.kotlin/
+out/
+
+# Never read by the build.
+.github/
+.githooks/
+.harness/
+.idea/
+.vscode/
+docs/
+template/
+*.md
+.DS_Store

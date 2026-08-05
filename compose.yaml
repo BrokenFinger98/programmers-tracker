@@ -1,0 +1,94 @@
+# programmers-tracker, as a resident container.
+#
+# Copy `.env.example` to `.env` and fill it in first — this file deliberately invents no
+# default for anything that belongs to you (where your records live, who git commits as).
+# Full walkthrough: docs/bootstrap.md.
+
+services:
+  tracker:
+    build: .
+    image: programmers-tracker:local
+    container_name: programmers-tracker
+    restart: unless-stopped
+
+    # ---------------------------------------------------------------------
+    # THE LOOPBACK PREFIX ON THE LEFT IS THE SECURITY CONTROL. DO NOT REMOVE IT.
+    #
+    # `127.0.0.1:8080:8080` tells Docker to listen on the HOST's loopback only, so
+    # nothing on the LAN can reach /watch. Shortening it to `8080:8080` binds the
+    # published port to every host interface and hands a process that holds a live
+    # Programmers session cookie — and can push to your GitHub — to the whole network.
+    #
+    # A bind address INSIDE a container namespace is not the same control as one on a
+    # host: `-p` forwards to the container's eth0 address, never to its loopback, so a
+    # server bound to 127.0.0.1 in here is unreachable from your browser extension.
+    # That is why TRACKER_BIND_ADDRESS is 0.0.0.0 below and why it is set HERE and not
+    # in the image — the application's own default stays loopback for native runs.
+    # Reasoning: docs/llm-wiki/wiki/decisions/2026-08-06-container-network-posture.md
+    # ---------------------------------------------------------------------
+    ports:
+      - "127.0.0.1:${TRACKER_PORT:-8080}:${TRACKER_PORT:-8080}"
+
+    environment:
+      TRACKER_PORT: ${TRACKER_PORT:-8080}
+      TRACKER_BIND_ADDRESS: "0.0.0.0"
+      TRACKER_SESSION_FILE: /run/secrets/programmers_session
+
+      # git refuses to commit without an identity, and there is no sane default for who
+      # you are. Unset, `docker compose up` stops here rather than starting a server that
+      # records to disk and never commits a thing.
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:?set GIT_AUTHOR_NAME in .env — git will not commit without an identity}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:?set GIT_AUTHOR_EMAIL in .env — git will not commit without an identity}
+      GIT_COMMITTER_NAME: ${GIT_AUTHOR_NAME}
+      GIT_COMMITTER_EMAIL: ${GIT_AUTHOR_EMAIL}
+
+      # Optional. Defaults live in application.yml; override only if you mean to.
+      TRACKER_BACKUP_AT: ${TRACKER_BACKUP_AT:-23:00}
+      TRACKER_BACKUP_ZONE: ${TRACKER_BACKUP_ZONE:-Asia/Seoul}
+
+    volumes:
+      # Your records. Read-write and never a named volume: a named volume would put your
+      # solving history inside Docker's storage, where `docker compose down -v` deletes it.
+      - ${TRACKER_RECORD_REPO:?set TRACKER_RECORD_REPO in .env to the absolute path of your record repository}:/records
+
+      # Process state — raw frames mid-grading, per-problem timers, the generated /watch
+      # token, the daily-backup marker. Survives the container because a raw session lost
+      # to a restart is a grading nobody can replay.
+      - ${TRACKER_STATE_DIR:-./.ps}:/app/.ps
+
+      # PUSHING NEEDS CREDENTIALS, AND THERE IS NO DEFAULT WORTH INVENTING. Nothing below
+      # is enabled: without it the tool still captures and still commits locally, and the
+      # push fails, is logged, and leaves the day owed so the next backup retries it.
+      # To push over SSH, uncomment the line below and make sure the record repository's
+      # remote is an SSH URL (`git -C <repo> remote set-url origin git@github.com:you/ps-records.git`).
+      # Read-only, and it is your private key — decide deliberately.
+      # - ${HOME}/.ssh:/home/tracker/.ssh:ro
+      #
+      # To push over HTTPS instead, put a personal access token in a git credential store
+      # on the host, mount that file read-only, and turn the helper on from .env with
+      # GIT_CONFIG_COUNT=1 / GIT_CONFIG_KEY_0=credential.helper / GIT_CONFIG_VALUE_0=store.
+      # - ${HOME}/.git-credentials:/home/tracker/.git-credentials:ro
+
+    secrets:
+      # Read-only by construction, and it never enters an image layer. See bootstrap.md
+      # for where to get the value.
+      - programmers_session
+
+    # A bind mount on Linux keeps the host's ownership, so the container has to write as
+    # you. `id -u` and `id -g` give you the numbers. Docker Desktop on macOS and Windows
+    # remaps ownership already — leave these unset there.
+    user: "${TRACKER_UID:-1000}:${TRACKER_GID:-1000}"
+
+    networks:
+      - tracker
+
+secrets:
+  programmers_session:
+    file: ${TRACKER_SESSION_FILE:-./.ps/session}
+
+networks:
+  # Its own network, and nothing else joins it. The published port is confined to the host
+  # loopback, but a container is reachable from every other container that shares its
+  # network — the /watch token is the second layer, not the only one.
+  tracker:
+    name: programmers-tracker
