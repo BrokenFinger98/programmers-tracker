@@ -89,3 +89,8 @@ for having fixed the real coupling.
 
 Recorded 2026-08-05. Decision 1 lands with this issue; decision 2 is its own issue so the
 verdict path is reviewed on its own diff.
+
+Decision 2 landed 2026-08-05 as issue #29. The shape it took is not the "grading events" this
+page assumed — one frame contributes several orthogonal facts, so the crossing is a record of
+extracted facts. See [[decisions/2026-08-05-grading-facts-not-events]]. No `protocol` import
+remains anywhere under `application`.

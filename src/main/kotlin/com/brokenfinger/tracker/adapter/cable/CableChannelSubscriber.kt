@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.SessionProvider
+import com.brokenfinger.tracker.protocol.parse.ObservedFrames
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -66,14 +67,20 @@ class CableChannelSubscriber(
         }
     }
 
-    /** Returns whether any frame arrived, which is what makes the next wait a first attempt. */
+    /**
+     * Returns whether any frame arrived, which is what makes the next wait a first attempt.
+     *
+     * The cable event becomes an `ObservedFrame` here, at the outermost edge: the capture is
+     * `application` and never names a wire type
+     * ([[decisions/2026-08-05-protocol-dependency-direction]] decision 2).
+     */
     private suspend fun collectOnce(channel: ChannelKey, capture: ChannelCapture): Boolean {
         var received = false
         runCatching {
             client.observe(ChannelIdentifier.from(channel), sessions)
                 .onEach { received = true }
                 .timeout(silenceDeadline.toKotlinDuration())
-                .collect { capture.onEvent(it) }
+                .collect { capture.onFrame(ObservedFrames.of(it)) }
         }.onFailure { report(channel, it) }
         return received
     }

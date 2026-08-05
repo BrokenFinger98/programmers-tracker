@@ -512,3 +512,36 @@ a changed byte breaks subscription silently. 451 tests before and after.
 **Split out as #29 (decision 2)**: messages reach `application` as domain events. Kept
 separate on purpose — it touches verdict resolution, and inside a rename-heavy diff a
 reviewer could not see it.
+
+## [2026-08-05] Messages reach `application` as domain facts ⏳
+
+Issue #29, branch `refactor/29-domain-grading-events`. ADR
+[[decisions/2026-08-05-grading-facts-not-events]] — the second half of
+[[decisions/2026-08-05-protocol-dependency-direction]], and the half that protects the
+verdict path.
+
+The shape changed from what #24 assumed. "Domain grading events" reads as a sealed hierarchy,
+but one frame contributes several **orthogonal** things at once — an algorithm `start` names
+the action, announces a count and opens the grading; a database `finish` ends the stream and
+carries the only testcase there is. An event per frame would have mirrored `SubmitMessage`
+one-to-one, i.e. the same coupling with a domain name on it. So the crossing is a record of
+extracted facts:
+
+- `domain/GradingFrameFacts` — action · terminal kind · testcase · announced ids · announced
+  count · error text · starts-a-grading. `GradingMessageMapper.factsOf` builds it; the six
+  per-fact mappers became its internals and stayed the units the fixture tests drive
+- `application/ObservedFrame` — wire text + facts, so stage-1-before-interpretation stays
+  literally true while `ChannelCapture` names no wire type
+- `application/FrameReader` port ← `protocol/parse/ObservedFrames`. The reconciler replays
+  through it, `channelOf` included: the envelope is still the only place an algorithm
+  submit's family and language survive (protocol doc §15.2), so that parsing stayed down
+
+`GradingSession.frames` holds the facts, not the wire text. The verbatim original is on disk
+before the session settles and the record points at it, so §2.4 is satisfied by bytes that
+outlive the process; a second in-memory copy would only be a weaker archive to mistake for
+the real one. Cost recorded in the ADR: the list now proves how many frames were
+uninterpreted, not which.
+
+**Measured**: zero `protocol` imports remain under `application` — production *and* tests,
+not just `message`/`parse` — and 451 tests before and after, the same captures driving the
+same five verdicts. check · test · build · guards all exit 0.

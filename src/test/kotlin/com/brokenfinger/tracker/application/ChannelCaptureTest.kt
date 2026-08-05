@@ -9,13 +9,12 @@ import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
-import com.brokenfinger.tracker.protocol.CableEvent
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
-import com.brokenfinger.tracker.support.fixtures.aCableEvent
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.aTerminalFrame
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
-import com.brokenfinger.tracker.support.fixtures.cableEvents
+import com.brokenfinger.tracker.support.fixtures.anObservedFrame
+import com.brokenfinger.tracker.support.fixtures.observedFrames
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +58,7 @@ class ChannelCaptureTest {
     fun `the frames that precede a grading belong to none, so nothing is appended`() {
         val capture = capture()
 
-        consume(capture, cableEvents("algorithm-pass.jsonl").take(1))
+        consume(capture, observedFrames("algorithm-pass.jsonl").take(1))
 
         journal shouldContainExactly emptyList()
     }
@@ -67,17 +66,17 @@ class ChannelCaptureTest {
     @Test
     fun `a frame nothing could parse is appended all the same`() {
         val capture = capture()
-        consume(capture, cableEvents("algorithm-pass.jsonl").take(2))
+        consume(capture, observedFrames("algorithm-pass.jsonl").take(2))
 
-        consume(capture, listOf(aCableEvent("{ not json")))
+        consume(capture, listOf(anObservedFrame("{ not json")))
 
         rawLog.frames().last() shouldBe "{ not json"
     }
 
     @Test
     fun `an unknown message type is preserved without ending the grading`() {
-        val stream = cableEvents("algorithm-pass.jsonl")
-        val unknown = aCableEvent(aBroadcastFrame("""{"type":"hint_used","stage":2}"""))
+        val stream = observedFrames("algorithm-pass.jsonl")
+        val unknown = anObservedFrame(aBroadcastFrame("""{"type":"hint_used","stage":2}"""))
 
         consume(capture(), stream.dropLast(1) + unknown + stream.last())
 
@@ -89,7 +88,7 @@ class ChannelCaptureTest {
 
     @Test
     fun `a starting grading pins the subscription against eviction`() {
-        consume(capture(), cableEvents("algorithm-pass.jsonl").take(2))
+        consume(capture(), observedFrames("algorithm-pass.jsonl").take(2))
 
         registry.snapshot().single().pinned shouldBe true
     }
@@ -146,7 +145,7 @@ class ChannelCaptureTest {
     fun `a database submit settles at result_lesson_challenge`() {
         val sql = aSqlChannel()
 
-        consume(capture(sql), cableEvents("sql-pass.jsonl", sql))
+        consume(capture(sql), observedFrames("sql-pass.jsonl", sql))
 
         records().single().verdict shouldBe Verdict.PASS
     }
@@ -190,7 +189,7 @@ class ChannelCaptureTest {
 
     @Test
     fun `a terminal frame with no grading in flight is ignored`() {
-        consume(capture(), cableEvents("algorithm-pass.jsonl").takeLast(1))
+        consume(capture(), observedFrames("algorithm-pass.jsonl").takeLast(1))
 
         journal shouldContainExactly emptyList()
         records() shouldContainExactly emptyList()
@@ -225,7 +224,7 @@ class ChannelCaptureTest {
     fun `a grading that a new start cut short is still recorded, marked incomplete`() {
         val capture = capture()
 
-        consume(capture, cableEvents("algorithm-pass.jsonl").dropLast(2))
+        consume(capture, observedFrames("algorithm-pass.jsonl").dropLast(2))
         consume(capture, "algorithm-wrong.jsonl")
 
         records().map { it.outcome } shouldContainExactly listOf(Outcome.INCOMPLETE, Outcome.JUDGED)
@@ -250,10 +249,10 @@ class ChannelCaptureTest {
         writerDispatcher = Dispatchers.Unconfined,
     )
 
-    private fun consume(capture: ChannelCapture, fixture: String) = consume(capture, cableEvents(fixture))
+    private fun consume(capture: ChannelCapture, fixture: String) = consume(capture, observedFrames(fixture))
 
-    private fun consume(capture: ChannelCapture, events: List<CableEvent>) = runBlocking {
-        events.forEach { capture.onEvent(it) }
+    private fun consume(capture: ChannelCapture, frames: List<ObservedFrame>) = runBlocking {
+        frames.forEach { capture.onFrame(it) }
     }
 
     private fun records(): List<SubmissionRecord> {

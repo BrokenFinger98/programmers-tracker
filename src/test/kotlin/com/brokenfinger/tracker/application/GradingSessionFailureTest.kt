@@ -1,16 +1,15 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.Verdict
-import com.brokenfinger.tracker.protocol.message.SubmitMessage
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.anAssembler
+import com.brokenfinger.tracker.support.fixtures.anUnmeasuredFrame
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
 
 /**
@@ -19,15 +18,15 @@ import org.junit.jupiter.api.Test
  * ([[decisions/2026-08-05-failure-taxonomy]]).
  */
 class GradingSessionFailureTest {
-    private val passStream = FixtureLoader.messages("algorithm-pass.jsonl")
-    private val wrongStream = FixtureLoader.messages("algorithm-wrong.jsonl")
+    private val passStream = FixtureLoader.facts("algorithm-pass.jsonl")
+    private val wrongStream = FixtureLoader.facts("algorithm-wrong.jsonl")
 
     // A memory-limit verdict has never been triggered, so its msg string is unknown
     // (protocol doc §14). This is the one case that cannot have a capture, so the measured
     // timeout stream is amended in the single field under test (dev rules §6.2).
     @Test
     fun `a terminal frame with an uncaptured failure message is unknown, never coerced`() {
-        val session = aSessionOf(FixtureLoader.messages("algorithm-timeout.jsonl").map(::asMemoryLimit))
+        val session = aSessionOf(FixtureLoader.facts("algorithm-timeout.jsonl").map(::asMemoryLimit))
 
         session.outcome shouldBe Outcome.UNKNOWN
         session.verdict.shouldBeNull()
@@ -84,7 +83,7 @@ class GradingSessionFailureTest {
 
     @Test
     fun `a stream that announced no expected ids is never claimed complete`() {
-        val session = aSessionOf(FixtureLoader.messages("algorithm-run-error.jsonl"))
+        val session = aSessionOf(FixtureLoader.facts("algorithm-run-error.jsonl"))
 
         session.testcasesComplete shouldBe false
     }
@@ -102,15 +101,8 @@ class GradingSessionFailureTest {
         session.verdict shouldBe Verdict.PASS
     }
 
-    private fun asMemoryLimit(message: SubmitMessage): SubmitMessage {
-        if (message !is SubmitMessage.Testcase) return message
-        return message.copy(msg = "실패 (메모리 초과)", runTime = null, memorySize = null)
+    private fun asMemoryLimit(frame: GradingFrameFacts): GradingFrameFacts {
+        val graded = frame.testcase ?: return frame
+        return frame.copy(testcase = graded.copy(msg = "실패 (메모리 초과)", runTime = null, memorySize = null))
     }
-
-    private fun anUnmeasuredFrame(): SubmitMessage = SubmitMessage.ofReceived(
-        buildJsonObject {
-            put("action", "submit")
-            put("type", "notice")
-        },
-    )
 }

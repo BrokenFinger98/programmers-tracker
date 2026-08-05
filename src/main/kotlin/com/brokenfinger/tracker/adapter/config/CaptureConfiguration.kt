@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
+import com.brokenfinger.tracker.application.FrameReader
 import com.brokenfinger.tracker.application.ProblemTimer
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RawSessionReconciler
@@ -18,6 +19,7 @@ import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEndpoint
 import com.brokenfinger.tracker.protocol.ManualFileSessionProvider
 import com.brokenfinger.tracker.protocol.SessionProvider
+import com.brokenfinger.tracker.protocol.parse.ObservedFrames
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,9 +94,13 @@ class CaptureConfiguration {
         logger.info("Startup reconciliation: {}", report)
     }
 
+    /** The one crossing out of the wire format, shared by the live path and the replay. */
     @Bean
-    fun rawSessionReconciler(rawLog: RawSessionLog, writer: RecordWriter, timer: ProblemTimer) =
-        RawSessionReconciler(rawLog, writer, timer)
+    fun frameReader(): FrameReader = ObservedFrames
+
+    @Bean
+    fun rawSessionReconciler(rawLog: RawSessionLog, writer: RecordWriter, timer: ProblemTimer, frames: FrameReader) =
+        RawSessionReconciler(rawLog, writer, timer, frames)
 
     /**
      * Observation runs on a supervisor job so one channel's failure cannot cancel the

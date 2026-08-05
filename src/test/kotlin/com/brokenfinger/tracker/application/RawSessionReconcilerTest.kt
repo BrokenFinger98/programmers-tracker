@@ -9,9 +9,9 @@ import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
-import com.brokenfinger.tracker.protocol.message.ActionCableFrame
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
+import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -217,7 +217,7 @@ class RawSessionReconcilerTest {
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
     private fun reconcile(): ReconcileReport = runBlocking {
-        RawSessionReconciler(rawLog, writer(), StaleTimer(ELAPSED_SEC), clock).reconcile()
+        RawSessionReconciler(rawLog, writer(), StaleTimer(ELAPSED_SEC), aFrameReader(), clock).reconcile()
     }
 
     private fun writer() = RecordWriter.of(
@@ -237,8 +237,7 @@ class RawSessionReconcilerTest {
     }
 
     /** What the live path would have appended: the broadcasts, welcome and ping excluded. */
-    private fun broadcastsOf(fixture: String): List<String> = FixtureLoader.rawFrames(fixture)
-        .filter { ActionCableFrame.ofReceived(it) is ActionCableFrame.Broadcast }
+    private fun broadcastsOf(fixture: String): List<String> = FixtureLoader.broadcastLines(fixture)
 
     private fun torn(line: String): String = line.take(line.length / 2)
 

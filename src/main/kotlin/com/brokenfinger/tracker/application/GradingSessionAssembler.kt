@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TerminalKind
@@ -9,13 +10,15 @@ import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TerminationRule
 import com.brokenfinger.tracker.domain.calc.VerdictResolver
-import com.brokenfinger.tracker.protocol.message.SubmitMessage
-import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 
 /**
  * Accumulates the frames broadcast on one channel and settles them into a
  * [GradingSession]. One instance observes one grading; it is not thread-safe and is not
  * reused across gradings.
+ *
+ * It is fed [GradingFrameFacts], never messages: what a frame *is* on the wire stops at
+ * `protocol/parse` ([[decisions/2026-08-05-protocol-dependency-direction]] decision 2), so a
+ * renamed Programmers message cannot reach the verdict path through here.
  *
  * It assembles and delegates, nothing more (dev rules §3): which frame ends the stream is
  * [TerminationRule]'s answer and what the failure means is [VerdictResolver]'s, both pure.
@@ -27,7 +30,7 @@ import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
  * Programmers has already broadcast can never be fetched again (protocol doc §11).
  */
 class GradingSessionAssembler private constructor(private val kind: ProblemKind, private val boundErrorText: String?) {
-    private val frames = mutableListOf<SubmitMessage>()
+    private val frames = mutableListOf<GradingFrameFacts>()
     private val announcedIds = linkedSetOf<Long>()
 
     // A run announces a count rather than ids, so completeness is checked against whichever
@@ -39,14 +42,14 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
     private var errorText: String? = null
 
     /** Records one frame. Frames arriving after termination are absorbed, not rejected. */
-    fun accept(message: SubmitMessage) {
-        frames += message
-        action = action ?: GradingMessageMapper.actionOf(message)
-        errorText = errorText ?: GradingMessageMapper.errorTextOf(message)
-        announcedIds += GradingMessageMapper.announcedTestcaseIds(message)
-        announcedCount = announcedCount ?: GradingMessageMapper.announcedTestcaseCount(message)
-        GradingMessageMapper.testcaseOf(message)?.let { testcases[it.id] = it }
-        markTerminal(message)
+    fun accept(facts: GradingFrameFacts) {
+        frames += facts
+        action = action ?: facts.action
+        errorText = errorText ?: facts.errorText
+        announcedIds += facts.announcedTestcaseIds
+        announcedCount = announcedCount ?: facts.announcedTestcaseCount
+        facts.testcase?.let { testcases[it.id] = it }
+        markTerminal(facts)
     }
 
     fun hasTerminated(): Boolean = terminal != null
@@ -63,9 +66,9 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
      * `finish` belongs to this grading, not a new one (design §4.2). Keeping the first
      * terminal is what makes that absorption rather than a second session.
      */
-    private fun markTerminal(message: SubmitMessage) {
+    private fun markTerminal(facts: GradingFrameFacts) {
         if (terminal != null) return
-        val received = GradingMessageMapper.terminalKindOf(message) ?: return
+        val received = facts.terminalKind ?: return
         val observed = action ?: return
         if (!TerminationRule.isTerminal(received, observed, kind)) return
         terminal = received

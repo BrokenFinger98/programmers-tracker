@@ -3,8 +3,7 @@ package com.brokenfinger.tracker.support.fixtures
 import com.brokenfinger.tracker.application.GradingSession
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.SettledCapture
-import com.brokenfinger.tracker.protocol.message.SubmitMessage
-import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
+import com.brokenfinger.tracker.domain.GradingFrameFacts
 
 // Object mothers (dev rules §6.4). The default capture is the measured passing algorithm
 // submit of fixtures/algorithm-pass.jsonl, already settled and ready to be recorded.
@@ -34,5 +33,5 @@ fun aRawSessionId(name: String = "20260804T142301000Z-120804.jsonl") = RawSessio
 fun aTerminalFrame(fixture: String): String = FixtureLoader.rawFrames(fixture).last()
 
 /** A measured stream with every terminal frame removed — the shape a timeout leaves (design §4.2). */
-fun aTruncatedStream(fixture: String = "algorithm-pass.jsonl"): List<SubmitMessage> =
-    FixtureLoader.messages(fixture).filter { GradingMessageMapper.terminalKindOf(it) == null }
+fun aTruncatedStream(fixture: String = "algorithm-pass.jsonl"): List<GradingFrameFacts> =
+    FixtureLoader.facts(fixture).filter { it.terminalKind == null }

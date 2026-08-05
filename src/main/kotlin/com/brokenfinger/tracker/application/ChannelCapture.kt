@@ -2,9 +2,7 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
-import com.brokenfinger.tracker.protocol.CableEvent
-import com.brokenfinger.tracker.protocol.message.SubmitMessage
-import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
+import com.brokenfinger.tracker.domain.GradingFrameFacts
 import org.slf4j.LoggerFactory
 
 /**
@@ -19,6 +17,10 @@ import org.slf4j.LoggerFactory
  *
  * Everything after that append is allowed to fail: a write that throws costs one record and
  * never the subscription, since the frames are still on disk and more gradings will follow.
+ *
+ * What arrives here is an [ObservedFrame] — the wire text to append, plus the facts
+ * `protocol/parse` read out of it. No message type reaches this far
+ * ([[decisions/2026-08-05-protocol-dependency-direction]] decision 2).
  *
  * Not thread-safe. One instance belongs to one channel's collector, which delivers frames in
  * arrival order.
@@ -35,22 +37,21 @@ class ChannelCapture(
     /** The preceding run's error text, waiting for the submit it may promote (design §3.3). */
     private var boundErrorText: String? = null
 
-    suspend fun onEvent(event: CableEvent) {
-        val grading = gradingFor(event) ?: return outsideGrading(event)
-        rawLog.append(grading.rawSessionId, event.rawText)
-        assemble(grading, event)
+    suspend fun onFrame(frame: ObservedFrame) {
+        val grading = gradingFor(frame) ?: return outsideGrading()
+        rawLog.append(grading.rawSessionId, frame.rawText)
+        assemble(grading, frame)
     }
 
-    private suspend fun gradingFor(event: CableEvent): LiveGrading? {
-        val start = startOf(event) ?: return live
+    private suspend fun gradingFor(frame: ObservedFrame): LiveGrading? {
+        val start = startOf(frame) ?: return live
         abandonInFlight()
         return opened(start)
     }
 
-    private fun startOf(event: CableEvent): SubmitMessage.Start? =
-        (event as? CableEvent.MessageReceived)?.message as? SubmitMessage.Start
+    private fun startOf(frame: ObservedFrame): GradingFrameFacts? = frame.facts?.takeIf { it.startsGrading }
 
-    private fun opened(start: SubmitMessage.Start): LiveGrading {
+    private fun opened(start: GradingFrameFacts): LiveGrading {
         val grading = LiveGrading(
             rawLog.start(channel.lessonId.value),
             GradingSessionAssembler.of(channel, bindingFor(start)),
@@ -65,17 +66,17 @@ class ChannelCapture(
      * The binding is per channel and lasts exactly one grading (design §3.3): only a submit
      * can be promoted by one, and a run that follows a run supersedes rather than inherits it.
      */
-    private fun bindingFor(start: SubmitMessage.Start): String? {
-        val bound = boundErrorText.takeIf { GradingMessageMapper.actionOf(start) == GradingAction.SUBMIT }
+    private fun bindingFor(start: GradingFrameFacts): String? {
+        val bound = boundErrorText.takeIf { start.isSubmit() }
         boundErrorText = null
         return bound
     }
 
-    private suspend fun assemble(grading: LiveGrading, event: CableEvent) {
-        val message = (event as? CableEvent.MessageReceived)?.message ?: return
-        grading.assembler.accept(message)
+    private suspend fun assemble(grading: LiveGrading, frame: ObservedFrame) {
+        val facts = frame.facts ?: return
+        grading.assembler.accept(facts)
         if (!grading.assembler.hasTerminated()) return
-        settle(grading, event.rawText)
+        settle(grading, frame.rawText)
     }
 
     private suspend fun settle(grading: LiveGrading, terminalFrame: String?) {
@@ -140,8 +141,8 @@ class ChannelCapture(
     // Welcome, confirmation, and anything trailing a terminal frame. The raw log's unit is one
     // grading, so there is nowhere to append these and no verdict rides on them. The frame text
     // itself is never logged — a broadcast carries a learner's solving history (dev rules §7).
-    private fun outsideGrading(event: CableEvent) {
-        logger.debug("Dropped a {} frame belonging to no grading on lesson {}", event::class.simpleName, lessonId())
+    private fun outsideGrading() {
+        logger.debug("Dropped a frame belonging to no grading on lesson {}", lessonId())
     }
 
     // The registry is bookkeeping and a grading is not: a channel it has already forgotten

@@ -56,9 +56,10 @@ and the rule states both, because a rule stricter than its reason invites drift:
   `protocol` builds its wire form (`ChannelIdentifier`) from them, which is the correct
   inward direction. A change to the identifier's JSON touches `asJson()` and nothing else.
 - **Protocol message types never leave `protocol`** — `SubmitMessage`, `CableEvent`,
-  `ActionCableFrame` and the mappers stay there, and `protocol/parse` hands `application`
-  domain-level events instead. This is the half the rule exists for: a renamed message or
-  field must not reach the verdict path.
+  `ActionCableFrame` and the mappers stay there, and `protocol/parse` hands `application` a
+  `GradingFrameFacts` record per frame instead — facts, not one event per message type, see
+  [[decisions/2026-08-05-grading-facts-not-events]]. This is the half the rule exists for: a
+  renamed message or field must not reach the verdict path.
 
 This layout is **hexagonal (ports & adapters) with orthodox-hybrid port rules** — see
 [[decisions/2026-08-05-hexagonal-architecture]]:
