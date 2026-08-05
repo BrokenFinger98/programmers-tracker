@@ -127,6 +127,31 @@ The guard is structural rather than a habit: a Gradle verification task, run as
 was negative-tested by reintroducing the defect. Counting assertions or trusting a green
 build cannot detect an absence; only comparing *what should have run* against *what did* can.
 
+## The classpath your tests run on is not the one your users get
+
+Issue #23 found the sharpest version of this yet, and only by starting the server.
+
+`POST /watch` returned **500 to everything** — including the paths whose whole purpose was
+to return 401 and 400. The cause was `kotlin-reflect`: Spring reads Kotlin method parameters
+through it, and it was on `testRuntimeClasspath` (pulled in transitively by
+`spring-boot-starter-test`) but **not** on `runtimeClasspath`. Thirteen `@WebMvcTest` slice
+tests exercised the error contract and passed, while every `@ExceptionHandler` in the running
+application died with `ClassNotFoundException`.
+
+No amount of additional testing *in that environment* could have found it. The tests were not
+wrong and the code was not wrong; **the environment the tests ran in was not the environment
+the code would run in**, and that difference was invisible from inside either one.
+
+This is the concrete reason behind the constitution's rule that features whose essence is
+external interaction are done only once they have actually been connected. It reads like
+caution about protocols. It is really about classpaths, configuration, wiring, and everything
+else a test harness quietly supplies on your behalf.
+
+Two more defects surfaced in the same session for the same reason — a timer nobody started,
+so every record carried a measured-looking `elapsedSec 0`, and a completeness flag that was
+structurally false for the most common action. Both were invisible to a green suite of 422
+tests. **Running it once found three defects that 422 tests could not.**
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
