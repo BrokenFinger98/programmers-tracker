@@ -28,6 +28,7 @@ fun aTestGroupMessage(
 fun aTestcaseMessage(
     action: String? = "submit",
     testcaseId: Long? = 154893L,
+    index: Int? = null,
     testcasesCount: Int? = 16,
     passed: Boolean? = true,
     msg: String? = "통과 (0.01ms, 85.2MB)",
@@ -36,7 +37,7 @@ fun aTestcaseMessage(
     challengeableType: String? = null,
     challengeableId: Long? = null,
 ) = SubmitMessage.Testcase(
-    action, testcaseId, testcasesCount, passed, msg, runTime, memorySize, challengeableType, challengeableId,
+    action, testcaseId, index, testcasesCount, passed, msg, runTime, memorySize, challengeableType, challengeableId,
 )
 
 fun aResultMessage(

@@ -186,3 +186,45 @@ while a real credential or an unscrubbed fixture is caught. Similarly the Englis
 check is deliberately narrow: Korean string literals are legitimate measured protocol data
 (`실패 (시간 초과)`), so a blanket Hangul grep would fire on fixtures, the protocol doc and
 the design doc.
+
+## [2026-08-05] Capture — session assembly and verdict classification ⏳
+
+Issue #16, branch `feat/16-capture-session-assembly`. Built with Orca orchestration
+(3 supervised workers; A and B in parallel, C after A).
+
+- `domain/` — Verdict(5) · Outcome(JUDGED/INCOMPLETE/UNKNOWN) · GradingAction ·
+  ProblemKind · TerminalKind · TestcaseResult. Imports nothing
+- `domain/calc/` — `TerminationRule` (the measured action×kind matrix, error terminal in
+  every cell) and `VerdictResolver` (pure; returns null rather than coercing an
+  unmeasured failure message)
+- `application/` + `adapter/store/` — `RawSessionLog` port and file implementation:
+  frames appended verbatim, never re-serialized; completion never overwrites; the raw
+  directory doubles as the crash-recovery work list. Filenames are colon-free so Windows
+  CI can create them; the Clock is injected
+- `protocol/parse/` — `GradingMessageMapper` as the only wire→domain crossing, plus
+  `HtmlText`; `application/GradingSessionAssembler` settles a stream into an outcome
+- 156 tests, gates check/test/build/guards all 0
+
+### Fixture gap closed with data we already had
+
+Worker C flagged honestly that the algorithm **run** success path had no fixture, so it
+was untested end to end. But we had captured exactly those frames live — twice (#6 on
+Boot 3.5, reproduced in #10 on Boot 4.1). Added
+`fixtures/algorithm-run-pass.jsonl` from that capture, which let three things move from
+assumed to measured:
+
+- the algorithm run cell terminates at `result`, so `SubmitMessage.Result` is now a
+  first-class message rather than an `Unknown` recognised by name
+- run testcases identify themselves by 0-based **`index`**, not `testcaseId` — previously
+  the mapper declined them, so a run produced zero testcases and would have settled UNKNOWN
+- out-of-order arrival is in the fixture itself (index 1 precedes index 0)
+
+### Open questions left deliberately unresolved
+
+- `VerdictResolver` lets the lowest-id failing testcase decide. Mixed failure kinds in one
+  grading (case 1 wrong, case 2 timeout) have no measured precedence rule, so none was
+  invented
+- The memory-limit message is still unmeasured (protocol §14); the UNKNOWN test amends a
+  measured timeout stream in that one field
+- `INCOMPLETE` always carries a null verdict even when `result_lesson_challenge` already
+  arrived — conservative, and re-derivable because the frames are preserved

@@ -37,6 +37,8 @@ sealed interface SubmitMessage {
     data class Testcase(
         val action: String?,
         val testcaseId: Long?,
+        /** run frames identify a case by 0-based `index` instead of `testcaseId` (§7). */
+        val index: Int?,
         val testcasesCount: Int?,
         val passed: Boolean?,
         val msg: String?,
@@ -77,6 +79,21 @@ sealed interface SubmitMessage {
         val challengeableId: Long?,
     ) : SubmitMessage
 
+    /**
+     * Terminal frame of an algorithm `run` (protocol doc §8 catalog; frame-level capture in
+     * `fixtures/algorithm-run-pass.jsonl` from our own live verification, issues #6 and #10).
+     * Counts are per example testcase, not per grading testcase.
+     */
+    data class Result(
+        val action: String?,
+        val passed: Boolean?,
+        val passedCount: Int?,
+        val totalCount: Int?,
+        val hideResult: Boolean?,
+        val challengeableType: String?,
+        val challengeableId: Long?,
+    ) : SubmitMessage
+
     /** run-path error with HTML-escaped compiler output or stack trace (protocol doc §7). */
     data class Error(val action: String?, val index: Int?, val msg: String?) : SubmitMessage
 
@@ -90,6 +107,7 @@ sealed interface SubmitMessage {
             "test_group" -> parseTestGroup(message)
             "testcase" -> parseTestcase(message)
             "result_lesson_challenge" -> parseResult(message)
+            "result" -> parseRunResult(message)
             "finish" -> parseFinish(message)
             "error" -> parseError(message)
             else -> unknown(type, message)
@@ -115,6 +133,7 @@ sealed interface SubmitMessage {
         private fun parseTestcase(message: JsonObject) = Testcase(
             action = message.stringField("action"),
             testcaseId = message.longField("testcaseId", "testcase_id"),
+            index = message.intField("index"),
             testcasesCount = message.intField("testcasesCount"),
             passed = message.booleanField("passed"),
             msg = message.stringField("msg"),
@@ -139,6 +158,16 @@ sealed interface SubmitMessage {
             finishModalLink = message.stringField("finishModalLink"),
             finishModalBtnText = message.stringField("finishModalBtnText"),
             surveyUrl = message.stringField("surveyUrl"),
+        )
+
+        private fun parseRunResult(message: JsonObject) = Result(
+            action = message.stringField("action"),
+            passed = message.booleanField("passed"),
+            passedCount = message.intField("passedCount"),
+            totalCount = message.intField("totalCount"),
+            hideResult = message.booleanField("hideResult"),
+            challengeableType = message.stringField("challengeable_type"),
+            challengeableId = message.longField("challengeable_id"),
         )
 
         private fun parseFinish(message: JsonObject) = Finish(
