@@ -49,7 +49,7 @@ marked *designed* exists in `src/`.
 | The failing code stored alongside the record | designed · §4.4 |
 | A per-problem page, and diffs between attempts | designed · §5.1 · §5.5 |
 | Problem titles and tags from a catalog | designed · §5.3 |
-| MCP server — Claude · Cursor · a local LLM reading the records | designed · §7 |
+| MCP server — Claude · Cursor · a local LLM reading the records | **built** — three read tools ([`mcp.md`](docs/mcp.md)) |
 | Weakness by tag · review queue · passed-but-slow · per-company profiles | designed · §6 |
 
 Two consequences of that table are worth stating outright, because they change what the first
@@ -97,9 +97,7 @@ Programmers web          ← browse · search · write · run · submit stays ri
                               └─ MCP exposure ──▶ Claude · Cursor · local LLM
 ```
 
-That is the full design. The table above says which of those boxes exist today — the
-subscription, the verdict resolution and the recording do; the sensor, the diffs and the MCP
-exposure do not.
+That is the full design. The table above says which of those boxes exist today.
 
 **The server sends nothing to Programmers.** It subscribes to the same channel and only listens.
 Submission is done by the user, directly in the browser.
