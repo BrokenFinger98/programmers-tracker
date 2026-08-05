@@ -320,9 +320,17 @@ Stated plainly, because finding these out by trial is worse.
   fails on host verification inside the container. Without either, commits still happen
   locally and only the push is lost.
 - **Do not run the container and a native instance against the same record repository.**
-  The design calls for an exclusive lock at startup and **that lock is not implemented**
-  (tracked as #44) — nothing stops a second process, and two writers on one repository will
-  corrupt attempt numbering and fight over the git index. Run exactly one.
+  There is now an exclusive lock at startup (#44) and a second instance refuses to start —
+  but **measured on 2026-08-06, Docker Desktop for macOS does not enforce file locks on a
+  bind mount**, which is exactly how `compose.yaml` gives the container your records. The
+  lock protects two native runs; between the container and anything else on macOS it silently
+  protects nothing. Two writers on one repository corrupt attempt numbering and fight over
+  the git index, so run exactly one. Details and what is still unverified (Linux hosts,
+  Windows, network filesystems):
+  [`decisions/2026-08-06-record-repository-lock`](llm-wiki/wiki/decisions/2026-08-06-record-repository-lock.md).
+- **The lock covers the record repository, not `.ps/`.** Raw frames, per-problem timers, the
+  backup marker and the generated `/watch` token are shared by a container and a native run
+  just as your records are, and nothing serializes them either.
 - **The daily backup defaults to `Asia/Seoul`.** Set `TRACKER_BACKUP_ZONE` to yours.
 
 ---

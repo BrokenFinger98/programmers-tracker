@@ -40,8 +40,12 @@ jobs:
       - name: ktlint
         run: ./gradlew ktlintCheck --no-daemon
 
+      # Wrapped rather than run directly: no test may write to a home-directory default,
+      # and the wrapper is what makes that a failure instead of a surprise in someone's
+      # home directory. `shell: bash` because the Windows runner defaults to pwsh.
       - name: test (unit + layer only — integration never runs in CI)
-        run: ./gradlew test verifyEveryTestClassRan --no-daemon
+        shell: bash
+        run: ./scripts/no-home-writes.sh ./gradlew test verifyEveryTestClassRan --no-daemon
 
       - name: build
         run: ./gradlew build -x test --no-daemon
@@ -106,12 +110,19 @@ jobs:
       - name: Build the image
         run: docker build -t programmers-tracker:ci .
 
-      # A record repository and a state directory, the way a user would mount them.
+      # A record repository and a state directory per container, the way a user would mount
+      # them. One directory each and not one shared: these two steps are about network
+      # posture, and since #44 a shared records mount would make the second container refuse
+      # to start — correctly, but for a reason that has nothing to do with what they test.
+      # The lock gets its own step below.
       - name: Prepare the mounts
         run: |
           set -e
-          mkdir -p "$RUNNER_TEMP/records" "$RUNNER_TEMP/state"
-          git -C "$RUNNER_TEMP/records" init -q
+          for name in default exposed shared; do
+            mkdir -p "$RUNNER_TEMP/records-$name" "$RUNNER_TEMP/state-$name"
+            git -C "$RUNNER_TEMP/records-$name" init -q
+          done
+          mkdir -p "$RUNNER_TEMP/state-second"
 
       # The image ships the application default, which is a loopback bind. Inside a
       # container namespace that makes the published port unreachable — the property this
@@ -122,7 +133,7 @@ jobs:
           set -e
           docker run -d --name tracker-default -p 127.0.0.1:18080:8080 \
             --user "$(id -u):$(id -g)" \
-            -v "$RUNNER_TEMP/records":/records -v "$RUNNER_TEMP/state":/app/.ps \
+            -v "$RUNNER_TEMP/records-default":/records -v "$RUNNER_TEMP/state-default":/app/.ps \
             programmers-tracker:ci
           for _ in $(seq 1 60); do
             docker logs tracker-default 2>&1 | grep -q "Started TrackerApplication" && break
@@ -144,7 +155,7 @@ jobs:
           set -e
           docker run -d --name tracker-exposed -e TRACKER_BIND_ADDRESS=0.0.0.0 \
             -p 127.0.0.1:18081:8080 --user "$(id -u):$(id -g)" \
-            -v "$RUNNER_TEMP/records":/records -v "$RUNNER_TEMP/state":/app/.ps \
+            -v "$RUNNER_TEMP/records-exposed":/records -v "$RUNNER_TEMP/state-exposed":/app/.ps \
             programmers-tracker:ci
           for _ in $(seq 1 60); do
             curl -sS -m 5 -o /dev/null http://127.0.0.1:18081/ && break
@@ -155,6 +166,39 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/watch \
             -H 'Content-Type: application/json' -d '{}')" = "401" \
             || { echo "/watch answered an untokened call with something other than 401"; exit 1; }
+
+      # The record-repository lock across a real bind mount on a native Linux host — the
+      # case 2026-08-06-record-repository-lock could only label expected-but-unverified,
+      # because Docker Desktop's virtualised mount silently honours no lock at all and that
+      # is the only host the ADR could measure. This runner is the missing measurement, and
+      # keeping it here means a regression is caught rather than rediscovered.
+      - name: A second container on the same records mount is refused
+        run: |
+          set -e
+          docker run -d --name tracker-holder --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/records-shared":/records -v "$RUNNER_TEMP/state-shared":/app/.ps \
+            programmers-tracker:ci
+          for _ in $(seq 1 60); do
+            docker logs tracker-holder 2>&1 | grep -q "Started TrackerApplication" && break
+            sleep 2
+          done
+          docker logs tracker-holder 2>&1 | grep -q "Started TrackerApplication" \
+            || { echo "the holder never started"; docker logs tracker-holder; exit 1; }
+
+          # Foreground on purpose: docker run propagates the exit code, and Spring Boot
+          # exits non-zero when the context fails to refresh.
+          if docker run --name tracker-second --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/records-shared":/records -v "$RUNNER_TEMP/state-second":/app/.ps \
+            programmers-tracker:ci >second.log 2>&1; then
+            echo "REGRESSION: a second instance started while another held /records."
+            echo "Either the lock stopped working or this filesystem does not enforce it."
+            exit 1
+          fi
+          grep -q "APPLICATION FAILED TO START" second.log \
+            || { echo "it failed, but not as a diagnosed refusal:"; tail -40 second.log; exit 1; }
+          grep -q "already held by another programmers-tracker instance" second.log \
+            || { echo "it failed for some other reason:"; tail -40 second.log; exit 1; }
+          echo "refused, as it must be"
 
       - name: The HEALTHCHECK reports healthy
         run: |
@@ -173,9 +217,9 @@ jobs:
       # note at the top of this file.
       - name: compose.yaml resolves
         env:
-          TRACKER_RECORD_REPO: ${{ runner.temp }}/records
-          TRACKER_STATE_DIR: ${{ runner.temp }}/state
-          TRACKER_SESSION_FILE: ${{ runner.temp }}/state/session
+          TRACKER_RECORD_REPO: ${{ runner.temp }}/records-default
+          TRACKER_STATE_DIR: ${{ runner.temp }}/state-default
+          TRACKER_SESSION_FILE: ${{ runner.temp }}/state-default/session
           GIT_AUTHOR_NAME: ci
           GIT_AUTHOR_EMAIL: ci@example.invalid
         run: |
@@ -190,8 +234,10 @@ jobs:
       - name: Container logs
         if: always()
         run: |
-          docker logs tracker-default 2>&1 | tail -40
-          docker logs tracker-exposed 2>&1 | tail -40
+          for name in tracker-default tracker-exposed tracker-holder tracker-second; do
+            echo "--- $name"
+            docker logs "$name" 2>&1 | tail -40 || echo "(never started)"
+          done
 
   # Rules CLAUDE.md states that the compiler cannot enforce. The same script runs
   # locally, so CI and a developer's machine can never disagree.

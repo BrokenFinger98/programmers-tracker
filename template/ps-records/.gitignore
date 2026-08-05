@@ -5,5 +5,9 @@
 # Cache (regenerable, large)
 .ps/catalog.json
 
+# The tracker's exclusive lock on this repository. It normally lives inside .git/, where git
+# cannot see it; this covers the one case where it cannot — a run from before `git init`.
+.programmers-tracker.lock
+
 # OS
 .DS_Store
