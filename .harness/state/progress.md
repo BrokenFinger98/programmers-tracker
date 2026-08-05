@@ -651,3 +651,27 @@ saved code and writes `Solution.<ext>`, `attempts/NNN.<ext>`, the diff and the R
   needs a cookie and a browser. "Implemented" is not "measured"
 - Attaching a `run` may fetch code from a later edit — the autosave race the pipeline ADR
   already accepts as honest rather than fixable
+
+## [2026-08-06] Stage 3 wired — but held for the owner ⏳
+
+Issue #36, branch `feat/36-attach-code-artifacts`, PR opened and **deliberately not merged**.
+513 tests, all gates 0, calculator coverage 100%.
+
+A settled grading now produces `Solution.<ext>`, `attempts/NNN.<ext>`, the diff and the
+README. Fetch failures are tested three ways and none of them touches the record: the verdict
+is unrecoverable while the code is re-fetchable, which is the whole reason this is stage 3.
+Serialization proven with 16 concurrent write-then-attach chains showing peak concurrency 1
+inside the derived-write section, plus a test that the fetch itself is not on that thread.
+
+**Why it is not merged**: clearing `codePending` required deciding how a durable record is
+corrected, and the chosen answer — append a corrected record, newest-per-`captureKey` wins —
+changes what `log/submissions.jsonl` means. Design §5.1 calls it "every submission, one line
+each", and every consumer that reads the JSONL directly must now resolve newest-per-key or
+silently double-count. That is a change to the data contract, not an implementation detail,
+so it is written up as a **proposed** ADR
+([[decisions/2026-08-06-record-corrections-by-append]]) and left for the owner.
+
+Also worth noting: the worker reported 549 tests where the tree has 513. Nothing is missing —
+`verifyEveryTestClassRan` passes and all 53 classes produced results; the worker miscounted
+the pre-existing tests in a class it edited. The guard is what made that answerable in
+seconds instead of being taken on trust.
