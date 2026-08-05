@@ -427,6 +427,11 @@ Everything needed for local scaffolding is available here.
 | 11 | 120805 | Algorithm | submit | Infinite loop → all 16 cases `"실패 (시간 초과)"`, score 0, **took 87 s** |
 | 12 | 120820 | Algorithm | `run` | **Full compiler output retrieved** (`/Solution.java:3: error: ';' expected`) |
 | 13 | 120810 | Algorithm | `run` | **Full stack trace retrieved** (`ArrayIndexOutOfBoundsException`) |
+| 14 | **120804** | Algorithm | `run` | **Success path captured frame by frame from our own Kotlin client** — `start` → `testcase` ×2 → **`result`** (`passedCount` 2 / `totalCount` 2). Terminal is `result`, **not** `finish`; cases identify themselves by 0-based **`index`**, not `testcaseId`; **index 1 arrived before index 0**. Captured 2026-08-04 (issue #6), reproduced byte-alike 2026-08-05 after the Spring Boot 4 upgrade (#10) |
 
 Server-side effect confirmed by the solved count rising 90 → 92. Rating 1371 → 1372.
 Entries 9~11 were intentional failing submissions, so those problems remain unsolved.
+
+Entry 14 upgrades the algorithm-`run` terminal and the run testcase shape from
+bundle-derived (§8) to measured. The frames are kept verbatim as
+`src/test/resources/fixtures/algorithm-run-pass.jsonl`.

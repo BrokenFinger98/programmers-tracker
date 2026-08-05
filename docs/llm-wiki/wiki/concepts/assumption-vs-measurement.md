@@ -42,6 +42,27 @@ claim. A design sentence that cites protocol behaviour should carry its section 
 that a claim with no citation is visibly suspicious rather than indistinguishable from a
 measured one.
 
+## The mirror image: evidence that never became a fixture
+
+The four claims above were assumptions wearing the clothes of measurements. Issue #16
+produced the opposite failure, and it is just as expensive.
+
+Building the session assembler, a worker reported honestly that the algorithm **run**
+success path had no fixture and was therefore untested end to end. That was true of the
+fixtures — and false of the project: those exact frames had been captured live twice, in
+the #6 verification and again after the Boot 4 upgrade in #10. The evidence existed in a
+terminal log and a PR description, where no test could reach it.
+
+The cost was not hypothetical. Without that capture, nothing showed that run testcases
+identify themselves by 0-based `index` rather than `testcaseId`, so the mapper declined
+them, a run grading collected **zero** testcases, and the session would have settled as
+`UNKNOWN` — a silent wrong outcome on the most common user action there is.
+
+**A measurement that is not a fixture is a measurement you do not have.** Live
+verification output is evidence with a half-life: it proves something today and is
+unreachable next week. Transcribing it into `src/test/resources/fixtures/` is what turns
+an observation into something the build can defend.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -53,6 +74,9 @@ measured one.
   close observed on 2026-08-05 was deliberately **not** written into the protocol doc,
   because its cause (server idle timeout? NAT? sleep?) was never established — see
   [[concepts/actioncable-broadcast-observation]].
+- When a live run produces frames, transcribe them into a fixture in the same change —
+  not "later". The protocol document's verification log records *that* it happened; the
+  fixture is what keeps it testable.
 - Confirmation is not validation: a wrong `challengeable_id` still returns
   `confirm_subscription` and still runs testcases (protocol §3). Success signals can lie
   about the thing you actually wanted to know — see [[concepts/verdict-classification]].
