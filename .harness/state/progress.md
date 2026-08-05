@@ -228,3 +228,48 @@ assumed to measured:
   measured timeout stream in that one field
 - `INCOMPLETE` always carries a null verdict even when `result_lesson_challenge` already
   arrived — conservative, and re-derivable because the frames are preserved
+
+## [2026-08-05] Recorder — the record write path ⏳
+
+Issue #18, branch `feat/18-recorder-write-path`. Orchestrated (A and B parallel, C after
+both). 284 tests, gates check/test/build/guards all 0.
+
+Scope was cut along the line that matters: this PR carries only what cannot be
+regenerated. `README.md`, `Solution.<ext>`, `diffFromPrev` and the runner all derive from
+records, so they wait for a follow-up issue; a lost record derives from nothing
+(protocol §11).
+
+- `domain/SubmissionRecord` — the §5.2 schema with the five fields the review added.
+  SQL score/rating/timing are null, never zero
+- `domain/CaptureKey` — first 16 hex of SHA-256 over lessonId + action + the raw terminal
+  frame text. Deterministic across restarts, because Programmers issues no submission id
+- `AttemptAuthority` — restored from the JSONL only, never a directory scan. Takes the
+  **highest** number per problem rather than counting lines, since runs reuse the previous
+  submit's number and a torn line may already have cost one
+- `JsonlRecordStore` — lenient reads, and it **heals** a torn final line on the next
+  append so a crash costs one record instead of gluing two together
+- `RecordLayout` — one slug rule that removes Windows-reserved characters, control
+  characters and trailing dots in a single pass while keeping Korean titles readable;
+  identity is the lessonId alone, so a renamed problem never splits history
+- `RecordWriter` — confined single writer, attempt allocation, capture-key dedup that
+  survives a restart and consumes no number, best-effort raw completion that still writes
+  the record when the move fails
+
+**Verified rather than trusted**: I mutation-tested the serialization guarantee myself —
+replacing `limitedParallelism(1)` with plain `Dispatchers.IO` makes the concurrency tests
+fail by losing log lines, which is the failure they are meant to catch.
+
+### Orchestration limit found
+
+Workers A and B touched disjoint files but share one worktree, so B's in-flight code broke
+A's `./gradlew` run. A worked around it by running gates against `git archive HEAD` in a
+scratch directory. **Files not overlapping does not mean builds do not overlap** — tasks
+that compile concurrently need isolated worktrees or sequencing.
+
+### Known gaps (carried to follow-up issues)
+
+- `score`/`rating` are not extracted onto the record yet; that needs a mapper change in
+  `protocol/**`, which was out of this task's scope
+- Catalog, timer and diff fields sit at defaults
+- A run's raw file is never moved, so `.ps/raw` accumulates until startup reconciliation
+  exists. Dedup makes reprocessing safe in the meantime

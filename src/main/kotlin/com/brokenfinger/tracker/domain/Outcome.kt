@@ -1,10 +1,13 @@
 package com.brokenfinger.tracker.domain
 
+import kotlinx.serialization.Serializable
+
 /**
  * Whether a conclusion was observed at all — a dimension separate from [Verdict]
  * (design §3.3). Mixing the two would let a grading we failed to observe dilute the
  * statistics of the gradings we did.
  */
+@Serializable
 enum class Outcome {
     /** A terminal frame arrived and the message matched a known verdict. */
     JUDGED,
