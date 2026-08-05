@@ -172,6 +172,26 @@ whatever state the workspace happens to be in. For anything reading build output
 equivalent. "It passed on my machine" is a statement about a machine's history as much as
 about the code — and history is exactly what a stale artifact preserves.
 
+## Missing data must look missing
+
+Every record this project writes today has an **empty `title`**: no catalog is wired, so
+nothing knows the problem's name. Generating a README from those records forces a choice
+that recurs everywhere data is derived — what to render for a field that has no value.
+
+The tempting options are all quiet lies. A placeholder title (`Untitled`, `Problem 120804`)
+reads like a name and will be copied into notes, search results and, eventually, a
+statistic. An empty string renders as an empty heading, which looks like a rendering bug
+rather than absent data. Both let a reader believe the field was populated.
+
+The rule adopted: **omit the key entirely and fall back to an identifier that is obviously
+an identifier.** The frontmatter simply has no `title`, and the heading is the lesson id.
+A reader can tell at a glance that the name is unknown rather than blank, and a later
+catalog fill-in changes the file visibly.
+
+This is the same instinct as refusing to write `elapsedSec 0` for an unstarted timer, or a
+verdict for an unrecognised failure message: **a value that looks measured is worse than no
+value**, because only the second one prompts anyone to go and measure it.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a

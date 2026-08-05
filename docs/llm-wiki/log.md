@@ -35,3 +35,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-05] ingest | testing things that loop forever → 0 created, 1 updated (orchestrated-implementation)
 
 ## [2026-08-05] ingest | protocol crosses as facts, not grading events (#29) → 1 created (ADR), 2 updated (index, protocol-dependency-direction)
+
+## [2026-08-05] ingest | missing data must look missing → 0 created, 1 updated (assumption-vs-measurement)
