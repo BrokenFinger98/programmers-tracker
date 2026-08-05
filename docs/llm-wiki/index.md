@@ -26,6 +26,8 @@ Every new page must be registered here (no orphans). Append entries start with t
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits
 - 2026-08-04 [[concepts/verdict-classification]] — Verdict classification and the silent-failure trap
+- 2026-08-05 [[concepts/bom-version-shadowing]] — The dependency you declared is not the one that runs
+- 2026-08-05 [[concepts/assumption-vs-measurement]] — How our own claims became "facts", and the four that were caught
 
 ## Entities
 - 2026-08-04 [[entities/programmers-actioncable]] — What the Programmers judge actually is
@@ -39,3 +41,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[sources/2026-08-04-protocol-reverse-engineering-and-design]]
 - 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
 - 2026-08-04 [[sources/2026-08-04-oss-workflow]]
+- 2026-08-05 [[sources/2026-08-05-design-review-and-stack-upgrade]]
