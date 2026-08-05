@@ -152,6 +152,26 @@ so every record carried a measured-looking `elapsedSec 0`, and a completeness fl
 structurally false for the most common action. Both were invisible to a green suite of 422
 tests. **Running it once found three defects that 422 tests could not.**
 
+## Verifying a guard against a dirty workspace
+
+The task written to catch silently-skipped tests was itself verified wrongly, twice.
+
+The second time is the instructive one. `verifyEveryTestClassRan` compares the test classes
+in the source tree against the result files on disk. It passed locally and failed in CI on
+all three operating systems, reporting **every** class as never having run — because it had
+no dependency on `test` and read an empty results directory. Locally it had read result files
+left behind by an earlier run.
+
+So the check "passed" by measuring **stale state**, which is the same failure it was written
+to detect. A verification that can succeed without the thing it verifies having happened is
+not a verification.
+
+The general form: **a guard must be tested from the state it is meant to protect**, not from
+whatever state the workspace happens to be in. For anything reading build output that means
+`clean` and `--no-build-cache`; for anything reading a checkout it means a fresh clone or an
+equivalent. "It passed on my machine" is a statement about a machine's history as much as
+about the code — and history is exactly what a stale artifact preserves.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a

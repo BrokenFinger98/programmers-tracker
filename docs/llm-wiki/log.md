@@ -27,3 +27,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-05] ingest | silently skipped tests → 0 created, 1 updated (assumption-vs-measurement)
 
 ## [2026-08-05] ingest | test classpath vs runtime classpath → 0 created, 1 updated (assumption-vs-measurement)
+
+## [2026-08-05] ingest | verifying a guard against a dirty workspace → 0 created, 1 updated (assumption-vs-measurement)
