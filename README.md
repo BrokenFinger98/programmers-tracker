@@ -150,4 +150,5 @@ record decisions). AI-assisted contributions are explicitly welcome.
 
 ## License
 
-MIT
+[MIT](LICENSE). The license carries the standard warranty and liability disclaimer;
+the private-protocol caveat is the paragraph under *Principles toward Programmers* above.
