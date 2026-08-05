@@ -138,5 +138,6 @@ Implemented in `fix/44-record-repo-lock` (#44):
 The gap the measurement found is not closed by this issue and is not pretended to be. If it
 is to be closed, it needs a mechanism that survives a filesystem with no locks — a heartbeat
 marker aged out by mtime is the obvious candidate, and it is a different decision from this
-one. Related: [[decisions/2026-08-06-container-network-posture]] ·
+one. Tracked as **#52**, which carries the measurement table and what a weaker mechanism
+would have to own. Related: [[decisions/2026-08-06-container-network-posture]] ·
 [[decisions/2026-08-05-git-retry-scope]] · [[concepts/assumption-vs-measurement]].
