@@ -297,6 +297,7 @@ changed only after pressing `run`. **The CodeMirror fallback in design §4.4 is 
 needed** — that removes MAIN-world injection, the most invasive part of the planned sensor
 extension.
 
-Caveat kept in both docs: one trial cannot exclude a debounced autosave firing in the same
-window. It matters practically, because under a debounce an edit-then-immediately-run
-sequence could still fetch stale code.
+A confirming trial then eliminated the debounce hypothesis instead of leaving it open: after
+a second edit the saved code stayed unchanged for three idle minutes, and any debounce short
+enough to explain the first trial would have fired in that window. Remaining unmeasured:
+SQL and other languages.

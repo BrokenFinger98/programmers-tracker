@@ -396,9 +396,10 @@ missing `<input data-type="code">` marks the fetch failed rather than storing an
 > pressed. The CodeMirror fallback (MAIN-world injection) is therefore **not needed**, which
 > removes the most invasive part of the sensor extension.
 >
-> One caveat survives: a single trial cannot exclude a time-based autosave that fired in the
-> same window. If an edit-then-immediately-`run` sequence is ever seen attaching stale code,
-> that is the hypothesis to test first.
+> A confirming trial eliminated the time-based-autosave hypothesis: after a second edit the
+> saved code stayed unchanged for three idle minutes, and a debounce short enough to explain
+> the first trial would have fired in that window. What remains unmeasured is SQL and other
+> languages.
 
 ### 4.5 Recorder
 

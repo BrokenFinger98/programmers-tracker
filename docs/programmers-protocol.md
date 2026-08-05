@@ -450,8 +450,17 @@ Method: `GET /learn/courses/30/lessons/120804?language=java` while authenticated
 `<input data-type="code">` and hashing it (`./gradlew liveCodeFetch`). Lesson 120804,
 algorithm, Java.
 
-**Not excluded by this trial**: a time-based autosave that happened to fire in the same
-window. The middle row makes an edit-triggered save unlikely, but a debounce long enough to
-span the gap would produce the same three rows. A second trial that edits and then waits
-without running would settle it. This matters practically — under a debounce, an
-edit-then-immediately-run sequence could still fetch stale code.
+**Confirming trial (same session): no time-based autosave.** The code was edited again and
+then left alone, with `run` never pressed:
+
+| Step | Saved-code SHA-256 |
+|---|---|
+| Immediately after the second edit | `22c9725…` — the value `run` had saved |
+| **After 3 minutes with no `run`** | `22c9725…` — still unchanged |
+
+This eliminates the debounce hypothesis rather than merely making it unlikely: a debounce
+short enough to explain the first trial's save would also have fired during these three
+idle minutes, and none did. `run` is therefore the cause.
+
+Still unmeasured: SQL problems, and other languages. The mechanism is very unlikely to
+differ, but it has not been observed.
