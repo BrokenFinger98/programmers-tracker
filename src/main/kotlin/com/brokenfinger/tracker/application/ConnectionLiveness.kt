@@ -60,6 +60,12 @@ class ConnectionLiveness(private val clock: Clock, private val deadline: Duratio
     }
 
     companion object {
+        /** The schedule as a plain function, for callers that hold no instance. */
+        fun retryDelayFor(attempt: Int): Duration {
+            require(attempt >= 1) { "reconnect attempts are numbered from 1: $attempt" }
+            return BACKOFF_SCHEDULE.getOrElse(attempt - 1) { BACKOFF_CAP }
+        }
+
         /** Measured: the server heartbeat arrives every 3 seconds (protocol §4). */
         val PING_INTERVAL: Duration = Duration.ofSeconds(3)
 

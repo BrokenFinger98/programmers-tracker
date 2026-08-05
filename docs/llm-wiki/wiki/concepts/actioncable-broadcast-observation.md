@@ -71,6 +71,25 @@ Everything broadcast afterwards is lost forever (protocol §11) and nothing in t
 say a gap existed. This is why liveness detection from the 3-second `ping` and a loud gap log
 are load-bearing rather than precautionary.
 
+## The envelope carries what the payload does not
+
+Building crash recovery surfaced an asymmetry worth knowing before you design around it.
+Measured across all nine fixtures:
+
+- an algorithm **submit**'s inner messages carry **no** `challengeable_type` and **no**
+  `language` — language appears only on `result_lesson_challenge`
+- algorithm **run** and every SQL message do carry the type and id
+
+So for the one stream you most need to reconstruct — an algorithm submit interrupted by a
+crash — the payload cannot tell you which problem family or language it belongs to. Only the
+ActionCable envelope's `identifier` string can, and it is present on every broadcast line.
+
+The practical consequence: **store the envelope, not just the message.** Anything that
+rebuilds a session from stored frames reads the identifier, which is also why
+`ChannelIdentifier.asJson()` now has a round-trip-tested inverse — ActionCable keys
+broadcasts by that exact string, so an inverse that does not reproduce it byte-for-byte
+would be worse than none. Details in `docs/programmers-protocol.md` §15.2.
+
 ## Result messages carry no code
 
 Broadcasts contain no source code. Instead, fetching the problem page while logged in

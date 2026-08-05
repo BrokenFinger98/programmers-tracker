@@ -126,6 +126,17 @@ class ChannelCapture(
         settle(abandoned, terminalFrame = null)
     }
 
+    /**
+     * The connection dropped. Anything in flight will never receive a terminal frame, so it
+     * settles INCOMPLETE with its frames kept rather than waiting for a result that is not
+     * coming — the broadcast is never re-sent (protocol doc §11).
+     */
+    suspend fun connectionLost() {
+        val abandoned = live ?: return
+        logger.warn("Observation of lesson {} dropped mid-grading; settling it incomplete", lessonId())
+        settle(abandoned, terminalFrame = null)
+    }
+
     // Welcome, confirmation, and anything trailing a terminal frame. The raw log's unit is one
     // grading, so there is nowhere to append these and no verdict rides on them. The frame text
     // itself is never logged — a broadcast carries a learner's solving history (dev rules §7).
