@@ -140,9 +140,12 @@ OSS support 2026-06-30 (ADR [[decisions/2026-08-05-backend-stack]]).
 - CLAUDE.md: stack table updated (JVM 25, Boot 4.x, layered async, catalog) and the
   stale "the user is a job-seeker" premise corrected
 - Gates: check/test/build = 0, 76 tests, 0 failures
-- Live re-verification: `confirm_subscription` received in 2.65 s on Boot 4.1 + JVM 25,
-  so the Ktor/coroutines linkage survived the migration. Broadcast-frame re-check still
-  pending a browser-triggered run
+- Live re-verification ✅ complete on Boot 4.1 + JVM 25: `confirm_subscription` in 0.40 s,
+  then the full browser-triggered run sequence (start → testcase ×2 → result 2/2). The
+  migration did not break the Ktor/coroutines/serialization path.
+  Incidental re-confirmation: testcases arrived **out of order** (index 1 before index 0),
+  which is exactly why the revised design requires a completeness check rather than a sort
+  alone (protocol §5, design §4.2)
 
 ### Observation worth acting on (2026-08-05)
 
