@@ -30,4 +30,5 @@ sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md]
 [[decisions/2026-08-05-backend-stack]] · [[decisions/2026-08-05-hexagonal-architecture]] ·
 [[decisions/2026-08-05-capture-pipeline-stages]] · [[decisions/2026-08-05-write-serialization]] ·
 [[decisions/2026-08-05-failure-taxonomy]] · [[concepts/bom-version-shadowing]] ·
-[[concepts/assumption-vs-measurement]] · [[concepts/actioncable-broadcast-observation]]
+[[concepts/assumption-vs-measurement]] · [[concepts/actioncable-broadcast-observation]] ·
+[[concepts/orchestrated-implementation]]

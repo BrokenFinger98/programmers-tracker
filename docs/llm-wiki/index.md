@@ -29,6 +29,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[concepts/verdict-classification]] — Verdict classification and the silent-failure trap
 - 2026-08-05 [[concepts/bom-version-shadowing]] — The dependency you declared is not the one that runs
 - 2026-08-05 [[concepts/assumption-vs-measurement]] — How our own claims became "facts", and the four that were caught
+- 2026-08-05 [[concepts/orchestrated-implementation]] — Building with supervised workers: three recurring failures and what supervision is for
 
 ## Entities
 - 2026-08-04 [[entities/programmers-actioncable]] — What the Programmers judge actually is
