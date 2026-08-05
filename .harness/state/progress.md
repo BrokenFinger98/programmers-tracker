@@ -568,3 +568,23 @@ messages here. A renamed Programmers message can no longer reach verdict resolut
 The ADR's honest note is worth keeping: `protocol/parse` imports `application` for the port,
 as `ProblemPageCodeFetcher` already does — consumer-declared ports are the shape here, but
 "`protocol` imports nothing upward" was never literally true.
+
+## [2026-08-05] CI hardened to stand in for a reviewer ⏳
+
+Issue #32, branch `chore/32-harden-ci`. Landed **before** unattended self-merging starts,
+because merging without a human reading the diff makes CI the only reviewer, and three of
+this project's failures so far were things a green build did not catch.
+
+- **`verifyCalculatorCoverage`** — branch coverage of `domain/calc` must hold 95%; it is at
+  100% today. Read from the Kover XML rather than a Kover rule, because Kover's verification
+  rules cannot be narrowed to one package and a project-wide number measures the wrong thing.
+  Negative-tested both ways: raising the threshold fails with the real number, and renaming
+  the package fails with "was it renamed, or did its tests stop running?"
+- **`repeatability` job** — runs the suite three times with `--no-build-cache --rerun-tasks`.
+  Two of the three past failures were non-deterministic and passed locally every time, and a
+  cached `test` task once made a broken guard look green. Each attempt prints its duration,
+  so a test that leaks work shows up as a slowing suite rather than as nothing at all
+- Simulated locally before pushing: three clean runs at 13 s / 8 s / 7 s
+
+The threshold is deliberately not a target to optimise — it exists to catch an unexercised
+branch in the code that decides verdicts.
