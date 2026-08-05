@@ -82,6 +82,17 @@ The constitution's stack table (3.x, JVM 21) is amended in the follow-up upgrade
 
 ## Outcome
 
-Approved 2026-08-05 after a full-stack review. Upgrade (SB 4.1.0 + JVM 25 + constitution
-amendment) scheduled as the next issue after #6 merges; Docker-based startup and a
-bootstrap guide are separate issues.
+Approved 2026-08-05 after a full-stack review, and **executed the same day** in #10:
+Spring Boot 4.1.0, `jvmToolchain(25)` (verified by class-file major version 69), version
+catalog at `gradle/libs.versions.toml`, and `spring.threads.virtual.enabled` for the
+inbound side. Gates green (76 tests) and the live capture path re-verified end to end —
+`confirm_subscription` plus a full browser-triggered run sequence on the new stack.
+
+**The version-policy clause earned itself immediately.** Checking the 4.1.0 BOM before
+trusting it showed it pins `kotlin-coroutines.version=1.10.2` — still below the 1.11.0
+Ktor 3.5.2 requires — and `kotlin.version=2.3.21` against our 2.4.10 compiler plugin. The
+`NoSuchMethodError` from #6 would have returned. Both overrides were kept and a second one
+added; a version catalog does **not** control BOM-managed versions, so the two mechanisms
+coexist and `dependencyInsight` is the only proof.
+
+Docker-based startup and the bootstrap guide remain separate issues.

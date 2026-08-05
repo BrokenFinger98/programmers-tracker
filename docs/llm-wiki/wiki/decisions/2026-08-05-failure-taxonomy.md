@@ -119,5 +119,20 @@ heartbeat every 30 s for every open tab.
 
 ## Outcome
 
-Recorded 2026-08-05 as part of the design revision (#8). Related:
-[[decisions/2026-08-05-capture-pipeline-stages]] · [[concepts/verdict-classification]].
+Recorded 2026-08-05 as part of the design revision (#8).
+
+**Reinforced by accident the same day.** During the #10 upgrade verification an idle
+observation socket **closed silently after ~30 m 50 s** — no exception, no close log, no
+reconnect; the frame `Flow` simply completed and the process exited 0. The cause is not
+established (server idle timeout, NAT, Wi-Fi, or sleep are all candidates), so this is an
+observation and deliberately **not** written into the protocol document until a second
+independent measurement reproduces it. What it does establish is that a long-lived
+observation socket demonstrably does not stay open, and that the current
+`ActionCableClient` ends a session with zero signal — anything broadcast afterwards is
+lost forever (protocol §11) with nothing in the logs to say so. Decisions 4 (ping
+watchdog) and 2 (`INCOMPLETE`) are therefore load-bearing, not precautionary.
+
+A second incidental confirmation: testcases again arrived out of order (index 1 before
+index 0), which is why decision 3 requires a completeness check rather than a sort alone.
+
+Related: [[decisions/2026-08-05-capture-pipeline-stages]] · [[concepts/verdict-classification]].
