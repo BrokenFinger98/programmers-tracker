@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
@@ -202,6 +203,8 @@ class RecordWriterTest {
             rawLog = FileRawSessionLog(rawDirectory()),
             rawAttemptPath = AttemptRawPath(layout::rawAttemptFile),
             recordRoot = root,
+            git = aQuietGitSync(),
+            submissionLog = layout.submissionLog(),
             clock = Clock.fixed(NOW, ZoneOffset.UTC),
             writerDispatcher = Dispatchers.Unconfined,
         )

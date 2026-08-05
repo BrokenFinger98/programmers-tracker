@@ -668,3 +668,41 @@ every branch with decisions to carry one, so the rule would block everything. Th
 distinction that actually matters is **contract change versus elaboration** — #36 is held
 because it changes what `submissions.jsonl` means, while #39 merges because its ADR fills in
 retry semantics inside a decision already accepted.
+
+## [2026-08-06] GitSync wired into the pipeline ✅
+
+Issue #41, branch `feat/41-wire-gitsync`. 537 tests (28 new), gates all 0
+(`check.sh` · `test.sh` · `build.sh` · `guards.sh` · `verifyCalculatorCoverage` = 100%).
+ADR: [[decisions/2026-08-06-wire-git-into-the-pipeline]].
+
+- **A settled submit is committed where it is written.** `RecordWriter` calls
+  `GitSync.commitSubmission` inside the same `withContext(writerDispatcher)` section as the
+  append — one derived write, one index, one writer. A `run` is not committed on its own
+- **Proven serialized the way the append is**: `RecordWriterSerializationTest` now routes the
+  append and the commit through one in-flight counter and drives 64 concurrent settlements
+  through it. Peak occupancy 1, so no commit ever overlaps another grading's append
+- **A git failure never costs a record.** A `GitSync` that throws on every call still leaves
+  the record on disk and returns it, and the next `reconcile()` commits what was left. The
+  writer's `runCatching` exists specifically to protect the dedup key, which `write()` removes
+  when the body throws
+- **`StartupReconciliation`** sequences the boot recoveries in order — raw sessions become
+  records, `reconcile()` commits whatever is uncommitted, then the backup catches up. Safe to
+  repeat; three runs leave one commit
+- **The 23:00 Asia/Seoul backup, with catch-up** — `DailyBackup` compares an injected clock
+  against an instant persisted through `AtomicStateFile` in `.ps`, so "the machine slept
+  through 23:00" is a fixed clock and an assertion rather than a wait. `BackupSchedule` ticks
+  once a minute and asks; no cron expression, so the hour is spelled once
+- **A records directory that is not a repository** is detected once via `git rev-parse`, said
+  once, and skipped for the life of the process — proven by a log assertion and by `git init`
+  after detection, which is deliberately not noticed
+- Every test drives real temporary repositories and a local bare remote. No mocks, no network,
+  no sleeps
+
+### Not done, and not claimed
+
+- **The derived artifacts of #34 are still not in the commit** — solution file, diff and
+  README have no producer yet (#36), so a submit commit carries the log and the raw frames only
+- **The MCP `push()` trigger has no caller**, because MCP does not exist yet
+- **Never run against a real record repository**, only temporary ones. The Spring context test
+  now redirects every path into a scratch directory: booting runs the startup reconciliation,
+  and `git add --all` against a developer's own `~/ps-records` would commit their pending work

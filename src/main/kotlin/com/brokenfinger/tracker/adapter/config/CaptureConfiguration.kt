@@ -8,11 +8,14 @@ import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
+import com.brokenfinger.tracker.application.DailyBackup
 import com.brokenfinger.tracker.application.FrameReader
+import com.brokenfinger.tracker.application.GitSync
 import com.brokenfinger.tracker.application.ProblemTimer
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RawSessionReconciler
 import com.brokenfinger.tracker.application.RecordWriter
+import com.brokenfinger.tracker.application.StartupReconciliation
 import com.brokenfinger.tracker.application.SubscriptionRegistry
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
@@ -26,7 +29,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationRunner
 import org.springframework.context.annotation.Bean
@@ -72,6 +74,7 @@ class CaptureConfiguration {
     fun recordWriter(
         layout: RecordLayout,
         rawLog: RawSessionLog,
+        git: GitSync,
         @Value("\${tracker.record-repo}") recordRepo: String,
         clock: Clock,
     ): RecordWriter = RecordWriter.of(
@@ -79,20 +82,22 @@ class CaptureConfiguration {
         rawLog = rawLog,
         rawAttemptPath = layout::rawAttemptFile,
         recordRoot = recordRoot(recordRepo),
+        git = git,
+        submissionLog = layout.submissionLog(),
         clock = clock,
     )
 
+    @Bean
+    fun startupReconciliation(sessions: RawSessionReconciler, git: GitSync, backup: DailyBackup) =
+        StartupReconciliation(sessions, git, backup)
+
     /**
-     * Picks up whatever a crash left behind. `.ps/raw` is the durable queue, so an
-     * unprocessed session there is a grading we captured but never recorded — and it can
-     * never be re-broadcast (protocol §11). Runs once at boot; dedup makes it safe if the
-     * session was in fact already recorded.
+     * Picks up whatever an earlier run left behind — orphaned raw sessions, uncommitted
+     * records, and a backup the machine slept through. Runs once at boot; every step is
+     * idempotent, so a boot that had nothing to recover does nothing.
      */
     @Bean
-    fun reconcileOrphanedSessions(reconciler: RawSessionReconciler) = ApplicationRunner {
-        val report = runBlocking { reconciler.reconcile() }
-        logger.info("Startup reconciliation: {}", report)
-    }
+    fun reconcileAtStartup(startup: StartupReconciliation) = ApplicationRunner { runBlocking { startup.run() } }
 
     /** The one crossing out of the wire format, shared by the live path and the replay. */
     @Bean
@@ -124,8 +129,6 @@ class CaptureConfiguration {
         scope = scope.scope,
         captureFor = { channel: ChannelKey -> ChannelCapture(channel, rawLog, registry, writer, timer) },
     )
-
-    private val logger = LoggerFactory.getLogger(CaptureConfiguration::class.java)
 
     private fun recordRoot(recordRepo: String): Path =
         Path.of(recordRepo.replaceFirst("~", System.getProperty("user.home")))

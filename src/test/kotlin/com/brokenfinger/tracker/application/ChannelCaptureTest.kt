@@ -10,6 +10,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
+import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.aTerminalFrame
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
@@ -245,6 +246,8 @@ class ChannelCaptureTest {
         rawLog = rawLog,
         rawAttemptPath = AttemptRawPath(RecordLayout(root)::rawAttemptFile),
         recordRoot = root,
+        git = aQuietGitSync(),
+        submissionLog = RecordLayout(root).submissionLog(),
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         writerDispatcher = Dispatchers.Unconfined,
     )
