@@ -28,6 +28,10 @@ springBoot {
 
 val ktorVersion = "3.5.2"
 
+// Spring Boot's BOM pins kotlinx-coroutines to 1.8.1, but Ktor 3.5.2 bytecode needs
+// 1.11.0 APIs — without this override the WebSocket client dies with NoSuchMethodError.
+extra["kotlin-coroutines.version"] = "1.11.0"
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
