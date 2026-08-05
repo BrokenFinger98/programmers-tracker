@@ -375,6 +375,18 @@ with no human step in between.** Measured three times against the real judge.
 | 2 | `elapsedSec 143` after wiring the timer, `complete false` (defect 3) |
 | 3 | `verdict PASS`, `elapsedSec 317`, `tcSummary.complete true` |
 
+### The guard failed twice, both times my error
+
+First it fired on every `--tests` filtered run, naming 43 innocent classes, so it became an
+explicit task instead of a `finalizedBy`. Then CI failed on all three operating systems with
+**all 44** classes named: the task had no dependency on `test`, so it read an empty results
+directory. It had passed locally only because a previous run's result files were still
+lying there — a stale-state false pass, which is precisely the class of defect the task
+exists to catch, committed by the task itself.
+
+Now `dependsOn(tasks.test)`, and verified from a genuinely clean state
+(`clean` then `--no-build-cache`) rather than against a dirty workspace.
+
 ### Also fixed: a guard that cried wolf
 
 `verifyEveryTestClassRan` failed on any `--tests` filtered run, naming 43 innocent classes.

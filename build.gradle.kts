@@ -78,8 +78,12 @@ kover {
 val verifyEveryTestClassRan =
     tasks.register("verifyEveryTestClassRan") {
         description = "Fails when a test class produced no result file — usually a non-Unit test method."
-        // Run explicitly after a FULL suite (scripts/test.sh, CI), never as finalizedBy: a
-        // filtered run legitimately leaves most classes without results.
+        // Depends on `test` rather than merely following it on the command line: without
+        // this the check can run against an empty results directory and report every class
+        // as missing. It passed locally only because a previous run had left results behind
+        // — the exact stale-state false pass this task exists to catch, committed by the
+        // task itself (measured in CI, #23).
+        dependsOn(tasks.test)
         val sources = fileTree("src/test/kotlin") { include("**/*.kt") }
         val resultsDir = layout.buildDirectory.dir("test-results/test")
         inputs.files(sources)
