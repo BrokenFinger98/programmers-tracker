@@ -81,6 +81,16 @@ tasks.register<JavaExec>("liveObserve") {
     args = (project.findProperty("observe") as String?)?.split(" ")?.filter { it.isNotBlank() } ?: emptyList()
 }
 
+// Measures whether `run` saves code — see LiveCodeFetch. Fetch, edit in the browser, run,
+// fetch again: if the hash follows the edit, `run` saves.
+tasks.register<JavaExec>("liveCodeFetch") {
+    description = "Fetches the saved code of a problem from the real Programmers page."
+    group = "verification"
+    mainClass.set("com.brokenfinger.tracker.protocol.LiveCodeFetchKt")
+    classpath = sourceSets.main.get().runtimeClasspath
+    args = (project.findProperty("fetchArgs") as String?)?.split(" ")?.filter { it.isNotBlank() } ?: emptyList()
+}
+
 tasks.register<Test>("integrationTest") {
     description = "Runs @Tag(\"integration\") tests against the real Programmers server."
     group = "verification"

@@ -435,3 +435,23 @@ Entries 9~11 were intentional failing submissions, so those problems remain unso
 Entry 14 upgrades the algorithm-`run` terminal and the run testcase shape from
 bundle-derived (§8) to measured. The frames are kept verbatim as
 `src/test/resources/fixtures/algorithm-run-pass.jsonl`.
+
+### 15.1 Does `run` save the code? — measured 2026-08-05 (issue #20)
+
+Yes. The saved code on the problem page changed only after `run` was pressed.
+
+| Step | Saved-code SHA-256 | Size |
+|---|---|---|
+| Baseline | `f7a5375…` | 98 chars, 5 lines |
+| After editing in the browser, **before** `run` | `f7a5375…` — unchanged | 98 chars, 5 lines |
+| After pressing `run` | `22c9725…` | 123 chars, 6 lines |
+
+Method: `GET /learn/courses/30/lessons/120804?language=java` while authenticated, reading
+`<input data-type="code">` and hashing it (`./gradlew liveCodeFetch`). Lesson 120804,
+algorithm, Java.
+
+**Not excluded by this trial**: a time-based autosave that happened to fire in the same
+window. The middle row makes an edit-triggered save unlikely, but a debounce long enough to
+span the gap would produce the same three rows. A second trial that edits and then waits
+without running would settle it. This matters practically — under a debounce, an
+edit-then-immediately-run sequence could still fetch stale code.

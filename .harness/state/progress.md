@@ -273,3 +273,30 @@ that compile concurrently need isolated worktrees or sequencing.
 - Catalog, timer and diff fields sit at defaults
 - A run's raw file is never moved, so `.ps/raw` accumulates until startup reconciliation
   exists. Dedup makes reprocessing safe in the meantime
+
+## [2026-08-05] CodeFetch + the last gate-1 measurement ⏳
+
+Issue #20, branch `feat/20-codefetch`. Built solo — a single component where orchestration
+overhead would have exceeded the gain.
+
+- `SavedCodePage` — extraction driven by a **measured excerpt of the real page**
+  (`fixtures/lesson-page-saved-code.html`). Two properties of that markup break a naive
+  parser and would have been absent from hand-written HTML: the `<input>` tag spans several
+  lines, and `value` contains **raw** newlines. The page also carries `initial_code_<id>`,
+  the untouched skeleton, so matching on `data-type="code"` is load-bearing
+- `ProblemPageCodeFetcher` + `PageSource` seam (same shape as `RawSocket`) — failures are
+  outcomes, not exceptions: `Unauthenticated` feeds the auth state, `RateLimited` backs off,
+  a missing input is a failure rather than an empty solution. Runs after the verdict is
+  already durable, so nothing it throws can unwind a record
+- 290 tests, gates check/test/build/guards all 0
+
+### gate-1 closed: `run` does save the code
+
+Measured on lesson 120804 (protocol §15.1): baseline hash, unchanged after editing,
+changed only after pressing `run`. **The CodeMirror fallback in design §4.4 is not
+needed** — that removes MAIN-world injection, the most invasive part of the planned sensor
+extension.
+
+Caveat kept in both docs: one trial cannot exclude a debounced autosave firing in the same
+window. It matters practically, because under a debounce an edit-then-immediately-run
+sequence could still fetch stale code.
