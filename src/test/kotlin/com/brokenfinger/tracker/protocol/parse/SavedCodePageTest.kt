@@ -30,6 +30,18 @@ class SavedCodePageTest {
             """.trimIndent()
     }
 
+    /**
+     * Guards the fixture itself. `.gitattributes` marks captures `-text` so no checkout
+     * platform rewrites them; without that, Windows (`core.autocrlf=true`, CI runners
+     * included) turns the raw newlines inside `value` into CRLF and the capture stops
+     * saying what Programmers actually served. Failing here names the cause directly
+     * instead of surfacing as a confusing string mismatch.
+     */
+    @Test
+    fun `the fixture still holds the bytes Programmers served`() {
+        page shouldNotContain "\r\n"
+    }
+
     @Test
     fun `does not confuse the skeleton input with the saved one`() {
         // The page carries both: `initial_code_<id>` is the untouched problem skeleton and

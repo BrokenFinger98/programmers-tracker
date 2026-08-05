@@ -86,6 +86,26 @@ The payoff was not academic. With `run` confirmed as the saver, design §4.4's f
 the extension injecting itself into the page's main world to read the editor buffer —
 became unnecessary, deleting the most invasive component of the planned sensor.
 
+## Evidence is bytes, and the checkout platform can rewrite them
+
+Issue #20's CI caught a third variant of the same theme. The measured page excerpt parsed
+correctly on macOS and Linux and failed on Windows, because GitHub's Windows runners check
+out with `core.autocrlf=true`: the raw newlines inside the captured `value` attribute became
+CRLF, and the capture no longer said what Programmers had served.
+
+Nothing was wrong with the parser. **The evidence had been edited in transit by the version
+control system**, and every platform got a slightly different answer to "what did the server
+send?".
+
+The fix belongs to the evidence, not the code: `.gitattributes` marks
+`src/test/resources/fixtures/**` as `-text`, so no checkout rewrites a capture. A capture is
+bytes; anything that normalizes it is changing the measurement. A test now asserts the
+fixture contains no CRLF, so a future removal of that rule fails by name rather than as a
+confusing string mismatch.
+
+This is also the clearest argument yet for the three-OS matrix: the bug is invisible on the
+developer's machine by construction.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
