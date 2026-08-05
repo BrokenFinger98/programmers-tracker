@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: programmers-tracker
+  # Inbound (/watch, MCP) runs on virtual threads; outbound observation uses coroutines
+  # + Ktor. Layered on purpose — see the ADR 2026-08-05-backend-stack.
+  threads:
+    virtual:
+      enabled: true
 
 # Measured protocol facts as defaults (protocol doc §1, §10); overridable per dev rules §9.1.
 tracker:

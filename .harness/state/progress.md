@@ -124,3 +124,37 @@ protocol facts. Two of my earlier claims were wrong and are corrected in-spec:
   §5.2 record: captureKey · outcome · tcSummary.complete · rawPath · codePending
 - §9 edge cases rewritten; "partial recovery" downgraded to a detector — never
   synthesize a record from the solved list
+
+## [2026-08-05] Spring Boot 4.1 + JVM 25 + version catalog ⏳
+
+Issue #10, branch `chore/10-spring-boot-4-jvm-25`. Driven by measured EOL: 3.5 ended
+OSS support 2026-06-30 (ADR [[decisions/2026-08-05-backend-stack]]).
+
+- Spring Boot 3.5.16 → 4.1.0, jvmToolchain 21 → 25 (verified: class-file major 69)
+- `gradle/libs.versions.toml` added; plugins and dependencies use catalog aliases
+- **BOM overrides survive the migration and are still load-bearing** — the 4.1.0 BOM
+  pins coroutines 1.10.2 (Ktor 3.5.2 needs 1.11.0) and Kotlin 2.3.21 (our plugin is
+  2.4.10). `dependencyInsight` confirms 1.11.0 / stdlib 2.4.10 after the override.
+  The catalog does NOT replace this mechanism
+- `spring.threads.virtual.enabled` on — inbound MVC on virtual threads per the ADR
+- CLAUDE.md: stack table updated (JVM 25, Boot 4.x, layered async, catalog) and the
+  stale "the user is a job-seeker" premise corrected
+- Gates: check/test/build = 0, 76 tests, 0 failures
+- Live re-verification: `confirm_subscription` received in 2.65 s on Boot 4.1 + JVM 25,
+  so the Ktor/coroutines linkage survived the migration. Broadcast-frame re-check still
+  pending a browser-triggered run
+
+### Observation worth acting on (2026-08-05)
+
+The idle observation socket **closed silently after ~30 m 50 s** — no exception, no close
+log, no reconnect; the Flow simply completed and the process exited 0. Cause is NOT
+established (server idle timeout, NAT, Wi-Fi, or sleep are all candidates), so this is an
+observation, not a protocol fact — do not write it into the protocol doc until a second
+independent measurement reproduces it.
+
+Two consequences:
+1. It is empirical support for [[decisions/2026-08-05-failure-taxonomy]] — a long-lived
+   observation socket demonstrably does not stay open, so reconnect is not optional.
+2. `ActionCableClient` currently ends a session with **zero signal**. Anything broadcast
+   after that point is lost forever (protocol §11) and nothing in the logs would say so.
+   The Capture implementation issue must add the close/gap log and the ping watchdog.

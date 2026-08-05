@@ -47,8 +47,10 @@ You are the **developer of the Programmers learning-record server**. Always keep
 - **We depend on an external private protocol** — Programmers never promised us an API.
   It can change at any time, and when it does, **silently accumulating wrong data is the worst outcome**.
 - **We handle personal learning records** — session cookies, emails, and solving history flow through. This is a public repository.
-- **The user is a job-seeker** — every hour spent building tools is an hour not spent solving problems.
-  Apply YAGNI strictly. Do not build "nice to haves".
+- **Tool time is not practice time** — the developer is employed and preparing an
+  experienced-hire move; many *users* of this tool are job-seekers. Either way an hour spent
+  building the tool is an hour not spent solving problems, so apply YAGNI strictly and do not
+  build "nice to haves". Argue the cut on engineering merit, not on time poverty.
 
 ---
 
@@ -58,10 +60,10 @@ Changes require a PR + an ADR in `docs/llm-wiki/wiki/decisions/`.
 
 | Area | Decision | Rationale |
 |---|---|---|
-| Language | **Kotlin (JVM 21)** | User's primary stack · portfolio |
-| Framework | **Spring Boot 3.x** + Spring MVC | Same |
-| Build | **Gradle Kotlin DSL** | |
-| Async | **Coroutines** | We do not handle multiple WebSocket subscriptions with threads |
+| Language | **Kotlin (JVM 25)** | User's primary stack · portfolio |
+| Framework | **Spring Boot 4.x** + Spring MVC | 3.5 reached OSS EOL 2026-06-30 · ADR `2026-08-05-backend-stack` |
+| Build | **Gradle Kotlin DSL** + `gradle/libs.versions.toml` | Versions live in one file — but BOM-managed versions still need explicit overrides |
+| Async | **Layered** — virtual threads inbound, **Coroutines** + Ktor outbound | The only long-lived stream is the outbound observation socket · ADR `2026-08-05-backend-stack` |
 | Serialization | **kotlinx.serialization** | Protocol fields are unstable — lenient parsing required |
 | Storage | **Files (JSONL + directories)** | No DB needed. Below scale threshold + git-friendly |
 | Testing | **JUnit 5 + Kotest assertions + MockK** | |

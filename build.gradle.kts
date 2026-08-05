@@ -1,17 +1,17 @@
 plugins {
-    kotlin("jvm") version "2.4.10"
-    kotlin("plugin.spring") version "2.4.10"
-    kotlin("plugin.serialization") version "2.4.10"
-    id("org.springframework.boot") version "3.5.16"
-    id("io.spring.dependency-management") version "1.1.7"
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+    alias(libs.plugins.ktlint)
 }
 
 group = "com.brokenfinger"
 version = "0.0.1-SNAPSHOT"
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
     compilerOptions {
         freeCompilerArgs.add("-Xjsr305=strict")
     }
@@ -26,24 +26,26 @@ springBoot {
     mainClass.set("com.brokenfinger.tracker.TrackerApplicationKt")
 }
 
-val ktorVersion = "3.5.2"
-
-// Spring Boot's BOM pins kotlinx-coroutines to 1.8.1, but Ktor 3.5.2 bytecode needs
-// 1.11.0 APIs — without this override the WebSocket client dies with NoSuchMethodError.
-extra["kotlin-coroutines.version"] = "1.11.0"
+// Spring Boot's BOM manages these transitively, so the version catalog alone does NOT
+// control them — the BOM wins unless its own properties are overridden here.
+// Measured against the 4.1.0 BOM: it pins coroutines 1.10.2, but Ktor 3.5.2 bytecode
+// needs 1.11.0 APIs (without this the WebSocket client dies at connect with
+// NoSuchMethodError), and it pins Kotlin 2.3.21 while our compiler plugin is 2.4.10.
+// Re-check both with `gradle dependencyInsight` after every Spring Boot upgrade.
+extra["kotlin-coroutines.version"] = libs.versions.coroutines.get()
+extra["kotlin.version"] = libs.versions.kotlin.get()
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    // Coroutine-native WebSocket client (ADR 2026-08-04-ktor-websocket-client).
-    implementation("io.ktor:ktor-client-core:$ktorVersion")
-    implementation("io.ktor:ktor-client-cio:$ktorVersion")
-    implementation("io.ktor:ktor-client-websockets:$ktorVersion")
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.websockets)
 
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("io.kotest:kotest-assertions-core:6.2.3")
-    testImplementation("io.mockk:mockk:1.14.11")
+    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.kotest.assertions.core)
+    testImplementation(libs.mockk)
 }
 
 // Default test task = unit + layer only; integration runs live against Programmers
