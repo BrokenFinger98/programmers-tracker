@@ -108,4 +108,4 @@ local run" as the double-writer it exists for. That lock **is not implemented** 
 no `FileLock` or any equivalent anywhere in `src/main/kotlin`. Shipping a container makes
 the scenario the ADR predicted trivially reachable, so the gap is now larger than when it
 was written. It is out of #43's scope and is recorded here so the next reader does not
-infer from this file that containers are safe to double-run.
+infer from this file that containers are safe to double-run. Tracked as **#44**.

@@ -817,7 +817,8 @@ exclusively at startup, and names "container plus a local run" as the double-wri
 for. There is no `FileLock` or equivalent anywhere in `src/main/kotlin` — the decision was
 recorded and never implemented. Shipping a container makes the predicted scenario trivially
 reachable, so the gap is now larger than when it was written. Out of #43's scope, stated in
-the ADR and in the guide's "what you cannot do yet" rather than papered over.
+the ADR and in the guide's "what you cannot do yet" rather than papered over, and filed as
+**#44** so it is tracked rather than merely noted.
 
 Also still missing and now stated plainly for users: no browser extension exists in this
 repository, so problems must be registered by hand with a `curl` to `/watch` — documented,

@@ -320,9 +320,9 @@ Stated plainly, because finding these out by trial is worse.
   fails on host verification inside the container. Without either, commits still happen
   locally and only the push is lost.
 - **Do not run the container and a native instance against the same record repository.**
-  The design calls for an exclusive lock at startup and **that lock is not implemented** —
-  nothing stops a second process, and two writers on one repository will corrupt attempt
-  numbering and fight over the git index. Run exactly one.
+  The design calls for an exclusive lock at startup and **that lock is not implemented**
+  (tracked as #44) — nothing stops a second process, and two writers on one repository will
+  corrupt attempt numbering and fight over the git index. Run exactly one.
 - **The daily backup defaults to `Asia/Seoul`.** Set `TRACKER_BACKUP_ZONE` to yours.
 
 ---
