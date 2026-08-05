@@ -106,6 +106,27 @@ confusing string mismatch.
 This is also the clearest argument yet for the three-OS matrix: the bug is invisible on the
 developer's machine by construction.
 
+## A test that never runs looks exactly like a test that passes
+
+The most expensive instance of this theme was self-inflicted. A Kotlin test method written
+as an expression body — `fun \`x\`() = runBlocking { ... }` — returns whatever the last
+expression returns. When that is not `Unit`, **JUnit does not run the method and does not
+say so**: no error, no skip notice, no entry in the report.
+
+Eight `ProblemPageCodeFetcher` tests reached `main` that way in #20/#21, through a green
+three-OS CI run, having never executed once. Among them was the test asserting that the
+session cookie never appears in a failure message. The PR claimed "failure paths tested".
+That claim was false, and nothing in the pipeline could tell.
+
+They pass now that they run — the production code was right all along. **That is what makes
+this failure mode dangerous rather than merely embarrassing**: nothing was broken, so nothing
+drew attention, and the same silence would have covered a test that genuinely failed.
+
+The guard is structural rather than a habit: a Gradle verification task, run as
+`finalizedBy` on `test`, fails when a class declaring `@Test` produces no result file. It
+was negative-tested by reintroducing the defect. Counting assertions or trusting a green
+build cannot detect an absence; only comparing *what should have run* against *what did* can.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -117,6 +138,8 @@ developer's machine by construction.
   close observed on 2026-08-05 was deliberately **not** written into the protocol doc,
   because its cause (server idle timeout? NAT? sleep?) was never established — see
   [[concepts/actioncable-broadcast-observation]].
+- Trust a test only after seeing it fail once. Green is not evidence that a check exists —
+  it is equally consistent with the check being absent.
 - Before writing "we cannot exclude X", ask what one more trial would cost. If X is a
   timing hypothesis, the trial is usually "do nothing and wait".
 - When a live run produces frames, transcribe them into a fixture in the same change —

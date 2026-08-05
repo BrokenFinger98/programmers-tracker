@@ -65,12 +65,41 @@ kover {
     }
 }
 
+// A JUnit test method whose expression body returns something other than Unit is silently
+// NOT RUN — no error, no skip notice, nothing. A test that never runs is indistinguishable
+// from a test that passes, which is how eight CodeFetch tests reached main looking green in
+// #21 without ever executing. This makes the invisible case visible: every test class in the
+// source tree must produce a result file.
+val verifyEveryTestClassRan =
+    tasks.register("verifyEveryTestClassRan") {
+        description = "Fails when a test class produced no result file — usually a non-Unit test method."
+        val sources = fileTree("src/test/kotlin") { include("**/*.kt") }
+        val resultsDir = layout.buildDirectory.dir("test-results/test")
+        inputs.files(sources)
+        doLast {
+            val declared = sources.files
+                .filter { it.readText().contains("@Test") }
+                .map { it.nameWithoutExtension }
+                .toSortedSet()
+            val ran = (resultsDir.get().asFile.listFiles() ?: emptyArray())
+                .filter { it.name.endsWith(".xml") }
+                .map { it.nameWithoutExtension.substringAfterLast('.') }
+                .toSortedSet()
+            val missing = declared - ran
+            check(missing.isEmpty()) {
+                "these test classes declare @Test but produced no results, so they never ran: " +
+                    missing.joinToString()
+            }
+        }
+    }
+
 // Default test task = unit + layer only; integration runs live against Programmers
 // and is opt-in via the separate integrationTest task (ADR 2026-08-04-test-environment).
 tasks.test {
     useJUnitPlatform {
         excludeTags("integration")
     }
+    finalizedBy(verifyEveryTestClassRan)
 }
 
 // Live-verification entry for issue #6 — subscribes to a real Programmers channel and

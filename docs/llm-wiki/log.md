@@ -23,3 +23,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-05] ingest | eliminating a confound instead of hedging it → 0 created, 1 updated (assumption-vs-measurement); protocol doc §15.1 measurement recorded
 
 ## [2026-08-05] ingest | parallel workers as a rule-consistency detector → 0 created, 1 updated (orchestrated-implementation)
+
+## [2026-08-05] ingest | silently skipped tests → 0 created, 1 updated (assumption-vs-measurement)
