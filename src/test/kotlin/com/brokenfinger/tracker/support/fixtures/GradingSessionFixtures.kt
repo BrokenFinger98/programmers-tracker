@@ -2,7 +2,7 @@ package com.brokenfinger.tracker.support.fixtures
 
 import com.brokenfinger.tracker.application.GradingSession
 import com.brokenfinger.tracker.application.GradingSessionAssembler
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.message.SubmitMessage
 import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 
@@ -10,20 +10,20 @@ import com.brokenfinger.tracker.protocol.parse.GradingMessageMapper
 // (dev rules §6.2). Every helper here goes through FixtureLoader — a hand-written stream
 // would only prove the protocol we imagined.
 
-fun anAssembler(channel: ChannelIdentifier = anAlgorithmIdentifier(), boundErrorText: String? = null) =
+fun anAssembler(channel: ChannelKey = anAlgorithmChannel(), boundErrorText: String? = null) =
     GradingSessionAssembler.of(channel, boundErrorText)
 
 /** Feeds a whole measured capture into a fresh assembler and settles it. */
 fun anAssembledSession(
     fixture: String,
-    channel: ChannelIdentifier = anAlgorithmIdentifier(),
+    channel: ChannelKey = anAlgorithmChannel(),
     boundErrorText: String? = null,
 ): GradingSession = aSessionOf(FixtureLoader.messages(fixture), channel, boundErrorText)
 
 /** Same, but for a stream a test has reordered, truncated or amended. */
 fun aSessionOf(
     messages: List<SubmitMessage>,
-    channel: ChannelIdentifier = anAlgorithmIdentifier(),
+    channel: ChannelKey = anAlgorithmChannel(),
     boundErrorText: String? = null,
 ): GradingSession = anAssembler(channel, boundErrorText).apply { messages.forEach(::accept) }.settle()
 

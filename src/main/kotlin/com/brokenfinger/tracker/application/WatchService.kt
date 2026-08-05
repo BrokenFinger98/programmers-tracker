@@ -1,10 +1,8 @@
 package com.brokenfinger.tracker.application
 
-import com.brokenfinger.tracker.domain.ProblemKind
-import com.brokenfinger.tracker.protocol.ChallengeableId
-import com.brokenfinger.tracker.protocol.ChallengeableType
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
-import com.brokenfinger.tracker.protocol.LessonId
+import com.brokenfinger.tracker.domain.ChallengeableId
+import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.LessonId
 import java.time.Clock
 
 /**
@@ -26,33 +24,28 @@ class WatchService(
         // it is the only place the clock can start. Without this every record carries
         // elapsedSec 0 — a measured-looking zero, which is worse than an absent value.
         timer.startIfAbsent(command.lessonId)
-        val identifier = identifierOf(command)
-        return outcomeOf(identifier, registry.watch(identifier, clock.instant()))
+        val channel = channelOf(command)
+        return outcomeOf(channel, registry.watch(channel, clock.instant()))
     }
 
-    private fun outcomeOf(identifier: ChannelIdentifier, result: WatchResult): WatchOutcome = when (result) {
+    private fun outcomeOf(channel: ChannelKey, result: WatchResult): WatchOutcome = when (result) {
         is WatchResult.AlreadyWatching -> WatchOutcome.REFRESHED
-        is WatchResult.Started -> started(identifier, result.evicted)
+        is WatchResult.Started -> started(channel, result.evicted)
         is WatchResult.Saturated -> throw WatchCapacityExceededException(SATURATED)
     }
 
-    private fun started(identifier: ChannelIdentifier, evicted: ChannelIdentifier?): WatchOutcome {
+    private fun started(channel: ChannelKey, evicted: ChannelKey?): WatchOutcome {
         evicted?.let(subscriber::unsubscribe)
-        subscriber.subscribe(identifier)
+        subscriber.subscribe(channel)
         return WatchOutcome.STARTED
     }
 
-    private fun identifierOf(command: WatchCommand) = ChannelIdentifier.of(
-        type = typeOf(command.kind),
+    private fun channelOf(command: WatchCommand) = ChannelKey.of(
         lessonId = LessonId(command.lessonId),
         challengeableId = ChallengeableId(command.challengeableId),
+        kind = command.kind,
         language = command.language,
     )
-
-    private fun typeOf(kind: ProblemKind) = when (kind) {
-        ProblemKind.ALGORITHM -> ChallengeableType.ALGORITHM
-        ProblemKind.DATABASE -> ChallengeableType.DATABASE
-    }
 
     private companion object {
         const val SATURATED = "every subscription slot is held by a live grading"

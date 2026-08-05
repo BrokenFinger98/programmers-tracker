@@ -48,6 +48,18 @@ Class suffixes keep the Spring convention — `XxxController` · `XxxService` ·
 The dependency direction is `adapter → application → domain`, and `protocol → domain` happens only in `parse`.
 **`domain` imports nothing.**
 
+**What may cross into `application` and what may not** — see
+[[decisions/2026-08-05-protocol-dependency-direction]]. The two halves behave differently
+and the rule states both, because a rule stricter than its reason invites drift:
+
+- **Identity value types live in `domain`** — `LessonId`, `ChallengeableId`, `ChannelKey`.
+  `protocol` builds its wire form (`ChannelIdentifier`) from them, which is the correct
+  inward direction. A change to the identifier's JSON touches `asJson()` and nothing else.
+- **Protocol message types never leave `protocol`** — `SubmitMessage`, `CableEvent`,
+  `ActionCableFrame` and the mappers stay there, and `protocol/parse` hands `application`
+  domain-level events instead. This is the half the rule exists for: a renamed message or
+  field must not reach the verdict path.
+
 This layout is **hexagonal (ports & adapters) with orthodox-hybrid port rules** — see
 [[decisions/2026-08-05-hexagonal-architecture]]:
 

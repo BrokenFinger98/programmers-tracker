@@ -6,7 +6,7 @@ import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aRunErrorText
-import com.brokenfinger.tracker.support.fixtures.aSqlIdentifier
+import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.fixtures.anAssembler
 import io.kotest.matchers.collections.shouldContainExactly
@@ -102,7 +102,7 @@ class GradingSessionAssemblerTest {
     // SQL submits never send finish; waiting for one hangs forever (protocol doc §6).
     @Test
     fun `a database submit is judged at result_lesson_challenge`() {
-        val session = anAssembledSession("sql-pass.jsonl", channel = aSqlIdentifier())
+        val session = anAssembledSession("sql-pass.jsonl", channel = aSqlChannel())
 
         session.outcome shouldBe Outcome.JUDGED
         session.verdict shouldBe Verdict.PASS
@@ -113,7 +113,7 @@ class GradingSessionAssemblerTest {
     // A database run does send finish, and reports its only result on that same frame.
     @Test
     fun `a database run is judged at finish from the result it carries`() {
-        val session = anAssembledSession("sql-run.jsonl", channel = aSqlIdentifier())
+        val session = anAssembledSession("sql-run.jsonl", channel = aSqlChannel())
 
         session.action shouldBe GradingAction.RUN
         session.verdict shouldBe Verdict.PASS

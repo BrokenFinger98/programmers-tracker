@@ -13,9 +13,9 @@ import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RawSessionReconciler
 import com.brokenfinger.tracker.application.RecordWriter
 import com.brokenfinger.tracker.application.SubscriptionRegistry
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEndpoint
-import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.ManualFileSessionProvider
 import com.brokenfinger.tracker.protocol.SessionProvider
 import kotlinx.coroutines.CoroutineName
@@ -116,7 +116,7 @@ class CaptureConfiguration {
         client = client,
         sessions = sessions,
         scope = scope.scope,
-        captureFor = { channel: ChannelIdentifier -> ChannelCapture(channel, rawLog, registry, writer, timer) },
+        captureFor = { channel: ChannelKey -> ChannelCapture(channel, rawLog, registry, writer, timer) },
     )
 
     private val logger = LoggerFactory.getLogger(CaptureConfiguration::class.java)

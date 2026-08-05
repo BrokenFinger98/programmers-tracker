@@ -448,3 +448,40 @@ and burned CPU for the rest of the suite. Five such tests, one runner pinned.
 Two rules now stated in the test class itself: **await the behaviour, never sleep for it**,
 and **cancel every scope** when the thing under test loops forever by design. Verified by
 running the class three times (stable) and the full suite in 5 s.
+
+## [2026-08-05] Identity value types move into `domain` ⏳
+
+Issue #24, branch `refactor/24-protocol-dependency-direction`. Pure refactor — 451 tests
+before and after, no behaviour change, all gates 0.
+
+Decision 1 of [[decisions/2026-08-05-protocol-dependency-direction]] only. The ADR splits
+the seven `application → protocol` imports into two kinds and lands them separately, because
+the message half touches the verdict path and must not be reviewed inside a rename diff.
+
+- `LessonId` and `ChallengeableId` moved to `domain`, keeping their validation and the §3
+  trap rationale (challengeable id vs codes key — four consecutive reverse-engineering
+  failures). `CodesKey` stays in `protocol`: nothing above it uses it
+- New `domain/ChannelKey` — lesson, challengeable, `ProblemKind`, language. This is the
+  identity everything above `protocol` now keys subscriptions, registries and captures by
+- `protocol/ChannelIdentifier` is the **wire form**, built from a key via
+  `ChannelIdentifier.from(key)` and exposing `key`. `asJson()` is unchanged, which the
+  byte-for-byte test and the round-trip over all nine measured captures both still prove
+- `ChallengeableType` stayed in `protocol` — it is wire mapping, not identity — and gained
+  the `ProblemKind → ChallengeableType` direction the identifier needs
+- Zero identity imports of `protocol` remain in `application`. What remains is exactly the
+  message half (`SubmitMessage`, `CableEvent`, `ActionCableFrame`, `GradingMessageMapper`,
+  `StoredChannel`), which is issue #29
+
+### Comments that had gone stale in the process
+
+Four KDocs justified a design by "the value class lives in `protocol`" — `WatchCommand`,
+`WatchRequestHandler`, `RawSessionLog`, `SubmissionRecord`. The types they name are right
+where they should be; the reasons were rewritten rather than deleted, since each decision
+(plain `Long` in the serialized record, plain `Long` as a directory name) still holds for a
+different reason than the one recorded.
+
+### Still open
+
+- Issue #29: `protocol/parse` must hand `application` domain-level grading events, so a
+  renamed message or field cannot reach `GradingSessionAssembler`. The violation that
+  matters most is the one that survives longest

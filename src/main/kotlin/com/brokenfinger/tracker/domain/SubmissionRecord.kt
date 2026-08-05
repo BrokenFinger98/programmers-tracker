@@ -11,8 +11,9 @@ import java.time.OffsetDateTime
  * (protocol doc §6). Writing zero instead would make those gradings drag every average
  * down, silently — the outcome CLAUDE.md names as the worst possible one.
  *
- * `lessonId` is a plain [Long] rather than a value class because the existing `LessonId`
- * lives in the `protocol` package and `domain` imports nothing from it (dev rules §2.1).
+ * `lessonId` is a plain [Long] rather than [LessonId] because this is the serialized form:
+ * the number is what lands in the JSONL, and wrapping it would put a value class in the
+ * schema that every reader of a stored record would then have to unwrap.
  */
 @Serializable
 data class SubmissionRecord(

@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.cable
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
 import com.brokenfinger.tracker.application.ConnectionLiveness
+import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.SessionProvider
@@ -22,7 +23,7 @@ import kotlin.time.toKotlinDuration
 /**
  * Holds one live subscription per watched channel and feeds its frames to a [ChannelCapture].
  *
- * One socket per identifier rather than one multiplexed connection: protocol doc §10 measured
+ * One socket per channel rather than one multiplexed connection: protocol doc §10 measured
  * two sockets receiving identical broadcasts, so this shape is known to work, while
  * multiplexing is a decision that would need evidence of its own. The registry caps watched
  * channels at 8 (design §4.1), so the socket count is bounded by construction.
@@ -38,51 +39,51 @@ class CableChannelSubscriber(
     private val scope: CoroutineScope,
     private val silenceDeadline: Duration = ConnectionLiveness.DEFAULT_DEADLINE,
     private val waitFor: suspend (Duration) -> Unit = { delay(it.toMillis()) },
-    private val captureFor: (ChannelIdentifier) -> ChannelCapture,
+    private val captureFor: (ChannelKey) -> ChannelCapture,
 ) : ChannelSubscriber {
-    private val jobs = ConcurrentHashMap<ChannelIdentifier, Job>()
+    private val jobs = ConcurrentHashMap<ChannelKey, Job>()
 
-    override fun subscribe(identifier: ChannelIdentifier) {
-        jobs.computeIfAbsent(identifier) { observe(it) }
+    override fun subscribe(channel: ChannelKey) {
+        jobs.computeIfAbsent(channel) { observe(it) }
     }
 
-    override fun unsubscribe(identifier: ChannelIdentifier) {
-        jobs.remove(identifier)?.cancel()
-        logger.info("Stopped observing lesson {}", identifier.lessonId.value)
+    override fun unsubscribe(channel: ChannelKey) {
+        jobs.remove(channel)?.cancel()
+        logger.info("Stopped observing lesson {}", channel.lessonId.value)
     }
 
-    private fun observe(identifier: ChannelIdentifier): Job {
-        val capture = captureFor(identifier)
-        return scope.launch { observeUntilCancelled(identifier, capture) }
+    private fun observe(channel: ChannelKey): Job {
+        val capture = captureFor(channel)
+        return scope.launch { observeUntilCancelled(channel, capture) }
     }
 
-    private suspend fun observeUntilCancelled(identifier: ChannelIdentifier, capture: ChannelCapture) {
+    private suspend fun observeUntilCancelled(channel: ChannelKey, capture: ChannelCapture) {
         var attempt = 0
         while (currentCoroutineContext().isActive) {
-            attempt = if (collectOnce(identifier, capture)) 1 else attempt + 1
+            attempt = if (collectOnce(channel, capture)) 1 else attempt + 1
             capture.connectionLost()
             waitFor(ConnectionLiveness.retryDelayFor(attempt))
         }
     }
 
     /** Returns whether any frame arrived, which is what makes the next wait a first attempt. */
-    private suspend fun collectOnce(identifier: ChannelIdentifier, capture: ChannelCapture): Boolean {
+    private suspend fun collectOnce(channel: ChannelKey, capture: ChannelCapture): Boolean {
         var received = false
         runCatching {
-            client.observe(identifier, sessions)
+            client.observe(ChannelIdentifier.from(channel), sessions)
                 .onEach { received = true }
                 .timeout(silenceDeadline.toKotlinDuration())
                 .collect { capture.onEvent(it) }
-        }.onFailure { report(identifier, it) }
+        }.onFailure { report(channel, it) }
         return received
     }
 
     // Logged loudly and per occurrence: a silent gap is the failure this class exists to
     // prevent, so a reconnect must never look like ordinary operation.
-    private fun report(identifier: ChannelIdentifier, cause: Throwable) {
+    private fun report(channel: ChannelKey, cause: Throwable) {
         logger.warn(
             "Observation of lesson {} ended ({}) — reconnecting; anything broadcast meanwhile is lost",
-            identifier.lessonId.value,
+            channel.lessonId.value,
             cause.javaClass.simpleName,
         )
     }
