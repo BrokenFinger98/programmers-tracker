@@ -105,7 +105,7 @@ class RecordWriter private constructor(
     /** Where this grading's frames came to rest, relative to the record repository. */
     private fun rawPathOf(capture: SettledCapture, attempt: Int): String {
         if (!capture.movesRaw(attempt)) return capture.rawSessionId.value
-        val destination = rawAttemptPath.of(capture.lessonId, capture.title, attempt)
+        val destination = rawAttemptPath.of(capture.lessonId, capture.problem?.title, attempt)
         return moved(capture, destination) ?: capture.rawSessionId.value
     }
 

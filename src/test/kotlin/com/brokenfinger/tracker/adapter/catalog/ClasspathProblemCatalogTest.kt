@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.catalog
 
+import com.brokenfinger.tracker.application.CatalogEntry
 import com.brokenfinger.tracker.domain.LessonId
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain

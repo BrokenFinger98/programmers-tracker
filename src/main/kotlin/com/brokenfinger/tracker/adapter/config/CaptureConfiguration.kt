@@ -192,8 +192,13 @@ class CaptureConfiguration {
     fun frameReader(): FrameReader = ObservedFrames
 
     @Bean
-    fun rawSessionReconciler(rawLog: RawSessionLog, writer: RecordWriter, timer: ProblemTimer, frames: FrameReader) =
-        RawSessionReconciler(rawLog, writer, timer, frames)
+    fun rawSessionReconciler(
+        rawLog: RawSessionLog,
+        writer: RecordWriter,
+        timer: ProblemTimer,
+        frames: FrameReader,
+        catalog: ProblemCatalog,
+    ) = RawSessionReconciler(rawLog, writer, timer, frames, catalog)
 
     /**
      * Observation runs on a supervisor job so one channel's failure cannot cancel the
@@ -212,11 +217,14 @@ class CaptureConfiguration {
         writer: RecordWriter,
         timer: ProblemTimer,
         attachment: CodeAttachment,
+        catalog: ProblemCatalog,
     ): ChannelSubscriber = CableChannelSubscriber(
         client = client,
         sessions = sessions,
         scope = scope.scope,
-        captureFor = { channel: ChannelKey -> ChannelCapture(channel, rawLog, registry, writer, timer, attachment) },
+        captureFor = { channel: ChannelKey ->
+            ChannelCapture(channel, rawLog, registry, writer, timer, attachment, catalog)
+        },
     )
 
     private fun recordRoot(recordRepo: String): Path = ConfiguredPath.of(recordRepo)

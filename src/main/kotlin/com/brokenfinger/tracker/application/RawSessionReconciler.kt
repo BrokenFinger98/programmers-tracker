@@ -36,6 +36,7 @@ class RawSessionReconciler(
     private val writer: RecordWriter,
     private val timer: ProblemTimer,
     private val frames: FrameReader,
+    private val catalog: ProblemCatalog,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     /** Reconciles every orphaned session, oldest first. An empty work list is a no-op. */
@@ -76,9 +77,7 @@ class RawSessionReconciler(
         session = replay.settle(),
         rawSessionId = session.id,
         lessonId = session.lessonId,
-        // The catalog title arrives on its own schedule; the layout falls back to the lesson
-        // number on its own (design §5.1).
-        title = "",
+        problem = catalog.find(channel.lessonId),
         language = channel.language,
         elapsedSec = elapsedOf(session),
         terminalFrame = replay.terminalFrame,

@@ -47,7 +47,9 @@ class RecordWriterGitTest {
     fun `a settled submit is committed once its record is written`() = runBlocking<Unit> {
         writer().write(aSubmit()) shouldNotBe null
 
-        repo.subjects().single() shouldStartWith "두 수의 곱 구하기 — WRONG"
+        // The level comes from the catalog and renders as a prefix; a problem the catalog
+        // does not know drops the bracket rather than inventing a level.
+        repo.subjects().single() shouldStartWith "[Lv0] 두 수의 곱 구하기 — WRONG"
         repo.filesInHead() shouldContainExactly listOf(
             "log/submissions.jsonl",
             "problems/120804-두-수의-곱-구하기/attempts/001.raw.jsonl",

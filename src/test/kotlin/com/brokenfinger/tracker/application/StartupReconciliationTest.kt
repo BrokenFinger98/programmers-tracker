@@ -10,6 +10,7 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
@@ -131,7 +132,7 @@ class StartupReconciliationTest {
             clock = clock(),
             writerDispatcher = Dispatchers.Unconfined,
         )
-        return RawSessionReconciler(rawLog, writer, StoppedTimer, aFrameReader(), clock())
+        return RawSessionReconciler(rawLog, writer, StoppedTimer, aFrameReader(), anEmptyCatalog(), clock())
     }
 
     private fun backupLog() = FileBackupLog(AtomicStateFile(base.resolve("state/backup.json")))

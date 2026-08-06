@@ -1,7 +1,23 @@
 package com.brokenfinger.tracker.application
 
-import com.brokenfinger.tracker.adapter.catalog.CatalogEntry
 import com.brokenfinger.tracker.domain.LessonId
+
+/**
+ * One problem as the shipped catalog describes it — reference data, no behaviour.
+ *
+ * It lives beside the port rather than beside the adapter that happens to read it today.
+ * `application` must not import `adapter` (dev rules §1), and a second source for the same
+ * facts — a locally fetched page, say — would otherwise have to depend on the classpath
+ * reader to describe a problem.
+ */
+data class CatalogEntry(
+    val id: Long,
+    val title: String,
+    val level: Int?,
+    val partTitle: String?,
+    val acceptanceRate: Int?,
+    val tags: List<String>,
+)
 
 /**
  * What is known about a problem independently of anything the user did to it — its title,
