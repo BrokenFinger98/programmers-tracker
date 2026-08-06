@@ -38,3 +38,32 @@ It is the measured evidence for three things the fixtures otherwise could not te
 - `challengeable_id`/`testcaseId` values not documented for a lesson are substituted
   with plausible placeholders (documented ids — 14643, 2778, 154893/154894, 5437/5438 — kept)
 - No emails, user ids, or session cookies appear in any fixture
+
+## What is verbatim and what is substituted
+
+The distinction matters because these two look alike and are not: **one is data we are only
+borrowing, the other is what the parser matches on.** Someone tidying up later will want to
+"fix" a substituted value back to what the site actually sent — this section exists to say
+which values that would break.
+
+### Substituted — Programmers' example data (#62)
+
+The `testcases[].input` and `.output` in the `run` captures. They are the site's example
+values, and holding them in a public repository buys nothing: the tests exercise the
+**shape** — two cases, a comma-joined argument string, a scalar expected value — and any
+values with that shape do it equally well.
+
+**Preserve the shape exactly when touching these.** The shape *is* the measurement, and it
+carries facts the parser depends on: comma-joined arguments, quoting, nested brackets, and
+the raw newline inside a quoted string that strict JSON rejects (protocol §7.1).
+
+### Verbatim — protocol values (do not substitute)
+
+The Korean result strings: `실패 (시간 초과)`, `실패 (런타임 에러)`, `테스트를 통과하였습니다.`
+and the rest.
+
+These are **functional**, not content. Verdict classification matches on them (protocol §7),
+so altering one makes the fixture test a protocol that does not exist. That is the failure
+this whole file exists to prevent — a test that passes against an imagined wire format.
+
+Frame types, field names, ordering and null-ness are verbatim for the same reason.

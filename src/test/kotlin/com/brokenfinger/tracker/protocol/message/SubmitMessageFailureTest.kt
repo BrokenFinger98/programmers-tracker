@@ -1,12 +1,14 @@
 package com.brokenfinger.tracker.protocol.message
 
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
-import com.brokenfinger.tracker.support.fixtures.aStartMessage
 import io.kotest.inspectors.forAll
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldMatch
+import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -58,14 +60,20 @@ class SubmitMessageFailureTest {
     // run start carries the example testcases already structured (protocol doc §7).
     @Test
     fun `parses example testcases from run start`() {
-        runErrorStream[0] shouldBe aStartMessage(
-            action = "run",
-            msg = null,
-            exampleTestcases = listOf(ExampleTestcase("3, 2", "1"), ExampleTestcase("10, 5", "0")),
-            hideResult = false,
-            challengeableType = "algorithm",
-            challengeableId = 14650L,
-        )
+        val start = runErrorStream[0].shouldBeInstanceOf<SubmitMessage.Start>()
+
+        // Asserts the **shape**, not the values. The example values are substituted in the
+        // fixture — they are Programmers' data and this repository is public (dev rules §7.3)
+        // — while the shape is the measurement: a comma-joined argument string and a scalar
+        // expected value, one entry per example, carried inline on `run`'s `start`.
+        val examples = start.exampleTestcases.shouldNotBeNull()
+        examples.shouldHaveSize(2)
+        examples.forEach { example ->
+            // Values joined by ", " — the form protocol §7 measured.
+            example.input.shouldNotBeNull() shouldMatch Regex("""[^,]+(, [^,]+)*""")
+            example.output.shouldNotBeNull().shouldNotBeBlank()
+        }
+        start.challengeableId shouldBe 14650L
     }
 
     @Test

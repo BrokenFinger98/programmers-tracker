@@ -475,7 +475,7 @@ Verdict and attempt count stay readable from `git log` alone.
 ps-records/
 ├── problems/
 │   └── 120804-두-수의-곱-구하기/
-│       ├── README.md            problem statement + examples
+│       ├── README.md            my attempt history + a link to the problem
 │       ├── Solution.java        latest code per language (updated on every run/submit)
 │       ├── SolutionTest.java    server-generated runner — for IntelliJ debugging
 │       ├── meta.json            identifiers · level · partTitle · acceptanceRate
@@ -636,9 +636,14 @@ and repeats the same value on repeated calls, so full collection is impossible.
 
 #### Solution — AI tags, server caches
 
-The server already stores the problem statements. An AI reads each once, classifies it, and
-the result goes into `meta.json` for permanent reuse. Exactly the "server collects, AI
-interprets" principle.
+An AI classifies each problem once and the result is reused permanently — exactly the
+"server collects, AI interprets" principle.
+
+**The server does not store the statements.** It never did, and it will not: copying
+Programmers' problem text into a records repository is reproducing their content for no
+benefit we cannot get otherwise, and their terms refuse it. Classification reads a statement
+and keeps only the labels; that is what produced the shipped catalog
+([[decisions/2026-08-06-shipped-problem-catalog]]). A record links to the problem instead.
 
 ```jsonc
 // problems/49189-가장-먼-노드/meta.json
@@ -1059,8 +1064,9 @@ greedy+sorting; "미로 탈출" and "미로 만들기" read alike yet differ in 
 embeddings point in exactly the wrong direction.** AI tagging is the more accurate
 similarity axis.
 
-All original text (problem statements, code, errors, diffs) is preserved, so an index can
-be built later if ever needed. Vectors become genuinely necessary only when merging
+All the text we keep — my code, my errors, my diffs — is preserved, so an index can be
+built later if ever needed. Problem statements are **not** among it and are not ours to
+index. Vectors become genuinely necessary only when merging
 external problem banks into tens of thousands of items, or when hundreds of natural-language
 retrospectives require semantic search.
 
@@ -1072,7 +1078,7 @@ server. A thin bridge is shipped alongside for stdio-only clients.
 ```
 [Query]
   list_problems(level?, part?, tag?, status?)  catalog of 689 problems
-  get_problem(lessonId)                        problem statement + all my attempts
+  get_problem(lessonId)                        my attempts, with a link to the problem
   submissions(since?, verdict?, tag?)          submission history
   attempt_diff(lessonId, from, to)             diff between attempts
   stats(groupBy)                               aggregation by verdict · tag · language
