@@ -1254,3 +1254,20 @@ would test the loader and say nothing about what actually ships.
 It failed the build because the ADR was not yet staged — existence is decided against git's
 index rather than the working tree, exactly so a dirty workspace cannot make it pass. Second
 time this week that guard caught something real.
+
+## [2026-08-06] LICENSE carries the legal name ✅
+
+Issue #67, branch `chore/67-license-legal-name`. One line.
+
+`Copyright (c) 2026 BrokenFinger98` → `Copyright (c) 2026 YU SUNWOO`. The handle was a
+placeholder from #48, added when the file was created because three documents cited a licence
+that did not exist and no name was available.
+
+Everything else is untouched. The text is byte-identical to canonical MIT, which is why
+GitHub detects it — an edit anywhere else would risk that.
+
+Worth recording so nobody later assumes this bought more than it did: **a name in a LICENSE
+is an assertion, not authentication.** Neither a legal name nor a handle proves authorship;
+commit history, account control and timestamps do. The narrow gain is that a legal name
+matches any formal context directly, without the intervening step of showing that a handle
+belongs to a person.
