@@ -58,6 +58,33 @@ class RecordRepositoryLockedFailureAnalyzerTest {
         registered.map { it.javaClass } shouldContain RecordRepositoryLockedFailureAnalyzer::class.java
     }
 
+    /**
+     * The two mechanisms recover differently, and naming the wrong one sends a user to wait
+     * for something that will not happen (#52).
+     */
+    @Test
+    fun `a lock refusal says the holder's death releases it`() {
+        val analysis = analyzer.analyze(bootFailureOf(RecordRepositoryLockedException(records, lockFile())))
+
+        analysis.shouldNotBeNull()
+        analysis.action shouldContain "released by the operating system"
+    }
+
+    @Test
+    fun `a heartbeat refusal says a watch window instead, and names why the lock did not settle it`() {
+        val refused = RecordRepositoryLockedException(
+            records,
+            lockFile(),
+            refusedBy = RecordRepositoryLockedException.Refusal.HEARTBEAT,
+        )
+
+        val analysis = analyzer.analyze(bootFailureOf(refused))
+
+        analysis.shouldNotBeNull()
+        analysis.action shouldContain "does not enforce locks"
+        analysis.action shouldContain "takes over on its own"
+    }
+
     private fun lockFile(): Path = records.resolve(".git").resolve(RecordRepositoryLock.LOCK_FILE)
 
     // The shape Spring hands an analyzer: the failure is wrapped, and the analyzer has to

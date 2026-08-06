@@ -1394,3 +1394,72 @@ failure fixtures exist to prevent.
 literally, so substituting them turned it red — correctly. Rewritten to assert the **shape**:
 two entries, a comma-joined argument string, a non-blank expected value. That is what the
 parser actually has to get right, and it no longer depends on holding somebody else's numbers.
+
+## [2026-08-06] One spelling of the silence rule ✅
+
+Issue #49, branch `refactor/49-liveness-one-spelling`. 762 tests, all gates 0.
+
+`ConnectionLiveness` presented itself as the liveness policy — a `Liveness` sealed interface,
+`frameArrived()`, `check()`, `isDead()`, an `AtomicReference` for the last frame, and a class
+comment saying detection was "the whole point of this class". **None of it ran.** The one
+production consumer, `CableChannelSubscriber`, expresses the same rule as a Flow
+`timeout(silenceDeadline)` and takes only the constants.
+
+Checked for a planned consumer before deleting: the design describes liveness as a detection
+mechanism, which the Flow timeout implements, and no health endpoint is planned. So option 1
+of the issue — delete the unused instance API — was the honest one.
+
+It is now an `object` carrying the numbers and the reasoning that fixes them. Call sites are
+unchanged: `ConnectionLiveness.DEFAULT_DEADLINE` and `retryDelayFor` read identically.
+
+The reason this was worth doing rather than leaving: **the spelling that does not run is the
+one that misleads.** Someone adding a second observation path — a replay, a health endpoint —
+would wire it to `isDead()` believing they had adopted the shipped policy, and would get a
+second implementation of a rule the pure calculators exist to keep singular (dev rules §3).
+
+The tests came with it. They now assert **bounds rather than literals**: each number sits
+between two failures, so they compare against the measurements that constrain it — the 3 s
+ping cadence and the 120 s grading timeout — instead of restating the constant. A test that
+only pins the literal lets someone change it to another number that still passes and still
+loses graded results.
+
+## [2026-08-07] A heartbeat behind the lock ✅
+
+Issue #52, branch `fix/52-heartbeat-on-lockless-filesystems`. 773 tests, all gates 0.
+ADR [[decisions/2026-08-07-heartbeat-behind-the-lock]].
+
+`RecordRepositoryLock` was built for one scenario — `docker compose up` while `bootRun` is
+alive — and measuring it found that **on a Docker Desktop bind mount it protects nothing**.
+`tryLock` returns a lock that excludes nobody and raises nothing, so neither the refusal nor
+the escape hatch fires. The scenario it existed for was the one it did not cover.
+
+A liveness marker now runs behind it, needing only `write` and `stat`.
+
+### Change, not age — and that is the whole design
+
+The obvious shape is a marker aged by mtime, and it is wrong in the one case that matters: a
+container and its host can disagree about what time it is, and an age computed against the
+wrong clock either refuses a free repository or admits a second writer, silently.
+
+So a holder rewrites the marker every beat and a starter reads it, waits, reads again.
+**Changed means alive.** Equality of two reads needs no agreement about when.
+
+### A test caught a real hole in the token
+
+The token started as `pid-counter`, which meant two instances *inside one process* wrote
+byte-identical markers — a takeover would have made a live holder look stale. Now
+`pid-nanoTime-counter`, and each part earns its place.
+
+### Verified where it matters
+
+Two containers on the same Docker Desktop bind mount — the exact configuration `compose.yaml`
+produces, and the one the kernel lock could not cover. The second refused. The refusal names
+the mechanism, because a kernel lock is gone the instant its holder dies while a heartbeat has
+to be observed to stop changing, and telling a user the wrong one sends them to wait for
+something that will not happen.
+
+### What it does not do
+
+Strictly weaker than a lock: two instances started inside the same watch window can both see
+no change and both proceed. The kernel lock closes that wherever locking works; this closes
+the common case where it does not. Windows and network filesystems remain expected-but-unmeasured.

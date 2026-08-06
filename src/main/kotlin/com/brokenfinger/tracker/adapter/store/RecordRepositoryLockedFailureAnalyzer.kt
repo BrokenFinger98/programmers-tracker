@@ -30,8 +30,23 @@ class RecordRepositoryLockedFailureAnalyzer : AbstractFailureAnalyzer<RecordRepo
         if (!cause.refusedByAnotherHolder) return moveOrDisable(cause)
         return "Run exactly one instance per record repository — a container and a native run count " +
             "as two, and `docker compose up` while `bootRun` is alive is the usual way this happens. " +
-            "Stop the other one and start again. Nothing needs deleting: the lock is released by the " +
-            "operating system the moment that process exits, however it exits."
+            "Stop the other one and start again. " + recoveryOf(cause)
+    }
+
+    /**
+     * The two mechanisms recover differently, and naming the wrong one sends a user to wait
+     * for something that will not happen. A kernel lock is gone the instant its holder dies;
+     * a heartbeat has to be *observed* to stop changing, which takes one watch window.
+     */
+    private fun recoveryOf(cause: RecordRepositoryLockedException): String = when (cause.refusedBy) {
+        RecordRepositoryLockedException.Refusal.KERNEL_LOCK ->
+            "Nothing needs deleting: the lock is released by the operating system the moment " +
+                "that process exits, however it exits."
+        RecordRepositoryLockedException.Refusal.HEARTBEAT ->
+            "This one was refused by the liveness marker rather than by a file lock, which means " +
+                "the filesystem holding your records does not enforce locks — a Docker Desktop " +
+                "bind mount is the usual reason. After the other instance stops, the next start " +
+                "waits one watch window and takes over on its own; nothing needs deleting."
     }
 
     private fun unavailableOn(cause: RecordRepositoryLockedException): String =

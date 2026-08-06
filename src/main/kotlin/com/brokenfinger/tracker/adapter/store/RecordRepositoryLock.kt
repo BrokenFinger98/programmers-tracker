@@ -17,14 +17,32 @@ import java.nio.file.StandardOpenOption.WRITE
  * not say. Carries the paths and nothing else — a record repository path is the user's own,
  * and no credential ever belongs in a message that gets printed on failure.
  */
-class RecordRepositoryLockedException(val recordRoot: Path, val lockFile: Path, cause: Throwable? = null) :
-    RuntimeException(describe(recordRoot, cause), cause) {
+class RecordRepositoryLockedException(
+    val recordRoot: Path,
+    val lockFile: Path,
+    cause: Throwable? = null,
+    /**
+     * Which mechanism refused. The two recover differently and telling a user the wrong one
+     * sends them to wait for something that will not happen: a kernel lock is released the
+     * instant the holder dies, while a heartbeat has to be observed to stop changing.
+     */
+    val refusedBy: Refusal = Refusal.KERNEL_LOCK,
+) : RuntimeException(describe(recordRoot, cause), cause) {
     /**
      * Whether a lock was **refused** (another holder) rather than **unavailable** (the
      * filesystem could not provide one at all). Two different problems with two different
      * answers, and only the second is the user's filesystem rather than their second window.
      */
     val refusedByAnotherHolder: Boolean = cause !is IOException
+
+    /** How the repository was found to be taken. */
+    enum class Refusal {
+        /** `FileChannel.tryLock` said no — the holder's death releases it immediately. */
+        KERNEL_LOCK,
+
+        /** The marker kept changing while we watched — recovery takes one watch window. */
+        HEARTBEAT,
+    }
 
     private companion object {
         fun describe(recordRoot: Path, cause: Throwable?): String {

@@ -44,3 +44,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-05] ingest | stage 3 wired: attach fetched code, append the correction (#36) → 1 created (ADR), 1 updated (index)
 
 ## [2026-08-06] ingest | Shipped problem catalog → 1 page created, index updated
+
+## [2026-08-07] ingest | Heartbeat behind the lock → 1 page created, index updated
