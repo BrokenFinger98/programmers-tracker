@@ -1204,3 +1204,53 @@ that does not validate the body will store an error page as data.
 Corrected while here: six documents claimed the solved.ac vocabulary has **180 tags**. It
 has **229** (fetched 2026-08-06). The decision to adopt their vocabulary is unchanged; only
 the count was stale.
+
+## [2026-08-06] The problem catalog — built once, shipped ✅
+
+Issue #63, branch `feat/63-problem-catalog`. 764 tests, all gates 0.
+ADR [[decisions/2026-08-06-shipped-problem-catalog]].
+
+689 problems with title, level, `partTitle`, acceptance rate and tags, loaded from the jar
+into memory at startup. A user runs nothing and fetches nothing.
+
+**536 classified by reading their statements; 153 taken from a `partTitle` that already
+names the technique** (`SELECT`, `해시`, `깊이/너비 우선 탐색(DFS/BFS)` …). Tags come only
+from solved.ac's published vocabulary, which now ships too — development-rules §8 required a
+local replica and `.ps/` is gitignored, so no clone had ever had one.
+
+### The arithmetic that decided it
+
+The design specified a **daily** 689-problem refresh. The owner asked for it to be built now
+rather than deferred, which left only the question of who collects it:
+
+| | requests to Programmers |
+|---|---|
+| daily refresh, per user | ~250,000 / year |
+| one local scan, per user | 536 × every user |
+| **one scan, shipped** | **543, once, ever** |
+
+The option that looks more considerate — every user scans their own — generates two orders
+of magnitude more traffic to produce identical files. Shipping is the lighter choice, and the
+counter-cost is that we distribute an index of ids and titles. No statements, no examples,
+no test data: the statements were read to produce labels and discarded.
+
+### Collection, measured
+
+Metadata 7 requests, every response validated. Statements 536 requests at 1.6-second
+spacing, **zero failures**. Labelling **zero requests** — eight Sonnet workers read files
+already on disk, which is also why the fetching stayed serial and rate-limited instead of
+being multiplied by the worker count.
+
+Validated before shipping: 536/536 classified, no id missing or duplicated, no tag outside
+the 229-tag vocabulary. Confidence high 434 / medium 81 / low 21, stored per entry so a
+consumer can weigh it.
+
+`ClasspathProblemCatalogTest` asserts against the **real shipped resource**, not a fixture.
+The file is the artifact — it was assembled by a process nobody will run again, so a fixture
+would test the loader and say nothing about what actually ships.
+
+### The doc-path guard earned itself again
+
+It failed the build because the ADR was not yet staged — existence is decided against git's
+index rather than the working tree, exactly so a dirty workspace cannot make it pass. Second
+time this week that guard caught something real.

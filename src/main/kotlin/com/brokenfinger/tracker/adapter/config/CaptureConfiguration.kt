@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.cable.CableChannelSubscriber
+import com.brokenfinger.tracker.adapter.catalog.ClasspathProblemCatalog
 import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileProblemTimer
@@ -16,6 +17,7 @@ import com.brokenfinger.tracker.application.DailyBackup
 import com.brokenfinger.tracker.application.DerivedArtifacts
 import com.brokenfinger.tracker.application.FrameReader
 import com.brokenfinger.tracker.application.GitSync
+import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.application.ProblemTimer
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RawSessionReconciler
@@ -73,6 +75,15 @@ class CaptureConfiguration {
 
     @Bean
     fun recordLayout(@Value("\${tracker.record-repo}") recordRepo: String) = RecordLayout(recordRoot(recordRepo))
+
+    /**
+     * Read once at boot and held for the process lifetime — it is a few hundred kilobytes of
+     * immutable reference data inside the jar, so re-reading it per lookup would buy nothing.
+     * A singleton is also the whole failure mode: a jar built without the resource fails here,
+     * loudly, rather than answering "unknown problem" forever.
+     */
+    @Bean
+    fun problemCatalog(): ProblemCatalog = ClasspathProblemCatalog.load()
 
     @Bean
     fun recordStore(layout: RecordLayout): RecordStore = JsonlRecordStore(layout.submissionLog())

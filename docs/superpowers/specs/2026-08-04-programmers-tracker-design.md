@@ -675,7 +675,7 @@ Reasons for adoption:
 > and keeps serving the tag vocabulary and hierarchy** (measured 2026-08-04: tag list of
 > 180, problem lookup normal). What we need is a classification vocabulary, not a judge, so
 > the shutdown does not affect us. Still, it is an external dependency, so **the vocabulary
-> is pinned as a snapshot in `.ps/tag-vocab.json`** so tagging and aggregation keep working
+> is pinned as a snapshot in `src/main/resources/tag-vocab.json`** so tagging and aggregation keep working
 > even if solved.ac disappears.
 
 ```
