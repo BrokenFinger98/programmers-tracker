@@ -219,6 +219,66 @@ and `finish` arrives normally.
 **The `testcases` carried in `run`'s `start` is the best path for local scaffolding.**
 Example inputs/outputs arrive already structured — no need to parse the problem body HTML for tables.
 
+### 7.1 The other problem shape — `main` reading stdin (measured 2026-08-06)
+
+Everything above is a problem where you fill in `solution(...)`. Programmers wraps it in a
+harness of its own — visible in the stack trace as `SolutionTest.lambda$main$0` calling
+`Solution.solution`. **Some problems instead ship a `main` and read stdin**, and they use a
+different frame:
+
+Measured on lesson 181951 (`a와 b 출력하기`, Lv0, java) by hooking the live socket:
+
+```jsonc
+{"action":"run","type":"start",
+ "testcases":[{"input":"\"4 5\"","output":"\"a = 4\nb = 5\""}],
+ "hideResult":false,"challengeable_type":"algorithm","challengeable_id":17583}
+
+{"action":"run","type":"testcase","index":0,
+ "stdout":"a = 4<br/>b = 5<br/>","stderr":null,"exitCode":0,"wallTime":677575,
+ "msg":"테스트를 통과하였습니다.","passed":true,
+ "challengeable_type":"algorithm","challengeable_id":17583}
+
+{"action":"run","type":"result","passed":true,"totalCount":1,"passedCount":1}
+```
+
+Four facts follow, and three of them are traps.
+
+**`stdout` is returned** — with `stderr`, `exitCode` and `wallTime`, on a `run/testcase`
+frame. This answers the §14 entry that asked. Note the frame **type differs by shape**: the
+solution-style capture above produces `run/error` carrying only `msg`; this produces
+`run/testcase`.
+
+**Example values are JSON literals, and the rule is the same for both shapes:**
+
+| shape | `input` as sent | meaning |
+|---|---|---|
+| `solution(...)` | `3, 2` | wrap in `[ ]` → the argument list |
+| `main` + stdin | `"4 5"` | quoted → the stdin text |
+
+Inputs are not always scalar. A run console for lesson 468379 shows
+`4, 5, 2, 2, [[0, 0], [3, 1], …]` — five arguments ending in a 2-D array. Splitting on
+commas destroys it; bracket-wrapping and parsing as JSON does not.
+
+**⚠️ They are JSON-*like*, and a strict parser rejects them.** The expected output above
+contains a **raw newline (0x0A) inside a quoted string**, which JSON forbids:
+
+```
+input  → JSON.parse OK
+output → FAIL: Bad control character in string literal
+```
+
+Control characters inside quotes must be escaped before parsing. Miss this and every
+multi-line stdin problem fails while every other problem works — it will look
+problem-specific rather than systematic.
+
+**⚠️ Newlines are encoded two ways in one response.** `start.testcases[].output` uses a raw
+`\n`; `testcase.stdout` uses `<br/>`. Comparing actual against expected means normalising
+each differently.
+
+**Telling the shapes apart**: the fetched code is the reliable signal — `public static void
+main(` versus a `solution(` declaration. The problem statement also renders differently
+(§12), but the code is what the runner has to match.
+
 ## 8. Full type Catalog (extracted from the bundle)
 
 ```
@@ -371,6 +431,10 @@ No problem, no code, no pass/fail. **A grading result not captured at that momen
 
 - Body: `div.guide-section-description > div.markdown`
 - I/O examples: `<table>` inside the body → `[['num1','num2','result'], ['2','3','-1'], …]`
+  — **only for `solution(...)` problems.** A `main` + stdin problem renders `입력 #N` /
+  `출력 #N` blocks instead, with no column names (measured 2026-08-06 on 181951). The table
+  header is the only place the **argument names** appear at all; the socket sends a flat
+  `"3, 2"` that carries neither names nor arity
 - Per-language initial code: `<input data-type="code" data-language="java" value="…">`
 - For SQL, the body contains the table schema (column names · types · Nullable) as a table
 
@@ -407,9 +471,13 @@ Everything needed for local scaffolding is available here.
 ## 14. Unverified Items
 
 - The 2-entry `scores` array shape for problems with efficiency tests
-- Whether `stdout` is retrievable on a successful algorithm `run`
+- ~~Whether `stdout` is retrievable on a successful algorithm `run`~~ — **answered, see §7.1**
 - `Challenge::SqlChannel` (unused — practice problems are all `database` type)
-- Exact rate-limit rules
+- Exact rate-limit rules. Partially measured 2026-08-06: `/api/v2/school/challenges/`
+  returned an HTML `서비스 접속 오류` page for 2 of 7 sequential requests at 2-second
+  spacing, and none at ~5 seconds with retry. So there is throttling, its threshold is
+  unknown, and **it fails as a 200-with-HTML rather than a 429** — a client that does not
+  validate the body will store an error page as data
 - Oracle submissions
 - Memory-limit-exceeded (`메모리 초과`) message — never triggered
 
@@ -428,6 +496,9 @@ Everything needed for local scaffolding is available here.
 | 12 | 120820 | Algorithm | `run` | **Full compiler output retrieved** (`/Solution.java:3: error: ';' expected`) |
 | 13 | 120810 | Algorithm | `run` | **Full stack trace retrieved** (`ArrayIndexOutOfBoundsException`) |
 | 14 | **120804** | Algorithm | `run` | **Success path captured frame by frame from our own Kotlin client** — `start` → `testcase` ×2 → **`result`** (`passedCount` 2 / `totalCount` 2). Terminal is `result`, **not** `finish`; cases identify themselves by 0-based **`index`**, not `testcaseId`; **index 1 arrived before index 0**. Captured 2026-08-04 (issue #6), reproduced byte-alike 2026-08-05 after the Spring Boot 4 upgrade (#10) |
+
+| 15 | **181951** | Algorithm (`main` + stdin) | `run` | **The other problem shape, captured live** — `start` carries `testcases:[{input,output}]` as for `solution(...)`, but the per-case frame is **`testcase`** (not `error`) and carries `stdout` · `stderr` · `exitCode` · `wallTime`. `input` is the stdin text as a **quoted JSON string**; the expected output holds a **raw newline inside quotes**, which strict JSON rejects. `stdout` encodes newlines as `<br/>` while the expected output uses `\n`. Captured 2026-08-06 by hooking `App.cable.connection.webSocket` in the browser. Details in §7.1 |
+| 16 | 181951 | Algorithm | submit | **Cached-result path reproduced** — a submit immediately after an identical `run` returned `submit/error` `"같은 코드로 채점한 결과가 있습니다."` and no verdict, confirming §13.2. Recorded with outcome `UNKNOWN`, which is the intended handling |
 
 Server-side effect confirmed by the solved count rising 90 → 92. Rating 1371 → 1372.
 Entries 9~11 were intentional failing submissions, so those problems remain unsolved.

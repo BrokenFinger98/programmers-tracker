@@ -68,7 +68,7 @@ Changes require a PR + an ADR in `docs/llm-wiki/wiki/decisions/`.
 | Storage | **Files (JSONL + directories)** | No DB needed. Below scale threshold + git-friendly |
 | Testing | **JUnit 5 + Kotest assertions + MockK** | |
 | Grading integration | **Passive observation** (ActionCable subscription) | Design ch. 3 |
-| Tag vocabulary | **solved.ac 180-tag snapshot** | Design 5.3 |
+| Tag vocabulary | **solved.ac tag snapshot** (229 tags, measured 2026-08-06) | Design 5.3 |
 
 The single source of truth for protocol facts is [`docs/programmers-protocol.md`](docs/programmers-protocol.md).
 Design decisions: [`docs/superpowers/specs/2026-08-04-programmers-tracker-design.md`](docs/superpowers/specs/2026-08-04-programmers-tracker-design.md).
@@ -106,7 +106,7 @@ Reject on sight. Even if the user explicitly requests it, **explain the reason f
 - ❌ **Rule-based analyzers inside the server** — interpretation is the AI's job. The server collects and aggregates, no further
 - ❌ **Vector DB · graph DB** — below scale threshold. Design 6.11 / 6.10
 - ❌ **Traffic interception** (MITM · extension hooking) — passive broadcast observation is sufficient
-- ❌ **Inventing our own tag taxonomy** — we use solved.ac's 180 tags
+- ❌ **Inventing our own tag taxonomy** — we use solved.ac's published tags
 - ❌ **Hardcoded paths · ports · repositories** — this is for public distribution. The developer's
   environment must not become the default
 
