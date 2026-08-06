@@ -10,6 +10,7 @@ import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.Verdict
 import java.time.OffsetDateTime
+import java.util.concurrent.atomic.AtomicLong
 
 // Object mothers (dev rules §6.4). Defaults describe the passing algorithm submission of
 // design §5.2; tests override only what differs. Korean literals are measured protocol
@@ -29,7 +30,7 @@ fun aSubmissionRecord(
     elapsedSec: Long = 847,
     sincePrevSec: Long? = 312,
     hintLevel: Int = 0,
-    captureKey: CaptureKey = CaptureKey("7f4afc0c3bbc82c8"),
+    captureKey: CaptureKey = aCaptureKey(),
     outcome: Outcome = Outcome.JUDGED,
     verdict: Verdict? = Verdict.PASS,
     score: Score? = Score(user = "100.0", perfect = "100.0"),
@@ -85,3 +86,20 @@ fun aSqlSubmissionRecord() = aSubmissionRecord(
     rating = null,
     codePath = "problems/131528-popular-ice-cream/attempts/001.sql",
 )
+
+/**
+ * A capture key that is different on every call, because in a real repository it is.
+ *
+ * The key is derived from the frame that ended one grading, so two gradings never share one
+ * — and since corrections are resolved newest-per-key
+ * ([[decisions/2026-08-06-record-corrections-by-append]]), a fixture that handed every record
+ * the same key would collapse a whole log into a single record. That is not a hypothetical:
+ * a fixed default here made six reader tests pass for the wrong reason until the reader
+ * started resolving corrections.
+ *
+ * A test that means "the same grading, corrected" says so explicitly — by passing a key, or
+ * by `copy()`ing a record, which keeps it.
+ */
+fun aCaptureKey(): CaptureKey = CaptureKey("%016x".format(captureKeys.incrementAndGet()))
+
+private val captureKeys = AtomicLong()

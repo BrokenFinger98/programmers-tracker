@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.Since
@@ -10,6 +11,7 @@ import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -168,5 +170,60 @@ class RecordQueryTest {
 
         buckets.sumOf { it.count } shouldBe 2
         buckets.last().key.shouldBeNull()
+    }
+
+    // Corrections ------------------------------------------------------------------------
+    //
+    // Stage 3 attaches the code after the record is already durable, and the log is
+    // append-only, so the correction is a second line carrying the same capture key
+    // ([[decisions/2026-08-06-record-corrections-by-append]]). Every read has to resolve to
+    // the newest line per key. These are the shapes that go wrong when it does not, and they
+    // are here rather than only in RecordHistoryTest because the defect they prevent is not
+    // in the resolver — it is in a reader that forgets to use it.
+
+    @Test
+    fun `a corrected submission is one submission, not two`() {
+        val pending = aSubmissionRecord(codePending = true, codePath = null)
+        val query = aRecordRepository(root)
+            .containing(pending, pending.copy(codePending = false, codePath = "problems/120804/attempts/001.java"))
+            .query()
+
+        query.history() shouldHaveSize 1
+        query.submissions(since = null, verdict = null) shouldHaveSize 1
+    }
+
+    @Test
+    fun `the correction wins, so the reader sees the attached code and not the pending state`() {
+        val pending = aSubmissionRecord(codePending = true, codePath = null)
+        val query = aRecordRepository(root)
+            .containing(pending, pending.copy(codePending = false, codePath = "problems/120804/attempts/001.java"))
+            .query()
+
+        query.history().single().isCodeAttached() shouldBe true
+    }
+
+    /**
+     * The failure that would be least visible: totals stay plausible while every attached
+     * submission is counted twice, so a pass rate looks right and is not.
+     */
+    @Test
+    fun `a correction does not double-count in the tally`() {
+        val passed = aSubmissionRecord(verdict = Verdict.PASS, codePending = true)
+        val failed = aSubmissionRecord(captureKey = CaptureKey("aaaabbbbccccdddd"), verdict = Verdict.WRONG)
+        val query = aRecordRepository(root)
+            .containing(passed, passed.copy(codePending = false), failed)
+            .query()
+
+        query.tally(TallyGroup.VERDICT).sumOf { it.count } shouldBe 2
+    }
+
+    @Test
+    fun `a problem lists a corrected attempt once`() {
+        val pending = aSubmissionRecord(lessonId = 120804, codePending = true)
+        val query = aRecordRepository(root)
+            .containing(pending, pending.copy(codePending = false))
+            .query()
+
+        query.problem(120804).submissions shouldHaveSize 1
     }
 }

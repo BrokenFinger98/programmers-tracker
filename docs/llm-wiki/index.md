@@ -22,7 +22,6 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-05 [[decisions/2026-08-05-failure-taxonomy]] — Termination matrix, INCOMPLETE/UNKNOWN outcomes, ping liveness
 - 2026-08-05 [[decisions/2026-08-05-ci-guard-scoping]] — CI guards deliberately narrow; coverage report-only
 - 2026-08-05 [[decisions/2026-08-05-protocol-dependency-direction]] — Identity types to domain; message knowledge stays in protocol
-- 2026-08-06 [[decisions/2026-08-06-record-corrections-by-append]] — **proposed** · corrections append rather than edit
 - 2026-08-05 [[decisions/2026-08-05-grading-facts-not-events]] — The protocol crosses into application as facts, not grading events
 - 2026-08-05 [[decisions/2026-08-05-git-retry-scope]] — Git retries lock contention only; path-scoped partial commits
 - 2026-08-06 [[decisions/2026-08-06-wire-git-into-the-pipeline]] — The commit rides with the writer; the daily backup asks rather than fires
@@ -31,7 +30,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-06 [[decisions/2026-08-06-one-place-carries-tense]] — The README states build status in one table; everything else is design tense
 - 2026-08-06 [[decisions/2026-08-06-markdown-paths-must-exist]] — Path guard over maintained docs only; tree blocks anchored to a real directory
 - 2026-08-06 [[decisions/2026-08-06-mcp-read-slice]] — MCP: hand-rolled JSON-RPC over MVC, dual-era (2026-07-28 + handshake), three read tools
-- 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line
+- 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
 

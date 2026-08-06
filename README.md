@@ -46,16 +46,15 @@ marked *designed* exists in `src/`.
 | One instance per record repository, enforced at startup | **built** (with a measured macOS caveat — [`bootstrap.md`](docs/bootstrap.md)) |
 | Telling the server which problem you are on | **built** — one `curl` per problem |
 | A browser sensor that tells it for you | designed · §8 |
-| The failing code stored alongside the record | designed · §4.4 |
-| A per-problem page, and diffs between attempts | designed · §5.1 · §5.5 |
+| The failing code stored alongside the record | **built** |
+| A per-problem page, and diffs between attempts | **built** |
 | Problem titles and tags from a catalog | designed · §5.3 |
 | MCP server — Claude · Cursor · a local LLM reading the records | **built** — three read tools ([`mcp.md`](docs/mcp.md)) |
 | Weakness by tag · review queue · passed-but-slow · per-company profiles | designed · §6 |
 
-Two consequences of that table are worth stating outright, because they change what the first
-hour with this tool feels like: **you register each problem by hand** (and again after a
-restart or a language-tab switch — a submission on an unregistered problem is lost), and
-**the code you wrote is not saved yet** — the record carries the grading, not the source.
+One consequence of that table is worth stating outright, because it changes what the first
+hour with this tool feels like: **you register each problem by hand**, and again after a
+restart or a language-tab switch — a submission on an unregistered problem is lost.
 [`docs/bootstrap.md`](docs/bootstrap.md) walks the whole gap.
 
 ---

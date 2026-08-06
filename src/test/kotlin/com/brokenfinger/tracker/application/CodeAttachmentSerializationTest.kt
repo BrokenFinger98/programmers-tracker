@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import io.kotest.matchers.collections.shouldHaveSize
@@ -119,6 +120,10 @@ class CodeAttachmentSerializationTest {
         rawLog = FileRawSessionLog(rawDirectory()),
         rawAttemptPath = AttemptRawPath(RecordLayout(root)::rawAttemptFile),
         recordRoot = root,
+        // Committing is off: this test is about how writes interleave on the writer, and a real
+        // git would add its own ordering to the thing being measured.
+        git = aQuietGitSync(),
+        submissionLog = RecordLayout(root).submissionLog(),
         clock = Clock.fixed(Instant.parse("2026-08-04T05:23:01Z"), ZoneOffset.UTC),
         writerDispatcher = writerDispatcher,
     )

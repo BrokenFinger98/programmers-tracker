@@ -1121,3 +1121,51 @@ Also worth noting: the worker reported 549 tests where the tree has 513. Nothing
 `verifyEveryTestClassRan` passes and all 53 classes produced results; the worker miscounted
 the pre-existing tests in a class it edited. The guard is what made that answerable in
 seconds instead of being taken on trust.
+
+## [2026-08-06] Stage 3 wired — the record finally carries the code ✅
+
+Issue #36, branch `feat/36-stage3-code-attachment`. 753 tests, all gates 0. Rebased from the
+held PR #38 after the owner accepted the correction semantics.
+
+A grading now produces its files as well as its record: the code is fetched after the record
+is durable, `codePending` clears, `Solution.<ext>` and `attempts/NNN.<ext>` are written,
+`diffFromPrev` is computed and the problem's `README.md` is regenerated. The fetch stays
+outside the confined writer, so a page round trip cannot stall another grading, and a failure
+leaves the record intact and pending for the next pass.
+
+### What the owner decided, and why it needed deciding
+
+Corrections are appended, not edited: a second complete line with the same `captureKey`,
+newest-per-key wins. The log stays append-only — the property that lets it be the attempt
+authority — but **`log/submissions.jsonl` is no longer one line per submission**, and design
+§5.1 said it was. That is a documented data contract, which is why it was held rather than
+merged unattended. §5.1 and §5.2 now state the rule.
+
+Two ADRs described this decision — one written during the design phase, one written overnight
+to escalate it. Neither had reached `main`, so they were merged into the earlier, more
+complete one rather than left as a contradiction the wiki schema forbids.
+
+### Two defects the merge itself surfaced
+
+**The MCP read slice did not resolve corrections.** `RecordQuery` decoded the log's lines
+directly, because #46 was built while this branch sat unmerged. Every attached submission
+would have been listed twice by `submissions` and counted twice by `stats` — a pass rate that
+looks plausible and is wrong. It now reads through `RecordHistory`, so there is one
+implementation of the rule instead of two. Four new tests in `RecordQueryTest` cover it, and
+they were **verified to fail** against the old reader before the fix was restored.
+
+**The record object mother handed every record the same capture key.** Harmless while nothing
+deduplicated; the moment a reader resolved newest-per-key it collapsed a whole log into one
+record, and six reader tests that had been passing for the wrong reason turned red.
+`aSubmissionRecord()` now issues a fresh key per call, which is what a real repository does.
+This is the same shape as every other finding this week — a fixture that was not wrong yet.
+
+### Merge conflicts and how they were resolved
+
+`CaptureConfiguration.kt` — the branch predates #41 and #44, so it carried a startup runner
+of its own while `main` had `StartupReconciliation`. Resolved toward one place: code
+attachment became a fourth step there, ordered **after sessions and before git**, because a
+recovered session is written pending and code attached after `git.reconcile` would sit
+uncommitted until something else swept it up.
+
+`progress.md` — append versus append; merged chronologically.

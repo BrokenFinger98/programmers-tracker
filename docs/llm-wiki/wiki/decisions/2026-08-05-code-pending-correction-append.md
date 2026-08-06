@@ -67,6 +67,12 @@ by the correction's arrival would shuffle a problem's attempt history in its REA
 
 ## Accepted costs
 
+- **`log/submissions.jsonl` is no longer "one line per submission", and design §5.1 said it
+  was.** That is a change to a documented data contract, not an implementation detail, which
+  is why it was held for the repository owner rather than settled unattended. Accepted
+  2026-08-06; §5.1 and §5.2 now state the correction semantics.
+- Every consumer that reads the JSONL directly — the MCP tools, Obsidian Dataview queries,
+  anything a user writes — must resolve newest-per-key or silently double-count.
 - The log grows by one line per successful attachment — roughly double its final size, since
   almost every record ends up attached. Negligible at one human's solving rate, real on disk.
 - No reader may take a raw line at face value again. A consumer that skips `RecordHistory`
@@ -79,5 +85,22 @@ by the correction's arrival would shuffle a problem's attempt history in its REA
 
 ## Outcome
 
-Implemented in #36 together with the wiring of stage 3. Related:
-[[decisions/2026-08-05-capture-pipeline-stages]] · [[decisions/2026-08-05-write-serialization]].
+Implemented in #36 together with the wiring of stage 3, and **accepted by the repository
+owner on 2026-08-06** — the contract change above is the reason it needed an owner rather than
+a merge.
+
+Two things the merge itself surfaced, both of the same shape as the cost above:
+
+- **The MCP read slice did not resolve corrections.** `RecordQuery` decoded the log's lines
+  directly, because #46 was built while this branch sat unmerged. Every attached submission
+  would have been listed twice by `submissions` and counted twice by `stats` — a pass rate
+  that looks plausible and is wrong. `RecordQuery` now reads through `RecordHistory`, there is
+  one implementation of the rule rather than two, and four tests in `RecordQueryTest` fail
+  without it (verified by reverting the fix).
+- **The record object mother handed every record the same capture key.** Harmless while
+  nothing deduplicated; the moment a reader resolved newest-per-key it collapsed a whole log
+  into one record, and six reader tests that had been passing for the wrong reason turned red.
+  `aSubmissionRecord()` now issues a fresh key per call, which is what a real repository does.
+
+Related: [[decisions/2026-08-05-capture-pipeline-stages]] ·
+[[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-06-mcp-read-slice]].

@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import io.kotest.matchers.collections.shouldContainExactly
@@ -230,11 +231,15 @@ class CodeAttachmentTest {
 
     private fun fetches(code: String) = CodeFetcher { _, _ -> CodeFetch.Fetched(code) }
 
+    // Committing is switched off: these tests are about what attachment does to a record and
+    // its files, and a real git here would only add a second reason for them to fail.
     private fun writer() = RecordWriter.of(
         store = store(),
         rawLog = FileRawSessionLog(root.resolve(".ps/raw")),
         rawAttemptPath = AttemptRawPath(RecordLayout(root)::rawAttemptFile),
         recordRoot = root,
+        git = aQuietGitSync(),
+        submissionLog = RecordLayout(root).submissionLog(),
         clock = Clock.fixed(Instant.parse("2026-08-04T05:23:01Z"), ZoneOffset.UTC),
         writerDispatcher = Dispatchers.Unconfined,
     )
