@@ -6,7 +6,13 @@
 
 services:
   tracker:
-    build: .
+    build:
+      context: .
+      # Passed through when the shell has it (`SOURCE_COMMIT=$(git rev-parse --short HEAD)
+      # docker compose build`), "unknown" otherwise. The build time is stamped either way,
+      # and that alone answers "am I running a stale image" — see #60.
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
     image: programmers-tracker:local
     container_name: programmers-tracker
     restart: unless-stopped

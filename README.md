@@ -71,7 +71,7 @@ cp -R template/ps-records ~/ps-records && git -C ~/ps-records init   # your reco
 mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session
 
 cp .env.example .env    # set TRACKER_RECORD_REPO, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
-docker compose up -d
+docker compose build && docker compose up -d   # build first: up alone reuses a stale image
 ```
 
 **[→ Full walkthrough: `docs/bootstrap.md`](docs/bootstrap.md)** — where to find the cookie,

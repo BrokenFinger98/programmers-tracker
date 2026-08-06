@@ -205,6 +205,26 @@ jobs:
       # only appears at the moment a push is attempted (#56: ssh was missing while
       # compose.yaml documented SSH credentials). Asserting presence is cheap; discovering
       # it from a user's failed backup is not.
+      # A running instance must be able to say which build it is. `docker compose up` reuses
+      # a tagged image without rebuilding, so the failure mode is running last week's code
+      # with no symptom at all beyond a log line that never appears (#60) — and this tool
+      # records data that cannot be re-fetched, so a stale image writes wrong records quietly.
+      - name: The image says which build it is
+        run: |
+          set -e
+          logs=$(docker logs tracker-exposed 2>&1)
+          echo "$logs" | grep -q "Running build" \
+            || { echo "REGRESSION: the image does not announce its build identity."; \
+                 echo "Without it a stale image is indistinguishable from a fresh one — see #60."; \
+                 echo "$logs" | head -30; exit 1; }
+          # An unstamped build means build-info.properties never reached the jar, which looks
+          # identical from outside and defeats the whole point.
+          if echo "$logs" | grep -q "Running an unstamped build"; then
+            echo "REGRESSION: the image carries no build-info.properties, so its stamp is empty."
+            exit 1
+          fi
+          echo "$logs" | grep -m1 "Running build"
+
       - name: The image ships the tools the docs promise
         run: |
           set -e

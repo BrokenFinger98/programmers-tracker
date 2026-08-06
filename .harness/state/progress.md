@@ -1309,3 +1309,46 @@ fields stay absent rather than being filled with a stand-in.
 
 Verified the new tests fail without the fix before keeping them: reverting `toRecord` to the
 hardcoded empty title turned two of them red.
+
+## [2026-08-06] A running instance says which build it is ✅
+
+Issue #60, branch `fix/60-image-identity`. 768 tests, all gates 0.
+
+`docker compose up` reuses a tagged image rather than rebuilding, so a user who pulls new
+code and starts the stack keeps running the old one. It happened during the 2026-08-06
+verification and invalidated a whole Docker pass: the image predated stage 3 by an hour, and
+**the only symptom was a log line that never appeared**. An absent line is close to
+invisible; it was noticed by accident.
+
+That matters more here than in most tools, because this one records data that cannot be
+re-fetched. A stale image writes records with whatever verdict rules it was built from and
+says nothing about it.
+
+Now the first lines of the log say:
+
+```
+Running build 0.0.1-SNAPSHOT — compiled 2026-08-06 14:37:39 UTC from commit 43578df.
+If that predates your last pull, you are on a stale image: rebuild with `docker compose build`.
+```
+
+### The commit could not be read the obvious way
+
+`.dockerignore` excludes `.git/` **for a security reason** — it carries every credential ever
+committed and then removed — so a container build cannot read the commit for itself. Relaxing
+that to get a nicer log line would have been a bad trade.
+
+So the **build time** carries the feature: Gradle stamps it always, and comparing it against
+when you last pulled is the whole diagnostic. The commit arrives as an optional build
+argument (`SOURCE_COMMIT=$(git rev-parse --short HEAD) docker compose build`) and reads
+`unknown` otherwise, which is honest rather than absent.
+
+### The stamp is optional, deliberately
+
+`BuildProperties` exists only when `build-info.properties` was generated, which a plain
+`gradlew test` does not do. Requiring it would turn a missing build stamp into a context that
+refuses to start — trading a diagnostic for an outage. An unstamped run says so instead, and
+CI fails if the *image* is ever unstamped, because from outside that looks identical to a
+stamped one.
+
+Verified by running it: built with `SOURCE_COMMIT`, started the real container, read the line
+out of `docker logs`.

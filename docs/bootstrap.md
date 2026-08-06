@@ -153,6 +153,17 @@ docker compose up -d
 docker compose logs -f
 ```
 
+> **After every `git pull`, run `docker compose build` first.**
+> `docker compose up` reuses an image that already carries the tag and does **not** rebuild,
+> so without this you keep running the code you built last time — and the only symptom is
+> behaviour that quietly does not happen. The first log line tells you which build you are on:
+>
+> ```
+> Running build 0.0.1-SNAPSHOT — compiled 2026-08-06 15:32:45 KST from commit unknown.
+> ```
+>
+> If that timestamp predates your last pull, you are on a stale image.
+
 ### Natively
 
 ```bash

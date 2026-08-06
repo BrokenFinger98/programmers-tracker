@@ -25,6 +25,22 @@ repositories {
 // LiveObserveKt adds a second main function; the boot jar keeps the Spring entry point.
 springBoot {
     mainClass.set("com.brokenfinger.tracker.TrackerApplicationKt")
+
+    // So a running instance can say which build it is. `docker compose up` reuses a tagged
+    // image without rebuilding, and the only symptom of running a stale one was an absent
+    // log line (#60) — a stale image records with whatever version it was built from and says
+    // nothing about it.
+    //
+    // The timestamp is the part that always exists. The commit does not: `.dockerignore`
+    // excludes `.git/` on purpose, because it carries every credential ever committed and
+    // then removed, so a container build cannot read it. It arrives as a build argument when
+    // whoever builds supplies one, and reads "unknown" when they do not — which is honest
+    // rather than absent.
+    buildInfo {
+        properties {
+            additional.put("commit", providers.environmentVariable("SOURCE_COMMIT").getOrElse("unknown"))
+        }
+    }
 }
 
 // Spring Boot's BOM manages these transitively, so the version catalog alone does NOT
