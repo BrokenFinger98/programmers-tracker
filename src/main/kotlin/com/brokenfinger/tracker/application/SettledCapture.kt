@@ -21,7 +21,13 @@ data class SettledCapture(
     /** The raw log this grading was assembled from — still the durable copy of its frames. */
     val rawSessionId: RawSessionId,
     val lessonId: Long,
-    val title: String,
+    /**
+     * What the shipped catalog knows about this problem, or null when it does not know it —
+     * a problem published after the catalog was built, which is ordinary rather than an error
+     * ([[decisions/2026-08-06-shipped-problem-catalog]]). Null stays null all the way to the
+     * record: an unknown title is absent, never a placeholder that reads like a measurement.
+     */
+    val problem: CatalogEntry?,
     val language: String,
     /** Time on this problem, measured by whoever owns the timer, never by the writer. */
     val elapsedSec: Long,
@@ -52,7 +58,11 @@ data class SettledCapture(
     fun toRecord(ts: OffsetDateTime, attempt: Int, key: CaptureKey, rawPath: String) = SubmissionRecord(
         ts = ts,
         lessonId = lessonId,
-        title = title,
+        title = problem?.title.orEmpty(),
+        level = problem?.level,
+        part = problem?.partTitle,
+        acceptanceRate = problem?.acceptanceRate,
+        tags = problem?.tags.orEmpty(),
         language = language,
         action = action(),
         attempt = attempt,

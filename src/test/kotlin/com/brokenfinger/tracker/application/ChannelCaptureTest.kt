@@ -10,14 +10,19 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
+import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
+import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.aTerminalFrame
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.fixtures.anObservedFrame
 import com.brokenfinger.tracker.support.fixtures.observedFrames
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -114,12 +119,10 @@ class ChannelCaptureTest {
 
     /** Nothing may look measured that was not: the catalog title arrives on its own schedule. */
     @Test
-    fun `the record carries no title and takes its elapsed time from the timer`() {
+    fun `the record takes its elapsed time from the timer, not from the frames`() {
         consume(capture(), "algorithm-pass.jsonl")
 
-        val record = records().single()
-        record.title shouldBe ""
-        record.elapsedSec shouldBe ELAPSED_SEC
+        records().single().elapsedSec shouldBe ELAPSED_SEC
     }
 
     @Test
@@ -265,6 +268,60 @@ class ChannelCaptureTest {
         records().map { it.outcome } shouldContainExactly listOf(Outcome.INCOMPLETE, Outcome.JUDGED)
     }
 
+    // Catalog ------------------------------------------------------------------------------
+    //
+    // The record carries what the shipped catalog knows about the problem
+    // ([[decisions/2026-08-06-shipped-problem-catalog]]). Before it existed every record was
+    // written with an empty title, so a problem directory was a bare lesson number and design
+    // §5.1's `<lessonId>-<slug>` was not what actually happened (#59).
+
+    @Test
+    fun `a recorded grading carries the catalogued title`() {
+        consume(capture(), "algorithm-pass.jsonl")
+
+        records().single().title shouldBe "두 수의 곱 구하기"
+    }
+
+    @Test
+    fun `it carries the rest of what the catalog knows, so weakness analysis has an axis`() {
+        consume(capture(), "algorithm-pass.jsonl")
+
+        val record = records().single()
+
+        record.level shouldBe 0
+        record.part shouldBe "코딩테스트 입문"
+        record.acceptanceRate shouldBe 91
+        record.tags shouldContainExactly listOf("implementation", "arithmetic")
+    }
+
+    /**
+     * The shipped catalog is a snapshot, so a problem published after it was built is simply
+     * unknown. That must record the grading anyway — the grading cannot be fetched again and
+     * the title can.
+     */
+    @Test
+    fun `a problem the catalog has never heard of is still recorded`() {
+        consume(capture(catalog = anEmptyCatalog()), "algorithm-pass.jsonl")
+
+        records().shouldHaveSize(1)
+    }
+
+    /**
+     * And it stays empty. A stand-in like "Unknown problem" would be indistinguishable from a
+     * title we actually know ([[concepts/assumption-vs-measurement]]), and `RecordLayout`
+     * already falls back to the bare lesson id on its own.
+     */
+    @Test
+    fun `an unknown problem leaves the catalogued fields absent rather than filled in`() {
+        consume(capture(catalog = anEmptyCatalog()), "algorithm-pass.jsonl")
+
+        val record = records().single()
+
+        record.title shouldBe ""
+        record.level.shouldBeNull()
+        record.tags.shouldBeEmpty()
+    }
+
     // Harness ------------------------------------------------------------------------------
 
     private fun recording(into: MutableList<SubmissionRecord>) = RecordAttachment {
@@ -276,9 +333,10 @@ class ChannelCaptureTest {
         channel: ChannelKey = anAlgorithmChannel(),
         store: RecordStore = JsonlRecordStore.under(root),
         attachment: RecordAttachment = RecordAttachment { AttachOutcome.DEFERRED },
+        catalog: ProblemCatalog = aCatalogOf(aCatalogEntry()),
     ): ChannelCapture {
         registry.watch(channel, NOW)
-        return ChannelCapture(channel, rawLog, registry, writerOf(store), FixedTimer(ELAPSED_SEC), attachment)
+        return ChannelCapture(channel, rawLog, registry, writerOf(store), FixedTimer(ELAPSED_SEC), attachment, catalog)
     }
 
     private fun writerOf(store: RecordStore) = RecordWriter.of(

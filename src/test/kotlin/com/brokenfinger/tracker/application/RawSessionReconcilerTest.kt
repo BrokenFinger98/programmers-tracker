@@ -11,6 +11,8 @@ import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
+import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
+import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import io.kotest.matchers.collections.shouldContainExactly
@@ -218,7 +220,15 @@ class RawSessionReconcilerTest {
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
     private fun reconcile(): ReconcileReport = runBlocking {
-        RawSessionReconciler(rawLog, writer(), StaleTimer(ELAPSED_SEC), aFrameReader(), clock).reconcile()
+        RawSessionReconciler(
+            rawLog,
+            writer(),
+            StaleTimer(ELAPSED_SEC),
+            aFrameReader(),
+            aCatalogOf(aCatalogEntry()),
+            clock,
+        )
+            .reconcile()
     }
 
     private fun writer() = RecordWriter.of(

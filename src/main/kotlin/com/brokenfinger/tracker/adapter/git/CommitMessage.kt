@@ -16,11 +16,12 @@ import com.brokenfinger.tracker.domain.Verdict
  * without opening a record. The design's own examples carry a Korean title; they are spelled
  * with a placeholder here only because committed comments are English (dev rules §12).
  *
- * **Every part degrades rather than being invented.** No catalog is wired yet, so today
- * every record carries an empty title and no level: the bracket is dropped and the lesson id
- * stands in for the name — the same fallback, for the same reason, that `ProblemReadme`
- * already applies to its heading. An invented title would read exactly like a real one,
- * which is the silent-wrong-data outcome CLAUDE.md ranks worst.
+ * **Every part degrades rather than being invented.** Title and level come from the shipped
+ * catalog (#59), which is a snapshot and does not know a problem published after it was
+ * built. For those the bracket is dropped and the lesson id stands in for the name — the
+ * same fallback, for the same reason, that `ProblemReadme` already applies to its heading.
+ * An invented title would read exactly like a real one, which is the silent-wrong-data
+ * outcome CLAUDE.md ranks worst.
  *
  * The title itself is data and is kept verbatim: a Korean problem name is what Programmers
  * called it, and dev rules §12 governs prose we write, not values we received.

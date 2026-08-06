@@ -1,21 +1,12 @@
 package com.brokenfinger.tracker.adapter.catalog
 
+import com.brokenfinger.tracker.application.CatalogEntry
 import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.domain.LessonId
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-
-/** One problem as the shipped catalog describes it. Everything here is reference data. */
-data class CatalogEntry(
-    val id: Long,
-    val title: String,
-    val level: Int?,
-    val partTitle: String?,
-    val acceptanceRate: Int?,
-    val tags: List<String>,
-)
 
 /**
  * The problem catalog, read once from the jar and held in memory.

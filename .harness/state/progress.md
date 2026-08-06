@@ -1271,3 +1271,41 @@ is an assertion, not authentication.** Neither a legal name nor a handle proves 
 commit history, account control and timestamps do. The narrow gain is that a legal name
 matches any formal context directly, without the intervening step of showing that a handle
 belongs to a person.
+
+## [2026-08-06] Records carry what the catalog knows ✅
+
+Issue #59, branch `fix/59-catalog-fields-in-records`. 768 tests, all gates 0.
+
+Every record was written with `title = ""`, hardcoded at both capture sites with a comment
+saying the catalog title "arrives on its own schedule". #65 shipped the catalog, so it does.
+A record now carries the title, level, part, acceptance rate and tags, and a problem
+directory is `problems/<lessonId>-<slug>` as design §5.1 always specified rather than a bare
+number nobody can read.
+
+Two things fell out of it that were not the point but are worth having:
+
+- **Commit subjects gained their level.** `CommitMessage` was written to render
+  `[Lv2] <title> — WRONG (12/16, attempt 3)` and had been silently dropping the bracket
+  because level was always null. Its doc comment said "No catalog is wired yet"; that is no
+  longer true and it now says so.
+- **Records carry tags**, which is the axis weakness analysis needs. Nothing consumes them
+  yet, but the data starts accumulating from this commit rather than from whenever §6 is
+  built — and a grading cannot be re-fetched later to backfill.
+
+### A dependency violation I introduced in #65, fixed here
+
+`application/ProblemCatalog` returned `adapter.catalog.CatalogEntry` — a port in
+`application` handing back a type owned by `adapter`, which dev rules §1 forbids in that
+direction. `CatalogEntry` moved to `application` beside the port. It also matters
+practically: a second source for the same facts, a locally fetched page say, would otherwise
+have had to depend on the classpath reader in order to describe a problem.
+
+### The absent case is the one that had to keep working
+
+The catalog is a snapshot, so a problem published after it was built is unknown. That records
+the grading anyway and leaves the catalogued fields empty — the grading cannot be fetched
+again and the title can. Two tests pin it, one that the record still appears and one that the
+fields stay absent rather than being filled with a stand-in.
+
+Verified the new tests fail without the fix before keeping them: reverting `toRecord` to the
+hardcoded empty title turned two of them red.

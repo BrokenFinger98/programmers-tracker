@@ -35,6 +35,7 @@ class ChannelCapture(
     private val writer: RecordWriter,
     private val timer: ProblemTimer,
     private val attachment: RecordAttachment,
+    private val catalog: ProblemCatalog,
 ) {
     private var live: LiveGrading? = null
 
@@ -124,9 +125,7 @@ class ChannelCapture(
         session = session,
         rawSessionId = rawSessionId,
         lessonId = lessonId(),
-        // The catalog title arrives on its own schedule and a placeholder here would read as
-        // measured; the layout falls back to the lesson number on its own (design §5.1).
-        title = "",
+        problem = catalog.find(channel.lessonId),
         language = channel.language,
         elapsedSec = timer.elapsedSecOf(lessonId()),
         terminalFrame = terminalFrame,
