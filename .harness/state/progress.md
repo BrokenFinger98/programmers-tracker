@@ -1169,3 +1169,38 @@ recovered session is written pending and code attached after `git.reconcile` wou
 uncommitted until something else swept it up.
 
 `progress.md` — append versus append; merged chronologically.
+
+## [2026-08-06] The other problem shape, measured ✅
+
+Issue #61, branch `docs/61-main-style-run-measurement`.
+
+Captured live on lesson 181951 by hooking `App.cable.connection.webSocket` in the browser,
+while investigating how to build the IntelliJ runner (#37). Programmers has **two problem
+shapes** and we had only ever captured one.
+
+- `solution(...)` problems — Programmers wraps them in its own `SolutionTest` harness, and a
+  failing run reports through `run/error` with `msg` only.
+- `main` + stdin problems — the per-case frame is **`run/testcase`**, carrying `stdout`,
+  `stderr`, `exitCode` and `wallTime`. This answers the §14 question about whether stdout is
+  retrievable: it is.
+
+Three traps came with it, all now written down before a parser relies on them:
+
+1. Example values are **JSON literals** — `3, 2` wraps to an argument array, `"4 5"` is the
+   stdin text — but they are not strictly JSON. The expected output holds a **raw newline
+   inside a quoted string**, which `JSON.parse` rejects. Miss it and only multi-line stdin
+   problems break, which will look problem-specific rather than systematic.
+2. **Newlines are encoded two ways in one response**: `\n` in the expected output, `<br/>`
+   in `stdout`.
+3. The problem statement renders differently per shape, and the **argument names exist only
+   in the solution-style table** — the socket sends a flat `"3, 2"` with neither names nor
+   arity.
+
+Also measured, and previously listed as unknown: the list API **throttles, and fails as a
+200 carrying an HTML error page** rather than a 429. Two of seven sequential requests at
+2-second spacing came back as `서비스 접속 오류`; none did at ~5 seconds with retry. A client
+that does not validate the body will store an error page as data.
+
+Corrected while here: six documents claimed the solved.ac vocabulary has **180 tags**. It
+has **229** (fetched 2026-08-06). The decision to adopt their vocabulary is unchanged; only
+the count was stale.

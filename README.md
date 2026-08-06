@@ -130,7 +130,7 @@ which have been built.
 
 - **How** you mostly die — logic errors, timeouts, or simple mistakes
 - **First-submission pass rate** — the metric that matters most in the real thing
-- Weaknesses by type (against the solved.ac 180-tag vocabulary)
+- Weaknesses by type (against the solved.ac tag vocabulary)
 - **Passed-but-slow problems** — solutions that dodged the intended approach
 - Repeated mistakes — an AI reads the diffs between attempts and points them out
 - When to review — confidence-based spaced repetition

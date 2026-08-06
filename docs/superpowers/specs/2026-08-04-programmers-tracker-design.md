@@ -653,7 +653,7 @@ interprets" principle.
 
 #### The tag vocabulary is solved.ac's
 
-We do not invent our own tag scheme. **The 180 solved.ac tags are adopted as the
+We do not invent our own tag scheme. **The solved.ac tags are adopted as the
 vocabulary.**
 
 ```
@@ -679,7 +679,7 @@ Reasons for adoption:
 > even if solved.ac disappears.
 
 ```
-GET https://solved.ac/api/v3/tag/list?page=N        full vocabulary (180 tags)
+GET https://solved.ac/api/v3/tag/list                full vocabulary (229 on 2026-08-06)
 ```
 
 The Cloudflare challenge blocks the server's plain HTTP client. Vocabulary collection is
