@@ -27,6 +27,11 @@ COPY src ./src
 # `bootJar`, not `build`: the gates run in CI on three operating systems and repeating
 # them here would only prove the same thing more slowly. The image build's job is to
 # produce the artifact.
+# The jar stamps itself with its build time, and with the commit when whoever builds
+# supplies one. `.dockerignore` excludes `.git/` on purpose — it carries every credential
+# ever committed and then removed — so this build cannot read the commit for itself.
+ARG SOURCE_COMMIT=unknown
+ENV SOURCE_COMMIT=$SOURCE_COMMIT
 RUN ./gradlew --no-daemon bootJar && mv build/libs/*.jar /tmp/tracker.jar
 
 # --- runtime -----------------------------------------------------------------
