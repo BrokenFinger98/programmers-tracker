@@ -200,6 +200,22 @@ jobs:
             || { echo "it failed for some other reason:"; tail -40 second.log; exit 1; }
           echo "refused, as it must be"
 
+      # Every binary the documentation tells a user to rely on. Their absence is invisible
+      # from outside — `docker compose config` validates, mounts resolve, and the failure
+      # only appears at the moment a push is attempted (#56: ssh was missing while
+      # compose.yaml documented SSH credentials). Asserting presence is cheap; discovering
+      # it from a user's failed backup is not.
+      - name: The image ships the tools the docs promise
+        run: |
+          set -e
+          for binary in git curl ssh; do
+            docker run --rm --entrypoint sh programmers-tracker:ci -c "command -v $binary" >/dev/null \
+              || { echo "REGRESSION: '$binary' is not in the image."; \
+                   echo "compose.yaml and docs/bootstrap.md tell users it is there — see #56."; \
+                   exit 1; }
+          done
+          echo "git, curl and ssh are all present"
+
       - name: The HEALTHCHECK reports healthy
         run: |
           set -e

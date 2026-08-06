@@ -35,8 +35,14 @@ FROM eclipse-temurin:25-jre AS runtime
 # `git` is not optional: the record repository's history is written by shelling out to the
 # git CLI (CommandLineGitSync), so an image without it records to disk and silently never
 # commits. `curl` backs the HEALTHCHECK below.
+#
+# `openssh-client` is not optional either, and its absence was invisible: git ships without
+# it, `docker compose config` validates, the key mounts correctly, and the push then dies on
+# `ssh: not found` (#56). compose.yaml documents SSH as a credential option, and a GitHub
+# deploy key — the only credential scoped to one repository — is SSH-only, so without this
+# the image quietly pushes users toward an account-wide token instead.
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y git curl \
+    && apt-get install --no-install-recommends -y git curl openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # The record repository arrives as a bind mount, so its owner is the host user and almost
