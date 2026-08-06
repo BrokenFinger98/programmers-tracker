@@ -313,8 +313,8 @@ Data we do not control is replicated locally, and only the replica is read.
 
 | Target | Snapshot | Refresh |
 |---|---|---|
-| solved.ac tag vocabulary, 229 tags | `.ps/tag-vocab.json` | Manual |
-| Programmers problem catalog, 689 problems | `.ps/catalog.json` | Once a day |
+| solved.ac tag vocabulary, 229 tags | `src/main/resources/tag-vocab.json` | Manual |
+| Programmers problem catalog, 689 problems | `src/main/resources/catalog.json` | **Once, ever** — see [[decisions/2026-08-06-shipped-problem-catalog]] |
 
 **Rationale**: Baekjoon Online Judge shut down in May 2026. The solved.ac API is still alive,
 but no one knows for how long.

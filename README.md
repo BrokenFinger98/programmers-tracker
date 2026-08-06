@@ -48,7 +48,7 @@ marked *designed* exists in `src/`.
 | A browser sensor that tells it for you | designed · §8 |
 | The failing code stored alongside the record | **built** |
 | A per-problem page, and diffs between attempts | **built** |
-| Problem titles and tags from a catalog | designed · §5.3 |
+| Problem titles and tags from a catalog | **built** — 689 problems, shipped |
 | MCP server — Claude · Cursor · a local LLM reading the records | **built** — three read tools ([`mcp.md`](docs/mcp.md)) |
 | Weakness by tag · review queue · passed-but-slow · per-company profiles | designed · §6 |
 
@@ -174,10 +174,11 @@ the derived pages of §5.5 exist.
 - This tool is **for personal learning records** and is used only on your own account
 - **It provides no auto-submission.** The user submits directly in the browser;
   the server merely observes and records the results
-- Today the server sends Programmers exactly one kind of request: the channel subscription.
-  The design adds two more, both at the level of what a browser already does — a problem-page
-  fetch to recover the code you wrote (§4.4), and a catalog fetch for problem titles and tags
-  (§5.3) that never polls more than once a day
+- The server sends Programmers two kinds of request, both at the level of what a browser
+  already does: the channel subscription, and a problem-page fetch to recover the code you
+  wrote (§4.4). **It never fetches a catalog** — problem titles, levels and tags ship inside
+  the jar, collected once and for everybody rather than once per install
+  ([`the decision`](docs/llm-wiki/wiki/decisions/2026-08-06-shipped-problem-catalog.md))
 - If Programmers asks us to stop, we comply
 
 Since this tool uses a private protocol, the judgment and responsibility for using it rest with the user.

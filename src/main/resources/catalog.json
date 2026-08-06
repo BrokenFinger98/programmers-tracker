@@ -1,0 +1,8964 @@
+{
+"schema": 1,
+"generatedAt": "2026-08-06",
+"vocabulary": {
+"source": "solved.ac /api/v3/tag/list",
+"tags": 229,
+"fetchedAt": "2026-08-06"
+},
+"provenance": {
+"metadata": "GET /api/v2/school/challenges/?perPage=100 — 7 requests, every response validated",
+"statements": "GET /learn/courses/30/lessons/{id} — 536 requests at 1.6s spacing, 0 failures",
+"labelling": "8 Sonnet workers over the fetched statements; no worker made a network request",
+"notFetched": "153 problems whose partTitle already names the technique"
+},
+"problems": [
+{
+"id": 1829,
+"title": "카카오프렌즈 컬러링북",
+"level": 2,
+"partTitle": "2017 카카오코드 예선",
+"acceptanceRate": 30,
+"tags": [
+"flood_fill",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 1830,
+"title": "브라이언의 고민",
+"level": 3,
+"partTitle": "2017 카카오코드 예선",
+"acceptanceRate": 3,
+"tags": [
+"backtracking",
+"string",
+"case_work"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1831,
+"title": "4단 고음",
+"level": 4,
+"partTitle": "2017 카카오코드 예선",
+"acceptanceRate": 11,
+"tags": [
+"dp",
+"combinatorics"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1832,
+"title": "보행자 천국",
+"level": 3,
+"partTitle": "2017 카카오코드 예선",
+"acceptanceRate": 37,
+"tags": [
+"dp",
+"grid_graph"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 1833,
+"title": "캠핑",
+"level": 3,
+"partTitle": "2017 카카오코드 예선",
+"acceptanceRate": 20,
+"tags": [
+"sweeping",
+"sorting",
+"stack"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1834,
+"title": "신비로운 유적 탐험",
+"level": 5,
+"partTitle": "2017 카카오코드 예선",
+"acceptanceRate": 1,
+"tags": [
+"dp_tree",
+"bipartite_matching",
+"trees"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1835,
+"title": "단체사진 찍기",
+"level": 2,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 25,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 1836,
+"title": "리틀 프렌즈 사천성",
+"level": 3,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 17,
+"tags": [
+"bfs",
+"backtracking",
+"greedy"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1837,
+"title": "GPS",
+"level": 3,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 16,
+"tags": [
+"dp",
+"graphs"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1838,
+"title": "몸짱 트레이너 라이언의 고민",
+"level": 3,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 10,
+"tags": [
+"parametric_search",
+"bipartite_matching"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1839,
+"title": "튜브의 소개팅",
+"level": 4,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 8,
+"tags": [
+"bfs",
+"dp",
+"grid_graph"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 1840,
+"title": "스마트한 프로도",
+"level": 5,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 1,
+"tags": [
+"graphs",
+"constructive"
+],
+"confidence": "low",
+"source": "classified"
+},
+{
+"id": 1841,
+"title": "IU와 콘의 보드게임",
+"level": 5,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 0,
+"tags": [
+"geometry",
+"dp"
+],
+"confidence": "low",
+"source": "classified"
+},
+{
+"id": 1842,
+"title": "네오의 귀걸이",
+"level": 5,
+"partTitle": "2017 카카오코드 본선",
+"acceptanceRate": 1,
+"tags": [
+"dp",
+"offline_queries",
+"segtree"
+],
+"confidence": "low",
+"source": "classified"
+},
+{
+"id": 1843,
+"title": "사칙연산",
+"level": 4,
+"partTitle": "동적계획법(Dynamic Programming)",
+"acceptanceRate": 20,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 1844,
+"title": "게임 맵 최단거리",
+"level": 2,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 66,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 1845,
+"title": "폰켓몬",
+"level": 1,
+"partTitle": "해시",
+"acceptanceRate": 69,
+"tags": [
+"hash_set"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 12899,
+"title": "124 나라의 숫자",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 52,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12900,
+"title": "2 x n 타일링",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 60,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12901,
+"title": "2016년",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 67,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12902,
+"title": "3 x n 타일링",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 30,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12903,
+"title": "가운데 글자 가져오기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 85,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12904,
+"title": "가장 긴 팰린드롬",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 47,
+"tags": [
+"string",
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12905,
+"title": "가장 큰 정사각형 찾기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 48,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12906,
+"title": "같은 숫자는 싫어",
+"level": 1,
+"partTitle": "스택/큐",
+"acceptanceRate": 80,
+"tags": [
+"stack",
+"queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 12907,
+"title": "거스름돈",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 46,
+"tags": [
+"dp",
+"knapsack"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12909,
+"title": "올바른 괄호",
+"level": 2,
+"partTitle": "스택/큐",
+"acceptanceRate": 80,
+"tags": [
+"stack",
+"queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 12910,
+"title": "나누어 떨어지는 숫자 배열",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 86,
+"tags": [
+"implementation",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12911,
+"title": "다음 큰 숫자",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 76,
+"tags": [
+"bruteforcing",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12912,
+"title": "두 정수 사이의 합",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"math",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12913,
+"title": "땅따먹기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 63,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12914,
+"title": "멀리 뛰기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 72,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12915,
+"title": "문자열 내 마음대로 정렬하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 73,
+"tags": [
+"sorting",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12916,
+"title": "문자열 내 p와 y의 개수",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 87,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12917,
+"title": "문자열 내림차순으로 배치하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 84,
+"tags": [
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12918,
+"title": "문자열 다루기 기본",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 82,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12919,
+"title": "서울에서 김서방 찾기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12920,
+"title": "선입 선출 스케줄링",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 31,
+"tags": [
+"binary_search",
+"parametric_search"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12921,
+"title": "소수 찾기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 64,
+"tags": [
+"sieve",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12922,
+"title": "수박수박수박수박수박수?",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 85,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12923,
+"title": "숫자 블록",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 40,
+"tags": [
+"math",
+"number_theory"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 12924,
+"title": "숫자의 표현",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 77,
+"tags": [
+"two_pointer",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12925,
+"title": "문자열을 정수로 바꾸기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12926,
+"title": "시저 암호",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 74,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12927,
+"title": "야근 지수",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 63,
+"tags": [
+"greedy",
+"priority_queue"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12928,
+"title": "약수의 합",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"math",
+"number_theory"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12929,
+"title": "올바른 괄호의 갯수",
+"level": 4,
+"partTitle": "연습문제",
+"acceptanceRate": 35,
+"tags": [
+"combinatorics",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12930,
+"title": "이상한 문자 만들기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 77,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12931,
+"title": "자릿수 더하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12932,
+"title": "자연수 뒤집어 배열로 만들기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12933,
+"title": "정수 내림차순으로 배치하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12934,
+"title": "정수 제곱근 판별",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12935,
+"title": "제일 작은 수 제거하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12936,
+"title": "줄 서는 방법",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 50,
+"tags": [
+"combinatorics",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12937,
+"title": "짝수와 홀수",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12938,
+"title": "최고의 집합",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 58,
+"tags": [
+"greedy",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12939,
+"title": "최댓값과 최솟값",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 80,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12940,
+"title": "최대공약수와 최소공배수",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 79,
+"tags": [
+"euclidean",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12941,
+"title": "최솟값 만들기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 80,
+"tags": [
+"greedy",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12942,
+"title": "최적의 행렬 곱셈",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 29,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12943,
+"title": "콜라츠 추측",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 86,
+"tags": [
+"simulation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12944,
+"title": "평균 구하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12945,
+"title": "피보나치 수",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 75,
+"tags": [
+"dp",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12946,
+"title": "하노이의 탑",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 48,
+"tags": [
+"recursion"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12947,
+"title": "하샤드 수",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12948,
+"title": "핸드폰 번호 가리기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 86,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12949,
+"title": "행렬의 곱셈",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 68,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12950,
+"title": "행렬의 덧셈",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 81,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12951,
+"title": "JadenCase 문자열 만들기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 80,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12952,
+"title": "N-Queen",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 43,
+"tags": [
+"backtracking"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12953,
+"title": "N개의 최소공배수",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 72,
+"tags": [
+"euclidean",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12954,
+"title": "x만큼 간격이 있는 n개의 숫자",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 88,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12969,
+"title": "직사각형 별찍기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 80,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12971,
+"title": "스티커 모으기(2)",
+"level": 3,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 56,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12973,
+"title": "짝지어 제거하기",
+"level": 2,
+"partTitle": "2017 팁스타운",
+"acceptanceRate": 76,
+"tags": [
+"stack"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12974,
+"title": "직사각형의 넓이",
+"level": 5,
+"partTitle": "연습문제",
+"acceptanceRate": 1,
+"tags": [
+"sweeping",
+"segtree",
+"coordinate_compression",
+"geometry"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12977,
+"title": "소수 만들기",
+"level": 1,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 64,
+"tags": [
+"bruteforcing",
+"primality_test"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12978,
+"title": "배달",
+"level": 2,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 54,
+"tags": [
+"dijkstra",
+"shortest_path"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12979,
+"title": "기지국 설치",
+"level": 3,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 59,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12980,
+"title": "점프와 순간 이동",
+"level": 2,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 72,
+"tags": [
+"greedy",
+"math"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 12981,
+"title": "영어 끝말잇기",
+"level": 2,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 70,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12982,
+"title": "예산",
+"level": 1,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 78,
+"tags": [
+"greedy",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12983,
+"title": "단어 퍼즐",
+"level": 4,
+"partTitle": "2017 팁스타운",
+"acceptanceRate": 26,
+"tags": [
+"dp",
+"string"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "min-piece string construction; also solvable via BFS over prefixes"
+},
+{
+"id": 12984,
+"title": "지형 편집",
+"level": 4,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 21,
+"tags": [
+"binary_search",
+"sorting",
+"prefix_sum"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "cost-minimizing height via weighted median; technique inferred, not explicit in statement"
+},
+{
+"id": 12985,
+"title": "예상 대진표",
+"level": 2,
+"partTitle": "2017 팁스타운",
+"acceptanceRate": 70,
+"tags": [
+"math",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 12987,
+"title": "숫자 게임",
+"level": 3,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 61,
+"tags": [
+"greedy",
+"sorting",
+"two_pointer"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17676,
+"title": "[1차] 추석 트래픽",
+"level": 3,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 23,
+"tags": [
+"bruteforcing",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17677,
+"title": "[1차] 뉴스 클러스터링",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 64,
+"tags": [
+"hash_set",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17678,
+"title": "[1차] 셔틀버스",
+"level": 3,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 46,
+"tags": [
+"simulation",
+"greedy",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17679,
+"title": "[1차] 프렌즈4블록",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 58,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17680,
+"title": "[1차] 캐시",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 66,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17681,
+"title": "[1차] 비밀지도",
+"level": 1,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 71,
+"tags": [
+"implementation",
+"bitmask"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17682,
+"title": "[1차] 다트 게임",
+"level": 1,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 61,
+"tags": [
+"implementation",
+"string",
+"parsing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17683,
+"title": "[3차] 방금그곡",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 50,
+"tags": [
+"string",
+"implementation",
+"bruteforcing"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 17684,
+"title": "[3차] 압축",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 62,
+"tags": [
+"implementation",
+"string",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17685,
+"title": "[3차] 자동완성",
+"level": 4,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 33,
+"tags": [
+"trie"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17686,
+"title": "[3차] 파일명 정렬",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 59,
+"tags": [
+"sorting",
+"string",
+"parsing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 17687,
+"title": "[3차] n진수 게임",
+"level": 2,
+"partTitle": "2018 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 63,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 42576,
+"title": "완주하지 못한 선수",
+"level": 1,
+"partTitle": "해시",
+"acceptanceRate": 60,
+"tags": [
+"hash_set"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42577,
+"title": "전화번호 목록",
+"level": 2,
+"partTitle": "해시",
+"acceptanceRate": 67,
+"tags": [
+"hash_set"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42578,
+"title": "의상",
+"level": 2,
+"partTitle": "해시",
+"acceptanceRate": 69,
+"tags": [
+"hash_set"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42579,
+"title": "베스트앨범",
+"level": 3,
+"partTitle": "해시",
+"acceptanceRate": 57,
+"tags": [
+"hash_set"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42583,
+"title": "다리를 지나는 트럭",
+"level": 2,
+"partTitle": "스택/큐",
+"acceptanceRate": 56,
+"tags": [
+"stack",
+"queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42584,
+"title": "주식가격",
+"level": 2,
+"partTitle": "스택/큐",
+"acceptanceRate": 63,
+"tags": [
+"stack",
+"queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42586,
+"title": "기능개발",
+"level": 2,
+"partTitle": "스택/큐",
+"acceptanceRate": 68,
+"tags": [
+"stack",
+"queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42587,
+"title": "프로세스",
+"level": 2,
+"partTitle": "스택/큐",
+"acceptanceRate": 66,
+"tags": [
+"stack",
+"queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42626,
+"title": "더 맵게",
+"level": 2,
+"partTitle": "힙(Heap)",
+"acceptanceRate": 63,
+"tags": [
+"priority_queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42627,
+"title": "디스크 컨트롤러",
+"level": 3,
+"partTitle": "힙(Heap)",
+"acceptanceRate": 47,
+"tags": [
+"priority_queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42628,
+"title": "이중우선순위큐",
+"level": 3,
+"partTitle": "힙(Heap)",
+"acceptanceRate": 63,
+"tags": [
+"priority_queue"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42746,
+"title": "가장 큰 수",
+"level": 2,
+"partTitle": "정렬",
+"acceptanceRate": 58,
+"tags": [
+"sorting"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42747,
+"title": "H-Index",
+"level": 2,
+"partTitle": "정렬",
+"acceptanceRate": 68,
+"tags": [
+"sorting"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42748,
+"title": "K번째수",
+"level": 1,
+"partTitle": "정렬",
+"acceptanceRate": 73,
+"tags": [
+"sorting"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42839,
+"title": "소수 찾기",
+"level": 2,
+"partTitle": "완전탐색",
+"acceptanceRate": 57,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42840,
+"title": "모의고사",
+"level": 1,
+"partTitle": "완전탐색",
+"acceptanceRate": 67,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42842,
+"title": "카펫",
+"level": 2,
+"partTitle": "완전탐색",
+"acceptanceRate": 74,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42860,
+"title": "조이스틱",
+"level": 2,
+"partTitle": "탐욕법(Greedy)",
+"acceptanceRate": 40,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42861,
+"title": "섬 연결하기",
+"level": 3,
+"partTitle": "탐욕법(Greedy)",
+"acceptanceRate": 51,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42862,
+"title": "체육복",
+"level": 1,
+"partTitle": "탐욕법(Greedy)",
+"acceptanceRate": 60,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42883,
+"title": "큰 수 만들기",
+"level": 2,
+"partTitle": "탐욕법(Greedy)",
+"acceptanceRate": 56,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42884,
+"title": "단속카메라",
+"level": 3,
+"partTitle": "탐욕법(Greedy)",
+"acceptanceRate": 60,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42885,
+"title": "구명보트",
+"level": 2,
+"partTitle": "탐욕법(Greedy)",
+"acceptanceRate": 73,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42888,
+"title": "오픈채팅방 ",
+"level": 2,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 59,
+"tags": [
+"hash_set",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 42889,
+"title": "실패율",
+"level": 1,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 63,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 42890,
+"title": "후보키",
+"level": 2,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 43,
+"tags": [
+"bitmask",
+"combinatorics",
+"bruteforcing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 42891,
+"title": "무지의 먹방 라이브",
+"level": 4,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 35,
+"tags": [
+"priority_queue",
+"sorting",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 42892,
+"title": "길 찾기 게임",
+"level": 3,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 40,
+"tags": [
+"trees",
+"sorting",
+"dfs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 42893,
+"title": "매칭 점수",
+"level": 3,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 22,
+"tags": [
+"string",
+"parsing",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 42894,
+"title": "블록 게임",
+"level": 4,
+"partTitle": "2019 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 21,
+"tags": [
+"implementation",
+"simulation",
+"hash_set"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 42895,
+"title": "N으로 표현",
+"level": 3,
+"partTitle": "동적계획법(Dynamic Programming)",
+"acceptanceRate": 32,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42897,
+"title": "도둑질",
+"level": 4,
+"partTitle": "동적계획법(Dynamic Programming)",
+"acceptanceRate": 42,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 42898,
+"title": "등굣길",
+"level": 3,
+"partTitle": "동적계획법(Dynamic Programming)",
+"acceptanceRate": 62,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43105,
+"title": "정수 삼각형",
+"level": 3,
+"partTitle": "동적계획법(Dynamic Programming)",
+"acceptanceRate": 65,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43162,
+"title": "네트워크",
+"level": 3,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 65,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43163,
+"title": "단어 변환",
+"level": 3,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 63,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43164,
+"title": "여행경로",
+"level": 3,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 51,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43165,
+"title": "타겟 넘버",
+"level": 2,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 65,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43236,
+"title": "징검다리",
+"level": 4,
+"partTitle": "이분탐색",
+"acceptanceRate": 31,
+"tags": [
+"binary_search"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 43238,
+"title": "입국심사",
+"level": 3,
+"partTitle": "이분탐색",
+"acceptanceRate": 49,
+"tags": [
+"binary_search"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 49189,
+"title": "가장 먼 노드",
+"level": 3,
+"partTitle": "그래프",
+"acceptanceRate": 51,
+"tags": [
+"graphs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 49190,
+"title": "방의 개수",
+"level": 5,
+"partTitle": "그래프",
+"acceptanceRate": 8,
+"tags": [
+"graphs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 49191,
+"title": "순위",
+"level": 3,
+"partTitle": "그래프",
+"acceptanceRate": 45,
+"tags": [
+"graphs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 49993,
+"title": "스킬트리",
+"level": 2,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 62,
+"tags": [
+"two_pointer",
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 49994,
+"title": "방문 길이",
+"level": 2,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 65,
+"tags": [
+"hash_set",
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 49995,
+"title": "쿠키 구입",
+"level": 4,
+"partTitle": "Summer/Winter Coding(~2018)",
+"acceptanceRate": 35,
+"tags": [
+"prefix_sum",
+"binary_search",
+"two_pointer"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 59034,
+"title": "모든 레코드 조회하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59035,
+"title": "역순 정렬하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59036,
+"title": "아픈 동물 찾기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59037,
+"title": "어린 동물 찾기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59038,
+"title": "최솟값 구하기",
+"level": 2,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59039,
+"title": "이름이 없는 동물의 아이디",
+"level": 1,
+"partTitle": "IS NULL",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59040,
+"title": "고양이와 개는 몇 마리 있을까",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59041,
+"title": "동명 동물 수 찾기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59042,
+"title": "없어진 기록 찾기",
+"level": 3,
+"partTitle": "JOIN",
+"acceptanceRate": 82,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59043,
+"title": "있었는데요 없었습니다",
+"level": 3,
+"partTitle": "JOIN",
+"acceptanceRate": 87,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59044,
+"title": "오랜 기간 보호한 동물(1)",
+"level": 3,
+"partTitle": "JOIN",
+"acceptanceRate": 87,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59045,
+"title": "보호소에서 중성화한 동물",
+"level": 4,
+"partTitle": "JOIN",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59046,
+"title": "루시와 엘라 찾기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 84,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59047,
+"title": "이름에 el이 들어가는 동물 찾기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 91,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59403,
+"title": "동물의 아이디와 이름",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59404,
+"title": "여러 기준으로 정렬하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59405,
+"title": "상위 n개 레코드",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59406,
+"title": "동물 수 구하기",
+"level": 2,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59407,
+"title": "이름이 있는 동물의 아이디",
+"level": 1,
+"partTitle": "IS NULL",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59408,
+"title": "중복 제거하기",
+"level": 2,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59409,
+"title": "중성화 여부 파악하기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 90,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59410,
+"title": "NULL 처리하기",
+"level": 2,
+"partTitle": "IS NULL",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59411,
+"title": "오랜 기간 보호한 동물(2)",
+"level": 3,
+"partTitle": "String, Date",
+"acceptanceRate": 86,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59412,
+"title": "입양 시각 구하기(1)",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59413,
+"title": "입양 시각 구하기(2)",
+"level": 4,
+"partTitle": "GROUP BY",
+"acceptanceRate": 62,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59414,
+"title": "DATETIME에서 DATE로 형 변환",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 91,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 59415,
+"title": "최댓값 구하기",
+"level": 1,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 81,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 60057,
+"title": "문자열 압축",
+"level": 2,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 45,
+"tags": [
+"bruteforcing",
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 60058,
+"title": "괄호 변환",
+"level": 2,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 49,
+"tags": [
+"divide_and_conquer",
+"recursion",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 60059,
+"title": "자물쇠와 열쇠",
+"level": 3,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 42,
+"tags": [
+"bruteforcing",
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 60060,
+"title": "가사 검색",
+"level": 4,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 28,
+"tags": [
+"trie"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 60061,
+"title": "기둥과 보 설치",
+"level": 3,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 37,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 60062,
+"title": "외벽 점검",
+"level": 3,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 34,
+"tags": [
+"backtracking",
+"greedy",
+"bruteforcing"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 60063,
+"title": "블록 이동하기",
+"level": 3,
+"partTitle": "2020 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 28,
+"tags": [
+"bfs",
+"grid_graph",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 62048,
+"title": "멀쩡한 사각형",
+"level": 2,
+"partTitle": "Summer/Winter Coding(2019)",
+"acceptanceRate": 44,
+"tags": [
+"math",
+"euclidean"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 62050,
+"title": "지형 이동",
+"level": 4,
+"partTitle": "Summer/Winter Coding(2019)",
+"acceptanceRate": 19,
+"tags": [
+"mst",
+"disjoint_set",
+"grid_graph"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 62284,
+"title": "우유와 요거트가 담긴 장바구니",
+"level": 4,
+"partTitle": "Summer/Winter Coding(2019)",
+"acceptanceRate": 75,
+"tags": [
+"implementation"
+],
+"confidence": "low",
+"source": "classified",
+"note": "SQL query problem (JOIN/GROUP BY/HAVING); vocab has no SQL-specific tag"
+},
+{
+"id": 64061,
+"title": "크레인 인형뽑기 게임",
+"level": 1,
+"partTitle": "2019 카카오 개발자 겨울 인턴십",
+"acceptanceRate": 55,
+"tags": [
+"stack",
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 64062,
+"title": "징검다리 건너기",
+"level": 3,
+"partTitle": "2019 카카오 개발자 겨울 인턴십",
+"acceptanceRate": 51,
+"tags": [
+"binary_search",
+"sliding_window",
+"greedy"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 64063,
+"title": "호텔 방 배정",
+"level": 4,
+"partTitle": "2019 카카오 개발자 겨울 인턴십",
+"acceptanceRate": 36,
+"tags": [
+"disjoint_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 64064,
+"title": "불량 사용자",
+"level": 3,
+"partTitle": "2019 카카오 개발자 겨울 인턴십",
+"acceptanceRate": 53,
+"tags": [
+"backtracking",
+"bitmask",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 64065,
+"title": "튜플",
+"level": 2,
+"partTitle": "2019 카카오 개발자 겨울 인턴십",
+"acceptanceRate": 66,
+"tags": [
+"parsing",
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 67256,
+"title": "키패드 누르기",
+"level": 1,
+"partTitle": "2020 카카오 인턴십",
+"acceptanceRate": 54,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 67257,
+"title": "수식 최대화",
+"level": 2,
+"partTitle": "2020 카카오 인턴십",
+"acceptanceRate": 49,
+"tags": [
+"bruteforcing",
+"string",
+"parsing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 67258,
+"title": "보석 쇼핑",
+"level": 3,
+"partTitle": "2020 카카오 인턴십",
+"acceptanceRate": 53,
+"tags": [
+"sliding_window",
+"two_pointer",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 67259,
+"title": "경주로 건설",
+"level": 3,
+"partTitle": "2020 카카오 인턴십",
+"acceptanceRate": 49,
+"tags": [
+"dijkstra",
+"grid_graph",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 67260,
+"title": "동굴 탐험",
+"level": 4,
+"partTitle": "2020 카카오 인턴십",
+"acceptanceRate": 20,
+"tags": [
+"lca",
+"trees",
+"topological_sorting",
+"euler_tour_technique"
+],
+"confidence": "low",
+"source": "classified",
+"note": "hard tree-query problem; exact standard technique uncertain"
+},
+{
+"id": 68644,
+"title": "두 개 뽑아서 더하기",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 74,
+"tags": [
+"bruteforcing",
+"sorting",
+"set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 68645,
+"title": "삼각 달팽이",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 56,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 68646,
+"title": "풍선 터트리기",
+"level": 3,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 46,
+"tags": [
+"stack",
+"greedy"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 68647,
+"title": "짝수 행 세기",
+"level": 4,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 7,
+"tags": [
+"combinatorics",
+"dp",
+"math"
+],
+"confidence": "low",
+"source": "classified",
+"note": "hard counting problem; combinatorial structure not fully certain from statement alone"
+},
+{
+"id": 68935,
+"title": "3진법 뒤집기",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 77,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 68936,
+"title": "쿼드압축 후 개수 세기",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 57,
+"tags": [
+"divide_and_conquer",
+"recursion",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 68937,
+"title": "트리 트리오 중간값",
+"level": 4,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 19,
+"tags": [
+"trees",
+"tree_diameter",
+"bfs"
+],
+"confidence": "low",
+"source": "classified",
+"note": "hard tree problem (median of pairwise distances); exact technique uncertain"
+},
+{
+"id": 68938,
+"title": "문자열의 아름다움",
+"level": 5,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 3,
+"tags": [
+"math",
+"combinatorics",
+"string"
+],
+"confidence": "low",
+"source": "classified",
+"note": "level-5 combinatorial string problem; exact technique uncertain from statement"
+},
+{
+"id": 70128,
+"title": "내적",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 86,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 70129,
+"title": "이진 변환 반복하기",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 78,
+"tags": [
+"implementation",
+"string",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 70130,
+"title": "스타 수열",
+"level": 3,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 33,
+"tags": [
+"greedy",
+"ad_hoc",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 70132,
+"title": "가짜 해밀토니안",
+"level": 5,
+"partTitle": "월간 코드 챌린지 시즌1",
+"acceptanceRate": 1,
+"tags": [
+"trees",
+"dp_tree"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "hard tree-DP problem (max caterpillar-like subtree); exact technique inferred, not verified"
+},
+{
+"id": 72410,
+"title": "신규 아이디 추천",
+"level": 1,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 53,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 72411,
+"title": "메뉴 리뉴얼",
+"level": 2,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 52,
+"tags": [
+"combinatorics",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 72412,
+"title": "순위 검색",
+"level": 2,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 36,
+"tags": [
+"binary_search",
+"hash_set",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 72413,
+"title": "합승 택시 요금",
+"level": 3,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 42,
+"tags": [
+"floyd_warshall",
+"shortest_path",
+"graphs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 72414,
+"title": "광고 삽입",
+"level": 3,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 37,
+"tags": [
+"difference_array",
+"sliding_window",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 72415,
+"title": "카드 짝 맞추기",
+"level": 3,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 21,
+"tags": [
+"backtracking",
+"bfs",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 72416,
+"title": "매출 하락 최소화",
+"level": 4,
+"partTitle": "2021 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 14,
+"tags": [
+"dp_tree",
+"priority_queue",
+"smaller_to_larger"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "min-cost hitting-set-per-subtree problem; heap-merge technique inferred, not verified"
+},
+{
+"id": 76501,
+"title": "음양 더하기",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 87,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 76502,
+"title": "괄호 회전하기",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 70,
+"tags": [
+"stack",
+"string",
+"bruteforcing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 76503,
+"title": "모두 0으로 만들기",
+"level": 3,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 29,
+"tags": [
+"trees",
+"dfs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 76504,
+"title": "RPG와 쿼리",
+"level": 5,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 1,
+"tags": [
+"bfs",
+"shortest_path",
+"number_theory"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "modular coin/turn-count problem on a graph; BFS-over-residues technique inferred, not verified"
+},
+{
+"id": 77484,
+"title": "로또의 최고 순위와 최저 순위",
+"level": 1,
+"partTitle": "2021 Dev-Matching: 웹 백엔드 개발자(상반기)",
+"acceptanceRate": 61,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 77485,
+"title": "행렬 테두리 회전하기",
+"level": 2,
+"partTitle": "2021 Dev-Matching: 웹 백엔드 개발자(상반기)",
+"acceptanceRate": 50,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 77486,
+"title": "다단계 칫솔 판매",
+"level": 3,
+"partTitle": "2021 Dev-Matching: 웹 백엔드 개발자(상반기)",
+"acceptanceRate": 48,
+"tags": [
+"trees",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 77487,
+"title": "헤비 유저가 소유한 장소",
+"level": 3,
+"partTitle": "2021 Dev-Matching: 웹 백엔드 개발자(상반기)",
+"acceptanceRate": 75,
+"tags": [
+"implementation"
+],
+"confidence": "low",
+"source": "classified",
+"note": "SQL query problem; vocabulary has no SQL-specific tag so this is a loose approximation"
+},
+{
+"id": 77884,
+"title": "약수의 개수와 덧셈",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 85,
+"tags": [
+"math",
+"bruteforcing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 77885,
+"title": "2개 이하로 다른 비트",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 58,
+"tags": [
+"bitmask",
+"math"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 77886,
+"title": "110 옮기기",
+"level": 3,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 37,
+"tags": [
+"stack",
+"greedy",
+"string"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 77887,
+"title": "중력 작용",
+"level": 5,
+"partTitle": "월간 코드 챌린지 시즌2",
+"acceptanceRate": 1,
+"tags": [
+"segtree",
+"euler_tour_technique",
+"trees"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "subtree-sum + path-update-to-root query problem; euler-tour+segtree technique inferred, not verified"
+},
+{
+"id": 81301,
+"title": "숫자 문자열과 영단어",
+"level": 1,
+"partTitle": "2021 카카오 채용연계형 인턴십",
+"acceptanceRate": 74,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 81302,
+"title": "거리두기 확인하기",
+"level": 2,
+"partTitle": "2021 카카오 채용연계형 인턴십",
+"acceptanceRate": 49,
+"tags": [
+"bfs",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 81303,
+"title": "표 편집",
+"level": 3,
+"partTitle": "2021 카카오 채용연계형 인턴십",
+"acceptanceRate": 42,
+"tags": [
+"linked_list",
+"stack",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 81304,
+"title": "미로 탈출",
+"level": 4,
+"partTitle": "2021 카카오 채용연계형 인턴십",
+"acceptanceRate": 10,
+"tags": [
+"dijkstra",
+"shortest_path",
+"bitmask"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 81305,
+"title": "시험장 나누기",
+"level": 5,
+"partTitle": "2021 카카오 채용연계형 인턴십",
+"acceptanceRate": 4,
+"tags": [
+"parametric_search",
+"dp_tree",
+"trees"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 82612,
+"title": "부족한 금액 계산하기",
+"level": 1,
+"partTitle": "위클리 챌린지",
+"acceptanceRate": 84,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 84021,
+"title": "퍼즐 조각 채우기",
+"level": 3,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 18,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 84512,
+"title": "모음사전",
+"level": 2,
+"partTitle": "완전탐색",
+"acceptanceRate": 65,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 86051,
+"title": "없는 숫자 더하기",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 87,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 86052,
+"title": "빛의 경로 사이클",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 19,
+"tags": [
+"functional_graph",
+"simulation",
+"graph_traversal"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 86053,
+"title": "금과 은 운반하기",
+"level": 3,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 18,
+"tags": [
+"parametric_search",
+"greedy"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 86054,
+"title": "안티세포",
+"level": 4,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 3,
+"tags": [
+"combinatorics",
+"prefix_sum",
+"two_pointer"
+],
+"confidence": "low",
+"source": "classified",
+"note": "counting distinct merge sequences; exact combinatorial technique guessed, not verified"
+},
+{
+"id": 86491,
+"title": "최소직사각형",
+"level": 1,
+"partTitle": "완전탐색",
+"acceptanceRate": 76,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 86971,
+"title": "전력망을 둘로 나누기",
+"level": 2,
+"partTitle": "완전탐색",
+"acceptanceRate": 56,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 87377,
+"title": "교점에 별 만들기",
+"level": 2,
+"partTitle": "위클리 챌린지",
+"acceptanceRate": 34,
+"tags": [
+"geometry",
+"line_intersection",
+"hash_set"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 87389,
+"title": "나머지가 1이 되는 수 찾기",
+"level": 1,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 88,
+"tags": [
+"bruteforcing",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 87390,
+"title": "n^2 배열 자르기",
+"level": 2,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 69,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 87391,
+"title": "공 이동 시뮬레이션",
+"level": 3,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 23,
+"tags": [
+"simulation",
+"math"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 87394,
+"title": "쿼리의 모음의 개수",
+"level": 5,
+"partTitle": "월간 코드 챌린지 시즌3",
+"acceptanceRate": 0,
+"tags": [
+"combinatorics",
+"dp",
+"cartesian_tree"
+],
+"confidence": "low",
+"source": "classified",
+"note": "counting distinct range-max-update query sequences; one of the hardest problems in this batch, technique guessed"
+},
+{
+"id": 87694,
+"title": "아이템 줍기",
+"level": 3,
+"partTitle": "깊이/너비 우선 탐색(DFS/BFS)",
+"acceptanceRate": 32,
+"tags": [
+"graph_traversal",
+"dfs",
+"bfs"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 87946,
+"title": "피로도",
+"level": 2,
+"partTitle": "완전탐색",
+"acceptanceRate": 68,
+"tags": [
+"bruteforcing"
+],
+"confidence": "high",
+"source": "partTitle"
+},
+{
+"id": 92334,
+"title": "신고 결과 받기",
+"level": 1,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 43,
+"tags": [
+"hash_set",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 92335,
+"title": "k진수에서 소수 개수 구하기",
+"level": 2,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 63,
+"tags": [
+"primality_test",
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 92341,
+"title": "주차 요금 계산",
+"level": 2,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 62,
+"tags": [
+"implementation",
+"parsing",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 92342,
+"title": "양궁대회",
+"level": 2,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 39,
+"tags": [
+"backtracking",
+"bruteforcing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 92343,
+"title": "양과 늑대",
+"level": 3,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 42,
+"tags": [
+"bitmask",
+"backtracking",
+"trees"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 92344,
+"title": "파괴되지 않은 건물",
+"level": 3,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 45,
+"tags": [
+"prefix_sum",
+"difference_array",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 92345,
+"title": "사라지는 발판",
+"level": 3,
+"partTitle": "2022 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 18,
+"tags": [
+"game_theory",
+"bitmask",
+"backtracking"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 118666,
+"title": "성격 유형 검사하기",
+"level": 1,
+"partTitle": "2022 KAKAO TECH INTERNSHIP",
+"acceptanceRate": 55,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 118667,
+"title": "두 큐 합 같게 만들기",
+"level": 2,
+"partTitle": "2022 KAKAO TECH INTERNSHIP",
+"acceptanceRate": 58,
+"tags": [
+"two_pointer",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 118668,
+"title": "코딩 테스트 공부",
+"level": 3,
+"partTitle": "2022 KAKAO TECH INTERNSHIP",
+"acceptanceRate": 28,
+"tags": [
+"dijkstra",
+"shortest_path",
+"graphs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 118669,
+"title": "등산코스 정하기",
+"level": 3,
+"partTitle": "2022 KAKAO TECH INTERNSHIP",
+"acceptanceRate": 33,
+"tags": [
+"dijkstra",
+"shortest_path",
+"graphs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 118670,
+"title": "행렬과 연산",
+"level": 4,
+"partTitle": "2022 KAKAO TECH INTERNSHIP",
+"acceptanceRate": 14,
+"tags": [
+"deque",
+"simulation",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 120583,
+"title": "중복된 숫자 개수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120585,
+"title": "머쓱이보다 키 큰 사람",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120802,
+"title": "두 수의 합 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120803,
+"title": "두 수의 차 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120804,
+"title": "두 수의 곱 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120805,
+"title": "몫 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120806,
+"title": "두 수의 나눗셈",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120807,
+"title": "숫자 비교하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120808,
+"title": "분수의 덧셈",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 64,
+"tags": [
+"math",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120809,
+"title": "배열 두 배 만들기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120810,
+"title": "나머지 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120811,
+"title": "중앙값 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120812,
+"title": "최빈값 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 71,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120813,
+"title": "짝수는 싫어요",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120814,
+"title": "피자 나눠 먹기 (1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120815,
+"title": "피자 나눠 먹기 (2)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 88,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120816,
+"title": "피자 나눠 먹기 (3)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120817,
+"title": "배열의 평균값",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120818,
+"title": "옷가게 할인 받기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120819,
+"title": "아이스 아메리카노",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120820,
+"title": "나이 출력",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 91,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120821,
+"title": "배열 뒤집기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120822,
+"title": "뒤집힌 문자열",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120823,
+"title": "직각삼각형 출력하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120824,
+"title": "짝수 홀수 개수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120825,
+"title": "문자 반복 출력하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120826,
+"title": "특정 문자 제거하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120829,
+"title": "각도기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120830,
+"title": "양꼬치",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120831,
+"title": "짝수의 합",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120833,
+"title": "배열 자르기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120834,
+"title": "외계행성의 나이",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 88,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120835,
+"title": "진료순서 정하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120836,
+"title": "순서쌍의 개수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"math",
+"number_theory"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 120837,
+"title": "개미 군단",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"greedy",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120838,
+"title": "모스부호 (1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120839,
+"title": "가위 바위 보",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120840,
+"title": "구슬을 나누는 경우의 수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 82,
+"tags": [
+"combinatorics",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120841,
+"title": "점의 위치 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120842,
+"title": "2차원으로 만들기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 87,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120843,
+"title": "공 던지기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 83,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120844,
+"title": "배열 회전시키기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120845,
+"title": "주사위의 개수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"math",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120846,
+"title": "합성수 찾기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 88,
+"tags": [
+"math",
+"primality_test"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 120847,
+"title": "최댓값 만들기(1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120848,
+"title": "팩토리얼",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120849,
+"title": "모음 제거",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120850,
+"title": "문자열 정렬하기 (1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120851,
+"title": "숨어있는 숫자의 덧셈 (1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120852,
+"title": "소인수분해",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 84,
+"tags": [
+"prime_factorization",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120853,
+"title": "컨트롤 제트",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 85,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120854,
+"title": "배열 원소의 길이",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120860,
+"title": "직사각형 넓이 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 78,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120861,
+"title": "캐릭터의 좌표",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 79,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120862,
+"title": "최댓값 만들기 (2)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120863,
+"title": "다항식 더하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 74,
+"tags": [
+"string",
+"parsing"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 120864,
+"title": "숨어있는 숫자의 덧셈 (2)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120866,
+"title": "안전지대",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 65,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120868,
+"title": "삼각형의 완성조건 (2)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 82,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120869,
+"title": "외계어 사전",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 79,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120871,
+"title": "저주의 숫자 3",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 77,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 120875,
+"title": "평행",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 55,
+"tags": [
+"geometry"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120876,
+"title": "겹치는 선분의 길이",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 62,
+"tags": [
+"difference_array",
+"geometry"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120878,
+"title": "유한소수 판별하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 76,
+"tags": [
+"math",
+"prime_factorization"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120880,
+"title": "특이한 정렬",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 74,
+"tags": [
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120882,
+"title": "등수 매기기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 77,
+"tags": [
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120883,
+"title": "로그인 성공?",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 78,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120884,
+"title": "치킨 쿠폰",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 77,
+"tags": [
+"math",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120885,
+"title": "이진수 더하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 83,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120886,
+"title": "A로 B 만들기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 87,
+"tags": [
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120887,
+"title": "k의 개수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 87,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 120888,
+"title": "중복된 문자 제거",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 87,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120889,
+"title": "삼각형의 완성조건 (1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120890,
+"title": "가까운 수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120891,
+"title": "369게임",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120892,
+"title": "암호 해독",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120893,
+"title": "대문자와 소문자",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120894,
+"title": "영어가 싫어요",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 82,
+"tags": [
+"string",
+"parsing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120895,
+"title": "인덱스 바꾸기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120896,
+"title": "한 번만 등장한 문자",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120897,
+"title": "약수 구하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120898,
+"title": "편지",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120899,
+"title": "가장 큰 수 찾기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120902,
+"title": "문자열 계산하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 83,
+"tags": [
+"string",
+"parsing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120903,
+"title": "배열의 유사도",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"set",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120904,
+"title": "숫자 찾기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120905,
+"title": "n의 배수 고르기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120906,
+"title": "자릿수 더하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120907,
+"title": "OX퀴즈",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 71,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120908,
+"title": "문자열안에 문자열",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120909,
+"title": "제곱수 판별하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120910,
+"title": "세균 증식",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 90,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120911,
+"title": "문자열 정렬하기 (2)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120912,
+"title": "7의 개수",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120913,
+"title": "잘라서 배열로 저장하기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 85,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120921,
+"title": "문자열 밀기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 76,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120922,
+"title": "종이 자르기",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 79,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120923,
+"title": "연속된 수의 합",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 67,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120924,
+"title": "다음에 올 숫자",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 68,
+"tags": [
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 120956,
+"title": "옹알이 (1)",
+"level": 0,
+"partTitle": "코딩테스트 입문",
+"acceptanceRate": 39,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 131112,
+"title": "강원도에 위치한 생산공장 목록 출력하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131113,
+"title": "조건별로 분류하여 주문상태 출력하기",
+"level": 3,
+"partTitle": "String, Date",
+"acceptanceRate": 88,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131114,
+"title": "경기도에 위치한 식품창고 목록 출력하기",
+"level": 1,
+"partTitle": "IS NULL",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131115,
+"title": "가격이 제일 비싼 식품의 정보 출력하기",
+"level": 2,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131116,
+"title": "식품분류별 가장 비싼 식품의 정보 조회하기",
+"level": 4,
+"partTitle": "GROUP BY",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131117,
+"title": "5월 식품들의 총매출 조회하기",
+"level": 4,
+"partTitle": "JOIN",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131118,
+"title": "서울에 위치한 식당 목록 출력하기",
+"level": 4,
+"partTitle": "SELECT",
+"acceptanceRate": 77,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131120,
+"title": "3월에 태어난 여성 회원 목록 출력하기",
+"level": 2,
+"partTitle": "SELECT",
+"acceptanceRate": 87,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131123,
+"title": "즐겨찾기가 가장 많은 식당 정보 출력하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131124,
+"title": "그룹별 조건에 맞는 식당 목록 출력하기",
+"level": 4,
+"partTitle": "JOIN",
+"acceptanceRate": 73,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131127,
+"title": "할인 행사",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 70,
+"tags": [
+"sliding_window",
+"hash_set"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 131128,
+"title": "숫자 짝꿍",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 58,
+"tags": [
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 131129,
+"title": "카운트 다운",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 33,
+"tags": [
+"bfs",
+"dp"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 131130,
+"title": "혼자 놀기의 달인",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 38,
+"tags": [
+"functional_graph"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 131528,
+"title": "나이 정보가 없는 회원 수 구하기\t",
+"level": 1,
+"partTitle": "IS NULL",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131529,
+"title": "카테고리 별 상품 개수 구하기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 91,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131530,
+"title": "가격대 별 상품 개수 구하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131532,
+"title": "년, 월, 성별 별 상품 구매 회원 수 구하기",
+"level": 4,
+"partTitle": "GROUP BY",
+"acceptanceRate": 76,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131533,
+"title": "상품 별 오프라인 매출 구하기",
+"level": 2,
+"partTitle": "JOIN",
+"acceptanceRate": 88,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131534,
+"title": "상품을 구매한 회원 비율 구하기",
+"level": 5,
+"partTitle": "JOIN",
+"acceptanceRate": 48,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131535,
+"title": "조건에 맞는 회원수 구하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131536,
+"title": "재구매가 일어난 상품과 회원 리스트 구하기",
+"level": 2,
+"partTitle": "SELECT",
+"acceptanceRate": 79,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131537,
+"title": "오프라인/온라인 판매 데이터 통합하기",
+"level": 4,
+"partTitle": "SELECT",
+"acceptanceRate": 69,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131697,
+"title": "가장 비싼 상품 구하기",
+"level": 1,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 131701,
+"title": "연속 부분 수열 합의 개수",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 71,
+"tags": [
+"prefix_sum",
+"sliding_window",
+"hash_set"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 131702,
+"title": "고고학 최고의 발견",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 15,
+"tags": [
+"bruteforcing",
+"simulation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 131703,
+"title": "2차원 동전 뒤집기",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 30,
+"tags": [
+"bruteforcing",
+"bitmask"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 131704,
+"title": "택배상자",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 63,
+"tags": [
+"stack",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 131705,
+"title": "삼총사",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 78,
+"tags": [
+"bruteforcing",
+"combinatorics"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 132201,
+"title": "12세 이하인 여자 환자 목록 출력하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 132202,
+"title": "진료과별 총 예약 횟수 출력하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 132203,
+"title": "흉부외과 또는 일반외과 의사 목록 출력하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 132204,
+"title": "취소되지 않은 진료 예약 조회하기",
+"level": 4,
+"partTitle": "String, Date",
+"acceptanceRate": 81,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 132265,
+"title": "롤케이크 자르기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 67,
+"tags": [
+"hash_set",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 132266,
+"title": "부대복귀",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 52,
+"tags": [
+"bfs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 132267,
+"title": "콜라 문제",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 73,
+"tags": [
+"simulation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 133024,
+"title": "인기있는 아이스크림",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 133025,
+"title": "과일로 만든 아이스크림 고르기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 133026,
+"title": "성분으로 구분한 아이스크림 총 주문량",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 133027,
+"title": "주문량이 많은 아이스크림들 조회하기",
+"level": 4,
+"partTitle": "JOIN",
+"acceptanceRate": 75,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 133499,
+"title": "옹알이 (2)",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 65,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 133500,
+"title": "등대",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 28,
+"tags": [
+"trees",
+"greedy"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 133502,
+"title": "햄버거 만들기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 59,
+"tags": [
+"stack",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 134239,
+"title": "우박수열 정적분",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 48,
+"tags": [
+"math",
+"prefix_sum"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 134240,
+"title": "푸드 파이트 대회",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 74,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 135807,
+"title": "숫자 카드 나누기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 55,
+"tags": [
+"number_theory",
+"euclidean"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 135808,
+"title": "과일 장수",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 65,
+"tags": [
+"greedy",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 136797,
+"title": "숫자 타자 대회",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 22,
+"tags": [
+"dp",
+"shortest_path"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 136798,
+"title": "기사단원의 무기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 69,
+"tags": [
+"math",
+"sieve"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 138475,
+"title": "억억단을 외우자",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 25,
+"tags": [
+"math",
+"sieve",
+"precomputation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 138476,
+"title": "귤 고르기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 73,
+"tags": [
+"greedy",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 138477,
+"title": "명예의 전당 (1)",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 73,
+"tags": [
+"priority_queue"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 140105,
+"title": "쌍둥이 빌딩 숲",
+"level": 4,
+"partTitle": "연습문제",
+"acceptanceRate": 12,
+"tags": [
+"combinatorics",
+"dp"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 140107,
+"title": "점 찍기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 43,
+"tags": [
+"math",
+"geometry"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 140108,
+"title": "문자열 나누기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 62,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 142085,
+"title": "디펜스 게임",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 52,
+"tags": [
+"greedy",
+"priority_queue"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 142086,
+"title": "가장 가까운 같은 글자",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 75,
+"tags": [
+"hash_set",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 144853,
+"title": "\t조건에 맞는 도서 리스트 출력하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 88,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 144854,
+"title": "조건에 맞는 도서와 저자 리스트 출력하기",
+"level": 2,
+"partTitle": "JOIN",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 144855,
+"title": "카테고리 별 도서 판매량 집계하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 88,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 144856,
+"title": "저자 별 카테고리 별 매출액 집계하기",
+"level": 4,
+"partTitle": "GROUP BY",
+"acceptanceRate": 78,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 147354,
+"title": "테이블 해시 함수",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 50,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 147355,
+"title": "크기가 작은 부분 문자열 ",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 79,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 148652,
+"title": "유사 칸토어 비트열",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 25,
+"tags": [
+"recursion",
+"divide_and_conquer"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 148653,
+"title": "마법의 엘리베이터",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 56,
+"tags": [
+"greedy",
+"math"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 150364,
+"title": "1,2,3 떨어트리기",
+"level": 4,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 8,
+"tags": [
+"trees",
+"recursion",
+"constructive"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 150365,
+"title": "미로 탈출 명령어",
+"level": 3,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 40,
+"tags": [
+"bfs",
+"backtracking",
+"greedy"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 150366,
+"title": "표 병합",
+"level": 3,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 32,
+"tags": [
+"disjoint_set",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 150367,
+"title": "표현 가능한 이진트리",
+"level": 3,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 35,
+"tags": [
+"divide_and_conquer",
+"trees"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 150368,
+"title": "이모티콘 할인행사",
+"level": 2,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 45,
+"tags": [
+"bruteforcing",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 150369,
+"title": "택배 배달과 수거하기",
+"level": 2,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 38,
+"tags": [
+"greedy",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 150370,
+"title": "개인정보 수집 유효기간",
+"level": 1,
+"partTitle": "2023 KAKAO BLIND RECRUITMENT",
+"acceptanceRate": 51,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 151136,
+"title": "평균 일일 대여 요금 구하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 151137,
+"title": "자동차 종류 별 특정 옵션이 포함된 자동차 수 구하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 151138,
+"title": "자동차 대여 기록에서 장기/단기 대여 구분하기",
+"level": 1,
+"partTitle": "String, Date",
+"acceptanceRate": 79,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 151139,
+"title": "대여 횟수가 많은 자동차들의 월별 대여 횟수 구하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 75,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 151141,
+"title": "자동차 대여 기록 별 대여 금액 구하기",
+"level": 4,
+"partTitle": "String, Date",
+"acceptanceRate": 54,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 152995,
+"title": "인사고과",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 46,
+"tags": [
+"sorting",
+"prefix_sum"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 152996,
+"title": "시소 짝꿍",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 56,
+"tags": [
+"hash_set",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 154538,
+"title": "숫자 변환하기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 62,
+"tags": [
+"dp",
+"bfs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 154539,
+"title": "뒤에 있는 큰 수 찾기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 64,
+"tags": [
+"stack"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 154540,
+"title": "무인도 여행",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 50,
+"tags": [
+"flood_fill",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 155651,
+"title": "호텔 대실",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 55,
+"tags": [
+"sweeping",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 155652,
+"title": "둘만의 암호",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 62,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 157339,
+"title": "특정 기간동안 대여 가능한 자동차들의 대여비용 구하기",
+"level": 4,
+"partTitle": "JOIN",
+"acceptanceRate": 53,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 157340,
+"title": "자동차 대여 기록에서 대여중 / 대여 가능 여부 구분하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 79,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 157341,
+"title": "대여 기록이 존재하는 자동차 리스트 구하기",
+"level": 3,
+"partTitle": "String, Date",
+"acceptanceRate": 87,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 157342,
+"title": "자동차 평균 대여 기간 구하기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 79,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 157343,
+"title": "특정 옵션이 포함된 자동차 리스트 구하기",
+"level": 1,
+"partTitle": "String, Date",
+"acceptanceRate": 85,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 159993,
+"title": "미로 탈출",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 56,
+"tags": [
+"bfs",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 159994,
+"title": "카드 뭉치",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 72,
+"tags": [
+"implementation",
+"two_pointer"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 160585,
+"title": "혼자서 하는 틱택토",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 43,
+"tags": [
+"case_work",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 160586,
+"title": "대충 만든 자판",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 62,
+"tags": [
+"implementation",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 161988,
+"title": "연속 펄스 부분 수열의 합",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 51,
+"tags": [
+"maximum_subarray",
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 161989,
+"title": "덧칠하기",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 66,
+"tags": [
+"greedy"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 161990,
+"title": "바탕화면 정리",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 53,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 164668,
+"title": "조건에 맞는 사용자와 총 거래금액 조회하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 88,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 164670,
+"title": "조건에 맞는 사용자 정보 조회하기",
+"level": 3,
+"partTitle": "String, Date",
+"acceptanceRate": 83,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 164671,
+"title": "조회수가 가장 많은 중고거래 게시판의 첨부파일 조회하기",
+"level": 3,
+"partTitle": "String, Date",
+"acceptanceRate": 79,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 164672,
+"title": "조건에 부합하는 중고거래 상태 조회하기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 83,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 164673,
+"title": "조건에 부합하는 중고거래 댓글 조회하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 71,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 169198,
+"title": "당구 연습",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 24,
+"tags": [
+"geometry",
+"math"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 169199,
+"title": "리코쳇 로봇",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 53,
+"tags": [
+"bfs",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 172927,
+"title": "광물 캐기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 48,
+"tags": [
+"greedy",
+"sorting"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 172928,
+"title": "공원 산책",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 49,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 176962,
+"title": "과제 진행하기",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 44,
+"tags": [
+"simulation",
+"stack",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 176963,
+"title": "추억 점수",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 71,
+"tags": [
+"hash_set",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 178870,
+"title": "연속된 부분 수열의 합",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 57,
+"tags": [
+"two_pointer",
+"sliding_window"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 178871,
+"title": "달리기 경주",
+"level": 1,
+"partTitle": "연습문제",
+"acceptanceRate": 50,
+"tags": [
+"hash_set",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 181186,
+"title": "아방가르드 타일링",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 11,
+"tags": [
+"dp",
+"combinatorics"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 181187,
+"title": "두 원 사이의 정수 쌍",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 42,
+"tags": [
+"math",
+"geometry"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181188,
+"title": "요격 시스템",
+"level": 2,
+"partTitle": "연습문제",
+"acceptanceRate": 43,
+"tags": [
+"greedy",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181829,
+"title": "이차원 배열 대각선 순회하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181830,
+"title": "정사각형으로 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 80,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181831,
+"title": "특별한 이차원 배열 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181832,
+"title": "정수를 나선형으로 배치하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 49,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181833,
+"title": "특별한 이차원 배열 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181834,
+"title": "l로 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181835,
+"title": "조건에 맞게 수열 변환하기 3",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181836,
+"title": "그림 확대",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 81,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181837,
+"title": "커피 심부름",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181838,
+"title": "날짜 비교하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181839,
+"title": "주사위 게임 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181840,
+"title": "정수 찾기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181841,
+"title": "꼬리 문자열",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181842,
+"title": "부분 문자열",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181843,
+"title": "부분 문자열인지 확인하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181844,
+"title": "배열의 원소 삭제하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181845,
+"title": "문자열로 변환",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181846,
+"title": "두 수의 합",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 83,
+"tags": [
+"arbitrary_precision",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181847,
+"title": "0 떼기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181848,
+"title": "문자열을 정수로 변환하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181849,
+"title": "문자열 정수의 합",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181850,
+"title": "정수 부분",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181851,
+"title": "전국 대회 선발 고사",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 79,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181852,
+"title": "뒤에서 5등 위로",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181853,
+"title": "뒤에서 5등까지",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181854,
+"title": "배열의 길이에 따라 다른 연산하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181855,
+"title": "문자열 묶기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181856,
+"title": "배열 비교하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181857,
+"title": "배열의 길이를 2의 거듭제곱으로 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181858,
+"title": "무작위로 K개의 수 뽑기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 83,
+"tags": [
+"hash_set",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181859,
+"title": "배열 만들기 6",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"stack",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181860,
+"title": "빈 배열에 추가, 삭제하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"stack",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 181861,
+"title": "배열의 원소만큼 추가하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181862,
+"title": "세 개의 구분자",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181863,
+"title": "rny_string",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181864,
+"title": "문자열 바꿔서 찾기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181865,
+"title": "간단한 식 계산하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181866,
+"title": "문자열 잘라서 정렬하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181867,
+"title": "x 사이의 개수",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181868,
+"title": "공백으로 구분하기 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181869,
+"title": "공백으로 구분하기 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181870,
+"title": "ad 제거하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181871,
+"title": "문자열이 몇 번 등장하는지 세기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181872,
+"title": "특정 문자열로 끝나는 가장 긴 부분 문자열 찾기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181873,
+"title": "특정한 문자를 대문자로 바꾸기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181874,
+"title": "A 강조하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181875,
+"title": "배열에서 문자열 대소문자 변환하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181876,
+"title": "소문자로 바꾸기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181877,
+"title": "대문자로 바꾸기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181878,
+"title": "원하는 문자열 찾기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181879,
+"title": "길이에 따른 연산",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181880,
+"title": "1로 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181881,
+"title": "조건에 맞게 수열 변환하기 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181882,
+"title": "조건에 맞게 수열 변환하기 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181883,
+"title": "수열과 구간 쿼리 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"prefix_sum",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 181884,
+"title": "n보다 커질 때까지 더하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181885,
+"title": "할 일 목록",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181886,
+"title": "5명씩",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181887,
+"title": "홀수 vs 짝수",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181888,
+"title": "n개 간격의 원소들",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181889,
+"title": "n 번째 원소까지",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181890,
+"title": "왼쪽 오른쪽",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181891,
+"title": "순서 바꾸기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181892,
+"title": "n 번째 원소부터",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181893,
+"title": "배열 조각하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 75,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181894,
+"title": "2의 영역",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181895,
+"title": "배열 만들기 3",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181896,
+"title": "첫 번째로 나오는 음수",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181897,
+"title": "리스트 자르기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181898,
+"title": "가까운 1 찾기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181899,
+"title": "카운트 다운",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181900,
+"title": "글자 지우기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181901,
+"title": "배열 만들기 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181902,
+"title": "문자 개수 세기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181903,
+"title": "qr code",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181904,
+"title": "세로 읽기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181905,
+"title": "문자열 뒤집기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181906,
+"title": "접두사인지 확인하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181907,
+"title": "문자열의 앞의 n글자",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181908,
+"title": "접미사인지 확인하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181909,
+"title": "접미사 배열",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"string",
+"sorting"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181910,
+"title": "문자열의 뒤의 n글자",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181911,
+"title": "부분 문자열 이어 붙여 문자열 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181912,
+"title": "배열 만들기 5",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181913,
+"title": "문자열 여러 번 뒤집기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 84,
+"tags": [
+"implementation",
+"string",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181914,
+"title": "9로 나눈 나머지",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181915,
+"title": "글자 이어 붙여 문자열 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181916,
+"title": "주사위 게임 3",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 64,
+"tags": [
+"implementation",
+"case_work",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181917,
+"title": "간단한 논리 연산",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181918,
+"title": "배열 만들기 4",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 84,
+"tags": [
+"stack",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181919,
+"title": "콜라츠 수열 만들기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181920,
+"title": "카운트 업",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181921,
+"title": "배열 만들기 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 76,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181922,
+"title": "수열과 구간 쿼리 4",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 86,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181923,
+"title": "수열과 구간 쿼리 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 83,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181924,
+"title": "수열과 구간 쿼리 3",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 87,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181925,
+"title": "수 조작하기 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181926,
+"title": "수 조작하기 1",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181927,
+"title": "마지막 두 원소",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181928,
+"title": "이어 붙인 수",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181929,
+"title": "원소들의 곱과 합",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181930,
+"title": "주사위 게임 2",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"case_work",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181931,
+"title": "등차수열의 특정한 항만 더하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"arithmetic",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181932,
+"title": "코드 처리하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 74,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181933,
+"title": "flag에 따라 다른 값 반환하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181934,
+"title": "조건 문자열",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181935,
+"title": "홀짝에 따라 다른 값 반환하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181936,
+"title": "공배수",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181937,
+"title": "n의 배수",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"math",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181938,
+"title": "두 수의 연산값 비교하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181939,
+"title": "더 크게 합치기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181940,
+"title": "문자열 곱하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181941,
+"title": "문자 리스트를 문자열로 변환하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181942,
+"title": "문자열 섞기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 88,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181943,
+"title": "문자열 겹쳐쓰기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 80,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181944,
+"title": "홀짝 구분하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181945,
+"title": "문자열 돌리기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181946,
+"title": "문자열 붙여서 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 90,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181947,
+"title": "덧셈식 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 89,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181948,
+"title": "특수문자 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181949,
+"title": "대소문자 바꿔서 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 79,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181950,
+"title": "문자열 반복해서 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 86,
+"tags": [
+"implementation",
+"string"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181951,
+"title": "a와 b 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 81,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 181952,
+"title": "문자열 출력하기",
+"level": 0,
+"partTitle": "코딩 기초 트레이닝",
+"acceptanceRate": 73,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 214288,
+"title": "상담원 인원",
+"level": 3,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 예선",
+"acceptanceRate": 17,
+"tags": [
+"greedy",
+"priority_queue",
+"simulation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 214289,
+"title": "에어컨",
+"level": 3,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 예선",
+"acceptanceRate": 12,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 214290,
+"title": "경사로의 개수",
+"level": 4,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 예선",
+"acceptanceRate": 7,
+"tags": [
+"dp",
+"exponentiation_by_squaring",
+"linear_algebra"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "likely matrix-exponentiation over a small grid-state automaton; inferred from constraints, not stated explicitly"
+},
+{
+"id": 214291,
+"title": "집합과 쿼리",
+"level": 5,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 예선",
+"acceptanceRate": 2,
+"tags": [
+"disjoint_set",
+"splay_tree",
+"data_structures"
+],
+"confidence": "low",
+"source": "classified",
+"note": "requires an advanced ordered structure supporting merge/split by insertion time; exact technique is a guess"
+},
+{
+"id": 214292,
+"title": "재밌는 레이싱 경기장 설계하기",
+"level": 5,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 본선",
+"acceptanceRate": 3,
+"tags": [
+"greedy",
+"sorting",
+"constructive"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 214293,
+"title": "중요한 도로",
+"level": 5,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 본선",
+"acceptanceRate": 2,
+"tags": [
+"dijkstra",
+"shortest_path",
+"dag"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 214294,
+"title": "빠른 이동",
+"level": 5,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 본선",
+"acceptanceRate": 1,
+"tags": [
+"scc",
+"dag",
+"graphs"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 214295,
+"title": "미로 주행 테스트",
+"level": 5,
+"partTitle": "2023 현대모비스 알고리즘 경진대회 본선",
+"acceptanceRate": 0,
+"tags": [
+"geometry",
+"coordinate_compression",
+"math"
+],
+"confidence": "low",
+"source": "classified",
+"note": "Manhattan-distance lattice-point counting; exact technique uncertain given problem complexity"
+},
+{
+"id": 250121,
+"title": "[PCCE 기출문제] 10번 / 데이터 분석",
+"level": 1,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 57,
+"tags": [
+"sorting",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 250125,
+"title": "[PCCE 기출문제] 9번 / 이웃한 칸",
+"level": 1,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 62,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 250126,
+"title": "[PCCE 기출문제] 8번 / 창고 정리",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 68,
+"tags": [
+"implementation",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise, not implementation from scratch"
+},
+{
+"id": 250127,
+"title": "[PCCE 기출문제] 7번 / 가습기",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 80,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 250128,
+"title": "[PCCE 기출문제] 6번 / 가채점",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 76,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise"
+},
+{
+"id": 250129,
+"title": "[PCCE 기출문제] 5번 / 산책",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 250130,
+"title": "[PCCE 기출문제] 4번 / 저축",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 83,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 250131,
+"title": "[PCCE 기출문제] 3번 / 나이 계산",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 81,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 250132,
+"title": "[PCCE 기출문제] 2번 / 피타고라스의 정리",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 82,
+"tags": [
+"pythagoras",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise"
+},
+{
+"id": 250133,
+"title": "[PCCE 기출문제] 1번 / 출력",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 74,
+"tags": [
+"implementation"
+],
+"confidence": "low",
+"source": "classified",
+"note": "fill-in-the-blank stub with almost no statement beyond expected output"
+},
+{
+"id": 250134,
+"title": "[PCCP 기출문제] 4번 / 수레 움직이기",
+"level": 3,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 22,
+"tags": [
+"bfs",
+"bitmask",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 250135,
+"title": "[PCCP 기출문제] 3번 / 아날로그 시계",
+"level": 2,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 17,
+"tags": [
+"math"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "clock-hand overlap counting; arithmetic/number-theory in nature, no closer specific tag fits"
+},
+{
+"id": 250136,
+"title": "[PCCP 기출문제] 2번 / 석유 시추",
+"level": 2,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 45,
+"tags": [
+"flood_fill",
+"graph_traversal",
+"prefix_sum"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 250137,
+"title": "[PCCP 기출문제] 1번 / 붕대 감기",
+"level": 1,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 46,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 258705,
+"title": "산 모양 타일링",
+"level": 3,
+"partTitle": "2024 KAKAO WINTER INTERNSHIP",
+"acceptanceRate": 29,
+"tags": [
+"dp"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 258707,
+"title": "n + 1 카드게임",
+"level": 3,
+"partTitle": "2024 KAKAO WINTER INTERNSHIP",
+"acceptanceRate": 24,
+"tags": [
+"greedy",
+"priority_queue",
+"simulation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 258709,
+"title": "주사위 고르기",
+"level": 3,
+"partTitle": "2024 KAKAO WINTER INTERNSHIP",
+"acceptanceRate": 25,
+"tags": [
+"combinatorics",
+"bruteforcing"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 258711,
+"title": "도넛과 막대 그래프",
+"level": 2,
+"partTitle": "2024 KAKAO WINTER INTERNSHIP",
+"acceptanceRate": 26,
+"tags": [
+"graphs",
+"graph_traversal"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 258712,
+"title": "가장 많이 받은 선물",
+"level": 1,
+"partTitle": "2024 KAKAO WINTER INTERNSHIP",
+"acceptanceRate": 31,
+"tags": [
+"implementation",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 273709,
+"title": "조건에 맞는 아이템들의 가격의 총합 구하기",
+"level": 2,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 91,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 273710,
+"title": "ROOT 아이템 구하기",
+"level": 2,
+"partTitle": "IS NULL",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 273711,
+"title": "업그레이드 된 아이템 구하기",
+"level": 2,
+"partTitle": "SELECT",
+"acceptanceRate": 69,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 273712,
+"title": "업그레이드 할 수 없는 아이템 구하기",
+"level": 3,
+"partTitle": "IS NULL",
+"acceptanceRate": 74,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 276013,
+"title": "Python 개발자 찾기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 276034,
+"title": "조건에 맞는 개발자 찾기",
+"level": 2,
+"partTitle": "SELECT",
+"acceptanceRate": 61,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 276035,
+"title": "FrontEnd 개발자 찾기",
+"level": 4,
+"partTitle": "JOIN",
+"acceptanceRate": 55,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 276036,
+"title": "언어별 개발자 분류하기",
+"level": 4,
+"partTitle": "GROUP BY",
+"acceptanceRate": 45,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 284527,
+"title": "조건에 맞는 사원 정보 조회하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 81,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 284528,
+"title": "연간 평가점수에 해당하는 평가 등급 및 성과금 조회하기",
+"level": 4,
+"partTitle": "GROUP BY",
+"acceptanceRate": 75,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 284529,
+"title": "부서별 평균 연봉 조회하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 86,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 284530,
+"title": "연도 별 평균 미세먼지 농도 조회하기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 85,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 284531,
+"title": "노선별 평균 역 사이 거리 조회하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 78,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 293257,
+"title": "물고기 종류 별 잡은 수 구하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 293258,
+"title": "잔챙이 잡은 수 구하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 293259,
+"title": "잡은 물고기의 평균 길이 구하기",
+"level": 1,
+"partTitle": "IS NULL",
+"acceptanceRate": 83,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 293260,
+"title": "월별 잡은 물고기 수 구하기",
+"level": 2,
+"partTitle": "GROUP BY",
+"acceptanceRate": 85,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 293261,
+"title": "물고기 종류 별 대어 찾기",
+"level": 3,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 73,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 298515,
+"title": "잡은 물고기 중 가장 큰 물고기의 길이 구하기",
+"level": 1,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 84,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 298516,
+"title": "한 해에 잡은 물고기 수 구하기",
+"level": 1,
+"partTitle": "String, Date",
+"acceptanceRate": 81,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 298517,
+"title": "가장 큰 물고기 10마리 구하기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 76,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 298518,
+"title": "특정 물고기를 잡은 총 수 구하기",
+"level": 2,
+"partTitle": "SELECT",
+"acceptanceRate": 81,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 298519,
+"title": "특정 조건을 만족하는 물고기별 수와 최대 길이 구하기",
+"level": 3,
+"partTitle": "GROUP BY",
+"acceptanceRate": 77,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 299305,
+"title": "대장균들의 자식의 수 구하기",
+"level": 3,
+"partTitle": "SELECT",
+"acceptanceRate": 73,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 299307,
+"title": "대장균의 크기에 따라 분류하기 1",
+"level": 3,
+"partTitle": "SELECT",
+"acceptanceRate": 83,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 299308,
+"title": "분기별 분화된 대장균의 개체 수 구하기",
+"level": 2,
+"partTitle": "String, Date",
+"acceptanceRate": 71,
+"tags": [
+"string"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 299310,
+"title": "연도별 대장균 크기의 편차 구하기 ",
+"level": 2,
+"partTitle": "SUM, MAX, MIN",
+"acceptanceRate": 62,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 301646,
+"title": "특정 형질을 가지는 대장균 찾기",
+"level": 1,
+"partTitle": "SELECT",
+"acceptanceRate": 48,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 301647,
+"title": "부모의 형질을 모두 가지는 대장균 찾기",
+"level": 2,
+"partTitle": "SELECT",
+"acceptanceRate": 54,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 301649,
+"title": "대장균의 크기에 따라 분류하기 2",
+"level": 3,
+"partTitle": "SELECT",
+"acceptanceRate": 63,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 301650,
+"title": "특정 세대의 대장균 찾기",
+"level": 4,
+"partTitle": "SELECT",
+"acceptanceRate": 65,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 301651,
+"title": "멸종위기의 대장균 찾기",
+"level": 5,
+"partTitle": "SELECT",
+"acceptanceRate": 26,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "partTitle",
+"note": "SQL"
+},
+{
+"id": 340198,
+"title": "[PCCE 기출문제] 10번 / 공원",
+"level": 1,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 47,
+"tags": [
+"implementation",
+"bruteforcing"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 340199,
+"title": "[PCCE 기출문제] 9번 / 지폐 접기",
+"level": 1,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 66,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 340200,
+"title": "[PCCE 기출문제] 8번 / 닉네임 규칙",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 78,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise"
+},
+{
+"id": 340201,
+"title": "[PCCE 기출문제] 7번 / 버스",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 63,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 340202,
+"title": "[PCCE 기출문제] 6번 / 물 부족",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 66,
+"tags": [
+"implementation",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise"
+},
+{
+"id": 340203,
+"title": "[PCCE 기출문제] 5번 / 심폐소생술",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 77,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 340204,
+"title": "[PCCE 기출문제] 4번 / 병과분류",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 81,
+"tags": [
+"string",
+"implementation"
+],
+"confidence": "high",
+"source": "classified",
+"note": "fill-in-the-blank exercise"
+},
+{
+"id": 340205,
+"title": "[PCCE 기출문제] 3번 / 수 나누기",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 73,
+"tags": [
+"string",
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise"
+},
+{
+"id": 340206,
+"title": "[PCCE 기출문제] 2번 / 각도 합치기",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 77,
+"tags": [
+"arithmetic"
+],
+"confidence": "high",
+"source": "classified",
+"note": "one-line bug-fix exercise"
+},
+{
+"id": 340207,
+"title": "[PCCE 기출문제] 1번 / 문자 출력",
+"level": 0,
+"partTitle": "PCCE 기출문제",
+"acceptanceRate": 73,
+"tags": [
+"implementation"
+],
+"confidence": "low",
+"source": "classified",
+"note": "fill-in-the-blank stub with almost no statement beyond expected output"
+},
+{
+"id": 340210,
+"title": "[PCCP 기출문제] 4번 / 수식 복원하기",
+"level": 3,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 22,
+"tags": [
+"bruteforcing",
+"arithmetic",
+"implementation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 340211,
+"title": "[PCCP 기출문제] 3번 / 충돌위험 찾기",
+"level": 2,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 38,
+"tags": [
+"simulation",
+"implementation",
+"hash_set"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 340212,
+"title": "[PCCP 기출문제] 2번 / 퍼즐 게임 챌린지",
+"level": 2,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 47,
+"tags": [
+"binary_search",
+"parametric_search",
+"prefix_sum"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 340213,
+"title": "[PCCP 기출문제] 1번 / 동영상 재생기",
+"level": 1,
+"partTitle": "PCCP 기출문제",
+"acceptanceRate": 43,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 388351,
+"title": "유연근무제",
+"level": 1,
+"partTitle": "2025 프로그래머스 코드챌린지 1차 예선",
+"acceptanceRate": 51,
+"tags": [
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 388352,
+"title": "비밀 코드 해독",
+"level": 2,
+"partTitle": "2025 프로그래머스 코드챌린지 1차 예선",
+"acceptanceRate": 46,
+"tags": [
+"bruteforcing",
+"combinatorics"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 388353,
+"title": "지게차와 크레인",
+"level": 2,
+"partTitle": "2025 프로그래머스 코드챌린지 1차 예선",
+"acceptanceRate": 46,
+"tags": [
+"flood_fill",
+"graph_traversal",
+"simulation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 388354,
+"title": "홀짝트리",
+"level": 3,
+"partTitle": "2025 프로그래머스 코드챌린지 1차 예선",
+"acceptanceRate": 21,
+"tags": [
+"trees",
+"rerooting",
+"dp_tree"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 389478,
+"title": "택배 상자 꺼내기",
+"level": 1,
+"partTitle": "2025 프로그래머스 코드챌린지 2차 예선",
+"acceptanceRate": 39,
+"tags": [
+"implementation",
+"math"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 389479,
+"title": "서버 증설 횟수",
+"level": 2,
+"partTitle": "2025 프로그래머스 코드챌린지 2차 예선",
+"acceptanceRate": 54,
+"tags": [
+"greedy",
+"difference_array",
+"simulation"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 389480,
+"title": "완전범죄",
+"level": 2,
+"partTitle": "2025 프로그래머스 코드챌린지 2차 예선",
+"acceptanceRate": 32,
+"tags": [
+"dp",
+"knapsack"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 389481,
+"title": "봉인된 주문",
+"level": 3,
+"partTitle": "2025 프로그래머스 코드챌린지 2차 예선",
+"acceptanceRate": 29,
+"tags": [
+"combinatorics",
+"dp_digit",
+"trie"
+],
+"confidence": "low",
+"source": "classified",
+"note": "lexicographic-rank counting with exclusions; exact technique (digit DP vs. trie-based exclusion) is a guess"
+},
+{
+"id": 389629,
+"title": "가장 큰 삼각형 덩어리",
+"level": 4,
+"partTitle": "2025 프로그래머스 코드챌린지 본선",
+"acceptanceRate": 6,
+"tags": [
+"disjoint_set",
+"grid_graph",
+"greedy"
+],
+"confidence": "low",
+"source": "classified",
+"note": "grid diagonal-orientation optimization; exact technique unclear from statement alone"
+},
+{
+"id": 389630,
+"title": "격자 뒤집기 미로",
+"level": 4,
+"partTitle": "2025 프로그래머스 코드챌린지 본선",
+"acceptanceRate": 4,
+"tags": [
+"bitmask",
+"dp",
+"dp_bitfield"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 389631,
+"title": "눈사람 만들기",
+"level": 5,
+"partTitle": "2025 프로그래머스 코드챌린지 본선",
+"acceptanceRate": 1,
+"tags": [
+"bfs",
+"graph_traversal",
+"graphs"
+],
+"confidence": "low",
+"source": "classified",
+"note": "complex reachability/counting on a grid; exact technique uncertain"
+},
+{
+"id": 389632,
+"title": "문자열과 알파벳과 쿼리",
+"level": 5,
+"partTitle": "2025 프로그래머스 코드챌린지 본선",
+"acceptanceRate": 1,
+"tags": [
+"rope",
+"data_structures"
+],
+"confidence": "low",
+"source": "classified",
+"note": "ordered split/merge string queries; technique guessed from problem shape"
+},
+{
+"id": 451808,
+"title": "숫자 야구",
+"level": 3,
+"partTitle": "연습문제",
+"acceptanceRate": 5,
+"tags": [
+"bruteforcing",
+"backtracking"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "interactive mastermind-style search with adaptive candidate filtering"
+},
+{
+"id": 468370,
+"title": "중요한 단어를 스포 방지",
+"level": 1,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 28,
+"tags": [
+"implementation",
+"string",
+"hash_set"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 468371,
+"title": "노란불 신호등",
+"level": 1,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 30,
+"tags": [
+"bruteforcing",
+"number_theory"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 468372,
+"title": "리프 노드 수 최대화",
+"level": 2,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 17,
+"tags": [
+"greedy",
+"dp",
+"math"
+],
+"confidence": "low",
+"source": "classified",
+"note": "tree-branching optimization under product/sum constraints; exact technique uncertain"
+},
+{
+"id": 468373,
+"title": "바이러스 파이프",
+"level": 2,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 36,
+"tags": [
+"trees",
+"bruteforcing",
+"bfs"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 468374,
+"title": "카카오 앱 정리하기",
+"level": 3,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 6,
+"tags": [
+"simulation",
+"implementation"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 468375,
+"title": "발전소 회로 복구",
+"level": 3,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 14,
+"tags": [
+"bitmask",
+"tsp",
+"bfs"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 468376,
+"title": "최고 속도",
+"level": 3,
+"partTitle": "2025 카카오 하반기 1차",
+"acceptanceRate": 7,
+"tags": [
+"dijkstra",
+"mst",
+"shortest_path"
+],
+"confidence": "medium",
+"source": "classified"
+},
+{
+"id": 468377,
+"title": "힌트 스테이지",
+"level": 2,
+"partTitle": "2025 카카오 하반기 2차",
+"acceptanceRate": 28,
+"tags": [
+"dp",
+"bitmask",
+"dp_bitfield"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 468378,
+"title": "보물 찾기",
+"level": 3,
+"partTitle": "2025 카카오 하반기 2차",
+"acceptanceRate": 15,
+"tags": [
+"binary_search",
+"greedy"
+],
+"confidence": "medium",
+"source": "classified",
+"note": "interactive weighted search minimizing cost; exact optimal strategy uncertain"
+},
+{
+"id": 468379,
+"title": "선인장 숨기기",
+"level": 2,
+"partTitle": "2025 카카오 하반기 2차",
+"acceptanceRate": 16,
+"tags": [
+"deque_trick",
+"sliding_window"
+],
+"confidence": "high",
+"source": "classified"
+},
+{
+"id": 468380,
+"title": "제곱 개수 배열",
+"level": 3,
+"partTitle": "2025 카카오 하반기 2차",
+"acceptanceRate": 11,
+"tags": [
+"prefix_sum",
+"binary_search",
+"two_pointer"
+],
+"confidence": "low",
+"source": "classified",
+"note": "run-length-encoded array range queries; exact counting technique for the second value is uncertain"
+},
+{
+"id": 468381,
+"title": "기차 선로",
+"level": 3,
+"partTitle": "2025 카카오 하반기 2차",
+"acceptanceRate": 4,
+"tags": [
+"dp_connection_profile",
+"dp",
+"bitmask"
+],
+"confidence": "medium",
+"source": "classified"
+}
+]
+}

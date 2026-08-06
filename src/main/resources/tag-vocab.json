@@ -1,0 +1,1609 @@
+{
+"source": "solved.ac /api/v3/tag/list",
+"count": 229,
+"tags": [
+{
+"key": "math",
+"ko": "수학",
+"en": "mathematics",
+"meta": false,
+"bojProblems": 8083
+},
+{
+"key": "implementation",
+"ko": "구현",
+"en": "implementation",
+"meta": false,
+"bojProblems": 6834
+},
+{
+"key": "dp",
+"ko": "다이나믹 프로그래밍",
+"en": "dynamic programming",
+"meta": false,
+"bojProblems": 5151
+},
+{
+"key": "data_structures",
+"ko": "자료 구조",
+"en": "data structures",
+"meta": false,
+"bojProblems": 5114
+},
+{
+"key": "graphs",
+"ko": "그래프 이론",
+"en": "graph theory",
+"meta": false,
+"bojProblems": 5085
+},
+{
+"key": "greedy",
+"ko": "그리디 알고리즘",
+"en": "greedy",
+"meta": false,
+"bojProblems": 3473
+},
+{
+"key": "string",
+"ko": "문자열",
+"en": "string",
+"meta": false,
+"bojProblems": 2964
+},
+{
+"key": "bruteforcing",
+"ko": "브루트포스 알고리즘",
+"en": "bruteforcing",
+"meta": false,
+"bojProblems": 2803
+},
+{
+"key": "graph_traversal",
+"ko": "그래프 탐색",
+"en": "graph traversal",
+"meta": false,
+"bojProblems": 2501
+},
+{
+"key": "sorting",
+"ko": "정렬",
+"en": "sorting",
+"meta": false,
+"bojProblems": 2427
+},
+{
+"key": "ad_hoc",
+"ko": "애드 혹",
+"en": "ad-hoc",
+"meta": false,
+"bojProblems": 2311
+},
+{
+"key": "geometry",
+"ko": "기하학",
+"en": "geometry",
+"meta": false,
+"bojProblems": 2047
+},
+{
+"key": "trees",
+"ko": "트리",
+"en": "tree",
+"meta": false,
+"bojProblems": 1920
+},
+{
+"key": "number_theory",
+"ko": "정수론",
+"en": "number theory",
+"meta": false,
+"bojProblems": 1889
+},
+{
+"key": "segtree",
+"ko": "세그먼트 트리",
+"en": "segment tree",
+"meta": false,
+"bojProblems": 1714
+},
+{
+"key": "binary_search",
+"ko": "이분 탐색",
+"en": "binary search",
+"meta": false,
+"bojProblems": 1665
+},
+{
+"key": "set",
+"ko": "집합과 맵",
+"en": "set / map",
+"meta": false,
+"bojProblems": 1619
+},
+{
+"key": "constructive",
+"ko": "해 구성하기",
+"en": "constructive",
+"meta": false,
+"bojProblems": 1581
+},
+{
+"key": "prefix_sum",
+"ko": "누적 합",
+"en": "prefix sum",
+"meta": false,
+"bojProblems": 1379
+},
+{
+"key": "arithmetic",
+"ko": "사칙연산",
+"en": "arithmetic",
+"meta": false,
+"bojProblems": 1374
+},
+{
+"key": "simulation",
+"ko": "시뮬레이션",
+"en": "simulation",
+"meta": false,
+"bojProblems": 1370
+},
+{
+"key": "combinatorics",
+"ko": "조합론",
+"en": "combinatorics",
+"meta": false,
+"bojProblems": 1292
+},
+{
+"key": "bfs",
+"ko": "너비 우선 탐색",
+"en": "breadth-first search",
+"meta": false,
+"bojProblems": 1227
+},
+{
+"key": "case_work",
+"ko": "많은 조건 분기",
+"en": "case work",
+"meta": false,
+"bojProblems": 1206
+},
+{
+"key": "bitmask",
+"ko": "비트마스킹",
+"en": "bitmask",
+"meta": false,
+"bojProblems": 1027
+},
+{
+"key": "shortest_path",
+"ko": "최단 경로",
+"en": "shortest path",
+"meta": false,
+"bojProblems": 990
+},
+{
+"key": "dfs",
+"ko": "깊이 우선 탐색",
+"en": "depth-first search",
+"meta": false,
+"bojProblems": 963
+},
+{
+"key": "hash_set",
+"ko": "해시를 사용한 집합과 맵",
+"en": "set / map by hashing",
+"meta": false,
+"bojProblems": 789
+},
+{
+"key": "dijkstra",
+"ko": "데이크스트라",
+"en": "dijkstra's",
+"meta": false,
+"bojProblems": 725
+},
+{
+"key": "sweeping",
+"ko": "스위핑",
+"en": "sweeping",
+"meta": false,
+"bojProblems": 708
+},
+{
+"key": "disjoint_set",
+"ko": "분리 집합",
+"en": "disjoint set",
+"meta": false,
+"bojProblems": 675
+},
+{
+"key": "backtracking",
+"ko": "백트래킹",
+"en": "backtracking",
+"meta": false,
+"bojProblems": 656
+},
+{
+"key": "dp_tree",
+"ko": "트리에서의 다이나믹 프로그래밍",
+"en": "dynamic programming on trees",
+"meta": false,
+"bojProblems": 597
+},
+{
+"key": "priority_queue",
+"ko": "우선순위 큐",
+"en": "priority queue",
+"meta": false,
+"bojProblems": 575
+},
+{
+"key": "parsing",
+"ko": "파싱",
+"en": "parsing",
+"meta": false,
+"bojProblems": 558
+},
+{
+"key": "parametric_search",
+"ko": "매개 변수 탐색",
+"en": "parametric search",
+"meta": false,
+"bojProblems": 544
+},
+{
+"key": "tree_set",
+"ko": "트리를 사용한 집합과 맵",
+"en": "set / map by trees",
+"meta": false,
+"bojProblems": 541
+},
+{
+"key": "game_theory",
+"ko": "게임 이론",
+"en": "game theory",
+"meta": false,
+"bojProblems": 534
+},
+{
+"key": "divide_and_conquer",
+"ko": "분할 정복",
+"en": "divide and conquer",
+"meta": false,
+"bojProblems": 509
+},
+{
+"key": "probability",
+"ko": "확률론",
+"en": "probability theory",
+"meta": false,
+"bojProblems": 508
+},
+{
+"key": "stack",
+"ko": "스택",
+"en": "stack",
+"meta": false,
+"bojProblems": 493
+},
+{
+"key": "two_pointer",
+"ko": "두 포인터",
+"en": "two-pointer",
+"meta": false,
+"bojProblems": 490
+},
+{
+"key": "dp_bitfield",
+"ko": "비트필드를 이용한 다이나믹 프로그래밍",
+"en": "dynamic programming using bitfield",
+"meta": false,
+"bojProblems": 409
+},
+{
+"key": "lazyprop",
+"ko": "느리게 갱신되는 세그먼트 트리",
+"en": "segment tree with lazy propagation",
+"meta": false,
+"bojProblems": 405
+},
+{
+"key": "primality_test",
+"ko": "소수 판정",
+"en": "primality test",
+"meta": false,
+"bojProblems": 398
+},
+{
+"key": "flow",
+"ko": "최대 유량",
+"en": "maximum flow",
+"meta": false,
+"bojProblems": 397
+},
+{
+"key": "offline_queries",
+"ko": "오프라인 쿼리",
+"en": "offline queries",
+"meta": false,
+"bojProblems": 372
+},
+{
+"key": "exponentiation_by_squaring",
+"ko": "분할 정복을 이용한 거듭제곱",
+"en": "exponentiation by squaring",
+"meta": false,
+"bojProblems": 354
+},
+{
+"key": "knapsack",
+"ko": "배낭 문제",
+"en": "knapsack",
+"meta": false,
+"bojProblems": 345
+},
+{
+"key": "dag",
+"ko": "방향 비순환 그래프",
+"en": "directed acyclic graph",
+"meta": false,
+"bojProblems": 340
+},
+{
+"key": "arbitrary_precision",
+"ko": "임의 정밀도 / 큰 수 연산",
+"en": "arbitrary precision / big integers",
+"meta": false,
+"bojProblems": 314
+},
+{
+"key": "coordinate_compression",
+"ko": "값 / 좌표 압축",
+"en": "value / coordinate compression",
+"meta": false,
+"bojProblems": 314
+},
+{
+"key": "recursion",
+"ko": "재귀",
+"en": "recursion",
+"meta": false,
+"bojProblems": 311
+},
+{
+"key": "euclidean",
+"ko": "유클리드 호제법",
+"en": "euclidean algorithm",
+"meta": false,
+"bojProblems": 268
+},
+{
+"key": "grid_graph",
+"ko": "격자 그래프",
+"en": "grid graph",
+"meta": false,
+"bojProblems": 264
+},
+{
+"key": "mst",
+"ko": "최소 스패닝 트리",
+"en": "minimum spanning tree",
+"meta": false,
+"bojProblems": 257
+},
+{
+"key": "topological_sorting",
+"ko": "위상 정렬",
+"en": "topological sorting",
+"meta": false,
+"bojProblems": 255
+},
+{
+"key": "linear_algebra",
+"ko": "선형대수학",
+"en": "linear algebra",
+"meta": false,
+"bojProblems": 254
+},
+{
+"key": "precomputation",
+"ko": "런타임 전의 전처리",
+"en": "precomputation",
+"meta": false,
+"bojProblems": 249
+},
+{
+"key": "convex_hull",
+"ko": "볼록 껍질",
+"en": "convex hull",
+"meta": false,
+"bojProblems": 245
+},
+{
+"key": "sieve",
+"ko": "에라토스테네스의 체",
+"en": "sieve of eratosthenes",
+"meta": false,
+"bojProblems": 233
+},
+{
+"key": "inclusion_and_exclusion",
+"ko": "포함 배제의 원리",
+"en": "inclusion and exclusion",
+"meta": false,
+"bojProblems": 231
+},
+{
+"key": "bipartite_matching",
+"ko": "이분 매칭",
+"en": "bipartite matching",
+"meta": false,
+"bojProblems": 230
+},
+{
+"key": "lca",
+"ko": "최소 공통 조상",
+"en": "lowest common ancestor",
+"meta": false,
+"bojProblems": 224
+},
+{
+"key": "sparse_table",
+"ko": "희소 배열",
+"en": "sparse table",
+"meta": false,
+"bojProblems": 220
+},
+{
+"key": "traceback",
+"ko": "역추적",
+"en": "traceback",
+"meta": false,
+"bojProblems": 216
+},
+{
+"key": "parity",
+"ko": "홀짝성",
+"en": "parity",
+"meta": false,
+"bojProblems": 215
+},
+{
+"key": "hashing",
+"ko": "해싱",
+"en": "hashing",
+"meta": false,
+"bojProblems": 208
+},
+{
+"key": "randomization",
+"ko": "무작위화",
+"en": "randomization",
+"meta": false,
+"bojProblems": 207
+},
+{
+"key": "modular_multiplicative_inverse",
+"ko": "모듈로 곱셈 역원",
+"en": "modular multiplicative inverse",
+"meta": false,
+"bojProblems": 204
+},
+{
+"key": "floyd_warshall",
+"ko": "플로이드–워셜",
+"en": "floyd–warshall",
+"meta": false,
+"bojProblems": 193
+},
+{
+"key": "scc",
+"ko": "강한 연결 요소",
+"en": "strongly connected component",
+"meta": false,
+"bojProblems": 191
+},
+{
+"key": "smaller_to_larger",
+"ko": "작은 집합에서 큰 집합으로 합치는 테크닉",
+"en": "smaller to larger technique",
+"meta": false,
+"bojProblems": 179
+},
+{
+"key": "line_intersection",
+"ko": "선분 교차 판정",
+"en": "line segment intersection check",
+"meta": false,
+"bojProblems": 177
+},
+{
+"key": "sqrt_decomposition",
+"ko": "제곱근 분할법",
+"en": "square root decomposition",
+"meta": false,
+"bojProblems": 175
+},
+{
+"key": "fft",
+"ko": "고속 푸리에 변환",
+"en": "fast fourier transform",
+"meta": false,
+"bojProblems": 173
+},
+{
+"key": "calculus",
+"ko": "미적분학",
+"en": "calculus",
+"meta": false,
+"bojProblems": 169
+},
+{
+"key": "trie",
+"ko": "트라이",
+"en": "trie",
+"meta": false,
+"bojProblems": 166
+},
+{
+"key": "deque",
+"ko": "덱",
+"en": "deque",
+"meta": false,
+"bojProblems": 163
+},
+{
+"key": "prime_factorization",
+"ko": "소인수분해",
+"en": "prime factorization",
+"meta": false,
+"bojProblems": 147
+},
+{
+"key": "geometry_3d",
+"ko": "3차원 기하학",
+"en": "geometry; 3d",
+"meta": false,
+"bojProblems": 145
+},
+{
+"key": "heuristics",
+"ko": "휴리스틱",
+"en": "heuristics",
+"meta": false,
+"bojProblems": 138
+},
+{
+"key": "ternary_search",
+"ko": "삼분 탐색",
+"en": "ternary search",
+"meta": false,
+"bojProblems": 135
+},
+{
+"key": "sliding_window",
+"ko": "슬라이딩 윈도우",
+"en": "sliding window",
+"meta": false,
+"bojProblems": 134
+},
+{
+"key": "euler_tour_technique",
+"ko": "오일러 경로 테크닉",
+"en": "euler tour technique",
+"meta": false,
+"bojProblems": 134
+},
+{
+"key": "suffix_array",
+"ko": "접미사 배열과 LCP 배열",
+"en": "suffix array and lcp array",
+"meta": false,
+"bojProblems": 133
+},
+{
+"key": "cht",
+"ko": "볼록 껍질을 이용한 최적화",
+"en": "convex hull trick",
+"meta": false,
+"bojProblems": 128
+},
+{
+"key": "mcmf",
+"ko": "최소 비용 최대 유량",
+"en": "minimum cost maximum flow",
+"meta": false,
+"bojProblems": 128
+},
+{
+"key": "sprague_grundy",
+"ko": "스프라그–그런디 정리",
+"en": "sprague–grundy theorem",
+"meta": false,
+"bojProblems": 128
+},
+{
+"key": "difference_array",
+"ko": "차분 배열 트릭",
+"en": "difference array",
+"meta": false,
+"bojProblems": 126
+},
+{
+"key": "mitm",
+"ko": "중간에서 만나기",
+"en": "meet in the middle",
+"meta": false,
+"bojProblems": 124
+},
+{
+"key": "pythagoras",
+"ko": "피타고라스 정리",
+"en": "pythagoras theorem",
+"meta": false,
+"bojProblems": 124
+},
+{
+"key": "lis",
+"ko": "가장 긴 증가하는 부분 수열 문제",
+"en": "longest increasing sequence problem",
+"meta": false,
+"bojProblems": 123
+},
+{
+"key": "centroid",
+"ko": "센트로이드",
+"en": "centroid",
+"meta": false,
+"bojProblems": 123
+},
+{
+"key": "bitset",
+"ko": "비트 집합",
+"en": "bit set",
+"meta": false,
+"bojProblems": 120
+},
+{
+"key": "permutation_cycle_decomposition",
+"ko": "순열 사이클 분할",
+"en": "permutation cycle decomposition",
+"meta": false,
+"bojProblems": 120
+},
+{
+"key": "kmp",
+"ko": "KMP",
+"en": "knuth–morris–pratt",
+"meta": false,
+"bojProblems": 115
+},
+{
+"key": "gaussian_elimination",
+"ko": "가우스 소거법",
+"en": "gaussian elimination",
+"meta": false,
+"bojProblems": 114
+},
+{
+"key": "linearity_of_expectation",
+"ko": "기댓값의 선형성",
+"en": "linearity of expectation",
+"meta": false,
+"bojProblems": 113
+},
+{
+"key": "bipartite_graph",
+"ko": "이분 그래프",
+"en": "bipartite graph",
+"meta": false,
+"bojProblems": 110
+},
+{
+"key": "hld",
+"ko": "Heavy-light 분할",
+"en": "heavy-light decomposition",
+"meta": false,
+"bojProblems": 109
+},
+{
+"key": "mfmc",
+"ko": "최대 유량 최소 컷 정리",
+"en": "max-flow min-cut theorem",
+"meta": false,
+"bojProblems": 102
+},
+{
+"key": "polygon_area",
+"ko": "다각형의 넓이",
+"en": "area of a polygon",
+"meta": false,
+"bojProblems": 100
+},
+{
+"key": "centroid_decomposition",
+"ko": "센트로이드 분할",
+"en": "centroid decomposition",
+"meta": false,
+"bojProblems": 94
+},
+{
+"key": "physics",
+"ko": "물리학",
+"en": "physics",
+"meta": false,
+"bojProblems": 92
+},
+{
+"key": "eulerian_path",
+"ko": "오일러 경로",
+"en": "eulerian path / circuit",
+"meta": false,
+"bojProblems": 92
+},
+{
+"key": "flt",
+"ko": "페르마의 소정리",
+"en": "fermat's little theorem",
+"meta": false,
+"bojProblems": 85
+},
+{
+"key": "0_1_bfs",
+"ko": "0-1 너비 우선 탐색",
+"en": "0-1 bfs",
+"meta": false,
+"bojProblems": 84
+},
+{
+"key": "flood_fill",
+"ko": "플러드 필",
+"en": "flood-fill",
+"meta": false,
+"bojProblems": 82
+},
+{
+"key": "articulation",
+"ko": "단절점과 단절선",
+"en": "articulation points and bridges",
+"meta": false,
+"bojProblems": 75
+},
+{
+"key": "2_sat",
+"ko": "2-sat",
+"en": "2-sat",
+"meta": false,
+"bojProblems": 74
+},
+{
+"key": "queue",
+"ko": "큐",
+"en": "queue",
+"meta": false,
+"bojProblems": 74
+},
+{
+"key": "functional_graph",
+"ko": "함수형 그래프",
+"en": "functional graph",
+"meta": false,
+"bojProblems": 73
+},
+{
+"key": "pigeonhole_principle",
+"ko": "비둘기집 원리",
+"en": "pigeonhole principle",
+"meta": false,
+"bojProblems": 73
+},
+{
+"key": "tsp",
+"ko": "외판원 순회 문제",
+"en": "travelling salesman problem",
+"meta": false,
+"bojProblems": 71
+},
+{
+"key": "deque_trick",
+"ko": "덱을 이용한 구간 최댓값 트릭",
+"en": "deque range maximum trick",
+"meta": false,
+"bojProblems": 67
+},
+{
+"key": "rerooting",
+"ko": "트리에서의 전방향 다이나믹 프로그래밍",
+"en": "rerooting on trees",
+"meta": false,
+"bojProblems": 65
+},
+{
+"key": "pst",
+"ko": "퍼시스턴트 세그먼트 트리",
+"en": "persistent segment tree",
+"meta": false,
+"bojProblems": 64
+},
+{
+"key": "dp_digit",
+"ko": "자릿수를 이용한 다이나믹 프로그래밍",
+"en": "digit dp",
+"meta": false,
+"bojProblems": 64
+},
+{
+"key": "planar_graph",
+"ko": "평면 그래프",
+"en": "planar graph",
+"meta": false,
+"bojProblems": 63
+},
+{
+"key": "bcc",
+"ko": "이중 연결 요소",
+"en": "biconnected component",
+"meta": false,
+"bojProblems": 62
+},
+{
+"key": "euler_phi",
+"ko": "오일러 피 함수",
+"en": "euler totient function",
+"meta": false,
+"bojProblems": 62
+},
+{
+"key": "generating_function",
+"ko": "생성 함수",
+"en": "generating function",
+"meta": false,
+"bojProblems": 62
+},
+{
+"key": "point_in_convex_polygon",
+"ko": "볼록 다각형 내부의 점 판정",
+"en": "point in convex polygon check",
+"meta": false,
+"bojProblems": 61
+},
+{
+"key": "crt",
+"ko": "중국인의 나머지 정리",
+"en": "chinese remainder theorem",
+"meta": false,
+"bojProblems": 60
+},
+{
+"key": "angle_sorting",
+"ko": "각도 정렬",
+"en": "angle sorting",
+"meta": false,
+"bojProblems": 60
+},
+{
+"key": "harmonic_number",
+"ko": "조화수",
+"en": "harmonic number",
+"meta": false,
+"bojProblems": 60
+},
+{
+"key": "linked_list",
+"ko": "연결 리스트",
+"en": "linked list",
+"meta": false,
+"bojProblems": 59
+},
+{
+"key": "invariant",
+"ko": "불변량 찾기",
+"en": "finding invariants",
+"meta": false,
+"bojProblems": 57
+},
+{
+"key": "tree_diameter",
+"ko": "트리의 지름",
+"en": "diameter of a tree",
+"meta": false,
+"bojProblems": 57
+},
+{
+"key": "mo",
+"ko": "mo's",
+"en": "mo's",
+"meta": false,
+"bojProblems": 51
+},
+{
+"key": "maximum_subarray",
+"ko": "최대 부분 배열 문제",
+"en": "maximum subarray",
+"meta": false,
+"bojProblems": 50
+},
+{
+"key": "cactus",
+"ko": "선인장",
+"en": "cactus",
+"meta": false,
+"bojProblems": 49
+},
+{
+"key": "bellman_ford",
+"ko": "벨만–포드",
+"en": "bellman–ford",
+"meta": false,
+"bojProblems": 49
+},
+{
+"key": "divide_and_conquer_optimization",
+"ko": "분할 정복을 사용한 최적화",
+"en": "divide and conquer optimization",
+"meta": false,
+"bojProblems": 48
+},
+{
+"key": "extended_euclidean",
+"ko": "확장 유클리드 호제법",
+"en": "extended euclidean algorithm",
+"meta": false,
+"bojProblems": 47
+},
+{
+"key": "splay_tree",
+"ko": "스플레이 트리",
+"en": "splay tree",
+"meta": false,
+"bojProblems": 45
+},
+{
+"key": "dp_sum_over_subsets",
+"ko": "부분집합의 합 다이나믹 프로그래밍",
+"en": "sum over subsets dynamic programming",
+"meta": false,
+"bojProblems": 45
+},
+{
+"key": "half_plane_intersection",
+"ko": "반평면 교집합",
+"en": "half plane intersection",
+"meta": false,
+"bojProblems": 40
+},
+{
+"key": "pbs",
+"ko": "병렬 이분 탐색",
+"en": "parallel binary search",
+"meta": false,
+"bojProblems": 39
+},
+{
+"key": "euler_characteristic",
+"ko": "오일러 지표 (χ=V-E+F)",
+"en": "euler characteristic (χ=v-e+f)",
+"meta": false,
+"bojProblems": 39
+},
+{
+"key": "rotating_calipers",
+"ko": "회전하는 캘리퍼스",
+"en": "rotating calipers",
+"meta": false,
+"bojProblems": 37
+},
+{
+"key": "regex",
+"ko": "정규 표현식",
+"en": "regular expression",
+"meta": false,
+"bojProblems": 36
+},
+{
+"key": "multi_segtree",
+"ko": "다차원 세그먼트 트리",
+"en": "multidimensional segment tree",
+"meta": false,
+"bojProblems": 36
+},
+{
+"key": "lcs",
+"ko": "최장 공통 부분 수열 문제",
+"en": "longest common subsequence",
+"meta": false,
+"bojProblems": 34
+},
+{
+"key": "manacher",
+"ko": "매내처",
+"en": "manacher's",
+"meta": false,
+"bojProblems": 34
+},
+{
+"key": "pollard_rho",
+"ko": "폴라드 로",
+"en": "pollard rho",
+"meta": false,
+"bojProblems": 34
+},
+{
+"key": "slope_trick",
+"ko": "함수 개형을 이용한 최적화",
+"en": "slope trick",
+"meta": false,
+"bojProblems": 34
+},
+{
+"key": "aho_corasick",
+"ko": "아호-코라식",
+"en": "aho-corasick",
+"meta": false,
+"bojProblems": 33
+},
+{
+"key": "miller_rabin",
+"ko": "밀러–라빈 소수 판별법",
+"en": "miller–rabin",
+"meta": false,
+"bojProblems": 33
+},
+{
+"key": "dp_deque",
+"ko": "덱을 이용한 다이나믹 프로그래밍",
+"en": "dynamic programming using a deque",
+"meta": false,
+"bojProblems": 32
+},
+{
+"key": "mobius_inversion",
+"ko": "뫼비우스 반전 공식",
+"en": "möbius inversion",
+"meta": false,
+"bojProblems": 31
+},
+{
+"key": "tree_isomorphism",
+"ko": "트리 동형 사상",
+"en": "tree isomorphism",
+"meta": false,
+"bojProblems": 31
+},
+{
+"key": "merge_sort_tree",
+"ko": "머지 소트 트리",
+"en": "merge sort tree",
+"meta": false,
+"bojProblems": 29
+},
+{
+"key": "point_in_non_convex_polygon",
+"ko": "오목 다각형 내부의 점 판정",
+"en": "point in non-convex polygon check",
+"meta": false,
+"bojProblems": 29
+},
+{
+"key": "cartesian_tree",
+"ko": "데카르트 트리",
+"en": "cartesian tree",
+"meta": false,
+"bojProblems": 28
+},
+{
+"key": "numerical_analysis",
+"ko": "수치해석",
+"en": "numerical analysis",
+"meta": false,
+"bojProblems": 28
+},
+{
+"key": "link_cut_tree",
+"ko": "링크/컷 트리",
+"en": "link/cut tree",
+"meta": false,
+"bojProblems": 27
+},
+{
+"key": "simulated_annealing",
+"ko": "담금질 기법",
+"en": "simulated annealing",
+"meta": false,
+"bojProblems": 27
+},
+{
+"key": "rabin_karp",
+"ko": "라빈–카프",
+"en": "rabin–karp",
+"meta": false,
+"bojProblems": 26
+},
+{
+"key": "statistics",
+"ko": "통계학",
+"en": "statistics",
+"meta": false,
+"bojProblems": 26
+},
+{
+"key": "li_chao_tree",
+"ko": "리–차오 트리",
+"en": "li–chao tree",
+"meta": false,
+"bojProblems": 26
+},
+{
+"key": "dp_connection_profile",
+"ko": "커넥션 프로파일을 이용한 다이나믹 프로그래밍",
+"en": "dynamic programming using connection profile",
+"meta": false,
+"bojProblems": 26
+},
+{
+"key": "hall",
+"ko": "홀의 결혼 정리",
+"en": "hall's theorem",
+"meta": false,
+"bojProblems": 25
+},
+{
+"key": "xor_basis",
+"ko": "배타적 논리합 기저 (gf(2))",
+"en": "xor basis (gf(2))",
+"meta": false,
+"bojProblems": 25
+},
+{
+"key": "alien",
+"ko": "Aliens 트릭",
+"en": "aliens trick",
+"meta": false,
+"bojProblems": 24
+},
+{
+"key": "berlekamp_massey",
+"ko": "벌리캠프–매시",
+"en": "berlekamp–massey",
+"meta": false,
+"bojProblems": 24
+},
+{
+"key": "offline_dynamic_connectivity",
+"ko": "오프라인 동적 연결성 판정",
+"en": "offline dynamic connectivity",
+"meta": false,
+"bojProblems": 24
+},
+{
+"key": "z",
+"ko": "z",
+"en": "z",
+"meta": false,
+"bojProblems": 23
+},
+{
+"key": "geometric_boolean_operations",
+"ko": "도형에서의 불 연산",
+"en": "boolean operations on geometric objects",
+"meta": false,
+"bojProblems": 23
+},
+{
+"key": "tree_compression",
+"ko": "트리 압축",
+"en": "tree compression",
+"meta": false,
+"bojProblems": 22
+},
+{
+"key": "hungarian",
+"ko": "헝가리안",
+"en": "hungarian",
+"meta": false,
+"bojProblems": 21
+},
+{
+"key": "linear_programming",
+"ko": "선형 계획법",
+"en": "linear programming",
+"meta": false,
+"bojProblems": 21
+},
+{
+"key": "beats",
+"ko": "세그먼트 트리 비츠",
+"en": "segment tree beats",
+"meta": false,
+"bojProblems": 20
+},
+{
+"key": "lucas",
+"ko": "뤼카 정리",
+"en": "lucas theorem",
+"meta": false,
+"bojProblems": 20
+},
+{
+"key": "duality",
+"ko": "쌍대성",
+"en": "duality",
+"meta": false,
+"bojProblems": 19
+},
+{
+"key": "circulation",
+"ko": "서큘레이션",
+"en": "circulation",
+"meta": false,
+"bojProblems": 19
+},
+{
+"key": "voronoi",
+"ko": "보로노이 다이어그램",
+"en": "voronoi diagram",
+"meta": false,
+"bojProblems": 18
+},
+{
+"key": "polynomial_interpolation",
+"ko": "다항식 보간법",
+"en": "polynomial interpolation",
+"meta": false,
+"bojProblems": 17
+},
+{
+"key": "green",
+"ko": "그린 정리",
+"en": "green's theorem",
+"meta": false,
+"bojProblems": 16
+},
+{
+"key": "dual_graph",
+"ko": "쌍대 그래프",
+"en": "dual graph",
+"meta": false,
+"bojProblems": 16
+},
+{
+"key": "cdq",
+"ko": "cdq 분할 정복",
+"en": "cdq",
+"meta": false,
+"bojProblems": 15
+},
+{
+"key": "bulldozer",
+"ko": "bulldozer 트릭",
+"en": "bulldozer trick",
+"meta": false,
+"bojProblems": 15
+},
+{
+"key": "min_enclosing_circle",
+"ko": "최소 외접원",
+"en": "minimum enclosing circle",
+"meta": false,
+"bojProblems": 15
+},
+{
+"key": "monotone_queue_optimization",
+"ko": "단조 큐를 이용한 최적화",
+"en": "monotone queue optimization",
+"meta": false,
+"bojProblems": 15
+},
+{
+"key": "kitamasa",
+"ko": "다항식을 이용한 선형점화식 계산",
+"en": "linear recurrence calculation by polynomials",
+"meta": false,
+"bojProblems": 14
+},
+{
+"key": "discrete_log",
+"ko": "이산 로그",
+"en": "discrete logarithm",
+"meta": false,
+"bojProblems": 14
+},
+{
+"key": "general_matching",
+"ko": "일반적인 매칭",
+"en": "general matching",
+"meta": false,
+"bojProblems": 14
+},
+{
+"key": "pick",
+"ko": "픽의 정리",
+"en": "pick's theorem",
+"meta": false,
+"bojProblems": 13
+},
+{
+"key": "matroid",
+"ko": "매트로이드",
+"en": "matroid",
+"meta": false,
+"bojProblems": 13
+},
+{
+"key": "suffix_tree",
+"ko": "접미사 트리",
+"en": "suffix tree",
+"meta": false,
+"bojProblems": 13
+},
+{
+"key": "geometry_hyper",
+"ko": "4차원 이상의 기하학",
+"en": "geometry; hyperdimensional",
+"meta": false,
+"bojProblems": 13
+},
+{
+"key": "burnside",
+"ko": "번사이드 보조정리",
+"en": "burnside's lemma",
+"meta": false,
+"bojProblems": 12
+},
+{
+"key": "dominator_tree",
+"ko": "도미네이터 트리",
+"en": "dominator tree",
+"meta": false,
+"bojProblems": 12
+},
+{
+"key": "differential_cryptanalysis",
+"ko": "차분 공격",
+"en": "differential cryptanalysis",
+"meta": false,
+"bojProblems": 12
+},
+{
+"key": "utf8",
+"ko": "utf-8 입력 처리",
+"en": "utf-8 inputs",
+"meta": false,
+"bojProblems": 11
+},
+{
+"key": "degree_sequence",
+"ko": "차수열",
+"en": "degree sequence",
+"meta": false,
+"bojProblems": 11
+},
+{
+"key": "tree_decomposition",
+"ko": "트리 분할",
+"en": "tree decomposition",
+"meta": false,
+"bojProblems": 11
+},
+{
+"key": "pisano",
+"ko": "피사노 주기",
+"en": "pisano period",
+"meta": false,
+"bojProblems": 10
+},
+{
+"key": "top_tree",
+"ko": "탑 트리",
+"en": "top tree",
+"meta": false,
+"bojProblems": 10
+},
+{
+"key": "discrete_sqrt",
+"ko": "이산 제곱근",
+"en": "discrete square root",
+"meta": false,
+"bojProblems": 10
+},
+{
+"key": "palindrome_tree",
+"ko": "회문 트리",
+"en": "palindrome tree",
+"meta": false,
+"bojProblems": 10
+},
+{
+"key": "bidirectional_search",
+"ko": "양방향 탐색",
+"en": "bidirectional search",
+"meta": false,
+"bojProblems": 10
+},
+{
+"key": "lgv",
+"ko": "린드스트롬–게셀–비엔노 보조정리",
+"en": "lindström–gessel–viennot lemma",
+"meta": false,
+"bojProblems": 9
+},
+{
+"key": "dial",
+"ko": "다이얼",
+"en": "dial",
+"meta": false,
+"bojProblems": 9
+},
+{
+"key": "rope",
+"ko": "로프",
+"en": "rope",
+"meta": false,
+"bojProblems": 9
+},
+{
+"key": "knuth_x",
+"ko": "크누스 X",
+"en": "knuth's x",
+"meta": false,
+"bojProblems": 9
+},
+{
+"key": "dancing_links",
+"ko": "춤추는 링크",
+"en": "dancing links",
+"meta": false,
+"bojProblems": 9
+},
+{
+"key": "gradient_descent",
+"ko": "경사 하강법",
+"en": "gradient descent",
+"meta": false,
+"bojProblems": 9
+},
+{
+"key": "floor_sum",
+"ko": "유리 등차수열의 내림 합",
+"en": "sum of floor of rational arithmetic sequence",
+"meta": false,
+"bojProblems": 8
+},
+{
+"key": "stable_marriage",
+"ko": "안정 결혼 문제",
+"en": "stable marriage problem",
+"meta": false,
+"bojProblems": 8
+},
+{
+"key": "bayes",
+"ko": "베이즈 정리",
+"en": "bayes theorem",
+"meta": false,
+"bojProblems": 7
+},
+{
+"key": "delaunay",
+"ko": "델로네 삼각분할",
+"en": "delaunay triangulation",
+"meta": false,
+"bojProblems": 7
+},
+{
+"key": "kinetic_segtree",
+"ko": "키네틱 세그먼트 트리",
+"en": "kinetic segment tree",
+"meta": false,
+"bojProblems": 7
+},
+{
+"key": "knuth",
+"ko": "크누스 최적화",
+"en": "knuth optimization",
+"meta": false,
+"bojProblems": 6
+},
+{
+"key": "birthday",
+"ko": "생일 문제",
+"en": "birthday problem",
+"meta": false,
+"bojProblems": 6
+},
+{
+"key": "bitset_lcs",
+"ko": "비트 집합을 이용한 최장 공통 부분 수열 최적화",
+"en": "longest common subsequence using bit sets",
+"meta": false,
+"bojProblems": 6
+},
+{
+"key": "multipoint_evaluation",
+"ko": "다중 대입값 계산",
+"en": "multipoint evaluation",
+"meta": false,
+"bojProblems": 6
+},
+{
+"key": "hirschberg",
+"ko": "히르쉬버그",
+"en": "hirschberg's",
+"meta": false,
+"bojProblems": 5
+},
+{
+"key": "chordal_graph",
+"ko": "현 그래프",
+"en": "chordal graph",
+"meta": false,
+"bojProblems": 5
+},
+{
+"key": "lte",
+"ko": "지수승강 보조정리",
+"en": "lifting the exponent lemma",
+"meta": false,
+"bojProblems": 4
+},
+{
+"key": "directed_mst",
+"ko": "유향 최소 스패닝 트리",
+"en": "directed minimum spanning tree",
+"meta": false,
+"bojProblems": 4
+},
+{
+"key": "stoer_wagner",
+"ko": "스토어–바그너",
+"en": "stoer–wagner",
+"meta": false,
+"bojProblems": 4
+},
+{
+"key": "hackenbush",
+"ko": "하켄부시 게임",
+"en": "hackenbush",
+"meta": false,
+"bojProblems": 3
+},
+{
+"key": "majority_vote",
+"ko": "보이어–무어 다수결 투표",
+"en": "boyer–moore majority vote",
+"meta": false,
+"bojProblems": 2
+},
+{
+"key": "rb_tree",
+"ko": "레드-블랙 트리",
+"en": "red-black tree",
+"meta": false,
+"bojProblems": 1
+},
+{
+"key": "a_star",
+"ko": "a*",
+"en": "a*",
+"meta": false,
+"bojProblems": 0
+},
+{
+"key": "treewidth",
+"ko": "제한된 트리 너비",
+"en": "treewidth",
+"meta": false,
+"bojProblems": 0
+},
+{
+"key": "discrete_kth_root",
+"ko": "이산 k제곱근",
+"en": "discrete k-th root",
+"meta": false,
+"bojProblems": 0
+}
+]
+}
