@@ -331,11 +331,11 @@ Stated plainly, because finding these out by trial is worse.
   fails on host verification inside the container. Without either, commits still happen
   locally and only the push is lost.
 - **Do not run the container and a native instance against the same record repository.**
-  There is now an exclusive lock at startup (#44) and a second instance refuses to start —
-  but **measured on 2026-08-06, Docker Desktop for macOS does not enforce file locks on a
-  bind mount**, which is exactly how `compose.yaml` gives the container your records. The
-  lock protects two native runs; between the container and anything else on macOS it silently
-  protects nothing. Two writers on one repository corrupt attempt numbering and fight over
+  A second instance refuses to start. Two mechanisms enforce it: an exclusive file lock
+  (#44), and — because **Docker Desktop does not honour file locks on a bind mount**, which is
+  exactly how `compose.yaml` gives the container your records — a liveness marker behind it
+  (#52), verified on that mount. The refusal message says which one refused, because they
+  recover differently. Two writers on one repository corrupt attempt numbering and fight over
   the git index, so run exactly one. Details and what is still unverified (Linux hosts,
   Windows, network filesystems):
   [`decisions/2026-08-06-record-repository-lock`](llm-wiki/wiki/decisions/2026-08-06-record-repository-lock.md).

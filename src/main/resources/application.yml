@@ -30,6 +30,17 @@ tracker:
   # same bind mount are two writers, and the second refuses to start. Off only for a
   # filesystem that cannot lock at all — then nothing enforces it, so run exactly one.
   record-repo-lock: ${TRACKER_RECORD_REPO_LOCK:true}
+  heartbeat:
+    # The second line of defence, for a filesystem that reports a lock it does not enforce —
+    # a Docker Desktop bind mount does exactly that (#52). A holder rewrites a marker every
+    # `interval`; a starter reads it, waits `watch`, and reads again. Changed means somebody
+    # is alive. It compares for change rather than age on purpose: a container and its host
+    # can disagree about the time, and an age computed against the wrong clock would either
+    # refuse a free repository or admit a second writer.
+    #
+    # `watch` must stay comfortably longer than `interval` or a live holder can look stale.
+    interval: ${TRACKER_HEARTBEAT_INTERVAL:PT4S}
+    watch: ${TRACKER_HEARTBEAT_WATCH:PT12S}
   # Live session frames, before a grading settles and its file moves into attempts/.
   raw-dir: ${TRACKER_RAW_DIR:.ps/raw}
   timers-file: ${TRACKER_TIMERS_FILE:.ps/timers.json}
