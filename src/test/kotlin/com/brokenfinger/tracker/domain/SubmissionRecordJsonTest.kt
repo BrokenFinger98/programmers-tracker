@@ -63,15 +63,24 @@ class SubmissionRecordJsonTest {
      */
     @Test
     fun `an unknown field does not fail the decode`() {
-        val line = SubmissionRecordJson.encode(aSubmissionRecord())
+        // One record, encoded and compared against itself. Two fixture calls would be two
+        // gradings now that each carries its own capture key, and the diff would be about
+        // that rather than about the unknown field.
+        val record = aSubmissionRecord()
+        val line = SubmissionRecordJson.encode(record)
         val extended = line.replaceFirst("{", """{"someFieldWeDoNotKnowYet":{"nested":[1,2]},""")
 
-        SubmissionRecordJson.decode(extended) shouldBe aSubmissionRecord()
+        SubmissionRecordJson.decode(extended) shouldBe record
     }
 
     @Test
     fun `the wire keys and enum spellings follow design section 5 point 2`() {
-        val line = SubmissionRecordJson.encode(aSubmissionRecord(verdict = Verdict.TIMEOUT))
+        // The key is pinned here rather than taken from the fixture: this test is about the
+        // wire spelling, and the fixture now issues a fresh key per record so that a log of
+        // several records is a log of several gradings.
+        val record = aSubmissionRecord(verdict = Verdict.TIMEOUT, captureKey = CaptureKey("7f4afc0c3bbc82c8"))
+
+        val line = SubmissionRecordJson.encode(record)
 
         line shouldContain "\"action\":\"submit\""
         line shouldContain "\"outcome\":\"JUDGED\""

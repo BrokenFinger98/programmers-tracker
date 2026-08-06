@@ -484,7 +484,7 @@ ps-records/
 │           ├── 002.java  002.json  002.raw.jsonl
 │           └── 003.sql   003.json  003.raw.jsonl
 ├── log/
-│   └── submissions.jsonl        every submission, one line each
+│   └── submissions.jsonl        append-only; newest line per captureKey is the record
 └── .ps/
     ├── raw/                     live session frames, before a session completes
     ├── catalog.json             cached catalog of 689 problems
@@ -501,6 +501,20 @@ and attempt number do not exist yet, so frames are appended to
 session completes ([[decisions/2026-08-05-capture-pipeline-stages]]). `.ps/raw/` is therefore
 also the crash-recovery work list: whatever is still there at startup is an unprocessed
 session.
+
+**Corrections are appended, not edited.** A record can change after it is durable — today
+only stage 3 clearing `codePending` when the code is attached — and the log is append-only
+because that is what lets it be the attempt authority and the dedup index (§4.5). So a
+correction is **a complete second line carrying the same `captureKey`**, and *the newest line
+for a key is the record*, kept in the position the first line held so a late attachment
+cannot reorder a problem's history.
+
+The consequence is a contract, not a detail: **the file is not one line per submission.**
+Anything reading the JSONL directly — the MCP tools, an Obsidian Dataview query, a script —
+must resolve newest-per-key or it will list and count every attached submission twice. In the
+server there is exactly one implementation of that rule, `application/RecordHistory`, and
+every reader goes through it. Decided in
+[[decisions/2026-08-05-code-pending-correction-append]].
 
 **Attempt numbering.** The number comes from `log/submissions.jsonl` (§4.5), never from
 scanning `attempts/`. Numbering is per problem and monotonic across languages, so the
@@ -557,7 +571,7 @@ payload carried in the `run` message's `start`. No need to parse the problem-sta
   "sincePrevSec": 312,                   // since the previous submission
   "hintLevel": 0,                        // 0 = none seen, 1–4
 
-  "captureKey": "a3f1…",                 // derived from the terminal frame · dedup key
+  "captureKey": "a3f1…",                 // terminal frame · dedup key · correction identity
   "outcome": "JUDGED",                   // JUDGED | INCOMPLETE | UNKNOWN
   "verdict": "TIMEOUT",                  // null unless outcome == JUDGED
   "score": {"user": "0.0", "perfect": "100.0"},
@@ -588,6 +602,12 @@ Five fields exist because of the 2026-08-05 review:
   re-analysis possible (development-rules §2.4).
 - **`codePending`** — a record whose verdict is durable but whose code attachment has not
   succeeded yet. Consumers must tolerate it.
+
+**A record is corrected by appending it again.** When the attachment finally succeeds, the
+whole record is written a second time with `codePending` false and `codePath`/`diffFromPrev`
+filled in, carrying **the same `captureKey`** — the log is never edited in place (§5.1). So
+`captureKey` is not only the dedup key: it is the identity that says *these two lines are one
+submission*, and a reader that ignores it sees two.
 
 For SQL problems `score`, `rating` and per-testcase `runTime`/`memorySize` are structurally
 absent (protocol §6), so they are null rather than zero — a zero would silently enter

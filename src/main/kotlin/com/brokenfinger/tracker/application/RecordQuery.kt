@@ -1,14 +1,12 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.SubmissionRecord
-import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.SubmissionFilter
 import com.brokenfinger.tracker.domain.calc.SubmissionTally
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
-import org.slf4j.LoggerFactory
 
 /**
  * Everything recorded about one problem.
@@ -41,16 +39,23 @@ data class ProblemHistory(
  */
 class RecordQuery(private val store: RecordStore) {
     /**
-     * The whole log, newest first. A line that is not a readable record is skipped.
+     * The whole log, newest first, **each capture key at its latest state**.
      *
-     * The log is append-only and therefore already in the order things happened, so it is
-     * reversed *before* sorting: the sort is stable, and two records sharing a timestamp
-     * would otherwise come back oldest-first inside a list that claims to be newest-first.
-     * Timestamps tie more often than they look like they would — a `run` and the `submit`
-     * that follows it can land in the same second.
+     * Through [RecordHistory] rather than decoding the lines directly, because the log is
+     * append-only and a record that changes after it was written is appended again rather
+     * than edited ([[decisions/2026-08-06-record-corrections-by-append]]). Read the raw lines
+     * and every submission whose code was attached later comes back twice — once pending,
+     * once complete — so `submissions` would list it twice and `stats` would count it twice.
+     * The write side and the read side have to resolve corrections the same way; there is one
+     * implementation so they cannot drift.
+     *
+     * The log is already in the order things happened, so it is reversed *before* sorting: the
+     * sort is stable, and two records sharing a timestamp would otherwise come back
+     * oldest-first inside a list that claims to be newest-first. Timestamps tie more often
+     * than they look like they would — a `run` and the `submit` that follows it can land in
+     * the same second.
      */
-    fun history(): List<SubmissionRecord> = store.read()
-        .mapNotNull(::decode)
+    fun history(): List<SubmissionRecord> = RecordHistory.of(store.read())
         .asReversed()
         .sortedByDescending { it.ts }
 
@@ -82,17 +87,4 @@ class RecordQuery(private val store: RecordStore) {
     // before the catalog was consulted would erase a title we already know.
     private fun <T> newest(submissions: List<SubmissionRecord>, field: (SubmissionRecord) -> T?): T? =
         submissions.firstNotNullOfOrNull(field)
-
-    private fun decode(recorded: RecordedSubmission): SubmissionRecord? =
-        runCatching { SubmissionRecordJson.decode(recorded.line) }.getOrElse { skipped() }
-
-    // Never logs the line: a record carries a learner's solving history (dev rules §7).
-    private fun skipped(): SubmissionRecord? {
-        logger.warn("Skipped a submission-log line the reader could not decode as a full record")
-        return null
-    }
-
-    private companion object {
-        val logger = LoggerFactory.getLogger(RecordQuery::class.java)!!
-    }
 }

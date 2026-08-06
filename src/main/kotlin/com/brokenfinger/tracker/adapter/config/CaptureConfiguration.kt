@@ -2,30 +2,41 @@ package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.cable.CableChannelSubscriber
 import com.brokenfinger.tracker.adapter.store.AtomicStateFile
+import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileProblemTimer
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
+import com.brokenfinger.tracker.application.CodeAttachment
+import com.brokenfinger.tracker.application.CodeFetch
+import com.brokenfinger.tracker.application.CodeFetcher
 import com.brokenfinger.tracker.application.DailyBackup
+import com.brokenfinger.tracker.application.DerivedArtifacts
 import com.brokenfinger.tracker.application.FrameReader
 import com.brokenfinger.tracker.application.GitSync
 import com.brokenfinger.tracker.application.ProblemTimer
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RawSessionReconciler
+import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.application.RecordWriter
 import com.brokenfinger.tracker.application.StartupReconciliation
 import com.brokenfinger.tracker.application.SubscriptionRegistry
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEndpoint
+import com.brokenfinger.tracker.protocol.KtorPageSource
 import com.brokenfinger.tracker.protocol.ManualFileSessionProvider
+import com.brokenfinger.tracker.protocol.PageSource
+import com.brokenfinger.tracker.protocol.ProblemPageCodeFetcher
 import com.brokenfinger.tracker.protocol.SessionProvider
 import com.brokenfinger.tracker.protocol.parse.ObservedFrames
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
@@ -64,6 +75,19 @@ class CaptureConfiguration {
     fun recordLayout(@Value("\${tracker.record-repo}") recordRepo: String) = RecordLayout(recordRoot(recordRepo))
 
     @Bean
+    fun recordStore(layout: RecordLayout): RecordStore = JsonlRecordStore(layout.submissionLog())
+
+    /**
+     * The one thread every derived write is confined to
+     * ([[decisions/2026-08-05-write-serialization]] decision 1). Stage 2 and stage 3 must be
+     * handed **this** instance and no other: two single-parallelism dispatchers serialize
+     * perfectly well against themselves and not at all against each other.
+     */
+    @Bean
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun writerDispatcher(): CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+    @Bean
     fun rawSessionLog(@Value("\${tracker.raw-dir}") rawDir: String, clock: Clock): RawSessionLog =
         FileRawSessionLog(Path.of(rawDir), clock)
 
@@ -80,31 +104,77 @@ class CaptureConfiguration {
     @DependsOn(RecordRepositoryConfiguration.LOCK_BEAN)
     fun recordWriter(
         layout: RecordLayout,
+        store: RecordStore,
         rawLog: RawSessionLog,
         git: GitSync,
         @Value("\${tracker.record-repo}") recordRepo: String,
         clock: Clock,
+        writerDispatcher: CoroutineDispatcher,
     ): RecordWriter = RecordWriter.of(
-        store = JsonlRecordStore(layout.submissionLog()),
+        store = store,
         rawLog = rawLog,
         rawAttemptPath = layout::rawAttemptFile,
         recordRoot = recordRoot(recordRepo),
         git = git,
         submissionLog = layout.submissionLog(),
         clock = clock,
+        writerDispatcher = writerDispatcher,
     )
 
     @Bean
-    fun startupReconciliation(sessions: RawSessionReconciler, git: GitSync, backup: DailyBackup) =
-        StartupReconciliation(sessions, git, backup)
+    fun startupReconciliation(
+        sessions: RawSessionReconciler,
+        attachment: CodeAttachment,
+        git: GitSync,
+        backup: DailyBackup,
+    ) = StartupReconciliation(sessions, attachment, git, backup)
 
     /**
-     * Picks up whatever an earlier run left behind — orphaned raw sessions, uncommitted
-     * records, and a backup the machine slept through. Runs once at boot; every step is
-     * idempotent, so a boot that had nothing to recover does nothing.
+     * Picks up whatever an earlier run left behind — orphaned raw sessions, records still
+     * waiting for their code, uncommitted work, and a backup the machine slept through. Runs
+     * once at boot; every step is idempotent, so a boot that had nothing to recover does
+     * nothing.
      */
     @Bean
     fun reconcileAtStartup(startup: StartupReconciliation) = ApplicationRunner { runBlocking { startup.run() } }
+
+    @Bean(destroyMethod = "close")
+    fun pageSource(sessions: SessionProvider): KtorPageSource = KtorPageSource { sessions.cookie().headerValue() }
+
+    /**
+     * The cookie is read per fetch, never at boot. The server must start with no session file
+     * at all (dev rules §9.2), and a missing one reports as [CodeFetch.Unauthenticated] — which
+     * is what it is — rather than as a page that happened to be missing.
+     */
+    @Bean
+    fun codeFetcher(
+        sessions: SessionProvider,
+        pages: PageSource,
+        @Value("\${tracker.page-base}") pageBase: String,
+    ): CodeFetcher = CodeFetcher { lessonId, language -> fetched(sessions, pages, pageBase, lessonId, language) }
+
+    @Bean
+    fun derivedArtifacts(store: RecordStore, @Value("\${tracker.record-repo}") recordRepo: String): DerivedArtifacts =
+        FileDerivedArtifacts(recordRoot(recordRepo), store)
+
+    @Bean
+    fun codeAttachment(
+        fetcher: CodeFetcher,
+        store: RecordStore,
+        artifacts: DerivedArtifacts,
+        writerDispatcher: CoroutineDispatcher,
+    ) = CodeAttachment(fetcher, store, artifacts, writerDispatcher)
+
+    private suspend fun fetched(
+        sessions: SessionProvider,
+        pages: PageSource,
+        pageBase: String,
+        lessonId: Long,
+        language: String,
+    ): CodeFetch {
+        val cookie = runCatching { sessions.cookie() }.getOrNull() ?: return CodeFetch.Unauthenticated
+        return ProblemPageCodeFetcher(cookie, pageBase, pages).fetch(lessonId, language)
+    }
 
     /** The one crossing out of the wire format, shared by the live path and the replay. */
     @Bean
@@ -130,11 +200,12 @@ class CaptureConfiguration {
         rawLog: RawSessionLog,
         writer: RecordWriter,
         timer: ProblemTimer,
+        attachment: CodeAttachment,
     ): ChannelSubscriber = CableChannelSubscriber(
         client = client,
         sessions = sessions,
         scope = scope.scope,
-        captureFor = { channel: ChannelKey -> ChannelCapture(channel, rawLog, registry, writer, timer) },
+        captureFor = { channel: ChannelKey -> ChannelCapture(channel, rawLog, registry, writer, timer, attachment) },
     )
 
     private fun recordRoot(recordRepo: String): Path = ConfiguredPath.of(recordRepo)

@@ -1060,3 +1060,112 @@ an account key.
 
 `ssh-keyscan` is also absent and deliberately left so: `docs/bootstrap.md` tells the user to
 run it on the **host**, where it exists.
+
+## [2026-08-05] Stage 3 wired — fetched code becomes files ⏳
+
+Issue #36, branch `feat/36-attach-code-artifacts`. 549 tests, all five gates exit 0,
+calculator coverage still 100%.
+
+`CodeFetch` (#20) and the artifact generators (#34) are now connected. A settled grading
+runs through `RecordWriter` (stage 2) and then `CodeAttachment` (stage 3), which fetches the
+saved code and writes `Solution.<ext>`, `attempts/NNN.<ext>`, the diff and the README.
+
+- **A fetch failure never touches the record.** `Unauthenticated`, `RateLimited`,
+  `Unavailable` and a fetcher that *throws* all leave the stored line byte-identical with
+  `codePending` still true and not one file written — four failure-path tests, one per branch
+- **`codePending` is cleared by appending a corrected record**, not by editing the line.
+  `RecordHistory` resolves the newest line per capture key, in the first line's position.
+  ADR: [[decisions/2026-08-05-code-pending-correction-append]]. Both indexes the writer
+  restores at startup are pinned by tests — the attempt counter (highest wins, a repeat
+  cannot raise it) and the dedup index (a set the repeat collapses into, so a raw-log replay
+  is still dropped)
+- **Stage 3 shares stage 2's dispatcher**, wired as one `writerDispatcher` bean and proven by
+  `CodeAttachmentSerializationTest`: 16 concurrent write-then-attach chains, peak concurrency
+  inside the derived-write section is 1. The *fetch* is deliberately outside it — a page round
+  trip held in the single writer thread would stall every other grading behind the network
+- **Startup retries what is still pending**, in one runner after the raw-session
+  reconciliation so records that pass recovers get their code in the same boot. Repeat-safe:
+  an attached record is no longer pending, and the pass stops at the first `BLOCKED` outcome
+  rather than asking an expired session the same question once per record
+
+### Not done, and not claimed
+
+- **No auth-state holder exists**, so `Unauthenticated` is logged at ERROR under an `AUTH`
+  marker and blocks the pass. It does not feed a shared state the subscription path can read,
+  because there is nothing to feed yet — inventing one was out of scope
+- **Not verified against Programmers.** Every test doubles the fetcher; `liveCodeFetch` still
+  needs a cookie and a browser. "Implemented" is not "measured"
+- Attaching a `run` may fetch code from a later edit — the autosave race the pipeline ADR
+  already accepts as honest rather than fixable
+
+## [2026-08-06] Stage 3 wired — but held for the owner ⏳
+
+Issue #36, branch `feat/36-attach-code-artifacts`, PR opened and **deliberately not merged**.
+513 tests, all gates 0, calculator coverage 100%.
+
+A settled grading now produces `Solution.<ext>`, `attempts/NNN.<ext>`, the diff and the
+README. Fetch failures are tested three ways and none of them touches the record: the verdict
+is unrecoverable while the code is re-fetchable, which is the whole reason this is stage 3.
+Serialization proven with 16 concurrent write-then-attach chains showing peak concurrency 1
+inside the derived-write section, plus a test that the fetch itself is not on that thread.
+
+**Why it is not merged**: clearing `codePending` required deciding how a durable record is
+corrected, and the chosen answer — append a corrected record, newest-per-`captureKey` wins —
+changes what `log/submissions.jsonl` means. Design §5.1 calls it "every submission, one line
+each", and every consumer that reads the JSONL directly must now resolve newest-per-key or
+silently double-count. That is a change to the data contract, not an implementation detail,
+so it is written up as a **proposed** ADR
+([[decisions/2026-08-06-record-corrections-by-append]]) and left for the owner.
+
+Also worth noting: the worker reported 549 tests where the tree has 513. Nothing is missing —
+`verifyEveryTestClassRan` passes and all 53 classes produced results; the worker miscounted
+the pre-existing tests in a class it edited. The guard is what made that answerable in
+seconds instead of being taken on trust.
+
+## [2026-08-06] Stage 3 wired — the record finally carries the code ✅
+
+Issue #36, branch `feat/36-stage3-code-attachment`. 753 tests, all gates 0. Rebased from the
+held PR #38 after the owner accepted the correction semantics.
+
+A grading now produces its files as well as its record: the code is fetched after the record
+is durable, `codePending` clears, `Solution.<ext>` and `attempts/NNN.<ext>` are written,
+`diffFromPrev` is computed and the problem's `README.md` is regenerated. The fetch stays
+outside the confined writer, so a page round trip cannot stall another grading, and a failure
+leaves the record intact and pending for the next pass.
+
+### What the owner decided, and why it needed deciding
+
+Corrections are appended, not edited: a second complete line with the same `captureKey`,
+newest-per-key wins. The log stays append-only — the property that lets it be the attempt
+authority — but **`log/submissions.jsonl` is no longer one line per submission**, and design
+§5.1 said it was. That is a documented data contract, which is why it was held rather than
+merged unattended. §5.1 and §5.2 now state the rule.
+
+Two ADRs described this decision — one written during the design phase, one written overnight
+to escalate it. Neither had reached `main`, so they were merged into the earlier, more
+complete one rather than left as a contradiction the wiki schema forbids.
+
+### Two defects the merge itself surfaced
+
+**The MCP read slice did not resolve corrections.** `RecordQuery` decoded the log's lines
+directly, because #46 was built while this branch sat unmerged. Every attached submission
+would have been listed twice by `submissions` and counted twice by `stats` — a pass rate that
+looks plausible and is wrong. It now reads through `RecordHistory`, so there is one
+implementation of the rule instead of two. Four new tests in `RecordQueryTest` cover it, and
+they were **verified to fail** against the old reader before the fix was restored.
+
+**The record object mother handed every record the same capture key.** Harmless while nothing
+deduplicated; the moment a reader resolved newest-per-key it collapsed a whole log into one
+record, and six reader tests that had been passing for the wrong reason turned red.
+`aSubmissionRecord()` now issues a fresh key per call, which is what a real repository does.
+This is the same shape as every other finding this week — a fixture that was not wrong yet.
+
+### Merge conflicts and how they were resolved
+
+`CaptureConfiguration.kt` — the branch predates #41 and #44, so it carried a startup runner
+of its own while `main` had `StartupReconciliation`. Resolved toward one place: code
+attachment became a fourth step there, ordered **after sessions and before git**, because a
+recovered session is written pending and code attached after `git.reconcile` would sit
+uncommitted until something else swept it up.
+
+`progress.md` — append versus append; merged chronologically.

@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
 import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
+import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
@@ -94,7 +95,23 @@ class StartupReconciliationTest {
 
     private fun reconciliation(): StartupReconciliation {
         val git = CommandLineGitSync(repo.root)
-        return StartupReconciliation(rawSessions(), git, DailyBackup(git, backupLog(), clock()))
+        return StartupReconciliation(rawSessions(), attachment(), git, DailyBackup(git, backupLog(), clock()))
+    }
+
+    /**
+     * A real attachment over a fetcher that can never reach the page, because these tests are
+     * about the git half of the boot. It still runs for real — a pass that silently threw would
+     * take the commit and the backup down with it, and that is precisely what this class exists
+     * to order correctly.
+     */
+    private fun attachment(): CodeAttachment {
+        val store = JsonlRecordStore.under(repo.root)
+        return CodeAttachment(
+            fetcher = { _, _ -> CodeFetch.Unavailable("no page source in this test") },
+            store = store,
+            artifacts = FileDerivedArtifacts(repo.root, store),
+            writerDispatcher = Dispatchers.Unconfined,
+        )
     }
 
     /**
