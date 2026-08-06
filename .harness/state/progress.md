@@ -1394,3 +1394,31 @@ failure fixtures exist to prevent.
 literally, so substituting them turned it red — correctly. Rewritten to assert the **shape**:
 two entries, a comma-joined argument string, a non-blank expected value. That is what the
 parser actually has to get right, and it no longer depends on holding somebody else's numbers.
+
+## [2026-08-06] One spelling of the silence rule ✅
+
+Issue #49, branch `refactor/49-liveness-one-spelling`. 762 tests, all gates 0.
+
+`ConnectionLiveness` presented itself as the liveness policy — a `Liveness` sealed interface,
+`frameArrived()`, `check()`, `isDead()`, an `AtomicReference` for the last frame, and a class
+comment saying detection was "the whole point of this class". **None of it ran.** The one
+production consumer, `CableChannelSubscriber`, expresses the same rule as a Flow
+`timeout(silenceDeadline)` and takes only the constants.
+
+Checked for a planned consumer before deleting: the design describes liveness as a detection
+mechanism, which the Flow timeout implements, and no health endpoint is planned. So option 1
+of the issue — delete the unused instance API — was the honest one.
+
+It is now an `object` carrying the numbers and the reasoning that fixes them. Call sites are
+unchanged: `ConnectionLiveness.DEFAULT_DEADLINE` and `retryDelayFor` read identically.
+
+The reason this was worth doing rather than leaving: **the spelling that does not run is the
+one that misleads.** Someone adding a second observation path — a replay, a health endpoint —
+would wire it to `isDead()` believing they had adopted the shipped policy, and would get a
+second implementation of a rule the pure calculators exist to keep singular (dev rules §3).
+
+The tests came with it. They now assert **bounds rather than literals**: each number sits
+between two failures, so they compare against the measurements that constrain it — the 3 s
+ping cadence and the 120 s grading timeout — instead of restating the constant. A test that
+only pins the literal lets someone change it to another number that still passes and still
+loses graded results.
