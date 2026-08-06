@@ -1352,3 +1352,45 @@ stamped one.
 
 Verified by running it: built with `SOURCE_COMMIT`, started the real container, read the line
 out of `docker logs`.
+
+## [2026-08-06] Minimised the Programmers content we hold ✅
+
+Issue #62, branch `chore/62-minimise-third-party-content`. 768 tests, all gates 0.
+
+Programmers' footer refuses 무단 복제 · 배포 of site content. Most of this project is
+untouched by that — it observes broadcasts about the user's own submissions with the user's
+own session, and fetches the user's own code. Two places held their data for no engineering
+reason, and the owner decided to remove both.
+
+### The design planned to copy problem statements. That plan is deleted.
+
+Four places assumed the statements would be stored: the §5.1 tree (`README.md` = "problem
+statement + examples"), the §5.3 tagging premise ("the server already stores the problem
+statements"), the §6.11 vector-DB reasoning ("all original text … is preserved"), and the §7
+`get_problem` description.
+
+It was never implemented — the generated `README.md` carries ids, counts and attempt history
+and no problem text. **The plan is what got removed, before someone built it.** A record links
+to the problem instead; what a reader wants from a record is their own code and how it was
+judged, and the statement is one click away and not ours.
+
+### Fixture example values are now ours; protocol strings are still theirs
+
+`testcases[].input`/`.output` in the run captures were Programmers' example values sitting in
+a public repository. Substituted — **shape preserved exactly**, because the shape is the
+measurement: comma-joined arguments, scalar expected value, one entry per example.
+
+The Korean result strings (`실패 (시간 초과)`, `테스트를 통과하였습니다.`) stay verbatim.
+They are **functional protocol values** that verdict classification matches on (protocol §7);
+substituting one would make the fixture test a protocol that does not exist — exactly the
+failure fixtures exist to prevent.
+
+`fixtures/README.md` and dev-rules §7.3 now record which is which, so a later tidy-up does not
+"fix" a substituted value back.
+
+### One test was asserting borrowed data
+
+`SubmitMessageFailureTest.parses example testcases from run start` compared the example values
+literally, so substituting them turned it red — correctly. Rewritten to assert the **shape**:
+two entries, a comma-joined argument string, a non-blank expected value. That is what the
+parser actually has to get right, and it no longer depends on holding somebody else's numbers.

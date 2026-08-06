@@ -305,6 +305,21 @@ value class SessionCookie(private val raw: String) {
 Use measured messages as fixtures, but substitute emails · user IDs · rankings.
 Same for personally identifiable paths like `surveyUrl` · `finishModalLink`.
 
+**Also substitute Programmers' example values** — `testcases[].input` and `.output`. They are
+their data, this is a public repository, and the tests exercise the *shape* rather than the
+values. **Preserve the shape exactly**: comma-joined arguments, quoting, nested brackets, and
+the raw newline inside a quoted string that strict JSON rejects (protocol §7.1). The shape is
+the measurement.
+
+**Never substitute a protocol value.** The Korean result strings — `실패 (시간 초과)`,
+`테스트를 통과하였습니다.` — are what verdict classification matches on (protocol §7), so
+changing one makes the fixture test a protocol that does not exist. Frame types, field names,
+ordering and null-ness are verbatim for the same reason.
+
+The two look alike and are not: one is borrowed data, the other is the thing under test.
+`fixtures/README.md` records which is which, so a later tidy-up does not "fix" a substituted
+value back and quietly break the distinction.
+
 ---
 
 ## 8. External Dependencies Pinned as Snapshots
