@@ -61,7 +61,19 @@ services:
       # push fails, is logged, and leaves the day owed so the next backup retries it.
       # To push over SSH, uncomment the line below and make sure the record repository's
       # remote is an SSH URL (`git -C <repo> remote set-url origin git@github.com:you/ps-records.git`).
-      # Read-only, and it is your private key — decide deliberately.
+      # Read-only, and it is your private key — decide deliberately. Mounting the whole
+      # directory hands the container every key on the machine, including ones belonging to
+      # systems that have nothing to do with this tool. Prefer a key created for this
+      # repository alone — a GitHub **deploy key**, which is scoped to one repository, so a
+      # leak costs you that repository and nothing else. Put the narrower mount in
+      # `compose.override.yaml` (gitignored, read automatically) rather than editing here:
+      #
+      #   services:
+      #     tracker:
+      #       volumes:
+      #         - ${HOME}/.ssh/ps-records-deploy:/home/tracker/.ssh/id_ed25519:ro
+      #         - ${HOME}/.ssh/known_hosts:/home/tracker/.ssh/known_hosts:ro
+      #
       # - ${HOME}/.ssh:/home/tracker/.ssh:ro
       #
       # To push over HTTPS instead, put a personal access token in a git credential store

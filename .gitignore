@@ -5,6 +5,12 @@
 application-local.yml
 .env
 
+# Personal Docker overrides. `docker compose` reads this automatically, which makes it the
+# right place for a credential mount whose path is one machine's — and the wrong thing to
+# commit, since compose.yaml must stay free of anyone's private paths.
+compose.override.yaml
+compose.override.yml
+
 # Personal work state (progress IS committed)
 .harness/state/goal.md
 

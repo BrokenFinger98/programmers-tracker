@@ -1036,3 +1036,27 @@ keep.
   real endpoint by contract test; not against Claude Desktop or Cursor.
 - `WatchToken` and `tracker.watch.token` are now narrower than their role. Naming debt,
   recorded rather than silently fixed in an unrelated PR.
+
+## [2026-08-06] The image could not do SSH, though compose.yaml documented it ✅
+
+Issue #56, branch `fix/56-openssh-client`. Found while setting up the owner's real record
+repository, by running the container against a real SSH remote rather than by reading files.
+
+`compose.yaml` tells the user to uncomment an `~/.ssh` mount "to push over SSH". The runtime
+stage installed `git curl` and nothing else, so `ssh` did not exist and the push died on
+`ssh: not found`. Everything upstream of that looked correct — `docker compose config`
+validates, the mounts resolve, the remote is right — which is why it survived: the failure is
+only observable at the moment a push is attempted.
+
+It also silently steered users toward the weaker credential. A GitHub **deploy key is
+SSH-only** and is scoped to one repository; the documented HTTPS alternative uses a token
+scoped to the whole account unless the user knows to make a fine-grained one.
+
+Fix: `openssh-client` in the runtime stage (+4 MB, 483 → 487 MB). CI now asserts that every
+binary the docs promise — `git`, `curl`, `ssh` — is present, so this cannot regress
+invisibly. Verified by a real `git push` from inside the built container to a real GitHub
+remote, authenticating as `BrokenFinger98/ps-records`, which is the deploy key rather than
+an account key.
+
+`ssh-keyscan` is also absent and deliberately left so: `docs/bootstrap.md` tells the user to
+run it on the **host**, where it exists.
