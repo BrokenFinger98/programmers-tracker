@@ -59,7 +59,8 @@ jobs:
           # right on a contributor's machine, wrong here: a runner image quietly dropping a
           # toolchain must not silently un-earn a language's supported status.
           for suite in JavaRunnerExecutionTest PythonRunnerExecutionTest CppRunnerExecutionTest \
-                       JavascriptRunnerExecutionTest KotlinRunnerExecutionTest CRunnerExecutionTest; do
+                       JavascriptRunnerExecutionTest KotlinRunnerExecutionTest CRunnerExecutionTest \
+                       CsharpRunnerExecutionTest; do
             results="build/test-results/test/TEST-com.brokenfinger.tracker.domain.calc.runner.$suite.xml"
             [ -f "$results" ] || { echo "REGRESSION: $suite left no results at all."; exit 1; }
             if grep -q "<skipped" "$results"; then

@@ -11,7 +11,14 @@ import kotlinx.serialization.json.longOrNull
 
 /** What the generator produced: a file to write, or a refusal that says why there is none. */
 sealed interface Runner {
-    data class Generated(val fileName: String, val source: String) : Runner
+    data class Generated(
+        val fileName: String,
+        val source: String,
+        /** Companion artifacts written beside the runner — C#'s project file (#88). */
+        val extras: List<ExtraFile> = emptyList(),
+    ) : Runner
+
+    data class ExtraFile(val fileName: String, val source: String)
 
     data class Refused(val reason: String) : Runner
 }

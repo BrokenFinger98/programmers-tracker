@@ -1681,3 +1681,28 @@ the skeleton's own includes and `size_t` vanished. Fixtures now carry the measur
 includes, and the harness guarantees `<stddef.h>` ahead of `Solution.c` — the parsed
 convention itself speaks `size_t`, so its visibility is the runner's premise, not the
 user's chore.
+
+## [2026-08-07] C# runner — seventh language; the series is complete ✅
+
+Issue #88, branch `feat/88-csharp-runner`. 1012 tests, all gates 0.
+
+Measured (title-guarded captures): `int[]` with no length params, the rectangular
+`int[,]` (not `int[][]` — its comma forced a bracket-aware parameter split), `string`,
+and a main-style skeleton whose class is **Example** with a `Console.Clear()` inside.
+
+C# is the first **two-artifact** runner: C# compiles projects, not files, so
+`runner_test.csproj` rides along as `Runner.ExtraFile` (a default-empty extension — zero
+churn for the six existing runners). The csproj is where the traps are disarmed: explicit
+`<Compile Include>` (default globbing would swallow every `.cs` under `attempts/`, each
+declaring another `Solution`) and `<StartupObject>` pinning the entry (the skeleton's own
+`Main` would otherwise be CS0017). The harness compares through `object` with runtime
+dispatch — `SequenceEqual` for arrays, rank+`Cast<int>()` for `int[,]` — so Java's null
+placeholder works.
+
+Honest status: **the C# execution suite skipped locally** — this machine's dotnet is a
+broken x86_64 host on arm64 — so CI's three runners are the proof-bearer, and the
+proof-ran gate + merge-only-on-green keep that proof ahead of shipping. The main-style
+fixture keeps `Console.Clear()` in on purpose: its behaviour under redirected output is
+measured per-OS by the suite, in CI.
+
+ADR outcome updated: series complete, 7/7, with the per-language facts pinned.
