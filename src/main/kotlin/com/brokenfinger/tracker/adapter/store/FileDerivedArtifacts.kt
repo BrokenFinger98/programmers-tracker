@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.runner.CppRunner
 import com.brokenfinger.tracker.domain.calc.runner.JavaRunner
 import com.brokenfinger.tracker.domain.calc.runner.JavascriptRunner
+import com.brokenfinger.tracker.domain.calc.runner.KotlinRunner
 import com.brokenfinger.tracker.domain.calc.runner.PythonRunner
 import com.brokenfinger.tracker.domain.calc.runner.Runner
 import kotlinx.serialization.json.Json
@@ -97,10 +98,12 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
             "python3" to PythonRunner::generate,
             "cpp" to CppRunner::generate,
             "javascript" to JavascriptRunner::generate,
+            "kotlin" to KotlinRunner::generate,
         )
 
         /** Every name a stale runner can have; a refusal clears them all. */
-        val RUNNER_FILES = listOf("RunnerTest.java", "runner_test.py", "runner_test.cpp", "runner_test.js")
+        val RUNNER_FILES =
+            listOf("RunnerTest.java", "runner_test.py", "runner_test.cpp", "runner_test.js", "runner_test.kt")
 
         val json = Json { ignoreUnknownKeys = true }
 
