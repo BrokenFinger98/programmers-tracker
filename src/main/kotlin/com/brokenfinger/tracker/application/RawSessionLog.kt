@@ -30,8 +30,19 @@ interface RawSessionLog {
      */
     fun append(session: RawSessionId, frameText: String)
 
-    /** Moves a terminated session's frames to [destination] and returns that path. */
+    /**
+     * Copies a terminated session's frames to [destination], leaving the source in place,
+     * and returns that path.
+     *
+     * Copy rather than move because the source is the crash-recovery queue ([unprocessed]):
+     * it must survive until the record line naming this destination is durable, or an
+     * interrupted write loses the grading with nowhere left to look (#95). [discard]
+     * retires it afterwards.
+     */
     fun complete(session: RawSessionId, destination: Path): Path
+
+    /** Retires a session whose record is durable; the frames now live at their destination. */
+    fun discard(session: RawSessionId)
 
     /** Sessions still awaiting stage 2 — the crash-recovery work list, oldest first. */
     fun unprocessed(): List<RawSession>

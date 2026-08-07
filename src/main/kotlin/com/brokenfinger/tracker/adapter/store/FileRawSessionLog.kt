@@ -8,7 +8,6 @@ import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.Instant
@@ -44,7 +43,11 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         // destroy frames that can never be captured again (protocol doc §11).
         if (Files.exists(destination)) throw FileAlreadyExistsException("$destination")
         destination.parent?.let { Files.createDirectories(it) }
-        return moveOf(source, destination)
+        return Files.copy(source, destination)
+    }
+
+    override fun discard(session: RawSessionId) {
+        Files.deleteIfExists(fileOf(session))
     }
 
     override fun unprocessed(): List<RawSession> {
@@ -53,10 +56,6 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
             entries.toList().mapNotNull { sessionOf(it) }.sortedBy { it.id.value }
         }
     }
-
-    private fun moveOf(source: Path, destination: Path): Path =
-        runCatching { Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE) }
-            .getOrElse { Files.move(source, destination) }
 
     private fun sessionOf(file: Path): RawSession? {
         val name = file.fileName.toString()

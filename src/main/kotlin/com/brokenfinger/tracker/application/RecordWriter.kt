@@ -68,10 +68,21 @@ class RecordWriter private constructor(
         runCatching { record(capture, key) }.onFailure { captured.remove(key) }.getOrThrow()
     }
 
+    /**
+     * Copy the frames, append the record, then retire the source (#95). `.ps/raw` is the
+     * only directory the reconciler scans, so a move before the append meant a failed
+     * append — a full disk, an unmounted record repo — took the grading out of the recovery
+     * queue for good, while the log said its frames were kept. Copying leaves the source in
+     * place until the record naming its destination is durable; an interruption anywhere
+     * before [RawSessionLog.discard] therefore replays, and the capture key drops the
+     * replay as the duplicate it is.
+     */
     private fun record(capture: SettledCapture, key: CaptureKey): SubmissionRecord {
         val attempt = attempts.allocate(capture.lessonId, capture.action())
-        val record = capture.toRecord(OffsetDateTime.now(clock), attempt, key, rawPathOf(capture, attempt))
+        val copied = copiedRawPath(capture, attempt)
+        val record = capture.toRecord(OffsetDateTime.now(clock), attempt, key, copied ?: capture.rawSessionId.value)
         store.append(SubmissionRecordJson.encode(record))
+        if (copied != null) retireRaw(capture)
         // After the append, inside the same confined section: the examples are a derived
         // write to the problem directory and must not interleave with another grading's
         // (write-serialization decision 1). The store itself is a no-op for a grading that
@@ -108,19 +119,32 @@ class RecordWriter private constructor(
     private fun pathsOf(record: SubmissionRecord): List<Path> =
         listOf(submissionLog, recordRoot.resolve(record.rawPath)).filter { Files.exists(it) }
 
-    /** Where this grading's frames came to rest, relative to the record repository. */
-    private fun rawPathOf(capture: SettledCapture, attempt: Int): String {
-        if (!capture.movesRaw(attempt)) return capture.rawSessionId.value
+    /**
+     * Copies the frames to their resting place and answers where the record should point,
+     * relative to the record repository.
+     *
+     * Best-effort by design: the verdict is unrecoverable and the copy is not, so a failed
+     * copy leaves the path naming the raw directory — where the frames still are — rather
+     * than a tidier path that would be a lie.
+     */
+    private fun copiedRawPath(capture: SettledCapture, attempt: Int): String? {
+        if (!capture.movesRaw(attempt)) return null
         val destination = rawAttemptPath.of(capture.lessonId, capture.problem?.title, attempt)
-        return moved(capture, destination) ?: capture.rawSessionId.value
-    }
-
-    // Best-effort by design: the verdict is unrecoverable and the move is not, so a failed
-    // move leaves the frames where they already are and costs a tidier path, never a record.
-    private fun moved(capture: SettledCapture, destination: Path): String? =
-        runCatching { relativeOf(rawLog.complete(capture.rawSessionId, destination)) }
+        return runCatching { relativeOf(rawLog.complete(capture.rawSessionId, destination)) }
             .onFailure { logger.warn("Raw frames stayed in the raw directory ({})", it.javaClass.simpleName) }
             .getOrNull()
+    }
+
+    /**
+     * Retires the source only once the record is durable, and only when the copy actually
+     * happened — a record still pointing at the raw directory must keep the file it names.
+     * A failure here costs a stale file the reconciler replays and the capture key drops,
+     * which is the safe direction.
+     */
+    private fun retireRaw(capture: SettledCapture) {
+        runCatching { rawLog.discard(capture.rawSessionId) }
+            .onFailure { logger.warn("Raw frames were copied but not retired ({})", it.javaClass.simpleName) }
+    }
 
     // Stored with forward slashes whatever the host uses — a record repository is meant to
     // be cloned onto another machine, and an absolute path would not survive the trip.

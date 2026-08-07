@@ -1774,3 +1774,19 @@ dropped.
 
 The regression test runs the colliding input for real, because the old code passed it.
 1015 tests.
+
+## [2026-08-07] #95 — the recovery queue now outlives the record write ✅
+
+`rawPathOf` was evaluated as an argument to `toRecord`, so the frames were physically moved
+out of `.ps/raw` — the only directory the reconciler scans — *before* `store.append`. A
+failed append (a full disk, an unmounted record repo) therefore took the grading out of the
+recovery queue for good, while the log line said its frames were kept.
+
+`complete` now **copies** and a new `discard` retires the source once the record is durable.
+An interruption anywhere before the discard leaves the file where the reconciler replays
+it, and the content-digest capture key drops the replay as the duplicate it is.
+
+Two details the tests forced out. The copy result decides the recorded path, so a failed
+copy still names the raw directory — where the frames actually are — instead of a tidier
+path that would be a lie. And `discard` runs only when the copy succeeded, otherwise a
+record pointing at `.ps/raw` would have its own file deleted underneath it.

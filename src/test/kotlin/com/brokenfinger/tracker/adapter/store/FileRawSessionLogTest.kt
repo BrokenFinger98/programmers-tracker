@@ -98,7 +98,7 @@ class FileRawSessionLogTest {
     }
 
     @Test
-    fun `complete moves the finished session to the attempt path, creating its directory`() {
+    fun `complete copies the finished session to the attempt path, creating its directory`() {
         val log = logAt(startedAt)
         val session = log.start(120804)
         log.append(session, """{"n":1}""")
@@ -107,7 +107,27 @@ class FileRawSessionLogTest {
         log.complete(session, destination) shouldBe destination
 
         Files.readAllLines(destination) shouldContainExactly listOf("""{"n":1}""")
+        // The source stays: it is the recovery queue, and it must outlive the record that
+        // names the destination (#95). `discard` is what retires it.
+        Files.exists(rawDir().resolve(session.value)) shouldBe true
+    }
+
+    @Test
+    fun `discard retires a session whose record is durable`() {
+        val log = logAt(startedAt)
+        val session = log.start(120804)
+        log.append(session, """{"n":1}""")
+        log.complete(session, root.resolve("problems/120804-x/attempts/001.raw.jsonl"))
+
+        log.discard(session)
+
         Files.exists(rawDir().resolve(session.value)) shouldBe false
+    }
+
+    /** Retiring what was never there is not an error — a retry must not fail on it. */
+    @Test
+    fun `discarding an absent session is silent`() {
+        logAt(startedAt).discard(RawSessionId("never-existed.jsonl"))
     }
 
     @Test
@@ -159,14 +179,20 @@ class FileRawSessionLogTest {
         log.unprocessed() shouldHaveSize 1
     }
 
+    /**
+     * Copying alone must NOT retire it: until the record naming the destination is durable,
+     * this session is still the only place the grading can be recovered from (#95).
+     */
     @Test
-    fun `a completed session leaves the work list`() {
+    fun `a copied session stays on the work list until it is discarded`() {
         val log = logAt(startedAt)
         val session = log.start(120804)
         log.append(session, """{"n":1}""")
 
         log.complete(session, root.resolve("attempts/001.raw.jsonl"))
+        log.unprocessed().map { it.id } shouldContainExactly listOf(session)
 
+        log.discard(session)
         log.unprocessed() shouldBe emptyList()
     }
 
