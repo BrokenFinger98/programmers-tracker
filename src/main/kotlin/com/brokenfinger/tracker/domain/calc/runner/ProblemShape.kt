@@ -29,6 +29,7 @@ enum class ProblemShape {
         private val JS_SOLUTION = Regex("""function\s+solution\s*\(""")
         private val JS_STDIN = Regex("""process\.stdin|require\s*\(\s*['"]readline['"]""")
         private val KOTLIN_MAIN = Regex("""fun\s+main\s*\(""")
+        private val CSHARP_MAIN = Regex("""static\s+void\s+Main\s*\(""")
 
         fun of(code: String): ProblemShape = ofJava(code)
 
@@ -77,6 +78,18 @@ enum class ProblemShape {
          */
         fun ofKotlin(code: String): ProblemShape = when {
             KOTLIN_MAIN.containsMatchIn(code) -> STDIN_MAIN
+            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
+            else -> UNRECOGNISED
+        }
+
+        /**
+         * C#: `Main` wins, Java's priority for Java's reason. Measured skeletons (editor
+         * captures 2026-08-07): the main-style one declares `public static void Main()` on
+         * a class named `Example`; the solution-style ones declare `solution` on
+         * `public class Solution` and never a `Main`.
+         */
+        fun ofCsharp(code: String): ProblemShape = when {
+            CSHARP_MAIN.containsMatchIn(code) -> STDIN_MAIN
             SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
             else -> UNRECOGNISED
         }

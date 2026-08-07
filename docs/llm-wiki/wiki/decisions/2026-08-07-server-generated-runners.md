@@ -86,5 +86,32 @@ wired into `CodeAttachment` so the runner rides the same trigger as the code it 
 834 tests; the execution suite compiles and runs generated runners in child JVMs for both
 shapes, both verdicts. python3 is next in the support order.
 
+**Series completed 2026-08-07** — all seven measured languages shipped, in order: java
+(#37), python3 (#78), cpp (#80), javascript (#82), kotlin (#84), c (#86), csharp (#88).
+Each earned "supported" through an execution suite against its real toolchain, and the CI
+proof-ran gate holds all seven suites to having actually run (a missing results file fails
+the same gate). Per-language facts worth keeping:
+
+- Every skeleton fact was **captured from the actual editor before writing** (Orca
+  browser, 2026-08-07); one capture drifted to a stale page and was caught by a
+  title-match guard — guard every capture.
+- The two shapes and the §7.1 value grammar held across all seven languages; what varied
+  was *packaging*: C++ shares one translation unit (hence `runner_` prefixes and named
+  locals), Kotlin needed a top-level bridge past its own harness `main`, C expands one
+  wire value into two or three physical arguments, C# ships a csproj beside the harness
+  with globbing off and the entry pinned.
+- Two languages settled open questions by experiment-as-test: Kotlin's `readLine()`
+  follows a swapped `System.in` (two-example test pins it), and C#'s skeleton
+  `Console.Clear()` under redirection is measured per-OS by its suite — **answered on the
+  suite's first CI outing** (run 31147247460): macOS/Linux no-op it, **Windows throws**;
+  in a terminal it clears the screen everywhere. The generator therefore emits a
+  stated-skip guard, only for solutions that actually call `Clear`, and the suite pins
+  both behaviours per OS.
+- csharp's execution proof **cannot run on the dev machine** (broken x86_64 dotnet host
+  on arm64); CI's three runners carry that proof, which merge-only-on-green keeps ahead
+  of shipping.
+- Not in scope, still: go/ruby/scala/swift (below the measured usage cut), mysql/oracle
+  (no runner concept for SQL).
+
 Related: [[decisions/2026-08-06-shipped-problem-catalog]] ·
 [[concepts/assumption-vs-measurement]].

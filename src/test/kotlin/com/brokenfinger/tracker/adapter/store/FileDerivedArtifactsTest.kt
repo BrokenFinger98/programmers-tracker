@@ -78,6 +78,23 @@ class FileDerivedArtifactsTest {
         Files.readString(directory.resolve("runner_test.cpp")) shouldContain "solution(arg1, arg2)"
     }
 
+    /** C# is the two-artifact runner — the project file must land beside the harness. */
+    @Test
+    fun `a csharp record gets its runner and project file`() {
+        val directory = root.resolve("problems/120804-두-수의-곱-구하기")
+        Files.createDirectories(directory)
+        Files.writeString(directory.resolve("examples.json"), """[{"input": "6, 7", "expected": "42"}]""")
+
+        artifacts().writeRunner(
+            aSubmissionRecord(language = "csharp"),
+            "public class Solution {\n    public int solution(int num1, int num2) { return num1 * num2; }\n}",
+        )
+
+        Files.readString(directory.resolve("runner_test.cs")) shouldContain "new Solution().solution"
+        val project = Files.readString(directory.resolve("runner_test.csproj"))
+        project shouldContain "<StartupObject>RunnerTest</StartupObject>"
+    }
+
     /**
      * The sweep must clear every runner name, not just the current language's: a problem
      * re-solved in another language leaves the previous language's runner behind, and a
@@ -94,6 +111,8 @@ class FileDerivedArtifactsTest {
             "runner_test.js",
             "runner_test.kt",
             "runner_test.c",
+            "runner_test.cs",
+            "runner_test.csproj",
         )
         val directory = root.resolve("problems/120804-두-수의-곱-구하기")
         Files.createDirectories(directory)

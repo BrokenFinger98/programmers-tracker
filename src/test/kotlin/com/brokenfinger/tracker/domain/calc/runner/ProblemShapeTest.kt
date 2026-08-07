@@ -230,6 +230,19 @@ class ProblemShapeTest {
         ProblemShape.ofKotlin("val x = 1") shouldBe ProblemShape.UNRECOGNISED
     }
 
+    // C# -----------------------------------------------------------------------------------
+
+    /** Measured skeletons (editor captures 2026-08-07): Main wins, Java's rule. */
+    @Test
+    fun `csharp reads with the java rule`() {
+        val solutionStyle = "public class Solution {\n    public int solution(int a) { return a; }\n}"
+        val mainStyle = "public class Example\n{\n    public static void Main()\n    {\n" +
+            "        Console.Clear();\n    }\n}"
+
+        ProblemShape.ofCsharp(solutionStyle) shouldBe ProblemShape.SOLUTION_FUNCTION
+        ProblemShape.ofCsharp(mainStyle) shouldBe ProblemShape.STDIN_MAIN
+    }
+
     // C ------------------------------------------------------------------------------------
 
     /** Measured skeletons (editor captures 2026-08-07) — C shares C++'s signals exactly. */

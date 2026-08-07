@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.runner.CRunner
 import com.brokenfinger.tracker.domain.calc.runner.CppRunner
+import com.brokenfinger.tracker.domain.calc.runner.CsharpRunner
 import com.brokenfinger.tracker.domain.calc.runner.JavaRunner
 import com.brokenfinger.tracker.domain.calc.runner.JavascriptRunner
 import com.brokenfinger.tracker.domain.calc.runner.KotlinRunner
@@ -69,6 +70,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
             is Runner.Generated -> runCatching {
                 Files.createDirectories(directory)
                 Files.writeString(directory.resolve(runner.fileName), runner.source)
+                runner.extras.forEach { extra -> Files.writeString(directory.resolve(extra.fileName), extra.source) }
             }.onFailure { logger.warn("Lesson {}: the runner could not be written", record.lessonId, it) }
             is Runner.Refused -> {
                 RUNNER_FILES.forEach { stale -> runCatching { Files.deleteIfExists(directory.resolve(stale)) } }
@@ -101,6 +103,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
             "javascript" to JavascriptRunner::generate,
             "kotlin" to KotlinRunner::generate,
             "c" to CRunner::generate,
+            "csharp" to CsharpRunner::generate,
         )
 
         /** Every name a stale runner can have; a refusal clears them all. */
@@ -111,6 +114,8 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
             "runner_test.js",
             "runner_test.kt",
             "runner_test.c",
+            "runner_test.cs",
+            "runner_test.csproj",
         )
 
         val json = Json { ignoreUnknownKeys = true }
