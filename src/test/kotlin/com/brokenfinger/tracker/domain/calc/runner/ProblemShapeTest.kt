@@ -86,6 +86,62 @@ class ProblemShapeTest {
         ProblemShape.ofPython("print(1 + 1)") shouldBe ProblemShape.UNRECOGNISED
     }
 
+    // C++ ----------------------------------------------------------------------------------
+
+    /** Measured skeleton, 120803 (editor capture 2026-08-07). */
+    @Test
+    fun `a cpp solution function makes it solution-style`() {
+        val code = """
+            #include <string>
+            #include <vector>
+
+            using namespace std;
+
+            int solution(int num1, int num2) {
+                int answer = 0;
+                return answer;
+            }
+        """.trimIndent()
+
+        ProblemShape.ofCpp(code) shouldBe ProblemShape.SOLUTION_FUNCTION
+    }
+
+    /** Measured skeleton, 181951 (editor capture 2026-08-07) — `int main(void)`. */
+    @Test
+    fun `a cpp main makes it main-style`() {
+        val code = """
+            #include <iostream>
+
+            using namespace std;
+
+            int main(void) {
+                int a;
+                int b;
+                cin >> a >> b;
+                cout << a + b << endl;
+                return 0;
+            }
+        """.trimIndent()
+
+        ProblemShape.ofCpp(code) shouldBe ProblemShape.STDIN_MAIN
+    }
+
+    /** Same priority as Java, same reason: a `solution` helper inside a `main` program is the user's own. */
+    @Test
+    fun `a cpp main wins over a solution helper`() {
+        val code = """
+            int solution(int n) { return n; }
+            int main(void) { std::cout << solution(1); return 0; }
+        """.trimIndent()
+
+        ProblemShape.ofCpp(code) shouldBe ProblemShape.STDIN_MAIN
+    }
+
+    @Test
+    fun `cpp code with neither is refused`() {
+        ProblemShape.ofCpp("void helper() {}") shouldBe ProblemShape.UNRECOGNISED
+    }
+
     @Test
     fun `neither shape is refused, not guessed`() {
         ProblemShape.of("SELECT * FROM FOODS_INFO;") shouldBe ProblemShape.UNRECOGNISED

@@ -51,18 +51,23 @@ jobs:
       # suite skips politely where the interpreter is missing — right for a contributor's
       # machine, wrong here: a runner image that dropped python would silently un-earn the
       # status. Asserted from the results file, not assumed from runner documentation.
-      - name: the Python execution proof genuinely ran
+      - name: the runner execution proofs genuinely ran
         shell: bash
         run: |
           set -e
-          results=build/test-results/test/TEST-com.brokenfinger.tracker.domain.calc.runner.PythonRunnerExecutionTest.xml
-          [ -f "$results" ] || { echo "REGRESSION: the Python execution suite left no results at all."; exit 1; }
-          if grep -q "<skipped" "$results"; then
-            echo "REGRESSION: the Python execution suite was SKIPPED on this runner — python3 missing?"
-            grep -o 'skipped[^/]*' "$results" | head -3
-            exit 1
-          fi
-          echo "PythonRunnerExecutionTest ran: $(grep -o 'tests="[0-9]*"' "$results" | head -1)"
+          # Each execution suite skips politely where its interpreter/compiler is missing —
+          # right on a contributor's machine, wrong here: a runner image quietly dropping a
+          # toolchain must not silently un-earn a language's supported status.
+          for suite in JavaRunnerExecutionTest PythonRunnerExecutionTest CppRunnerExecutionTest; do
+            results="build/test-results/test/TEST-com.brokenfinger.tracker.domain.calc.runner.$suite.xml"
+            [ -f "$results" ] || { echo "REGRESSION: $suite left no results at all."; exit 1; }
+            if grep -q "<skipped" "$results"; then
+              echo "REGRESSION: $suite was SKIPPED on this runner — toolchain missing?"
+              grep -o 'skipped[^/]*' "$results" | head -3
+              exit 1
+            fi
+            echo "$suite ran: $(grep -o 'tests="[0-9]*"' "$results" | head -1)"
+          done
 
       - name: build
         run: ./gradlew build -x test --no-daemon
