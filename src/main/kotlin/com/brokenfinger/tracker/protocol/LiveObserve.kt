@@ -49,6 +49,9 @@ private fun printEvent(event: CableEvent) = when (event) {
     is CableEvent.SubscriptionConfirmed -> println("[${elapsed()}s confirmed] ${event.rawText}")
     is CableEvent.MessageReceived -> println("[${elapsed()}s broadcast] ${event.rawText}")
     is CableEvent.Unhandled -> println("[${elapsed()}s unhandled] ${event.rawText}")
+    // Every 3 seconds and content-free. Printed anyway: this tool exists to watch what the
+    // socket really does, and the heartbeat's cadence is part of that.
+    is CableEvent.Heartbeat -> println("[${elapsed()}s ping]")
 }
 
 private val startedAt = System.nanoTime()

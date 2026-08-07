@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.application.ChannelSubscriber
 import com.brokenfinger.tracker.application.ConnectionLiveness
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
+import com.brokenfinger.tracker.protocol.CableEvent
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.SessionProvider
 import com.brokenfinger.tracker.protocol.parse.ObservedFrames
@@ -12,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.timeout
 import kotlinx.coroutines.isActive
@@ -79,7 +81,11 @@ class CableChannelSubscriber(
         runCatching {
             client.observe(ChannelIdentifier.from(channel), sessions)
                 .onEach { received = true }
+                // The deadline sits ABOVE the filter on purpose (#94): the heartbeat is the
+                // only traffic an idle channel produces, so it must reach the timeout — and
+                // it must not reach the capture, which records what it is given.
                 .timeout(silenceDeadline.toKotlinDuration())
+                .filter { it !is CableEvent.Heartbeat }
                 .collect { capture.onFrame(ObservedFrames.of(it)) }
         }.onFailure { report(channel, it) }
         return received

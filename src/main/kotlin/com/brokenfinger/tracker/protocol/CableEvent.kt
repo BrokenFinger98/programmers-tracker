@@ -17,4 +17,13 @@ sealed interface CableEvent {
 
     /** Unknown or malformed frames, preserved instead of dropped (dev rules §2.3). */
     data class Unhandled(override val rawText: String, val frame: ActionCableFrame) : CableEvent
+
+    /**
+     * The server's `{"type":"ping"}`, every 3 seconds (protocol §4). Carries no content and
+     * belongs to no grading, so nothing downstream records it — it exists so that **silence
+     * can be measured** (#94). Swallowing it inside the flow, as this used to, left the
+     * silence deadline measuring the gap between *gradings*, which fires on an idle channel
+     * and reconnects forever.
+     */
+    data class Heartbeat(override val rawText: String) : CableEvent
 }

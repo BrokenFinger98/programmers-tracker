@@ -35,5 +35,10 @@ fun aFrameReader(): FrameReader = ObservedFrames
 private fun anObservedFrameOrNull(rawText: String, channel: ChannelKey): ObservedFrame? =
     emittedBy(rawText, channel)?.let(ObservedFrames::of)
 
+// Heartbeats are dropped here for the same reason CableChannelSubscriber drops them: they
+// exist to keep the silence deadline honest (#94) and never reach a capture, so a fixture
+// that handed them over would not be what the socket loop produces.
 private fun emittedBy(rawText: String, channel: ChannelKey): CableEvent? =
-    (SubscriptionProtocol(ChannelIdentifier.from(channel)).next(rawText) as? SubscriptionProtocol.Step.Emit)?.event
+    (SubscriptionProtocol(ChannelIdentifier.from(channel)).next(rawText) as? SubscriptionProtocol.Step.Emit)
+        ?.event
+        ?.takeIf { it !is CableEvent.Heartbeat }

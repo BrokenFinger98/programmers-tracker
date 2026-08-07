@@ -1790,3 +1790,28 @@ Two details the tests forced out. The copy result decides the recorded path, so 
 copy still names the raw directory — where the frames actually are — instead of a tidier
 path that would be a lie. And `discard` runs only when the copy succeeded, otherwise a
 record pointing at `.ps/raw` would have its own file deleted underneath it.
+
+## [2026-08-07] #94 (first half) — the ping now resets the silence deadline ✅
+
+`ConnectionLiveness` documents the 3-second ping as "the one liveness signal we get for
+free", but `SubscriptionProtocol` mapped it to `Ignore` and `RawSocket` turned that into
+`Unit` — so the ping never left the flow, and `.timeout(silenceDeadline)` was measuring the
+gap between **gradings**. Opening a problem and reading it therefore reconnected every
+~15 seconds, indefinitely, against Programmers.
+
+The ping is now a `CableEvent.Heartbeat`. The deadline sits **above** the filter that drops
+it, so the timeout sees it and the capture never does. `Step.Ignore` had no producer left
+and was deleted rather than kept as a state nothing reaches.
+
+Why it survived: `LiveObserve` — the tool the idle-close was measured with — applies no
+timeout at all, and the subscriber's tests stub `client.observe` with a hand-built flow,
+so no test had ever put a ping through the real composition. Two now do: one at the
+protocol layer, one driving heartbeats through the subscriber and asserting both that it
+does not reconnect and that the capture is never handed one.
+
+The fixture helper had to learn the same rule — it claims to produce "what a subscription
+hands the capture", and production hands no heartbeats.
+
+**Second half still open**: a grading whose `start` frame was missed is still discarded
+before the raw log. Split into its own issue because where orphan frames should live is a
+design question that interacts with raw-directory hygiene (#99).

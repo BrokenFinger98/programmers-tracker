@@ -10,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -126,6 +127,32 @@ class CableChannelSubscriberTest {
         subscriber.subscribe(channel)
 
         awaitAtLeast(opened, 2)
+    }
+
+    /**
+     * The defect this class's own doc described backwards (#94): the deadline was applied
+     * to a flow the ping never reached, so it measured the gap between *gradings* and fired
+     * on every idle channel. A heartbeat must hold the socket open — and must not reach the
+     * capture, which records what it is given.
+     */
+    @Test
+    fun `heartbeats hold the socket open and never reach the capture`() = runBlocking<Unit> {
+        val capture = mockk<ChannelCapture>(relaxed = true)
+        val reconnects = AtomicInteger()
+        val subscriber = subscriberOver(deadline = Duration.ofMillis(200), capture = capture, attempts = reconnects) {
+            flow {
+                while (true) {
+                    emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                    delay(POLL_MS)
+                }
+            }
+        }
+
+        subscriber.subscribe(channel)
+        delay(600)
+
+        reconnects.get() shouldBe 0
+        verify(exactly = 0) { runBlocking { capture.onFrame(any()) } }
     }
 
     /** A grading in flight when the socket drops must settle, never wait for a result. */
