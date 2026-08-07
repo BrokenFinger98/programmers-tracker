@@ -59,14 +59,23 @@ class CommandLineGitSync(
         return neverThrowing(what, action)
     }
 
-    // `rev-parse` is git's own answer to the question and covers what a `.git` directory test
-    // does not: a worktree whose `.git` is a file, and a records directory nested inside some
-    // other repository, which would otherwise commit records into a repository nobody meant.
+    // `rev-parse` is git's own answer and covers what a `.git` directory test does not — a
+    // worktree whose `.git` is a file. But it must be `--show-toplevel` compared against the
+    // root, not `--git-dir`: the latter succeeds from *any* subdirectory and answers about
+    // the enclosing repository, so a records directory nested inside another project passed
+    // this check, and `reconcile`'s repo-wide `add --all` then committed that project's
+    // unrelated working tree under our message and pushed it (#93).
     private fun detectRepository(): Boolean {
-        if (runCatching { git(listOf("rev-parse", "--git-dir")).succeeded() }.getOrDefault(false)) return true
+        val top = runCatching { git(listOf("rev-parse", "--show-toplevel")) }.getOrNull()
+        if (top != null && top.succeeded() && isRoot(top.output.trim())) return true
         logger.warn(NOT_A_REPOSITORY, root)
         return false
     }
+
+    // Compared as real paths so a symlinked or `/private`-prefixed record root still matches
+    // the toplevel git reports; an unreadable path simply is not the root.
+    private fun isRoot(toplevel: String): Boolean =
+        runCatching { Path.of(toplevel).toRealPath() == root.toRealPath() }.getOrDefault(false)
 
     // A run owns no attempt number and no commit of its own (design §4.6); its edits to the
     // solution file ride along with the next submit or the next reconciliation.
