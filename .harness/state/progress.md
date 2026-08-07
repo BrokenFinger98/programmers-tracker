@@ -1722,3 +1722,22 @@ plain `FAIL` — the injection was invisible in its own output.
 Fixed at `ExampleValues`, the one place §7.1 values are parsed, so all seven languages
 agree. The five typed generators already refused these by coercing; this makes the two
 text-emitting ones match rather than patching them separately.
+## [2026-08-07] Adversarial review, and the first fix ✅
+
+Four independent reviews (runner correctness, capture pipeline, security/privacy, product
+gap) attacked the finished system. They found what the finished-series report did not:
+**two paths that print `ALL PASS` on wrong code**, protocol values reaching generated
+runners as executable code, an enclosing-repo mistake that commits the user's unrelated
+work, and a liveness rule whose stated premise is inverted in the code. Ten issues filed
+(#90–#100), each reproduced before filing rather than argued.
+
+#90 first, because it is the charter violation: `JavaRunner`'s generated `check` ORed a
+rendered-string comparison onto `deepEquals`. `deepEquals` already compares arrays deeply
+and every boxed scalar, so that clause could only ever add passes — and
+`Arrays.deepToString` is not injective, so a one-element `{"a, b"}` passed against a
+two-element `["a", "b"]`. Reproduced under JDK 25 (`ALL PASS`, exit 0) before touching it.
+Java was the oldest generator and the only one still carrying the leniency the later six
+dropped.
+
+The regression test runs the colliding input for real, because the old code passed it.
+1015 tests.
