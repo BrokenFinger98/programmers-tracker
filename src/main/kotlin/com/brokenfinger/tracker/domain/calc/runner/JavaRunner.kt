@@ -199,10 +199,12 @@ $body
             System.setIn(originalIn);
             System.setOut(originalOut);
         }
-        // The judge accepts a println-terminated last line, so trailing newlines are
-        // insignificant on both sides — and nothing else is.
-        String actual = captured.toString().replaceAll("[\r\n]+$", "");
-        String want = expected.replaceAll("[\r\n]+$", "");
+        // Two normalisations, and only these two. Trailing newlines: the judge accepts a
+        // println-terminated last line. Line separators: the judge's expected output uses \n,
+        // but THIS runner runs on the user's machine, where println emits \r\n on Windows —
+        // a platform artifact, not an answer difference. (Caught by CI's windows-latest gate.)
+        String actual = captured.toString().replace("\r\n", "\n").replaceAll("\n+$", "");
+        String want = expected.replace("\r\n", "\n").replaceAll("\n+$", "");
         boolean ok = actual.equals(want);
         System.out.println("example " + index + (ok ? "  PASS" : "  FAIL — expected <" + want + ">, got <" + actual + ">"));
         if (!ok) failures++;
