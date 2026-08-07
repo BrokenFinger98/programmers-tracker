@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
@@ -29,6 +30,8 @@ data class GradingSession(
     val testcasesComplete: Boolean,
     /** Run-path error text, already unescaped — the input that later promotes a submit. */
     val errorText: String?,
+    /** The examples the stream announced (protocol §7) — what the runner is generated from. */
+    val examples: List<ProblemExample> = emptyList(),
     /**
      * What every accepted frame said, in arrival order, including the frames nothing
      * recognised — those contribute an empty record and still hold their position, so a

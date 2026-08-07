@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.cable.CableChannelSubscriber
 import com.brokenfinger.tracker.adapter.catalog.ClasspathProblemCatalog
 import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
+import com.brokenfinger.tracker.adapter.store.FileExampleStore
 import com.brokenfinger.tracker.adapter.store.FileProblemTimer
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
@@ -128,6 +129,7 @@ class CaptureConfiguration {
         recordRoot = recordRoot(recordRepo),
         git = git,
         submissionLog = layout.submissionLog(),
+        examples = FileExampleStore(layout),
         clock = clock,
         writerDispatcher = writerDispatcher,
     )

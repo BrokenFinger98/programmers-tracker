@@ -47,6 +47,7 @@ class RecordWriter private constructor(
     private val recordRoot: Path,
     private val git: GitSync,
     private val submissionLog: Path,
+    private val examples: ExampleStore,
     private val attempts: AttemptAuthority,
     private val captured: MutableSet<CaptureKey>,
     private val clock: Clock,
@@ -71,6 +72,11 @@ class RecordWriter private constructor(
         val attempt = attempts.allocate(capture.lessonId, capture.action())
         val record = capture.toRecord(OffsetDateTime.now(clock), attempt, key, rawPathOf(capture, attempt))
         store.append(SubmissionRecordJson.encode(record))
+        // After the append, inside the same confined section: the examples are a derived
+        // write to the problem directory and must not interleave with another grading's
+        // (write-serialization decision 1). The store itself is a no-op for a grading that
+        // announced none, so a submit cannot blank what its preceding run wrote.
+        examples.replace(capture.lessonId, capture.problem?.title, capture.session.examples)
         committed(record)
         return record
     }
@@ -145,6 +151,7 @@ class RecordWriter private constructor(
             recordRoot: Path,
             git: GitSync,
             submissionLog: Path,
+            examples: ExampleStore = ExampleStore { _, _, _ -> },
             clock: Clock = Clock.systemDefaultZone(),
             writerDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
         ): RecordWriter {
@@ -155,6 +162,7 @@ class RecordWriter private constructor(
                 rawAttemptPath = rawAttemptPath,
                 recordRoot = recordRoot,
                 git = git,
+                examples = examples,
                 submissionLog = submissionLog,
                 attempts = AttemptAuthority.from(history),
                 captured = keysOf(history),

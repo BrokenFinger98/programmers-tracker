@@ -24,6 +24,11 @@ data class GradingFrameFacts(
     val announcedTestcaseIds: List<Long> = emptyList(),
     /** How many cases were promised, for the streams that promise a count instead of ids. */
     val announcedTestcaseCount: Int? = null,
+    /**
+     * The example pairs a `run` `start` ships inline (protocol §7) — the runner generator's
+     * whole input (#37). Empty for every frame that announces none.
+     */
+    val announcedExamples: List<ProblemExample> = emptyList(),
     /** Run-path error text, already unescaped — the input that later promotes a submit. */
     val errorText: String? = null,
     /** Whether this frame opens a grading rather than continuing one. */
