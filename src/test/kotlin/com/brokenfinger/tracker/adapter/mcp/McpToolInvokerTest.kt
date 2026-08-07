@@ -2,9 +2,13 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.aCaptureKey
+import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
+import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -236,8 +240,67 @@ class McpToolInvokerTest {
         message(result).shouldContain("limit")
     }
 
-    private fun invokerOver(vararg records: com.brokenfinger.tracker.domain.SubmissionRecord): McpToolInvoker =
-        McpToolInvoker(aRecordRepository(root).containing(*records).query())
+    // list_problems ------------------------------------------------------------------------
+
+    /**
+     * The answer no other tool can give (#100): the records alone cannot separate "never
+     * tried" from "tried and failed", so `untouched` is the point of joining a catalog.
+     */
+    @Test
+    fun `list_problems answers untouched for a catalogued problem with no submits`() {
+        val invoker = invokerOver(catalog = aCatalogOf(aCatalogEntry(id = 120804), aCatalogEntry(id = 120803)))
+
+        val payload = structured(invoker.call("list_problems", arguments("status" to "untouched")))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 2
+    }
+
+    @Test
+    fun `list_problems reports a passed problem with the submits it took`() {
+        val invoker = invokerOver(
+            aSubmissionRecord(lessonId = 120804, verdict = Verdict.WRONG, attempt = 1),
+            aSubmissionRecord(lessonId = 120804, verdict = Verdict.PASS, attempt = 2, captureKey = aCaptureKey()),
+            catalog = aCatalogOf(aCatalogEntry(id = 120804)),
+        )
+
+        val listed = structured(invoker.call("list_problems", JsonObject(emptyMap())))["problems"]!!
+            .jsonArray.single().jsonObject
+
+        listed["status"]!!.jsonPrimitive.content shouldBe "passed"
+        listed["attempts"]!!.jsonPrimitive.int shouldBe 2
+    }
+
+    /** An unreadable argument is the client's mistake, said plainly rather than ignored. */
+    @Test
+    fun `list_problems refuses a level that is not a number`() {
+        val result = invokerOver(catalog = aCatalogOf(aCatalogEntry())).call(
+            "list_problems",
+            arguments(
+                "level" to "easy",
+            ),
+        )
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("level")
+    }
+
+    @Test
+    fun `list_problems refuses a status outside the three`() {
+        val result = invokerOver(catalog = aCatalogOf(aCatalogEntry())).call(
+            "list_problems",
+            arguments(
+                "status" to "nearly",
+            ),
+        )
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("status")
+    }
+
+    private fun invokerOver(
+        vararg records: com.brokenfinger.tracker.domain.SubmissionRecord,
+        catalog: com.brokenfinger.tracker.application.ProblemCatalog = anEmptyCatalog(),
+    ): McpToolInvoker = McpToolInvoker(aRecordRepository(root).containing(*records).query(catalog))
 
     private fun arguments(vararg pairs: Pair<String, Any>): JsonObject = buildJsonObject {
         pairs.forEach { (key, value) ->

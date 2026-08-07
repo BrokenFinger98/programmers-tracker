@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.support.fixtures
 
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
+import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
@@ -33,7 +34,8 @@ class RecordRepositoryFixture(val root: Path) {
 
     fun store(): JsonlRecordStore = JsonlRecordStore(logFile())
 
-    fun query(): RecordQuery = RecordQuery(store())
+    /** Catalogue-free by default: most read tests are about records, not about browsing. */
+    fun query(catalog: ProblemCatalog = anEmptyCatalog()): RecordQuery = RecordQuery(store(), catalog)
 
     fun logFile(): Path = RecordLayout(root).submissionLog()
 }

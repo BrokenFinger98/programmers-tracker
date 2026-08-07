@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.fixtures.anInitializeParams
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
@@ -54,7 +55,8 @@ class McpControllerTest {
     @TestConfiguration
     class Beans {
         @Bean
-        fun mcpDispatcher(): McpDispatcher = McpDispatcher(McpToolInvoker(RecordQuery(scratchStore())))
+        fun mcpDispatcher(): McpDispatcher =
+            McpDispatcher(McpToolInvoker(RecordQuery(scratchStore(), anEmptyCatalog())))
 
         @Bean
         fun watchToken(): WatchToken = WatchToken(GRANTED, "build/tmp/mcp-token-should-not-be-created")
@@ -95,7 +97,7 @@ class McpControllerTest {
 
         val listed = json(post(aLegacyBody("tools/list", id = 2)))["result"]!!.jsonObject
         listed["tools"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }
-            .shouldContainExactly("submissions", "get_problem", "stats")
+            .shouldContainExactly(McpToolCatalog.NAMES)
 
         val params = aToolCallParams("stats", buildJsonObject { put("groupBy", "verdict") })
         val called = json(post(aLegacyBody("tools/call", params, id = 3)))["result"]!!.jsonObject
@@ -132,7 +134,7 @@ class McpControllerTest {
             .shouldContainExactly(McpProtocol.MODERN)
 
         val listed = json(postModern("tools/list", id = 2))["result"]!!.jsonObject
-        listed["tools"]!!.jsonArray.size shouldBe 3
+        listed["tools"]!!.jsonArray.size shouldBe McpToolCatalog.NAMES.size
         listed["cacheScope"]!!.jsonPrimitive.content shouldBe "private"
 
         val params = aToolCallParams("get_problem", buildJsonObject { put("lessonId", 120804) })

@@ -31,6 +31,13 @@ data class CatalogEntry(
 interface ProblemCatalog {
     fun find(lessonId: LessonId): CatalogEntry?
 
+    /**
+     * Every problem the snapshot describes, for the callers that browse rather than look
+     * up — `list_problems` answers "which of these have I never touched", which no
+     * per-lesson lookup can (#100).
+     */
+    fun all(): List<CatalogEntry>
+
     /** The techniques this problem needs, from the adopted vocabulary. Empty when unknown. */
     fun tagsOf(lessonId: LessonId): List<String>
 

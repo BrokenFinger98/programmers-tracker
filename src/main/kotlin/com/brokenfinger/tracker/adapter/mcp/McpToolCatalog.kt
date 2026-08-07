@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import kotlinx.serialization.json.JsonArray
@@ -31,13 +32,45 @@ object McpToolCatalog {
     const val SUBMISSIONS = "submissions"
     const val GET_PROBLEM = "get_problem"
     const val STATS = "stats"
+    const val LIST_PROBLEMS = "list_problems"
 
-    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS)
+    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS)
 
     fun definitions(): JsonArray = buildJsonArray {
         add(submissions())
         add(getProblem())
         add(stats())
+        add(listProblems())
+    }
+
+    private fun listProblems(): JsonObject = tool(
+        name = LIST_PROBLEMS,
+        title = "The problem catalog, with your standing against each",
+        description = "The shipped Programmers catalog joined against the records: every problem carries " +
+            "`status` — untouched, attempted or passed — and the number of submits. `untouched` is the " +
+            "answer no other tool can give, because the records alone cannot tell \"never tried\" from " +
+            "\"tried and failed\". The catalog is a snapshot we do not own, so a problem published after " +
+            "it was built is simply absent.",
+    ) {
+        putJsonObject("properties") {
+            putJsonObject("level") {
+                put("type", "integer")
+                put("description", "Keep only problems at this Programmers level.")
+            }
+            putJsonObject("part") {
+                put("type", "string")
+                put("description", "Keep only problems in this part, matched case-insensitively and in full.")
+            }
+            putJsonObject("tag") {
+                put("type", "string")
+                put("description", "Keep only problems carrying this solved.ac tag, matched case-insensitively.")
+            }
+            putJsonObject("status") {
+                put("type", "string")
+                put("description", "Keep only problems you stand this way against.")
+                putJsonArray("enum") { ProblemStatus.entries.forEach { add(it.wireName()) } }
+            }
+        }
     }
 
     private fun submissions(): JsonObject = tool(

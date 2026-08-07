@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.BrowsedProblem
 import com.brokenfinger.tracker.domain.calc.UnknownReason
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -61,6 +62,26 @@ object McpRecordJson {
         put("submissionCount", history.submissions.size)
         put("submissions", JsonArray(history.submissions.map(::full)))
     }
+
+    /**
+     * The catalog browse (#100). A field the snapshot does not carry is **left out**, the
+     * same rule the record serializers follow: an absent level and a level of zero mean
+     * different things, and only one of them was measured.
+     */
+    fun problems(found: List<BrowsedProblem>): JsonArray = JsonArray(
+        found.map { problem ->
+            buildJsonObject {
+                put("lessonId", problem.lessonId)
+                put("title", problem.title)
+                problem.level?.let { put("level", it) }
+                problem.part?.let { put("part", it) }
+                problem.acceptanceRate?.let { put("acceptanceRate", it) }
+                put("tags", format.encodeToJsonElement(problem.tags))
+                put("status", problem.status.wireName())
+                put("attempts", problem.attempts)
+            }
+        },
+    )
 
     private val HEAVY = setOf("testcases", "errorText", "diffFromPrev")
 }

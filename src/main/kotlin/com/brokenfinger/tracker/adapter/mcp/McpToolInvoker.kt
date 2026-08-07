@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
@@ -31,6 +32,7 @@ class McpToolInvoker(private val query: RecordQuery) {
         McpToolCatalog.SUBMISSIONS -> executed { submissions(checked(arguments, SUBMISSION_ARGS)) }
         McpToolCatalog.GET_PROBLEM -> executed { problem(checked(arguments, PROBLEM_ARGS)) }
         McpToolCatalog.STATS -> executed { stats(checked(arguments, STATS_ARGS)) }
+        McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(arguments, LIST_ARGS)) }
         else -> throw McpFailure(
             McpErrors.INVALID_PARAMS,
             400,
@@ -50,6 +52,19 @@ class McpToolInvoker(private val query: RecordQuery) {
     }
 
     private fun problem(arguments: JsonObject): JsonObject = McpRecordJson.problem(query.problem(lessonIdOf(arguments)))
+
+    private fun listProblems(arguments: JsonObject): JsonObject {
+        val found = query.browse(
+            level = arguments.wholeNumber("level"),
+            part = arguments.text("part"),
+            tag = arguments.text("tag"),
+            status = arguments.text("status")?.let(ProblemStatus::from),
+        )
+        return buildJsonObject {
+            put("count", found.size)
+            put("problems", McpRecordJson.problems(found))
+        }
+    }
 
     private fun stats(arguments: JsonObject): JsonObject {
         val raw = arguments.text("groupBy") ?: throw IllegalArgumentException("groupBy is required")
@@ -121,9 +136,18 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun JsonObject.text(name: String): String? =
         (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
+    // Absent means "do not narrow"; present but not a number is the client's mistake and is
+    // said so, rather than quietly widening the question that was asked.
+    private fun JsonObject.wholeNumber(name: String): Int? {
+        val raw = this[name] ?: return null
+        return (raw as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+            ?: throw IllegalArgumentException("$name must be a whole number")
+    }
+
     private companion object {
         val SUBMISSION_ARGS = setOf("since", "verdict")
         val PROBLEM_ARGS = setOf("lessonId")
         val STATS_ARGS = setOf("groupBy")
+        val LIST_ARGS = setOf("level", "part", "tag", "status")
     }
 }

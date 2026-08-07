@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -31,14 +32,14 @@ class McpConfigurationTest {
     fun `points the read side at the submission log of the configured record repository`() {
         aRecordRepository(root).containing(aSubmissionRecord(), aSubmissionRecord())
 
-        McpConfiguration().recordQuery(RecordLayout(root)).history().size shouldBe 2
+        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog()).history().size shouldBe 2
     }
 
     @Test
     fun `assembles a dispatcher that answers a tool call over that repository`() {
         aRecordRepository(root).containing(aSubmissionRecord())
         val configuration = McpConfiguration()
-        val query = configuration.recordQuery(RecordLayout(root))
+        val query = configuration.recordQuery(RecordLayout(root), anEmptyCatalog())
 
         val dispatcher = configuration.mcpDispatcher(configuration.mcpToolInvoker(query))
 
@@ -52,6 +53,6 @@ class McpConfigurationTest {
 
     @Test
     fun `answers an empty repository rather than failing to wire at all`() {
-        McpConfiguration().recordQuery(RecordLayout(root)).history().size shouldBe 0
+        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog()).history().size shouldBe 0
     }
 }
