@@ -21,12 +21,31 @@ enum class ProblemShape {
     ;
 
     companion object {
-        private val MAIN = Regex("""public\s+static\s+void\s+main\s*\(""")
-        private val SOLUTION = Regex("""\bsolution\s*\(""")
+        private val JAVA_MAIN = Regex("""public\s+static\s+void\s+main\s*\(""")
+        private val JAVA_SOLUTION = Regex("""\bsolution\s*\(""")
+        private val PYTHON_SOLUTION = Regex("""def\s+solution\s*\(""")
+        private val PYTHON_STDIN = Regex("""\binput\s*\(|sys\.stdin""")
 
-        fun of(code: String): ProblemShape = when {
-            MAIN.containsMatchIn(code) -> STDIN_MAIN
-            SOLUTION.containsMatchIn(code) -> SOLUTION_FUNCTION
+        fun of(code: String): ProblemShape = ofJava(code)
+
+        /** Java: `main` wins — a `solution` helper inside a `main` program is the user's own. */
+        fun ofJava(code: String): ProblemShape = when {
+            JAVA_MAIN.containsMatchIn(code) -> STDIN_MAIN
+            JAVA_SOLUTION.containsMatchIn(code) -> SOLUTION_FUNCTION
+            else -> UNRECOGNISED
+        }
+
+        /**
+         * Python has no `main`: a main-style script is top-level code reading `input()`. The
+         * priority is reversed from Java's — `def solution(` wins — because the solution-style
+         * skeleton always declares it while the main-style skeleton never does, and top-level
+         * statements exist in both. A user-defined `solution` helper inside a main-style
+         * script is unmeasured; if it happens, the generated caller refuses downstream on
+         * arity, which is the honest failure.
+         */
+        fun ofPython(code: String): ProblemShape = when {
+            PYTHON_SOLUTION.containsMatchIn(code) -> SOLUTION_FUNCTION
+            PYTHON_STDIN.containsMatchIn(code) -> STDIN_MAIN
             else -> UNRECOGNISED
         }
     }
