@@ -42,12 +42,12 @@ class ProblemShapeTest {
     }
 
     /**
-     * Both at once is main-style: Programmers' main-style skeletons name the class
-     * `Solution` too, and a helper called `solution` inside a `main` program is the user's
-     * own refactoring, not a harness entry point. The `main` is what actually runs.
+     * A `main` program that *calls* a helper named `solution` is unambiguous — the helper
+     * is the user's own refactoring, not a harness entry point, and `main` is what runs.
+     * A call is not a declaration, which is the distinction the ambiguity check turns on.
      */
     @Test
-    fun `a main method wins over a solution helper`() {
+    fun `a main method wins over a solution helper it merely calls`() {
         val code = """
             public class Solution {
                 static int solution(int n) { return n; }
@@ -56,6 +56,24 @@ class ProblemShapeTest {
         """.trimIndent()
 
         ProblemShape.of(code) shouldBe ProblemShape.STDIN_MAIN
+    }
+
+    /**
+     * Both *declared* is genuinely undecidable (#91). A solution-style problem with a debug
+     * `main` left in and a main-style problem refactored into a helper look identical here,
+     * and guessing `main` produced a harness that never called the graded code and still
+     * printed `ALL PASS`.
+     */
+    @Test
+    fun `a declared solution beside a main is ambiguous, not main-style`() {
+        val code = """
+            public class Solution {
+                public String solution(String s) { return s; }
+                public static void main(String[] args) { System.out.println("CBA"); }
+            }
+        """.trimIndent()
+
+        ProblemShape.of(code) shouldBe ProblemShape.AMBIGUOUS
     }
 
     // Python -------------------------------------------------------------------------------
@@ -127,12 +145,25 @@ class ProblemShapeTest {
     }
 
     /** Same priority as Java, same reason: a `solution` helper inside a `main` program is the user's own. */
+    /**
+     * C++ has no visibility keyword to lean on, so a declared `solution` beside a `main` is
+     * exactly the undecidable case (#91) — it used to read as main-style, which is how a
+     * debug `main` produced a harness that tested nothing.
+     */
     @Test
-    fun `a cpp main wins over a solution helper`() {
+    fun `a declared cpp solution beside a main is ambiguous`() {
         val code = """
             int solution(int n) { return n; }
             int main(void) { std::cout << solution(1); return 0; }
         """.trimIndent()
+
+        ProblemShape.ofCpp(code) shouldBe ProblemShape.AMBIGUOUS
+    }
+
+    /** A call with no declaration in the file stays main-style: a call is not a declaration. */
+    @Test
+    fun `a cpp main that merely calls solution is still main-style`() {
+        val code = "int main(void) { std::cout << solution(1); return 0; }"
 
         ProblemShape.ofCpp(code) shouldBe ProblemShape.STDIN_MAIN
     }
@@ -217,10 +248,17 @@ class ProblemShapeTest {
         ProblemShape.ofKotlin(code) shouldBe ProblemShape.STDIN_MAIN
     }
 
-    /** Java's priority, Java's reason. */
+    /** Same undecidable case as C++'s, for the same reason (#91). */
     @Test
-    fun `a kotlin main wins over a solution helper`() {
+    fun `a declared kotlin solution beside a main is ambiguous`() {
         val code = "fun solution(n: Int): Int = n\nfun main(args: Array<String>) { println(solution(1)) }"
+
+        ProblemShape.ofKotlin(code) shouldBe ProblemShape.AMBIGUOUS
+    }
+
+    @Test
+    fun `a kotlin main that merely calls solution is still main-style`() {
+        val code = "fun main(args: Array<String>) { println(solution(1)) }"
 
         ProblemShape.ofKotlin(code) shouldBe ProblemShape.STDIN_MAIN
     }

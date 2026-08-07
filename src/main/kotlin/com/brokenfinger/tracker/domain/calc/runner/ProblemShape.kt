@@ -18,6 +18,21 @@ enum class ProblemShape {
 
     /** Neither measured shape. The generator refuses rather than guesses. */
     UNRECOGNISED,
+
+    /**
+     * Both shapes' signals at once — a `main` **and** a `solution(...)` declaration. The
+     * code alone cannot separate the two readings (#91): a main-style problem whose author
+     * refactored a helper out, and a solution-style problem with a debug `main` left in,
+     * look identical here. Guessing `main` silently generates a harness that never calls
+     * the code the judge actually grades, so this refuses instead.
+     *
+     * Only the five languages that declare a `main` reach this. Python and JavaScript
+     * resolve the same collision in favour of the solution declaration, which is the
+     * measured rule for them — so a main-style script of theirs that happens to define a
+     * `solution` helper carries the mirror-image risk. Unmeasured, and left alone rather
+     * than guessed at from the other languages' behaviour.
+     */
+    AMBIGUOUS,
     ;
 
     companion object {
@@ -33,10 +48,31 @@ enum class ProblemShape {
 
         fun of(code: String): ProblemShape = ofJava(code)
 
-        /** Java: `main` wins — a `solution` helper inside a `main` program is the user's own. */
-        fun ofJava(code: String): ProblemShape = when {
-            JAVA_MAIN.containsMatchIn(code) -> STDIN_MAIN
-            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
+        /**
+         * Java: a `main` means main-style — **unless** the file also declares `solution`,
+         * which is [AMBIGUOUS]. The old rule let `main` win outright, and a debug `main`
+         * left in a solution-style file then produced a harness that never called
+         * `solution` at all and still printed `ALL PASS` (#91).
+         *
+         * "Declares" is the language's own signature parser, not the bare token: a `main`
+         * program *calling* a helper named `solution` is unambiguous and still reads as
+         * main-style, which is what the original rule was reaching for.
+         */
+        fun ofJava(code: String): ProblemShape = decide(
+            main = JAVA_MAIN.containsMatchIn(code),
+            declaresSolution = JavaSignature.of(code) != null,
+            solutionToken = SOLUTION_TOKEN.containsMatchIn(code),
+        )
+
+        /**
+         * `main` wins, a solution declaration alongside it is ambiguous, and a bare
+         * `solution(` token with no `main` is solution-style — shared by every language
+         * whose measured main-style skeleton declares a `main`.
+         */
+        private fun decide(main: Boolean, declaresSolution: Boolean, solutionToken: Boolean): ProblemShape = when {
+            main && declaresSolution -> AMBIGUOUS
+            main -> STDIN_MAIN
+            solutionToken -> SOLUTION_FUNCTION
             else -> UNRECOGNISED
         }
 
@@ -45,18 +81,22 @@ enum class ProblemShape {
          * capture 2026-08-07): 181951 ships `int main(void)`; the solution-style skeletons
          * (120803, 120817, 12950) never declare a `main`.
          */
-        fun ofCpp(code: String): ProblemShape = when {
-            CPP_MAIN.containsMatchIn(code) -> STDIN_MAIN
-            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
-            else -> UNRECOGNISED
-        }
+        fun ofCpp(code: String): ProblemShape = decide(
+            main = CPP_MAIN.containsMatchIn(code),
+            declaresSolution = CppSignature.of(code) != null,
+            solutionToken = SOLUTION_TOKEN.containsMatchIn(code),
+        )
 
         /**
          * C: identical signals to C++ — the measured skeletons (editor captures
          * 2026-08-07) share `int main(void)` on the main side and a `solution(`
          * declaration on the other, so the same rule reads both languages.
          */
-        fun ofC(code: String): ProblemShape = ofCpp(code)
+        fun ofC(code: String): ProblemShape = decide(
+            main = CPP_MAIN.containsMatchIn(code),
+            declaresSolution = CSignature.of(code) != null,
+            solutionToken = SOLUTION_TOKEN.containsMatchIn(code),
+        )
 
         /**
          * JavaScript: Python's reversed priority, Python's reason — the solution skeleton
@@ -76,11 +116,11 @@ enum class ProblemShape {
          * Array<String>)`; the solution-style skeletons (120803, 120817, 12950) declare
          * `fun solution` inside `class Solution` and never a `main`.
          */
-        fun ofKotlin(code: String): ProblemShape = when {
-            KOTLIN_MAIN.containsMatchIn(code) -> STDIN_MAIN
-            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
-            else -> UNRECOGNISED
-        }
+        fun ofKotlin(code: String): ProblemShape = decide(
+            main = KOTLIN_MAIN.containsMatchIn(code),
+            declaresSolution = KotlinSignature.of(code) != null,
+            solutionToken = SOLUTION_TOKEN.containsMatchIn(code),
+        )
 
         /**
          * C#: `Main` wins, Java's priority for Java's reason. Measured skeletons (editor
@@ -88,11 +128,11 @@ enum class ProblemShape {
          * a class named `Example`; the solution-style ones declare `solution` on
          * `public class Solution` and never a `Main`.
          */
-        fun ofCsharp(code: String): ProblemShape = when {
-            CSHARP_MAIN.containsMatchIn(code) -> STDIN_MAIN
-            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
-            else -> UNRECOGNISED
-        }
+        fun ofCsharp(code: String): ProblemShape = decide(
+            main = CSHARP_MAIN.containsMatchIn(code),
+            declaresSolution = CsharpSignature.of(code) != null,
+            solutionToken = SOLUTION_TOKEN.containsMatchIn(code),
+        )
 
         /**
          * Python has no `main`: a main-style script is top-level code reading `input()`. The
