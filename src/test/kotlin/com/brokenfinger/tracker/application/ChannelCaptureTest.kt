@@ -428,6 +428,10 @@ private class RecordingRawSessionLog(private val journal: MutableList<String>) :
         return destination
     }
 
+    // Retiring the source is bookkeeping the capture tests do not observe; the frames stay
+    // readable here so `frames()` still answers what was appended.
+    override fun discard(session: RawSessionId) = Unit
+
     override fun unprocessed(): List<RawSession> = emptyList()
 
     /** Every frame appended to the most recent session. */
