@@ -51,6 +51,13 @@ enum class ProblemShape {
         }
 
         /**
+         * C: identical signals to C++ — the measured skeletons (editor captures
+         * 2026-08-07) share `int main(void)` on the main side and a `solution(`
+         * declaration on the other, so the same rule reads both languages.
+         */
+        fun ofC(code: String): ProblemShape = ofCpp(code)
+
+        /**
          * JavaScript: Python's reversed priority, Python's reason — the solution skeleton
          * (120803) always declares `function solution(`, while the main-style skeleton
          * (181951) is top-level code over `process.stdin` via `require('readline')` and

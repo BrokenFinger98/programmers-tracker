@@ -87,8 +87,14 @@ class FileDerivedArtifactsTest {
      */
     @Test
     fun `a refusal sweeps stale runners of every language`() {
-        val staleRunners =
-            listOf("RunnerTest.java", "runner_test.py", "runner_test.cpp", "runner_test.js", "runner_test.kt")
+        val staleRunners = listOf(
+            "RunnerTest.java",
+            "runner_test.py",
+            "runner_test.cpp",
+            "runner_test.js",
+            "runner_test.kt",
+            "runner_test.c",
+        )
         val directory = root.resolve("problems/120804-두-수의-곱-구하기")
         Files.createDirectories(directory)
         staleRunners.forEach { Files.writeString(directory.resolve(it), "stale") }

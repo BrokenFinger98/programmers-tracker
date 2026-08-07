@@ -1651,3 +1651,33 @@ The execution suite compiles generated source with `kotlin-compiler-embeddable` 
 3 CI runners and can never skip. The **two-example main-style test settled the open
 question**: `readLine()`'s LineReader follows a swapped `System.in`, so the in-process
 harness stands, and that experiment is now pinned as a test.
+
+## [2026-08-07] C runner — sixth language, where one wire value is not one argument ✅
+
+Issue #86, branch `feat/86-c-runner`. 982 tests, all gates 0.
+
+Measured (editor captures 2026-08-07): a 1-D array travels as `int name[], size_t
+name_len` (120817/120821), a 2-D one as `int** name, size_t name_rows, size_t name_cols`
+(120860), strings as `const char*` in and malloc'd `char*` out (120822), and a returned
+`int*`'s length is implied by the answer. 12950 does not offer C at all — older problems
+carry narrow language lists, which the capture guard caught when the dropdown stayed on
+Java.
+
+`CSignature` therefore parses **physical** parameters and groups them into **logical**
+ones — the wire arity counts the logical side — refusing any grouping the skeletons never
+showed: unpaired `size_t`, mis-named lengths, string arrays, non-int array elements, grid
+returns. The generator stages a 2-D value as row arrays behind a pointer array (an
+`int[2][2]` does not convert to `int**`), and a missing expected value refuses, C having
+no untyped placeholder.
+
+Main-style reuses C++'s rename-and-include, but C has no stream objects to swap: each
+example stages stdin in a temp file and `freopen`s both standard streams, so the harness
+reports on **stderr** — stdout belongs to the solution under test. Skipping the dup2
+restore dance keeps it portable; windows-latest is MinGW's `freopen` question, the way
+`\r\n` was Java's.
+
+The execution suite caught a fixture lie before CI could: minimal test solutions omitted
+the skeleton's own includes and `size_t` vanished. Fixtures now carry the measured
+includes, and the harness guarantees `<stddef.h>` ahead of `Solution.c` — the parsed
+convention itself speaks `size_t`, so its visibility is the runner's premise, not the
+user's chore.
