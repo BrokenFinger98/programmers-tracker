@@ -28,7 +28,9 @@ sealed interface Runner {
  */
 object JavaRunner {
     fun generate(code: String, examples: List<ProblemExample>): Runner {
-        if (examples.isEmpty()) return Runner.Refused("no examples were captured — press Run Code (코드 실행) once and they will be")
+        if (examples.isEmpty()) {
+            return Runner.Refused("no examples were captured — press Run Code (코드 실행) once and they will be")
+        }
         return when (ProblemShape.of(code)) {
             ProblemShape.SOLUTION_FUNCTION -> solutionRunner(code, examples)
             ProblemShape.STDIN_MAIN -> stdinRunner(examples)
