@@ -133,9 +133,11 @@ $cases
 
     static int failures = 0;
 
+    // deepEquals alone: it already compares arrays deeply and every boxed scalar, so a
+    // rendered-string comparison beside it could only ever ADD passes — and
+    // Arrays.deepToString is not injective, so it passed answers of the wrong shape.
     static void check(int index, Object actual, Object expected) {
-        boolean ok = java.util.Objects.deepEquals(actual, expected)
-            || String.valueOf(stringify(actual)).equals(String.valueOf(stringify(expected)));
+        boolean ok = java.util.Objects.deepEquals(actual, expected);
         System.out.println("example " + index + (ok ? "  PASS" : "  FAIL — expected "
             + stringify(expected) + ", got " + stringify(actual)));
         if (!ok) failures++;
