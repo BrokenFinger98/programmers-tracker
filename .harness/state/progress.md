@@ -1706,3 +1706,18 @@ fixture keeps `Console.Clear()` in on purpose: its behaviour under redirected ou
 measured per-OS by the suite, in CI.
 
 ADR outcome updated: series complete, 7/7, with the per-language facts pinned.
+
+## [2026-08-07] #93 — GitSync no longer adopts an enclosing repository ✅
+
+`detectRepository` asked `git rev-parse --git-dir`, which succeeds from *any* subdirectory
+and answers about the enclosing repository. A records directory nested inside another
+project therefore passed the check, and `reconcile`'s repo-wide `add --all` committed that
+project's unrelated working tree under our message, ready for the next push. Reproduced
+before fixing: `secret-wip.txt` and `src/App.java` staged from a neighbouring project.
+
+The comment directly above the check already claimed to cover exactly this case. The fix
+is the question it should have asked: `--show-toplevel`, compared against the configured
+root as real paths so a symlinked or `/private`-prefixed root still matches.
+
+The new test asserts on the thing that matters — the enclosing project's work is still
+uncommitted afterwards.

@@ -248,6 +248,29 @@ class CommandLineGitSyncTest {
         heard.single() shouldContain "not a git repository"
     }
 
+    /**
+     * The case the detection comment already claimed to cover and did not (#93): a records
+     * directory sitting inside someone else's repository. `rev-parse --git-dir` succeeds
+     * from any subdirectory and answers about the *enclosing* repository, so this passed —
+     * and `reconcile`'s repo-wide `add --all` then committed that project's unrelated work
+     * under our message, ready for the next push.
+     */
+    @Test
+    fun `a records directory nested inside another repository is refused, not adopted`() {
+        val enclosing = Files.createDirectories(base.resolve("someone-elses-project"))
+        git("init", "-b", "main", at = enclosing)
+        Files.writeString(enclosing.resolve("secret-wip.txt"), "the user's unrelated work")
+        val records = Files.createDirectories(enclosing.resolve("ps-records"))
+        Files.writeString(records.resolve("note.md"), "records live here")
+
+        val sync = CommandLineGitSync(records) { }
+
+        val heard = warningsWhile { sync.reconcile() shouldBe false }
+        heard.single() shouldContain "not a git repository"
+        // The proof that matters: the enclosing project's work was never touched.
+        git("status", "--porcelain", at = enclosing) shouldContain "secret-wip.txt"
+    }
+
     /** Asked once means once: a repository created afterwards is not noticed, and says so. */
     @Test
     fun `a directory that becomes a repository later is still left alone, and quietly`() {
