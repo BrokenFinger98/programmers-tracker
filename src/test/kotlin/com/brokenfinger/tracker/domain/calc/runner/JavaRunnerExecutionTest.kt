@@ -52,6 +52,31 @@ class JavaRunnerExecutionTest {
         run.exitCode shouldBe 1
     }
 
+    /**
+     * The defect this suite existed to catch and did not (#90): the harness used to OR a
+     * rendered-string comparison onto `deepEquals`, and `Arrays.deepToString` is not
+     * injective — a one-element `{"a, b"}` and a two-element `{"a", "b"}` both render
+     * `[a, b]`, so a wrong-shaped answer passed. Runs for real, because the old code
+     * printed `ALL PASS` here.
+     */
+    @Test
+    @Timeout(TIMEOUT)
+    fun `an answer of the wrong shape fails even when it renders identically`() {
+        val solution = """
+            public class Solution {
+                public String[] solution(String s) {
+                    return new String[]{"a, b"};
+                }
+            }
+        """.trimIndent()
+        val examples = listOf(ProblemExample("\"x\"", "[\"a\", \"b\"]"))
+
+        val run = execute(solution, examples)
+
+        run.output shouldContain "FAIL"
+        run.exitCode shouldBe 1
+    }
+
     @Test
     @Timeout(TIMEOUT)
     fun `an array-returning solution is compared by content, not by reference`() {
