@@ -15,9 +15,11 @@ import kotlinx.serialization.json.putJsonObject
 /**
  * The tools this server exposes — three, and deliberately not the twenty of design §7.
  *
- * The rest of §7 needs a problem catalog, a tag vocabulary, exam state and a review
- * schedule, none of which exist. A tool that answered "not implemented" would be worse
- * than an absent one: a client discovers it through `tools/list` and plans around it.
+ * The rest of §7 is absent rather than stubbed: a tool that answered "not implemented"
+ * would be worse than an absent one, because a client discovers it through `tools/list`
+ * and plans around it. Exam state and a review schedule do not exist yet. The catalog and
+ * the tag vocabulary now do — they ship in the jar — so `list_problems` is merely
+ * unexposed (#100), not unsupported.
  *
  * Every description says what the tool *counts*, never what it concludes. Interpretation
  * belongs to the AI reading the numbers (CLAUDE.md, design §7).

@@ -322,8 +322,10 @@ Stated plainly, because finding these out by trial is worse.
   by hand, re-register after a language-tab switch and after every server restart, and if
   you forget, that submission is lost. This is the single biggest gap between the tool as
   designed and the tool as it exists.
-- **No MCP server.** The record repository is written correctly and you can open it as an
-  Obsidian vault, but the "expose it to an AI" half of the design does not exist yet.
+- **The MCP server exposes three tools, not the design's twenty.** `submissions`,
+  `get_problem` and `stats` are built and connectable today — see [`mcp.md`](mcp.md) for
+  the client configuration. What is missing is the analysis half: review queue, warmup
+  diagnosis, exam mode, and anything that writes.
 - **Pushing from the container needs credentials you must supply.** There is no sane default
   and none is invented. `compose.yaml` carries two commented mounts — your SSH key, or a git
   credential store — and you choose. Over SSH, add GitHub to your host's
