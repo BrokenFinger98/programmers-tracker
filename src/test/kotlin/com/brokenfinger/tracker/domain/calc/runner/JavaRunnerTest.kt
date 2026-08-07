@@ -80,6 +80,22 @@ class JavaRunnerTest {
         runner.source shouldContain "a = 4\\nb = 5"
     }
 
+    /**
+     * Refused, not defaulted (#98). The stdin side already refused unreadable text; the
+     * expected side two lines below substituted `""`, so the harness asserted that the
+     * program prints nothing — the constitution's forbidden default substitution.
+     */
+    @Test
+    fun `a main-style expected that is not text refuses instead of becoming empty`() {
+        val code = "public class Solution {\n" +
+            "    public static void main(String[] args) { System.out.println(\"x\"); }\n}"
+
+        val refused = JavaRunner.generate(code, listOf(ProblemExample("\"in\"", "null")))
+            .shouldBeInstanceOf<Runner.Refused>()
+
+        refused.reason shouldContain "expected output is not text"
+    }
+
     // Refusals ------------------------------------------------------------------------------
 
     @Test

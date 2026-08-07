@@ -59,10 +59,10 @@ object CsharpRunner {
         val arguments = values.zip(signature.parameters).map { (value, parameter) ->
             literalOf(value, parameter.type) ?: return null
         }
+        // No placeholder (#98) — see JavaRunner.callFor.
         val expected = example.expected?.let { ExampleValues.single(it) }
-            ?.let { literalOf(it, signature.returnType) }
-        return "        Check(${index + 1}, new Solution().solution(${arguments.joinToString(", ")}), " +
-            "${expected ?: "null /* expected value not captured */"});"
+            ?.let { literalOf(it, signature.returnType) } ?: return null
+        return "        Check(${index + 1}, new Solution().solution(${arguments.joinToString(", ")}), $expected);"
     }
 
     private fun refusalFor(index: Int, example: ProblemExample, signature: CsharpSignature): Runner.Refused {
@@ -71,6 +71,8 @@ object CsharpRunner {
             values == null -> "example ${index + 1} could not be parsed as an argument list"
             values.size != signature.parameters.size ->
                 "example ${index + 1} has ${values.size} argument(s) but solution declares ${signature.parameters.size}"
+            example.expected == null ->
+                "example ${index + 1}'s expected value was not captured"
             else -> "example ${index + 1} does not fit the declared parameter types"
         }
         return Runner.Refused("$detail — refusing rather than generating a runner that tests the wrong thing")

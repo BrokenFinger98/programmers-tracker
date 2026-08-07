@@ -56,8 +56,9 @@ object PythonRunner {
         val values = ExampleValues.arguments(raw) ?: return null
         if (values.size != signature.parameters.size) return null
         val arguments = values.map { literalOf(it) ?: return null }
-        val expected = example.expected?.let { ExampleValues.single(it) }?.let { literalOf(it) }
-        return Call(arguments.joinToString(", "), expected ?: "None  # expected value not captured")
+        // No placeholder (#98) — see JavaRunner.callFor.
+        val expected = example.expected?.let { ExampleValues.single(it) }?.let { literalOf(it) } ?: return null
+        return Call(arguments.joinToString(", "), expected)
     }
 
     private fun refusalFor(index: Int, example: ProblemExample, signature: PythonSignature): Runner.Refused {
@@ -66,6 +67,8 @@ object PythonRunner {
             values == null -> "example ${index + 1} could not be parsed as an argument list"
             values.size != signature.parameters.size ->
                 "example ${index + 1} has ${values.size} argument(s) but solution declares ${signature.parameters.size}"
+            example.expected == null ->
+                "example ${index + 1}'s expected value was not captured"
             else -> "example ${index + 1} does not fit the parameters"
         }
         return Runner.Refused("$detail — refusing rather than generating a runner that tests the wrong thing")
@@ -155,6 +158,14 @@ def check(index, stdin_text, expected):
     )
     actual = result.stdout.replace("\r\n", "\n").rstrip("\n")
     want = expected.replace("\r\n", "\n").rstrip("\n")
+    # A crash after the right output is still a crash: the judge sees exitCode on the
+    # run/testcase frame (protocol §7.1), so a runner that read only stdout passed a
+    # solution that printed the answer and then died (#98).
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip().splitlines()
+        print(f"example {index}  FAIL — exited {result.returncode}: " + (detail[-1] if detail else "no stderr"))
+        failures += 1
+        return
     ok = actual == want
     print(f"example {index}  " + ("PASS" if ok else f"FAIL — expected {want!r}, got {actual!r}"))
     if not ok:

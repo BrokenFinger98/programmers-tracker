@@ -161,6 +161,28 @@ class CRunnerExecutionTest {
         run.exitCode shouldBe 1
     }
 
+    /**
+     * C has no way to ask a returned pointer for its length, so an answer with extra
+     * elements past the expected end passes (#98) — reproduced before the fix, where it
+     * printed a bare ALL PASS. It cannot be detected; it can be *stated*, and the verdict
+     * line now carries what was actually compared.
+     */
+    @Test
+    @Timeout(TIMEOUT)
+    fun `an array answer says how much of it was checked`() {
+        val solution = "#include <stdio.h>\n#include <stdlib.h>\n" +
+            "int* solution(int num_list[], size_t num_list_len) {\n" +
+            "    int* answer = (int*)malloc(4 * sizeof(int));\n" +
+            "    answer[0] = 1; answer[1] = 2; answer[2] = 3; answer[3] = 99;\n" +
+            "    return answer;\n}"
+        val examples = listOf(ProblemExample("[1, 2, 3]", "[1, 2, 3]"))
+
+        val run = execute(solution, examples)
+
+        run.output shouldContain "first 3 elements"
+        run.output shouldContain "cannot report the returned length"
+    }
+
     // Harness ------------------------------------------------------------------------------
 
     private data class Run(val exitCode: Int, val output: String)

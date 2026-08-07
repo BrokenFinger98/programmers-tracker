@@ -97,6 +97,27 @@ class PythonRunnerExecutionTest {
         run.exitCode shouldBe 1
     }
 
+    /**
+     * A crash after the right output is still a crash (#98). The harness read only stdout,
+     * so a solution that printed both correct lines and then died reported ALL PASS with
+     * exit 0 — reproduced before the fix. The judge sees `exitCode` on the run/testcase
+     * frame (protocol §7.1), so it would not have been fooled.
+     */
+    @Test
+    @Timeout(TIMEOUT)
+    fun `a solution that prints the right answer and then crashes fails`() {
+        val solution = "import sys\n" +
+            "a, b = map(int, input().split())\n" +
+            "print(f\"a = {a}\")\nprint(f\"b = {b}\")\n" +
+            "raise IndexError('after the answer')"
+        val examples = listOf(ProblemExample("\"4 5\"", "\"a = 4\nb = 5\""))
+
+        val run = execute(solution, examples)
+
+        run.output shouldContain "exited 1"
+        run.exitCode shouldBe 1
+    }
+
     // Harness ------------------------------------------------------------------------------
 
     private data class Run(val exitCode: Int, val output: String)
