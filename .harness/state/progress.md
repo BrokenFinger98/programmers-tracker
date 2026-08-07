@@ -1531,3 +1531,27 @@ Decisions that will matter to step 2:
 
 The end-to-end tests are driven by the measured run capture; its example values are our #62
 substitutions, whose shape is the measurement.
+
+## [2026-08-07] The server generates runners — Java first ✅
+
+Issue #37 step 2, branch `feat/37-carry-run-examples` (continues step 1). 834 tests, all
+gates 0. ADR [[decisions/2026-08-07-server-generated-runners]].
+
+`(user's code, measured examples) → RunnerTest.java`, or a refusal that says why. Wired into
+the attachment, so the runner rides the same trigger as the code it tests, and a refusal
+deletes a stale runner rather than leaving one that tests yesterday's solution.
+
+The owner settled both open questions: the server generates (an AI-over-MCP design was
+declined — it must work out of the box), and the support order follows measured usage —
+java → python3 → cpp → javascript → kotlin → c → csharp, from the pagination depth of one
+problem's shared solutions, bias stated.
+
+The line held throughout: **a runner that compiles and tests the wrong thing is worse than
+none.** Types come only from the user's own signature; the signature parser is shallow and
+refuses generics; example values parse in exactly one place that handles the §7.1
+raw-newline trap; every mismatch refuses with an actionable reason.
+
+**Java earned "supported" by execution, not by review**: the suite compiles and runs
+generated runners in child JVMs — a correct solution passes, a wrong one fails naming the
+example, both shapes, including the measured 181951 stdin case round-tripped through
+generation, `System.setIn`, and stdout comparison.
