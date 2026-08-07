@@ -30,5 +30,4 @@ private suspend fun FlowCollector<CableEvent>.execute(socket: RawSocket, step: S
         is SubscriptionProtocol.Step.Send -> socket.send(step.frameText)
         is SubscriptionProtocol.Step.Emit -> emit(step.event)
         is SubscriptionProtocol.Step.Fail -> throw SubscriptionRejectedException(step.reason)
-        SubscriptionProtocol.Step.Ignore -> Unit
     }

@@ -22,9 +22,17 @@ class SubscriptionProtocolTest {
         step.frameText shouldBe CableCommand.subscribe(anAlgorithmIdentifier())
     }
 
+    /**
+     * Emitted, not ignored (#94). The ping is the only traffic an idle channel produces, so
+     * it is what the silence deadline has to measure; ignoring it here left the deadline
+     * timing the gap between gradings and reconnecting on every idle channel. The subscriber
+     * filters it out downstream, after the timeout has seen it.
+     */
     @Test
-    fun `ping is ignored`() {
-        protocol.next(capture[2]) shouldBe Step.Ignore
+    fun `ping surfaces as a heartbeat, preserving the raw text`() {
+        val step = protocol.next(capture[2]).shouldBeInstanceOf<Step.Emit>()
+
+        step.event.shouldBeInstanceOf<CableEvent.Heartbeat>().rawText shouldBe capture[2]
     }
 
     @Test

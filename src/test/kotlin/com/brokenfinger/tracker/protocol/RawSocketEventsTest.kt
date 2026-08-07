@@ -30,10 +30,13 @@ class RawSocketEventsTest {
 
         val events = runBlocking { socket.events(SubscriptionProtocol(identifier)).toList() }
 
-        // welcome + ping produce no events: 9 captured lines → 1 confirm + 6 broadcasts.
-        events shouldHaveSize 7
+        // Welcome alone produces no event: 9 captured lines → 1 confirm + 1 heartbeat + 6
+        // broadcasts. The heartbeat is emitted here on purpose — the silence deadline sits
+        // above the subscriber's filter and has to see it (#94).
+        events shouldHaveSize 8
         events.first().shouldBeInstanceOf<CableEvent.SubscriptionConfirmed>()
-        events.drop(1).map { it.shouldBeInstanceOf<CableEvent.MessageReceived>().rawText } shouldBe lines.drop(3)
+        events[1].shouldBeInstanceOf<CableEvent.Heartbeat>()
+        events.drop(2).map { it.shouldBeInstanceOf<CableEvent.MessageReceived>().rawText } shouldBe lines.drop(3)
     }
 
     @Test
