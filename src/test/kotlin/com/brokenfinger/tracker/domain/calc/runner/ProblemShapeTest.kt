@@ -230,6 +230,18 @@ class ProblemShapeTest {
         ProblemShape.ofKotlin("val x = 1") shouldBe ProblemShape.UNRECOGNISED
     }
 
+    // C ------------------------------------------------------------------------------------
+
+    /** Measured skeletons (editor captures 2026-08-07) — C shares C++'s signals exactly. */
+    @Test
+    fun `c reads with the cpp rule`() {
+        val solutionStyle = "double solution(int numbers[], size_t numbers_len) { return 0; }"
+        val mainStyle = "#include <stdio.h>\n\nint main(void) {\n    int a;\n    scanf(\"%d\", &a);\n    return 0;\n}"
+
+        ProblemShape.ofC(solutionStyle) shouldBe ProblemShape.SOLUTION_FUNCTION
+        ProblemShape.ofC(mainStyle) shouldBe ProblemShape.STDIN_MAIN
+    }
+
     @Test
     fun `neither shape is refused, not guessed`() {
         ProblemShape.of("SELECT * FROM FOODS_INFO;") shouldBe ProblemShape.UNRECOGNISED
