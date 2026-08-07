@@ -57,8 +57,9 @@ object JavascriptRunner {
         if (values.size != signature.parameters.size) return null
         // JSON is JavaScript: every parsed value serialises back to a valid JS literal.
         val arguments = values.joinToString(", ") { it.toString() }
-        val expected = example.expected?.let { ExampleValues.single(it) }?.toString()
-        return Call(arguments, expected ?: "null /* expected value not captured */")
+        // No placeholder (#98) — see JavaRunner.callFor.
+        val expected = example.expected?.let { ExampleValues.single(it) }?.toString() ?: return null
+        return Call(arguments, expected)
     }
 
     private fun refusalFor(index: Int, example: ProblemExample, signature: JavascriptSignature): Runner.Refused {
@@ -67,6 +68,8 @@ object JavascriptRunner {
             values == null -> "example ${index + 1} could not be parsed as an argument list"
             values.size != signature.parameters.size ->
                 "example ${index + 1} has ${values.size} argument(s) but solution declares ${signature.parameters.size}"
+            example.expected == null ->
+                "example ${index + 1}'s expected value was not captured"
             else -> "example ${index + 1} does not fit the parameters"
         }
         return Runner.Refused("$detail — refusing rather than generating a runner that tests the wrong thing")
@@ -143,6 +146,15 @@ function check(index, stdinText, expected) {
     // Two normalisations, and only these two: trailing newlines and \r\n to \n.
     const actual = String(result.stdout || "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
     const want = expected.replace(/\r\n/g, "\n").replace(/\n+$/, "");
+    // A crash after the right output is still a crash: the judge sees exitCode on the
+    // run/testcase frame (protocol §7.1), so a runner that read only stdout passed a
+    // solution that printed the answer and then died (#98).
+    if (result.status !== 0 || result.error) {
+        const detail = String(result.stderr || "").trim().split("\n").pop() || String(result.error || "no stderr");
+        console.log("example " + index + "  FAIL — exited " + result.status + ": " + detail);
+        failures += 1;
+        return;
+    }
     const ok = actual === want;
     console.log("example " + index + (ok ? "  PASS" : "  FAIL — expected <" + want + ">, got <" + actual + ">"));
     if (!ok) failures += 1;

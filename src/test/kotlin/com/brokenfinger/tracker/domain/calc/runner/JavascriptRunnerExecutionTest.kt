@@ -104,6 +104,24 @@ class JavascriptRunnerExecutionTest {
         run.exitCode shouldBe 1
     }
 
+    /** Same defect, same language family (#98) — see the Python suite for the reasoning. */
+    @Test
+    @Timeout(TIMEOUT)
+    fun `a solution that prints the right answer and then exits non-zero fails`() {
+        val solution = "const readline = require('readline');\n" +
+            "const rl = readline.createInterface({ input: process.stdin });\n" +
+            "rl.on('line', function (line) {\n" +
+            "    const input = line.split(' ');\n" +
+            "    console.log('a = ' + input[0]);\n    console.log('b = ' + input[1]);\n" +
+            "    process.exit(3);\n});"
+        val examples = listOf(ProblemExample("\"4 5\"", "\"a = 4\nb = 5\""))
+
+        val run = execute(solution, examples)
+
+        run.output shouldContain "exited 3"
+        run.exitCode shouldBe 1
+    }
+
     // Harness ------------------------------------------------------------------------------
 
     private data class Run(val exitCode: Int, val output: String)

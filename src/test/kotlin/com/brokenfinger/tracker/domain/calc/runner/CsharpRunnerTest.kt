@@ -159,15 +159,19 @@ class CsharpRunnerTest {
         ).shouldBeInstanceOf<Runner.Refused>()
     }
 
-    /** The harness compares through object — Java's null placeholder works here. */
+    /**
+     * Refused, not defaulted (#98). The placeholder was then *compared against*, so a stub
+     * returning null reported ALL PASS — reproduced before the fix. C and C++ already
+     * refused this input; all seven now agree.
+     */
     @Test
-    fun `a missing expected value becomes a null placeholder like Java's`() {
-        val runner = CsharpRunner.generate(
+    fun `a missing expected value refuses instead of standing in for one`() {
+        val refused = CsharpRunner.generate(
             "public class Solution { public int solution(int a) { return a; } }",
             listOf(ProblemExample("1", null)),
-        ).shouldBeInstanceOf<Runner.Generated>()
+        ).shouldBeInstanceOf<Runner.Refused>()
 
-        runner.source shouldContain "null /* expected value not captured */"
+        refused.reason shouldContain "expected value was not captured"
     }
 
     @Test

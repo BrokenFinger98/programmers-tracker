@@ -1892,3 +1892,29 @@ answer to a precise question beats a full answer to a different one.
 Verified against a running server, not only in tests: 689 total, 240 untouched at level 0,
 100 in 코딩테스트 입문, 0 for a tag the catalog genuinely lacks, and both bad-argument paths
 answering with the correction rather than a widened result.
+
+## [2026-08-07] #98 — four narrower false-PASS paths, each reproduced first ✅
+
+All four were generated and **run** before being touched; three printed `ALL PASS` with
+exit 0 on code that was wrong or had crashed.
+
+1. **The "expected value not captured" placeholder was compared against.** A half-captured
+   example plus a stub returning null passed. C and C++ already refused this input; Java,
+   Kotlin, C#, JavaScript and Python now do too, so all seven agree and the refusal names
+   the reason.
+2. **Java main-style substituted `""` for an unreadable expected.** The stdin side two lines
+   above already refused; the expected side defaulted, so the harness asserted the program
+   prints nothing — the constitution's forbidden substitution, next to the guard that does
+   it right.
+3. **Python and JavaScript main-style ignored the child's exit status.** A solution that
+   printed both correct lines and then died reported `ALL PASS`. The judge sees `exitCode`
+   on the run/testcase frame (protocol §7.1), so it would not have been fooled; now neither
+   is the runner, and the failing line carries the exit code and the last stderr line.
+4. **C compared a returned `int*` over the expected length only.** This one cannot be
+   fixed — C has no way to ask a pointer for its length, and reading past a shorter block is
+   undefined behaviour. So it is **stated** instead: the verdict line now reads
+   `PASS (first 3 elements; C cannot report the returned length)`, and the generated file's
+   header says the judge does see what this check cannot.
+
+Every regression test **executes** the generated runner. Text assertions would not have
+caught any of these, and did not.

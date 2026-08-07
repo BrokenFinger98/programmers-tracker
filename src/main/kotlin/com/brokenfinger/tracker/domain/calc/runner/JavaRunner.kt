@@ -76,8 +76,11 @@ object JavaRunner {
         val arguments = values.zip(signature.parameters).map { (value, parameter) ->
             literalOf(value, parameter.type) ?: return null
         }
+        // No placeholder (#98): a `null` written here was then *compared against*, so a stub
+        // returning null passed. C and C++ already refuse this; all seven now agree.
         val expected = example.expected?.let { ExampleValues.single(it) }?.let { literalOf(it, signature.returnType) }
-        return Call(index, arguments.joinToString(", "), expected ?: "null /* expected value not captured */")
+            ?: return null
+        return Call(index, arguments.joinToString(", "), expected)
     }
 
     private fun refusalFor(index: Int, example: ProblemExample, signature: JavaSignature): Runner.Refused {
@@ -86,6 +89,8 @@ object JavaRunner {
             values == null -> "example ${index + 1} could not be parsed as an argument list"
             values.size != signature.parameters.size ->
                 "example ${index + 1} has ${values.size} argument(s) but solution declares ${signature.parameters.size}"
+            example.expected == null ->
+                "example ${index + 1}'s expected value was not captured"
             else -> "example ${index + 1} does not fit the declared parameter types"
         }
         return Runner.Refused("$detail — refusing rather than generating a runner that tests the wrong thing")
@@ -181,8 +186,12 @@ $cases
             Triple(
                 index + 1,
                 quoted(stdin.contentOrNull ?: return Runner.Refused("example ${index + 1} is not text")),
+                // Refused, not defaulted (#98): `""` here made the harness assert that the
+                // program prints nothing — the constitution's forbidden substitution, three
+                // lines from the guard above that does it right.
                 quoted(
-                    expected.contentOrNull ?: "",
+                    expected.contentOrNull
+                        ?: return Runner.Refused("example ${index + 1}'s expected output is not text"),
                 ),
             )
         }
