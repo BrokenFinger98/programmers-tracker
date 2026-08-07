@@ -44,8 +44,8 @@ marked *designed* exists in `src/`.
 | The original frames kept verbatim beside the record | **built** |
 | Records written to your own git repository — committed, pushed on a pass, backed up daily | **built** |
 | One instance per record repository, enforced at startup | **built** (with a measured macOS caveat — [`bootstrap.md`](docs/bootstrap.md)) |
-| Telling the server which problem you are on | **built** — one `curl` per problem |
-| A browser sensor that tells it for you | designed · §8 |
+| Telling the server which problem you are on | **built** — a `curl` per problem, or the sensor below |
+| A browser sensor that tells it for you | **written, unproven** — [`extension/`](extension/README.md); measured selectors and contract, never loaded in a browser end to end |
 | The failing code stored alongside the record | **built** |
 | A per-problem page, and diffs between attempts | **built** |
 | A per-problem runner from the judge's own examples | **built** — java · python3 · cpp · javascript · kotlin · c · csharp; the rest refuse with a reason |
@@ -54,8 +54,10 @@ marked *designed* exists in `src/`.
 | Weakness by tag · review queue · passed-but-slow · per-company profiles | designed · §6 |
 
 One consequence of that table is worth stating outright, because it changes what the first
-hour with this tool feels like: **you register each problem by hand**, and again after a
-restart or a language-tab switch — a submission on an unregistered problem is lost.
+hour with this tool feels like: **a submission on a problem the server was never told about
+is lost, silently.** The sensor extension exists to remove that burden, but until someone
+has actually run it in a browser, plan on registering each problem yourself — and again
+after a restart or a language-tab switch.
 [`docs/bootstrap.md`](docs/bootstrap.md) walks the whole gap.
 
 ---

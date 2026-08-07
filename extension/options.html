@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>programmers-tracker sensor</title>
+    <style>
+      body { font: 13px/1.5 system-ui, sans-serif; margin: 16px; width: 360px; }
+      label { display: block; margin-top: 12px; font-weight: 600; }
+      input { width: 100%; box-sizing: border-box; padding: 6px; margin-top: 4px; }
+      p { color: #555; margin: 4px 0 0; }
+      code { background: #f2f2f2; padding: 1px 4px; }
+      #saved { color: #2a7; min-height: 1.5em; margin-top: 12px; }
+    </style>
+  </head>
+  <body>
+    <label for="token">Watch token</label>
+    <input id="token" type="password" autocomplete="off" spellcheck="false" />
+    <p>The contents of <code>.ps/watch-token</code> in your record repository. It is stored
+      by this extension only, and never sent anywhere but your own machine.</p>
+
+    <label for="port">Server port</label>
+    <input id="port" type="number" min="1" max="65535" />
+    <p>Match <code>TRACKER_PORT</code>. The default is 8080.</p>
+
+    <div id="saved"></div>
+    <script src="options.js"></script>
+  </body>
+</html>
