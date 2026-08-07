@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.application.DerivedArtifacts
 import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.runner.CppRunner
 import com.brokenfinger.tracker.domain.calc.runner.JavaRunner
 import com.brokenfinger.tracker.domain.calc.runner.PythonRunner
 import com.brokenfinger.tracker.domain.calc.runner.Runner
@@ -93,10 +94,11 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
         val GENERATORS = mapOf<String, (String, List<ProblemExample>) -> Runner>(
             "java" to JavaRunner::generate,
             "python3" to PythonRunner::generate,
+            "cpp" to CppRunner::generate,
         )
 
         /** Every name a stale runner can have; a refusal clears them all. */
-        val RUNNER_FILES = listOf("RunnerTest.java", "runner_test.py")
+        val RUNNER_FILES = listOf("RunnerTest.java", "runner_test.py", "runner_test.cpp")
 
         val json = Json { ignoreUnknownKeys = true }
 

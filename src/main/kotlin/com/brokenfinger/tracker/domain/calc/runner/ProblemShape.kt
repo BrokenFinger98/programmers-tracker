@@ -22,16 +22,28 @@ enum class ProblemShape {
 
     companion object {
         private val JAVA_MAIN = Regex("""public\s+static\s+void\s+main\s*\(""")
-        private val JAVA_SOLUTION = Regex("""\bsolution\s*\(""")
+        private val SOLUTION_TOKEN = Regex("""\bsolution\s*\(""")
         private val PYTHON_SOLUTION = Regex("""def\s+solution\s*\(""")
         private val PYTHON_STDIN = Regex("""\binput\s*\(|sys\.stdin""")
+        private val CPP_MAIN = Regex("""\bint\s+main\s*\(""")
 
         fun of(code: String): ProblemShape = ofJava(code)
 
         /** Java: `main` wins — a `solution` helper inside a `main` program is the user's own. */
         fun ofJava(code: String): ProblemShape = when {
             JAVA_MAIN.containsMatchIn(code) -> STDIN_MAIN
-            JAVA_SOLUTION.containsMatchIn(code) -> SOLUTION_FUNCTION
+            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
+            else -> UNRECOGNISED
+        }
+
+        /**
+         * C++: `main` wins, Java's priority for Java's reason. Measured skeletons (editor
+         * capture 2026-08-07): 181951 ships `int main(void)`; the solution-style skeletons
+         * (120803, 120817, 12950) never declare a `main`.
+         */
+        fun ofCpp(code: String): ProblemShape = when {
+            CPP_MAIN.containsMatchIn(code) -> STDIN_MAIN
+            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
             else -> UNRECOGNISED
         }
 

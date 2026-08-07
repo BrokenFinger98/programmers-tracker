@@ -65,6 +65,40 @@ class FileDerivedArtifactsTest {
     }
 
     @Test
+    fun `a cpp record gets its runner generated from the stored examples`() {
+        val directory = root.resolve("problems/120804-두-수의-곱-구하기")
+        Files.createDirectories(directory)
+        Files.writeString(directory.resolve("examples.json"), """[{"input": "6, 7", "expected": "42"}]""")
+
+        artifacts().writeRunner(
+            aSubmissionRecord(language = "cpp"),
+            "int solution(int num1, int num2) { return num1 * num2; }",
+        )
+
+        Files.readString(directory.resolve("runner_test.cpp")) shouldContain "solution(arg1, arg2)"
+    }
+
+    /**
+     * The sweep must clear every runner name, not just the current language's: a problem
+     * re-solved in another language leaves the previous language's runner behind, and a
+     * stale runner that still passes is worse than none. The names are spelled out here on
+     * purpose — a list shared with production would sweep whatever production says,
+     * tautologically.
+     */
+    @Test
+    fun `a refusal sweeps stale runners of every language`() {
+        val staleRunners = listOf("RunnerTest.java", "runner_test.py", "runner_test.cpp")
+        val directory = root.resolve("problems/120804-두-수의-곱-구하기")
+        Files.createDirectories(directory)
+        staleRunners.forEach { Files.writeString(directory.resolve(it), "stale") }
+
+        // No examples.json stored → the generator refuses (no examples captured).
+        artifacts().writeRunner(aSubmissionRecord(language = "cpp"), "int solution(int a) { return a; }")
+
+        staleRunners.forEach { Files.exists(directory.resolve(it)) shouldBe false }
+    }
+
+    @Test
     fun `the README of a problem is written from the records it is given`() {
         artifacts().writeReadme(listOf(aSubmissionRecord(attempt = 2)))
 

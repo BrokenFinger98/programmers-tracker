@@ -1583,3 +1583,30 @@ Two things the execution tests caught before CI could:
 CI now asserts the Python execution suite **genuinely ran** on every runner, from the
 results file: the suite skips politely where python3 is missing — right for a contributor's
 machine, wrong in CI, where a skip would silently un-earn the supported status.
+
+## [2026-08-07] C++ runner — third language, the single-translation-unit one ✅
+
+Issue #80, branch `feat/80-cpp-runner`. 894 tests, all gates 0.
+
+Measured first, from the actual editor (Orca browser, 2026-08-07): 181951 ships `int
+main(void)`; 120803/120817/12950 declare by-value parameters under `using namespace std;`,
+nested vectors spelled `vector<vector<int>>`. Four skeletons, both shapes, cited in the
+shape/signature tests.
+
+C++ is the first language whose harness shares one translation unit with the user's code
+(`#include "Solution.cpp"`), which forced three moves the earlier runners never needed:
+file-scope harness identifiers wear a `runner_` prefix (a user's name collision fails
+loudly at compile time, never silently tests the wrong thing); solution arguments are
+**named locals** so hand-edited reference signatures bind; main-style renames the user's
+`main` via the preprocessor and swaps `cin`/`cout` buffers in-process — with `cin.clear()`
+between examples, because the previous run leaves eof bits behind.
+
+One honest divergence: a missing expected value **refuses** here — Java compares against a
+`null` placeholder and Python against `None`, but C++ has no untyped placeholder that
+compiles.
+
+Execution suite: 7 tests under a real compiler (`g++`/`clang++` probe), including nested
+vectors and strings specifically because each instantiates a different `runner_str`
+overload set — templates only prove themselves at instantiation. The CI proof-ran step now
+loops over all three suites, and gained a job: a results file gone missing (suite renamed
+or dropped) fails the same gate.
