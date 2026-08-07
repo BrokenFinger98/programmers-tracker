@@ -15,10 +15,11 @@ import java.time.format.DateTimeFormatter
  * that server-written and human-written text never share a file, because a marker-delimited
  * region eventually breaks and then the two are indistinguishable.
  *
- * The page states only what the records know. No catalog is wired yet, so today every record
- * carries an empty title and no level, part or acceptance rate — those fields are then left out
- * entirely and the heading is the lesson id. An invented title would read exactly like a real
- * one, which is the silent-wrong-data outcome CLAUDE.md names as the worst possible.
+ * The page states only what the records know. The catalog has been carried into records since
+ * #69, so a record of a catalogued problem brings its title, level, part and acceptance rate;
+ * a record that lacks them — a problem outside the shipped catalog — leaves those fields out
+ * entirely and heads the page with the lesson id. An invented title would read exactly like a
+ * real one, which is the silent-wrong-data outcome CLAUDE.md names as the worst possible.
  *
  * Output depends on the records alone, so regenerating an unchanged problem rewrites the same
  * bytes and leaves the record repository's git history clean.
@@ -49,8 +50,8 @@ class ProblemReadme(private val layout: RecordLayout) {
         field("language", quoted(latest(records) { it.language.ifBlank { null } })),
     )
 
-    // Catalog metadata is unset on every record written today. Omitted rather than defaulted:
-    // `level: 0` would be indistinguishable from a genuine Lv0 problem.
+    // Omitted rather than defaulted when a record carries no catalog metadata: `level: 0`
+    // would be indistinguishable from a genuine Lv0 problem.
     private fun catalog(records: List<SubmissionRecord>): List<String> = listOfNotNull(
         field("level", levelOf(records)?.toString()),
         field("part", quoted(latest(records) { it.part?.ifBlank { null } })),

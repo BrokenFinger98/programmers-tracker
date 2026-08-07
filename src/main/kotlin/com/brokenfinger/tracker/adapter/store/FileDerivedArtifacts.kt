@@ -56,8 +56,9 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
      * to the log — a best-effort runner that compiles and tests the wrong thing is the one
      * outcome #37 forbids.
      *
-     * Java only today, by the owner's support order; other languages log once per attachment
-     * and write nothing.
+     * Seven languages today, in the owner's measured support order — java, python3, cpp,
+     * javascript, kotlin, c, csharp — each earned by an execution suite against its real
+     * toolchain. Anything else logs once per attachment and writes nothing.
      */
     override fun writeRunner(record: SubmissionRecord, code: String) {
         val directory = layout.problemDirectory(record.lessonId, record.title)

@@ -1815,3 +1815,32 @@ hands the capture", and production hands no heartbeats.
 **Second half still open**: a grading whose `start` frame was missed is still discarded
 before the raw log. Split into its own issue because where orphan frames should live is a
 design question that interacts with raw-directory hygiene (#99).
+
+## [2026-08-07] #96 — six documents stopped describing a system that no longer exists ✅
+
+All six were verified against the code before being touched, and two of them were costing
+users a working feature or a correct setup:
+
+- `docs/bootstrap.md` said **"No MCP server"** — false since #46, and it sat in the section
+  framed as the honest gap list, so readers believed it and never opened `mcp.md`.
+- `.env.example` shipped `TRACKER_RECORD_REPO=/absolute/path/to/ps-records`, which
+  **satisfies** compose's `${...:?}` guard. An unedited `.env` started cleanly and recorded
+  into a directory named after the placeholder. The value is now empty, which the guard
+  rejects — confirmed by running `docker compose config` against it.
+- README listed the runner as java-only; seven languages ship.
+- `mcp.md` and `McpToolCatalog` both gave "no catalog exists yet" as the reason
+  `list_problems` is absent. It has shipped in the jar since #69, so the reason expired —
+  now stated as merely unexposed (#100).
+- `ProblemReadme`'s two comments claimed no catalog is wired and every record carries an
+  empty title.
+
+`template/ps-records/README.md` is the one the user reads first, and it was the worst: five
+Dataview dashboard notes nothing generates, a `SolutionTest.java` the server does not write
+(it writes `RunnerTest.java`), and a `meta.json` that has never existed. Rewritten around
+what is actually produced, with the dashboards named as *not yet written* instead of
+promised.
+
+That file is also the one document `scripts/guards.sh` cannot check — every path in it is
+relative to a repository living elsewhere, which the guard deliberately skips. So the
+invariant is pinned as a test instead, and the test was proved by reintroducing both
+fabrications and watching it fail.

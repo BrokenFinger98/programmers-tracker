@@ -112,10 +112,14 @@ You do not have to configure this. The server decides from how your client opens
 
 ## What is not built
 
-Design §7 sketches about twenty tools. The other seventeen need a problem catalog, the
-solved.ac tag vocabulary, exam state or a review schedule, and **none of those exist yet**,
-so those tools are absent rather than stubbed. A tool that answered "not implemented" would
-be worse than a missing one: a client discovers it through `tools/list` and plans around it.
+Design §7 sketches about twenty tools. The other seventeen are absent rather than stubbed:
+a tool that answered "not implemented" would be worse than a missing one, because a client
+discovers it through `tools/list` and plans around it.
+
+What they wait on has changed. The problem catalog (689 problems) and the solved.ac tag
+vocabulary (229 tags) now **ship inside the jar** and are loaded at startup, so
+`list_problems` is only unexposed, not unsupported — that gap is issue #100. Exam state and
+a review schedule genuinely do not exist yet, and the tools built on them wait on that.
 
 Not built, and not stubbed:
 
