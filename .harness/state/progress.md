@@ -1721,6 +1721,21 @@ root as real paths so a symlinked or `/private`-prefixed root still matches.
 
 The new test asserts on the thing that matters — the enclosing project's work is still
 uncommitted afterwards.
+## [2026-08-07] #92 — protocol values can no longer become code in a generated runner ✅
+
+Strict parsing was treated as sufficient and is not: kotlinx-serialization accepts bare
+unquoted tokens even in non-lenient mode, returning a primitive whose `content` is the raw
+text. Only whitespace and `" [ ] { } : \` terminate such a token, so `( ) ; . ' |` ride
+through, and a comma-free payload also clears the arity check.
+
+`JavascriptRunner` emitted `it.toString()` and `PythonRunner` fell through to
+`value.content`, so the token landed in the generated file verbatim. Reproduced before
+fixing: `require('fs').mkdirSync(...)` actually ran under node, and the runner reported a
+plain `FAIL` — the injection was invisible in its own output.
+
+Fixed at `ExampleValues`, the one place §7.1 values are parsed, so all seven languages
+agree. The five typed generators already refused these by coercing; this makes the two
+text-emitting ones match rather than patching them separately.
 ## [2026-08-07] Adversarial review, and the first fix ✅
 
 Four independent reviews (runner correctness, capture pipeline, security/privacy, product
