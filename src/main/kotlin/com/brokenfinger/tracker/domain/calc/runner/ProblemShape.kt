@@ -26,6 +26,8 @@ enum class ProblemShape {
         private val PYTHON_SOLUTION = Regex("""def\s+solution\s*\(""")
         private val PYTHON_STDIN = Regex("""\binput\s*\(|sys\.stdin""")
         private val CPP_MAIN = Regex("""\bint\s+main\s*\(""")
+        private val JS_SOLUTION = Regex("""function\s+solution\s*\(""")
+        private val JS_STDIN = Regex("""process\.stdin|require\s*\(\s*['"]readline['"]""")
 
         fun of(code: String): ProblemShape = ofJava(code)
 
@@ -44,6 +46,18 @@ enum class ProblemShape {
         fun ofCpp(code: String): ProblemShape = when {
             CPP_MAIN.containsMatchIn(code) -> STDIN_MAIN
             SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
+            else -> UNRECOGNISED
+        }
+
+        /**
+         * JavaScript: Python's reversed priority, Python's reason — the solution skeleton
+         * (120803) always declares `function solution(`, while the main-style skeleton
+         * (181951) is top-level code over `process.stdin` via `require('readline')` and
+         * never does. Both measured from the editor 2026-08-07.
+         */
+        fun ofJavascript(code: String): ProblemShape = when {
+            JS_SOLUTION.containsMatchIn(code) -> SOLUTION_FUNCTION
+            JS_STDIN.containsMatchIn(code) -> STDIN_MAIN
             else -> UNRECOGNISED
         }
 

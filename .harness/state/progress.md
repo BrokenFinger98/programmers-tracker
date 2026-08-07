@@ -1610,3 +1610,20 @@ vectors and strings specifically because each instantiates a different `runner_s
 overload set — templates only prove themselves at instantiation. The CI proof-ran step now
 loops over all three suites, and gained a job: a results file gone missing (suite renamed
 or dropped) fails the same gate.
+
+## [2026-08-07] JavaScript runner — fourth language, the no-type-mapping one ✅
+
+Issue #82, branch `feat/82-javascript-runner`. 917 tests, all gates 0.
+
+The luxury language: §7.1 example values are JSON and JSON is valid JavaScript, so
+literals embed verbatim — the one runner with no type mapping to get wrong. What JS takes
+back is loading: the measured skeleton declares `function solution(...)` and exports
+nothing, so `require()` cannot see it. The runner loads `Solution.js` as a script via
+`vm.runInThisContext` (the purpose-built API — the security hook rightly flagged the first
+eval-based sketch), where a function declaration lands on the global object. That loading
+choice is also why `JavascriptSignature` admits only the declaration form: a
+`const solution = ...` arrow stays script-scoped, and a runner calling it would throw.
+
+Main-style (181951: top-level readline over process.stdin) re-runs as a fresh `node` child
+per example — Python's subprocess rationale. Deep comparison via `JSON.stringify`, which is
+order-sensitive over arrays like the judge. CI proof-ran loop now covers four suites.

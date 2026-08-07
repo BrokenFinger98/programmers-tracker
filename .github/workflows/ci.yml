@@ -58,7 +58,7 @@ jobs:
           # Each execution suite skips politely where its interpreter/compiler is missing —
           # right on a contributor's machine, wrong here: a runner image quietly dropping a
           # toolchain must not silently un-earn a language's supported status.
-          for suite in JavaRunnerExecutionTest PythonRunnerExecutionTest CppRunnerExecutionTest; do
+          for suite in JavaRunnerExecutionTest PythonRunnerExecutionTest CppRunnerExecutionTest JavascriptRunnerExecutionTest; do
             results="build/test-results/test/TEST-com.brokenfinger.tracker.domain.calc.runner.$suite.xml"
             [ -f "$results" ] || { echo "REGRESSION: $suite left no results at all."; exit 1; }
             if grep -q "<skipped" "$results"; then
