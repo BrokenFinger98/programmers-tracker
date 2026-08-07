@@ -142,6 +142,51 @@ class ProblemShapeTest {
         ProblemShape.ofCpp("void helper() {}") shouldBe ProblemShape.UNRECOGNISED
     }
 
+    // JavaScript ---------------------------------------------------------------------------
+
+    /** Measured skeleton, 120803 (editor capture 2026-08-07). */
+    @Test
+    fun `a javascript solution function makes it solution-style`() {
+        val code = "function solution(num1, num2) {\n    var answer = 0;\n    return answer;\n}"
+
+        ProblemShape.ofJavascript(code) shouldBe ProblemShape.SOLUTION_FUNCTION
+    }
+
+    /** Measured skeleton, 181951 (editor capture 2026-08-07) — readline over process.stdin. */
+    @Test
+    fun `javascript reading stdin makes it main-style`() {
+        val code = """
+            const readline = require('readline');
+            const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+
+            let input = [];
+
+            rl.on('line', function (line) {
+                input = line.split(' ');
+            }).on('close', function () {
+                console.log(Number(input[0]) + Number(input[1]));
+            });
+        """.trimIndent()
+
+        ProblemShape.ofJavascript(code) shouldBe ProblemShape.STDIN_MAIN
+    }
+
+    /** Python's reversed priority, Python's reason: the solution skeleton always declares it. */
+    @Test
+    fun `a javascript solution declaration wins over a readline require`() {
+        val code = "const rl = require('readline');\nfunction solution(n) { return n; }"
+
+        ProblemShape.ofJavascript(code) shouldBe ProblemShape.SOLUTION_FUNCTION
+    }
+
+    @Test
+    fun `javascript code with neither is refused`() {
+        ProblemShape.ofJavascript("console.log(1 + 1);") shouldBe ProblemShape.UNRECOGNISED
+    }
+
     @Test
     fun `neither shape is refused, not guessed`() {
         ProblemShape.of("SELECT * FROM FOODS_INFO;") shouldBe ProblemShape.UNRECOGNISED
