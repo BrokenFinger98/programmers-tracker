@@ -172,5 +172,9 @@ private class ProbedArtifacts(private val delegate: DerivedArtifacts, private va
     override fun writeCode(record: SubmissionRecord, code: String): AttachedCode =
         probe.around { delegate.writeCode(record, code) }
 
+    override fun writeRunner(record: SubmissionRecord, code: String) = probe.around {
+        delegate.writeRunner(record, code)
+    }
+
     override fun writeReadme(records: List<SubmissionRecord>) = probe.around { delegate.writeReadme(records) }
 }

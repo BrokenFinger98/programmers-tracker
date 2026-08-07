@@ -3,7 +3,7 @@ package com.brokenfinger.tracker.domain
 import kotlinx.serialization.Serializable
 
 /**
- * One example the judge runs on `코드 실행`, exactly as the wire carried it.
+ * One example the judge runs on Run Code, exactly as the wire carried it.
  *
  * The `run` `start` frame ships these inline (protocol §7) and they are the whole input to
  * the runner generator (#37): [input] is the argument list of a `solution(...)` problem or

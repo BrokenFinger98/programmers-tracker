@@ -3,7 +3,13 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.application.AttachedCode
 import com.brokenfinger.tracker.application.DerivedArtifacts
 import com.brokenfinger.tracker.application.RecordStore
+import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.runner.JavaRunner
+import com.brokenfinger.tracker.domain.calc.runner.Runner
+import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -19,7 +25,8 @@ import java.nio.file.Path
  */
 class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) : DerivedArtifacts {
     private val artifacts = CodeArtifacts(recordRoot, records)
-    private val readme = ProblemReadme(RecordLayout(recordRoot))
+    private val layout = RecordLayout(recordRoot)
+    private val readme = ProblemReadme(layout)
 
     /**
      * The attempt copy is what a submit points at: it is the code of *that* grading and never
@@ -36,6 +43,39 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
         return AttachedCode(relativeOf(attempt ?: latest), diff)
     }
 
+    /**
+     * The runner rides the same trigger as the code it tests: regenerated on every
+     * attachment, from the *current* code and the *captured* examples, and a refusal removes
+     * the stale file rather than leaving a runner that tests yesterday's solution. Reasons go
+     * to the log — a best-effort runner that compiles and tests the wrong thing is the one
+     * outcome #37 forbids.
+     *
+     * Java only today, by the owner's support order; other languages log once per attachment
+     * and write nothing.
+     */
+    override fun writeRunner(record: SubmissionRecord, code: String) {
+        val directory = layout.problemDirectory(record.lessonId, record.title)
+        if (record.language != "java") {
+            logger.info("Lesson {}: no runner — {} is not yet supported (#37)", record.lessonId, record.language)
+            return
+        }
+        when (val runner = JavaRunner.generate(code, examplesOf(directory))) {
+            is Runner.Generated -> runCatching {
+                Files.createDirectories(directory)
+                Files.writeString(directory.resolve(runner.fileName), runner.source)
+            }.onFailure { logger.warn("Lesson {}: the runner could not be written", record.lessonId, it) }
+            is Runner.Refused -> {
+                runCatching { Files.deleteIfExists(directory.resolve(RUNNER_FILE)) }
+                logger.info("Lesson {}: no runner — {}", record.lessonId, runner.reason)
+            }
+        }
+    }
+
+    /** The pairs stage 2 stored; an unreadable file means no examples, which refuses cleanly. */
+    private fun examplesOf(directory: Path): List<ProblemExample> = runCatching {
+        json.decodeFromString<List<ProblemExample>>(Files.readString(directory.resolve("examples.json")))
+    }.getOrDefault(emptyList())
+
     override fun writeReadme(records: List<SubmissionRecord>) {
         readme.write(records)
     }
@@ -44,4 +84,12 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
     // record repository cloned onto another machine still resolves every path it carries.
     private fun relativeOf(path: Path): String =
         recordRoot.toAbsolutePath().relativize(path.toAbsolutePath()).joinToString("/")
+
+    private companion object {
+        const val RUNNER_FILE = "RunnerTest.java"
+
+        val json = Json { ignoreUnknownKeys = true }
+
+        val logger = LoggerFactory.getLogger(FileDerivedArtifacts::class.java)!!
+    }
 }

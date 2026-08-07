@@ -92,6 +92,7 @@ class CodeAttachment(
     // that names them, so no other grading's write can slip between the two.
     private fun attached(record: SubmissionRecord, code: String) {
         val written = artifacts.writeCode(record, code)
+        artifacts.writeRunner(record, code)
         val corrected = record.copy(
             codePath = written.codePath,
             codePending = false,
@@ -185,6 +186,14 @@ data class AttachReport(val attached: Int = 0, val deferred: Int = 0, val blocke
 interface DerivedArtifacts {
     /** Writes `Solution.<ext>`, plus the attempt copy when the record owns one, and reports both. */
     fun writeCode(record: SubmissionRecord, code: String): AttachedCode
+
+    /**
+     * Regenerates the problem's runner from the freshly attached code and the captured
+     * examples (#37) — or removes a stale one, because a runner built from yesterday's code
+     * would test something the user is no longer looking at. Refusals are logged with their
+     * reason, never written as a best-effort file.
+     */
+    fun writeRunner(record: SubmissionRecord, code: String)
 
     /** Rewrites one problem's README from its records, oldest first. */
     fun writeReadme(records: List<SubmissionRecord>)

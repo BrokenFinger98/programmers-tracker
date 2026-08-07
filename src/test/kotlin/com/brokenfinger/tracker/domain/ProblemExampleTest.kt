@@ -5,7 +5,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 
 /**
- * One example the judge runs on `코드 실행` — the pair the runner (#37) is generated from.
+ * One example the judge runs on Run Code — the pair the runner (#37) is generated from.
  *
  * Received leniently (`ofReceived`, dev rules §4): the values come off the wire, a field may
  * be missing, and losing a whole capture to one malformed example would cost more than the

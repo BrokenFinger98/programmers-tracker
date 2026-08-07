@@ -43,6 +43,32 @@ class CodeAttachmentTest {
 
     // Attaching ----------------------------------------------------------------------------
 
+    /**
+     * The runner rides the attachment (#37): fresh code plus the captured examples produce
+     * `RunnerTest.java` in the same pass that wrote `Solution.java`.
+     */
+    @Test
+    fun `an attachment regenerates the runner from the captured examples`() = runBlocking<Unit> {
+        examplesOnDisk("""[{"input":"6, 7","expected":"42"}]""")
+        val record = stored(aPending(attempt = 2))
+
+        attachment(fetches(CODE_V2)).attach(record)
+
+        Files.readString(problemDirectory().resolve("RunnerTest.java")) shouldContain "solution(6, 7)"
+    }
+
+    /** No captured examples refuses — and removes a stale runner rather than leaving a lie. */
+    @Test
+    fun `no examples means no runner, and a stale one is removed`() = runBlocking<Unit> {
+        Files.createDirectories(problemDirectory())
+        Files.writeString(problemDirectory().resolve("RunnerTest.java"), "// stale")
+        val record = stored(aPending(attempt = 2))
+
+        attachment(fetches(CODE_V2)).attach(record)
+
+        Files.exists(problemDirectory().resolve("RunnerTest.java")) shouldBe false
+    }
+
     @Test
     fun `a fetched submit writes its solution file, its attempt copy and clears the mark`() = runBlocking<Unit> {
         val record = stored(aPending(attempt = 2))
@@ -243,6 +269,11 @@ class CodeAttachmentTest {
         clock = Clock.fixed(Instant.parse("2026-08-04T05:23:01Z"), ZoneOffset.UTC),
         writerDispatcher = Dispatchers.Unconfined,
     )
+
+    private fun examplesOnDisk(json: String) {
+        Files.createDirectories(problemDirectory())
+        Files.writeString(problemDirectory().resolve("examples.json"), json)
+    }
 
     private fun store(): RecordStore = JsonlRecordStore.under(root)
 
