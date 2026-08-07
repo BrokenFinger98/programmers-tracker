@@ -210,8 +210,24 @@ $cases
                 ?: return Runner.Refused("example ${index + 1}'s expected output could not be read as a quoted text")
             "        Check(${index + 1}, ${quoted(stdin)}, ${quoted(expected)});"
         }
-        return generated(stdinSource("$holder.$call", cases.joinToString("\n")))
+        val guard = if (code.contains("Console.Clear")) CLEAR_GUARD else ""
+        return generated(stdinSource("$holder.$call", guard + cases.joinToString("\n")))
     }
+
+    /**
+     * Measured in CI 2026-08-07: the skeleton's `Console.Clear()` targets the real console
+     * and **throws under redirected output on Windows** (macOS/Linux no-op it). In a
+     * terminal it merely clears the screen and everything works — so instead of letting
+     * the first example crash with a bare IOException, the harness states the one case it
+     * cannot serve and exits cleanly, the runner's skip-with-reason posture.
+     */
+    private const val CLEAR_GUARD =
+        "        if (OperatingSystem.IsWindows() && Console.IsOutputRedirected)\n" +
+            "        {\n" +
+            "            Console.WriteLine(\"SKIPPED — the solution calls Console.Clear(), which throws \" +\n" +
+            "                \"with redirected output on Windows; run in a terminal instead\");\n" +
+            "            return;\n" +
+            "        }\n"
 
     /**
      * Calls the user's `Main` per example with `Console.SetIn`/`SetOut` swapped to

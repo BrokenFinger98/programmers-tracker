@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.domain.calc.runner
 import com.brokenfinger.tracker.domain.ProblemExample
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Test
 
@@ -103,6 +104,24 @@ class CsharpRunnerTest {
         runner.source shouldContain "Example.Main();"
         runner.source shouldContain "Check(1, \"4 5\", \"9\");"
         runner.extras.single().source shouldContain "<StartupObject>RunnerTest</StartupObject>"
+        // The skeleton carries Console.Clear(), so the measured Windows guard rides along.
+        runner.source shouldContain "Console.IsOutputRedirected"
+    }
+
+    /**
+     * Measured in CI 2026-08-07: `Console.Clear()` throws under redirected output on
+     * Windows. The guard exists only for code that actually calls it — a clear-free
+     * solution keeps an unconditional harness.
+     */
+    @Test
+    fun `the windows guard is emitted only when the solution calls Clear`() {
+        val clearFree = "using System;\n\npublic class Example\n{\n    public static void Main()\n    {\n" +
+            "        Console.WriteLine(Console.ReadLine());\n    }\n}"
+
+        val runner = CsharpRunner.generate(clearFree, listOf(ProblemExample("\"x\"", "\"x\"")))
+            .shouldBeInstanceOf<Runner.Generated>()
+
+        runner.source shouldNotContain "Console.IsOutputRedirected"
     }
 
     // Refusals ------------------------------------------------------------------------------

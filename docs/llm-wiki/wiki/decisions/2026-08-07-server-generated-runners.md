@@ -102,7 +102,11 @@ the same gate). Per-language facts worth keeping:
   with globbing off and the entry pinned.
 - Two languages settled open questions by experiment-as-test: Kotlin's `readLine()`
   follows a swapped `System.in` (two-example test pins it), and C#'s skeleton
-  `Console.Clear()` under redirection is measured per-OS by its suite.
+  `Console.Clear()` under redirection is measured per-OS by its suite — **answered on the
+  suite's first CI outing** (run 31147247460): macOS/Linux no-op it, **Windows throws**;
+  in a terminal it clears the screen everywhere. The generator therefore emits a
+  stated-skip guard, only for solutions that actually call `Clear`, and the suite pins
+  both behaviours per OS.
 - csharp's execution proof **cannot run on the dev machine** (broken x86_64 dotnet host
   on arm64); CI's three runners carry that proof, which merge-only-on-green keeps ahead
   of shipping.

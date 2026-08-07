@@ -107,13 +107,34 @@ class CsharpRunnerExecutionTest {
         run.exitCode shouldBe 0
     }
 
-    /**
-     * The measured main-style skeleton — `Console.Clear()` kept in on purpose, because
-     * whether it survives redirected output on each OS is exactly what this measures.
-     */
+    /** The universal main-style path — no `Console.Clear()`, must pass on every OS. */
     @Test
     @Timeout(TIMEOUT)
     fun `a main-style solution is fed stdin through the swapped console`() {
+        val solution = "using System;\n\npublic class Example\n{\n    public static void Main()\n    {\n" +
+            "        String[] s = Console.ReadLine().Split(' ');\n" +
+            "        Console.WriteLine(\"a = {0}\", Int32.Parse(s[0]));\n" +
+            "        Console.WriteLine(\"b = {0}\", Int32.Parse(s[1]));\n    }\n}"
+        val examples = listOf(
+            ProblemExample("\"4 5\"", "\"a = 4\nb = 5\""),
+            ProblemExample("\"7 9\"", "\"a = 7\nb = 9\""),
+        )
+
+        val run = execute(solution, examples)
+
+        run.output shouldContain "ALL PASS"
+        run.exitCode shouldBe 0
+    }
+
+    /**
+     * The measured skeleton — `Console.Clear()` kept in on purpose. Measured in CI
+     * 2026-08-07: macOS/Linux no-op it under redirection; **Windows throws**, so there the
+     * harness must state its skip instead of crashing on the first example. Both measured
+     * behaviours are pinned here, per OS.
+     */
+    @Test
+    @Timeout(TIMEOUT)
+    fun `the skeleton's Clear no-ops on unix and skips with a reason on windows`() {
         val solution = """
             using System;
 
@@ -141,7 +162,7 @@ class CsharpRunnerExecutionTest {
 
         val run = execute(solution, examples)
 
-        run.output shouldContain "ALL PASS"
+        run.output shouldContain if (WINDOWS) "SKIPPED" else "ALL PASS"
         run.exitCode shouldBe 0
     }
 
@@ -189,6 +210,9 @@ class CsharpRunnerExecutionTest {
     private companion object {
         /** Every case pays a project build; the first also warms the SDK on a cold runner. */
         const val TIMEOUT = 300L
+
+        /** Which measured `Console.Clear()` behaviour to expect — it differs by OS. */
+        val WINDOWS: Boolean = System.getProperty("os.name").startsWith("Windows")
 
         /** Probed once — false also on machines whose installed dotnet host cannot start. */
         val DOTNET: Boolean = runCatching {
