@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.UnknownReason
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -28,7 +29,7 @@ object McpRecordJson {
         encodeDefaults = true
     }
 
-    fun full(record: SubmissionRecord): JsonObject = format.encodeToJsonElement(record).jsonObject
+    fun full(record: SubmissionRecord): JsonObject = withReason(record, format.encodeToJsonElement(record).jsonObject)
 
     /**
      * The history view. Drops only the three fields that each run to kilobytes — a full
@@ -36,6 +37,17 @@ object McpRecordJson {
      * whole log and `get_problem` is where the detail lives.
      */
     fun summary(record: SubmissionRecord): JsonObject = JsonObject(full(record) - HEAVY)
+
+    /**
+     * The classified reason an UNKNOWN is unknown (#74). Carried as its own short field
+     * because the summary view drops `errorText` for weight — without this, the one record a
+     * user will ask an AI about ("why is this UNKNOWN when my screen said 100?") is the one
+     * whose explanation was trimmed. Absent when unmeasured, per the classifier.
+     */
+    private fun withReason(record: SubmissionRecord, encoded: JsonObject): JsonObject {
+        val reason = UnknownReason.of(record.outcome, record.errorText) ?: return encoded
+        return JsonObject(encoded + ("unknownReason" to format.encodeToJsonElement(reason.label)))
+    }
 
     fun summaries(records: List<SubmissionRecord>): JsonArray = JsonArray(records.map(::summary))
 

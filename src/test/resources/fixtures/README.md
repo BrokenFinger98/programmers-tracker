@@ -17,6 +17,7 @@ verbatim — failure classification depends on them (protocol doc section 7).
 | `sql-run.jsonl` | §6, §15 #8 — `returned_rows` double-encoded, `msg` explicitly null | |
 | `algorithm-run-error.jsonl` | §7 run path, §15 #12–13 — HTML-escaped compiler output / stack trace | |
 | `algorithm-run-pass.jsonl` | **Our own live capture**, lesson 120804, 2026-08-04 and reproduced 2026-08-05 (issues #6, #10) | the only fixture not transcribed from the protocol doc — see below |
+| `algorithm-cached-result.jsonl` | §13.2, §15 #16 — lesson 181952, 2026-08-07: submit answered from cache, terminal `error` `같은 코드로 채점한 결과가 있습니다.`, **no verdict frames at all** | our own live capture; drives the UNKNOWN-reason classification (#74) |
 
 ### `algorithm-run-pass.jsonl` — provenance
 

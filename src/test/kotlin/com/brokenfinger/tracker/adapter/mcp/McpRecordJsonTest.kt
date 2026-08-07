@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.ProblemHistory
+import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.support.fixtures.aSqlSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -94,5 +95,31 @@ class McpRecordJsonTest {
         json.shouldNotContainKey("acceptanceRate")
         json["submissionCount"]!!.jsonPrimitive.int shouldBe 0
         json["submissions"]!!.jsonArray.size shouldBe 0
+    }
+
+    /**
+     * The summary drops `errorText` for weight, which without this field would trim the
+     * explanation off the exact record a user asks an AI about — "why is this UNKNOWN when
+     * my screen said 100?" (#74).
+     */
+    @Test
+    fun `a cached-result unknown keeps its reason in the summary`() {
+        val cached = aSubmissionRecord(
+            outcome = Outcome.UNKNOWN,
+            verdict = null,
+            errorText = "같은 코드로 채점한 결과가 있습니다.",
+        )
+
+        val summary = McpRecordJson.summary(cached)
+
+        summary["unknownReason"]?.jsonPrimitive?.content shouldBe "cached result"
+        summary.containsKey("errorText") shouldBe false
+    }
+
+    @Test
+    fun `an unexplained unknown carries no reason field at all`() {
+        val odd = aSubmissionRecord(outcome = Outcome.UNKNOWN, verdict = null, errorText = "서버 점검 중입니다.")
+
+        McpRecordJson.summary(odd).containsKey("unknownReason") shouldBe false
     }
 }

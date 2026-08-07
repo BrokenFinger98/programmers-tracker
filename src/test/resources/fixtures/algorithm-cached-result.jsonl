@@ -1,0 +1,2 @@
+{"identifier":"{\"channel\":\"Challenge::AlgorithmChannel\",\"challengeable_type\":\"algorithm\",\"challengeable_id\":17582,\"language\":\"java\",\"lesson_id\":181952}","message":{"action":"submit","type":"start","msg":"채점을 시작합니다."}}
+{"identifier":"{\"channel\":\"Challenge::AlgorithmChannel\",\"challengeable_type\":\"algorithm\",\"challengeable_id\":17582,\"language\":\"java\",\"lesson_id\":181952}","message":{"action":"submit","type":"error","msg":"같은 코드로 채점한 결과가 있습니다."}}

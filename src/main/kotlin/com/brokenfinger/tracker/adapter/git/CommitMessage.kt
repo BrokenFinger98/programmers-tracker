@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.UnknownReason
 
 /**
  * The subject line of one submit commit (design §4.6).
@@ -38,7 +39,15 @@ object CommitMessage {
     private fun verdictOf(record: SubmissionRecord): String = record.verdict?.name ?: record.outcome.name
 
     private fun detailsOf(record: SubmissionRecord): String =
-        listOfNotNull(testcasesOf(record), "attempt ${record.attempt}", elapsedOf(record)).joinToString(", ")
+        listOfNotNull(reasonOf(record), testcasesOf(record), "attempt ${record.attempt}", elapsedOf(record))
+            .joinToString(", ")
+
+    /**
+     * Why an UNKNOWN is unknown, when measured (#74). The browser can be showing a cached
+     * 100.0 scoreboard while this subject says UNKNOWN; without the reason the two read as a
+     * capture bug. Unmeasured causes stay absent — the classifier already refuses to guess.
+     */
+    private fun reasonOf(record: SubmissionRecord): String? = UnknownReason.of(record.outcome, record.errorText)?.label
 
     /** A grading that reported no testcase at all — a compile error — carries no counts. */
     private fun testcasesOf(record: SubmissionRecord): String? {

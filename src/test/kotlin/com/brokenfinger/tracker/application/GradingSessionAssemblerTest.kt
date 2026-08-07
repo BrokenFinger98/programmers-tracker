@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.UnknownReason
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aRunErrorText
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
@@ -39,6 +40,22 @@ class GradingSessionAssemblerTest {
      * index 1 genuinely arrived before index 0 — measured in our own live verification
      * (fixtures/algorithm-run-pass.jsonl, issues #6 and #10).
      */
+    /**
+     * The cached-result path, from our own live capture (#74, protocol §13.2, §15 #16): a
+     * submit answered from cache carries `start` then a terminal `error` and **no verdict
+     * frames at all** — while the browser renders the cached scoreboard. UNKNOWN is correct;
+     * the error text must survive onto the session so the classifier can name the reason.
+     */
+    @Test
+    fun `a cached-result submit settles UNKNOWN with the measured error text preserved`() {
+        val session = anAssembledSession("algorithm-cached-result.jsonl")
+
+        session.outcome shouldBe Outcome.UNKNOWN
+        session.verdict shouldBe null
+        session.errorText shouldBe "같은 코드로 채점한 결과가 있습니다."
+        UnknownReason.of(session.outcome, session.errorText) shouldBe UnknownReason.CACHED_RESULT
+    }
+
     @Test
     fun `an algorithm run that passed is judged from its result frame`() {
         val session = anAssembledSession("algorithm-run-pass.jsonl")

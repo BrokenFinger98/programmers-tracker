@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.UnknownReason
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.format.DateTimeFormatter
@@ -89,8 +90,17 @@ class ProblemReadme(private val layout: RecordLayout) {
         "| ${record.attempt} | ${record.ts.format(TIME)} | ${verdictOf(record)} " +
             "| ${testcasesOf(record)} | ${elapsedOf(record.elapsedSec)} | ${diffOf(record)} |"
 
-    /** An unjudged submit reports its outcome; borrowing a neighbouring verdict would invent data. */
-    private fun verdictOf(record: SubmissionRecord): String = record.verdict?.name ?: record.outcome.name
+    /**
+     * An unjudged submit reports its outcome; borrowing a neighbouring verdict would invent
+     * data. A measured reason rides along (#74) — `UNKNOWN (cached result)` tells the reader
+     * why the browser's scoreboard and this row disagree, where a bare UNKNOWN reads as a
+     * capture bug.
+     */
+    private fun verdictOf(record: SubmissionRecord): String {
+        val base = record.verdict?.name ?: record.outcome.name
+        val reason = UnknownReason.of(record.outcome, record.errorText)?.label ?: return base
+        return "$base ($reason)"
+    }
 
     private fun testcasesOf(record: SubmissionRecord): String {
         val summary = record.tcSummary
