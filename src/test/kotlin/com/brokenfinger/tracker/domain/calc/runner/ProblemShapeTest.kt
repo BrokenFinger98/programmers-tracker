@@ -58,6 +58,34 @@ class ProblemShapeTest {
         ProblemShape.of(code) shouldBe ProblemShape.STDIN_MAIN
     }
 
+    // Python -------------------------------------------------------------------------------
+
+    @Test
+    fun `a python def solution makes it solution-style`() {
+        ProblemShape.ofPython("def solution(num1, num2):\n    return num1 * num2") shouldBe
+            ProblemShape.SOLUTION_FUNCTION
+    }
+
+    /** Python has no main: the main-style skeleton is top-level code reading input(). */
+    @Test
+    fun `python top-level input reading makes it main-style`() {
+        ProblemShape.ofPython("a, b = map(int, input().split())\nprint(a + b)") shouldBe
+            ProblemShape.STDIN_MAIN
+    }
+
+    /** Reversed priority from Java, and the doc says why. */
+    @Test
+    fun `a python def solution wins over an input call inside it`() {
+        val code = "def solution(prompt):\n    return input(prompt)"
+
+        ProblemShape.ofPython(code) shouldBe ProblemShape.SOLUTION_FUNCTION
+    }
+
+    @Test
+    fun `python code with neither is refused`() {
+        ProblemShape.ofPython("print(1 + 1)") shouldBe ProblemShape.UNRECOGNISED
+    }
+
     @Test
     fun `neither shape is refused, not guessed`() {
         ProblemShape.of("SELECT * FROM FOODS_INFO;") shouldBe ProblemShape.UNRECOGNISED

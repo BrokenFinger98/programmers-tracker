@@ -47,6 +47,23 @@ jobs:
         shell: bash
         run: ./scripts/no-home-writes.sh ./gradlew test verifyEveryTestClassRan --no-daemon
 
+      # A language is "supported" only while its execution suite actually runs (#78). The
+      # suite skips politely where the interpreter is missing — right for a contributor's
+      # machine, wrong here: a runner image that dropped python would silently un-earn the
+      # status. Asserted from the results file, not assumed from runner documentation.
+      - name: the Python execution proof genuinely ran
+        shell: bash
+        run: |
+          set -e
+          results=build/test-results/test/TEST-com.brokenfinger.tracker.domain.calc.runner.PythonRunnerExecutionTest.xml
+          [ -f "$results" ] || { echo "REGRESSION: the Python execution suite left no results at all."; exit 1; }
+          if grep -q "<skipped" "$results"; then
+            echo "REGRESSION: the Python execution suite was SKIPPED on this runner — python3 missing?"
+            grep -o 'skipped[^/]*' "$results" | head -3
+            exit 1
+          fi
+          echo "PythonRunnerExecutionTest ran: $(grep -o 'tests="[0-9]*"' "$results" | head -1)"
+
       - name: build
         run: ./gradlew build -x test --no-daemon
 

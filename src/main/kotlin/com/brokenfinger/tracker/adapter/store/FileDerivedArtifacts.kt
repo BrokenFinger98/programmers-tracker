@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.runner.JavaRunner
+import com.brokenfinger.tracker.domain.calc.runner.PythonRunner
 import com.brokenfinger.tracker.domain.calc.runner.Runner
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -55,17 +56,18 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
      */
     override fun writeRunner(record: SubmissionRecord, code: String) {
         val directory = layout.problemDirectory(record.lessonId, record.title)
-        if (record.language != "java") {
+        val generate = GENERATORS[record.language]
+        if (generate == null) {
             logger.info("Lesson {}: no runner — {} is not yet supported (#37)", record.lessonId, record.language)
             return
         }
-        when (val runner = JavaRunner.generate(code, examplesOf(directory))) {
+        when (val runner = generate(code, examplesOf(directory))) {
             is Runner.Generated -> runCatching {
                 Files.createDirectories(directory)
                 Files.writeString(directory.resolve(runner.fileName), runner.source)
             }.onFailure { logger.warn("Lesson {}: the runner could not be written", record.lessonId, it) }
             is Runner.Refused -> {
-                runCatching { Files.deleteIfExists(directory.resolve(RUNNER_FILE)) }
+                RUNNER_FILES.forEach { stale -> runCatching { Files.deleteIfExists(directory.resolve(stale)) } }
                 logger.info("Lesson {}: no runner — {}", record.lessonId, runner.reason)
             }
         }
@@ -86,7 +88,15 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
         recordRoot.toAbsolutePath().relativize(path.toAbsolutePath()).joinToString("/")
 
     private companion object {
-        const val RUNNER_FILE = "RunnerTest.java"
+        /** The supported generators, in the measured order (#37) — a language lands here only
+         *  after its execution suite has actually run its output. */
+        val GENERATORS = mapOf<String, (String, List<ProblemExample>) -> Runner>(
+            "java" to JavaRunner::generate,
+            "python3" to PythonRunner::generate,
+        )
+
+        /** Every name a stale runner can have; a refusal clears them all. */
+        val RUNNER_FILES = listOf("RunnerTest.java", "runner_test.py")
 
         val json = Json { ignoreUnknownKeys = true }
 

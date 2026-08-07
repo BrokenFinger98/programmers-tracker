@@ -1555,3 +1555,31 @@ raw-newline trap; every mismatch refuses with an actionable reason.
 generated runners in child JVMs — a correct solution passes, a wrong one fails naming the
 example, both shapes, including the measured 181951 stdin case round-tripped through
 generation, `System.setIn`, and stdout comparison.
+
+## [2026-08-07] Python runner — second language, earned by execution ✅
+
+Issue #78, branch `feat/78-python-runner`. 857 tests, all gates 0.
+
+`PythonSignature` (names and arity — Python declares no types, so this generator has one
+check fewer than Java's and does not pretend otherwise), `PythonRunner` (both shapes), and
+per-language dispatch in `FileDerivedArtifacts` with a stale-runner sweep across every
+runner file name.
+
+Shape detection needed a per-language split: Python has no `main`, so a main-style script is
+top-level code reading `input()` — and the priority is **reversed** from Java's, `def
+solution(` winning, because the solution-style skeleton always declares it while the
+main-style one never does. The main-style runner re-runs `Solution.py` as a fresh child per
+example, since a script executes at import time and could only ever run once in-process.
+
+Two things the execution tests caught before CI could:
+
+- A deliberately wrong main-style fixture with **no `input()` at all** has no shape signal
+  and is correctly refused — the test now reads input like a real wrong answer would, and
+  the no-signal case is covered as the refusal it is.
+- The solution module is `Solution.py` (capital S, from `CodeArtifacts`), so `import
+  solution` would have broken on case-sensitive filesystems. Checked against the actual
+  writer rather than assumed.
+
+CI now asserts the Python execution suite **genuinely ran** on every runner, from the
+results file: the suite skips politely where python3 is missing — right for a contributor's
+machine, wrong in CI, where a skip would silently un-earn the supported status.
