@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.domain.calc.runner
 
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -67,6 +68,31 @@ class ExampleValuesTest {
     fun `an unparseable value returns null rather than an approximation`() {
         ExampleValues.arguments("new int[]{1,2}").shouldBeNull()
         ExampleValues.single("{'python': 'dict'}").shouldBeNull()
+    }
+
+    /**
+     * Strict parsing alone was not enough (#92): kotlinx-serialization accepts bare unquoted
+     * tokens even in non-lenient mode, handing back a primitive whose `content` is the raw
+     * text — and the generators that emit a value's text directly turned one into executable
+     * code in a file the user is told to run. Only whitespace and `" [ ] { } : \` terminate
+     * such a token, so `( ) ; . ' |` all ride through; a comma-free payload also satisfies
+     * the arity check downstream.
+     */
+    @Test
+    fun `a bare unquoted token is refused, not handed on as a value`() {
+        ExampleValues.arguments("0)||require('fs').mkdirSync('/tmp/x')||solution(0").shouldBeNull()
+        ExampleValues.arguments("abc").shouldBeNull()
+        ExampleValues.single("__import__('os').system('id')").shouldBeNull()
+    }
+
+    /** The refusal must not cost the measured shapes: quoted text, numbers, arrays of them. */
+    @Test
+    fun `the measured value shapes still parse`() {
+        ExampleValues.arguments("3, 2")!!.size shouldBe 2
+        ExampleValues.arguments("[[1, 2], [3, 4]], true")!!.size shouldBe 2
+        ExampleValues.single("\"a = 4\nb = 5\"")!!.jsonPrimitive.content shouldBe "a = 4\nb = 5"
+        ExampleValues.single("null").shouldNotBeNull()
+        ExampleValues.single("-1.5").shouldNotBeNull()
     }
 
     @Test
