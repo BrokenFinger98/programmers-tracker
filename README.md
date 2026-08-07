@@ -50,7 +50,7 @@ marked *designed* exists in `src/`.
 | A per-problem page, and diffs between attempts | **built** |
 | A per-problem runner from the judge's own examples | **built** — java · python3 · cpp · javascript · kotlin · c · csharp; the rest refuse with a reason |
 | Problem titles and tags from a catalog | **built** — 689 problems, shipped |
-| MCP server — Claude · Cursor · a local LLM reading the records | **built** — three read tools ([`mcp.md`](docs/mcp.md)) |
+| MCP server — Claude · Cursor · a local LLM reading the records | **built** — four read tools ([`mcp.md`](docs/mcp.md)) |
 | Weakness by tag · review queue · passed-but-slow · per-company profiles | designed · §6 |
 
 One consequence of that table is worth stating outright, because it changes what the first

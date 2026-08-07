@@ -1870,3 +1870,25 @@ The request contract was exercised against a running server with the measured id
 manifest wiring, the worker relay and the badge are written and unexercised. The
 constitution's rule about external-interaction features applies, and the README, the
 bootstrap gap list and the README status table all say so rather than implying otherwise.
+
+## [2026-08-07] #100 — list_problems, the tool the catalog was already paying for ✅
+
+The 689-problem catalog and the 229-tag vocabulary have shipped in the jar since #69 and
+were loaded at startup, but the only consumer was title lookup during capture. Nothing
+exposed them, and `McpToolCatalog`'s own comment still gave "no catalog exists yet" as the
+reason the tool was absent.
+
+`list_problems(level?, part?, tag?, status?)` joins the catalog against the records.
+`status` is the point: **`untouched` is the answer no other tool can give**, because the
+records alone cannot separate "never tried" from "tried and failed" — both are simply
+absent from a verdict tally, and design §5.6 says those two call for different
+prescriptions.
+
+The join is a pure calculator (`CatalogBrowse`) over two in-memory snapshots per dev rules
+§3, so a browse and any later re-analysis cannot drift. Filters all narrow, and one naming
+something the catalog does not contain returns nothing rather than everything — an empty
+answer to a precise question beats a full answer to a different one.
+
+Verified against a running server, not only in tests: 689 total, 240 untouched at level 0,
+100 in 코딩테스트 입문, 0 for a tag the catalog genuinely lacks, and both bad-argument paths
+answering with the correction rather than a widened result.

@@ -53,7 +53,7 @@ and changes between releases, so it is deliberately not reproduced here.
 
 ---
 
-## The three tools
+## The four tools
 
 Each returns stored records and counts. **None of them interprets, ranks or advises** — that
 is the AI's job, not the server's, and it is a rule rather than an omission
@@ -64,9 +64,15 @@ is the AI's job, not the server's, and it is a rule rather than an omission
 | `submissions` | `since?` · `verdict?` | Every recorded run and submit, newest first. Per-testcase detail, compiler output and diffs are omitted here. |
 | `get_problem` | `lessonId` | One lesson and every submission against it, in full — testcases and compiler output included. |
 | `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. |
+| `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
 
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
 offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
+
+`list_problems` is the only one that can answer **"which of these have I never touched"** —
+the records alone cannot tell that from "tried and failed", since both are simply absent
+from a verdict tally. Its filters all narrow, and a filter naming something the catalog does
+not contain returns nothing rather than everything.
 
 ### Missing data looks missing
 
@@ -116,14 +122,13 @@ Design §7 sketches about twenty tools. The other seventeen are absent rather th
 a tool that answered "not implemented" would be worse than a missing one, because a client
 discovers it through `tools/list` and plans around it.
 
-What they wait on has changed. The problem catalog (689 problems) and the solved.ac tag
-vocabulary (229 tags) now **ship inside the jar** and are loaded at startup, so
-`list_problems` is only unexposed, not unsupported — that gap is issue #100. Exam state and
-a review schedule genuinely do not exist yet, and the tools built on them wait on that.
+What they wait on has narrowed. `list_problems` shipped (#100) once the catalog was found
+to be loaded but unexposed. Exam state and a review schedule genuinely do not exist yet, and
+the tools built on them wait on that.
 
 Not built, and not stubbed:
 
-- `list_problems`, `attempt_diff`, `tag_problem`, `untagged`
+- `attempt_diff`, `tag_problem`, `untagged`
 - `warmup_plan` · `warmup_reset` · `warmup_report`
 - `review_queue` · `slow_passes` · `performance` · `stuck_testcases` · `company_profile`
 - `exam_start` · `exam_status` · `exam_finish`

@@ -32,7 +32,9 @@ class ClasspathProblemCatalog private constructor(
 
     override fun titleOf(lessonId: LessonId): String? = find(lessonId)?.title
 
-    fun all(): Collection<CatalogEntry> = byId.values
+    // Insertion order, which is the shipped file's order: the snapshot was collected by
+    // level and part, so browsing it unsorted already reads the way a learner walks it.
+    override fun all(): List<CatalogEntry> = byId.values.toList()
 
     fun size(): Int = byId.size
 

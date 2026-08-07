@@ -86,7 +86,7 @@ class McpDispatcherTest {
     fun `tools list answers the catalog, with none of the modern-only fields`() {
         val result = resultOf(dispatcher.dispatch(aLegacyCall("tools/list"), McpHeaders()))
 
-        result["tools"]!!.jsonArray.size shouldBe 3
+        result["tools"]!!.jsonArray.size shouldBe McpToolCatalog.NAMES.size
         result.shouldNotContainKey("resultType")
         result.shouldNotContainKey("ttlMs")
     }

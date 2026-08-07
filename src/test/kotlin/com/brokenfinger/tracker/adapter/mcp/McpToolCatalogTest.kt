@@ -24,9 +24,9 @@ class McpToolCatalogTest {
      * one, because a client discovers it through `tools/list` and plans around it.
      */
     @Test
-    fun `exposes exactly the three tools that can be answered from what is on disk`() {
+    fun `exposes exactly the four tools that can be answered from what ships`() {
         tools.map { it["name"]!!.jsonPrimitive.content }
-            .shouldContainExactly("submissions", "get_problem", "stats")
+            .shouldContainExactly("submissions", "get_problem", "stats", "list_problems")
     }
 
     /** The spec asks for a deterministic order so clients can cache the list. */

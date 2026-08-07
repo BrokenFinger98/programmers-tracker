@@ -1,7 +1,12 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.BrowsedProblem
+import com.brokenfinger.tracker.domain.calc.CatalogBrowse
+import com.brokenfinger.tracker.domain.calc.CatalogSummary
+import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.SubmissionFilter
 import com.brokenfinger.tracker.domain.calc.SubmissionTally
@@ -37,7 +42,7 @@ data class ProblemHistory(
  * leaves a torn final line, and refusing to answer because of it would hide every record
  * before it — a grading Programmers has already broadcast can never be fetched again.
  */
-class RecordQuery(private val store: RecordStore) {
+class RecordQuery(private val store: RecordStore, private val catalog: ProblemCatalog) {
     /**
      * The whole log, newest first, **each capture key at its latest state**.
      *
@@ -63,6 +68,42 @@ class RecordQuery(private val store: RecordStore) {
         SubmissionFilter.matching(history(), since, verdict)
 
     fun tally(group: TallyGroup): List<TallyBucket> = SubmissionTally.of(history(), group)
+
+    /**
+     * The shipped catalog joined against what was recorded (#100).
+     *
+     * Reads the whole log once and hands two snapshots to the calculator, per dev rules §3
+     * — no lookup happens mid-join, so the answer is a consistent picture of one moment
+     * rather than a walk over a log that may be growing underneath it.
+     *
+     * @throws IllegalStateException never; a catalogue we do not own may simply be empty.
+     */
+    fun browse(
+        level: Int? = null,
+        part: String? = null,
+        tag: String? = null,
+        status: ProblemStatus? = null,
+    ): List<BrowsedProblem> {
+        val submits = history().filter { it.action == GradingAction.SUBMIT }
+        return CatalogBrowse.of(
+            catalogued = catalog.all().map { it.toSummary() },
+            passedIds = submits.filter { it.verdict == Verdict.PASS }.map { it.lessonId }.toSet(),
+            attemptsById = submits.groupingBy { it.lessonId }.eachCount(),
+            level = level,
+            part = part,
+            tag = tag,
+            status = status,
+        )
+    }
+
+    private fun CatalogEntry.toSummary() = CatalogSummary(
+        lessonId = id,
+        title = title,
+        level = level,
+        part = partTitle,
+        acceptanceRate = acceptanceRate,
+        tags = tags,
+    )
 
     /**
      * One problem and every recorded submission against it. A lesson with nothing recorded

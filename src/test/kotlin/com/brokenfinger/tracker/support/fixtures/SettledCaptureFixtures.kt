@@ -65,4 +65,6 @@ private class FakeCatalog(private val byId: Map<Long, CatalogEntry>) : ProblemCa
     override fun tagsOf(lessonId: LessonId): List<String> = find(lessonId)?.tags.orEmpty()
 
     override fun titleOf(lessonId: LessonId): String? = find(lessonId)?.title
+
+    override fun all(): List<CatalogEntry> = byId.values.toList()
 }
