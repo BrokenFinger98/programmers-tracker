@@ -78,6 +78,37 @@ class CommitMessageTest {
         CommitMessage.of(record) shouldBe "[Lv0] 두 수의 곱 구하기 — INCOMPLETE (1/1, attempt 2)"
     }
 
+    /**
+     * The screen shows a cached 100.0 while the record says UNKNOWN (#74); the subject is
+     * where a user first meets that contradiction, so the measured reason rides along.
+     */
+    @Test
+    fun `a cached-result unknown names its reason in the subject`() {
+        val record = aSubmissionRecord(
+            outcome = Outcome.UNKNOWN,
+            verdict = null,
+            tcSummary = TestcaseSummary.of(emptyList(), complete = false),
+            testcases = emptyList(),
+            errorText = "같은 코드로 채점한 결과가 있습니다.",
+        )
+
+        CommitMessage.of(record) shouldBe "[Lv0] 두 수의 곱 구하기 — UNKNOWN (cached result, attempt 2)"
+    }
+
+    /** An unmeasured error text explains nothing — a wrong reason printed confidently is worse. */
+    @Test
+    fun `an unexplained unknown stays a plain UNKNOWN`() {
+        val record = aSubmissionRecord(
+            outcome = Outcome.UNKNOWN,
+            verdict = null,
+            tcSummary = TestcaseSummary.of(emptyList(), complete = false),
+            testcases = emptyList(),
+            errorText = "서버 점검 중입니다.",
+        )
+
+        CommitMessage.of(record) shouldBe "[Lv0] 두 수의 곱 구하기 — UNKNOWN (attempt 2)"
+    }
+
     @Test
     fun `a grading that reported no testcase carries no counts`() {
         val record = aSubmissionRecord(

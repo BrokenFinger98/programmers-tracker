@@ -1463,3 +1463,45 @@ something that will not happen.
 Strictly weaker than a lock: two instances started inside the same watch window can both see
 no change and both proceed. The kernel lock closes that wherever locking works; this closes
 the common case where it does not. Windows and network filesystems remain expected-but-unmeasured.
+
+## [2026-08-07] A cached-result UNKNOWN says why ✅
+
+Issue #74, branch `fix/74-cached-result-reason`. 786 tests, all gates 0, calculator
+coverage held.
+
+Submit the same code twice and the browser renders the cached scoreboard — 100.0 — while the
+record says UNKNOWN. Both are correct and they disagree; during the 2026-08-07 verification
+that contradiction cost real investigation time, and the only explanation lived in a JSONL
+field nobody opens. For a user it is indistinguishable from the tool being broken.
+
+**UNKNOWN stays.** The socket delivered no verdict, and inventing PASS because a message
+mentions a previous grading would fabricate a record from a hint. What changed is that the
+*reason* now reaches every place a human meets the record.
+
+### One classifier, three consumers
+
+`domain/calc/UnknownReason` — a pure calculator matching **measured strings exactly**. The
+cached-result message (`같은 코드로 채점한 결과가 있습니다.`, measured on 181951 and 181952)
+classifies as `CACHED_RESULT`; anything else stays unexplained rather than guessed, because a
+wrong reason printed confidently is worse than none.
+
+- commit subject: `[Lv0] 문자열 출력하기 — UNKNOWN (cached result, attempt 1)`
+- README attempt row: `UNKNOWN (cached result)`
+- MCP: an `unknownReason` field on the summary — which matters doubly, because the summary
+  view drops `errorText` for weight, so the one record a user asks an AI about was exactly
+  the one whose explanation had been trimmed
+
+### Drift is loud now
+
+The measured string is the only cached-result marker there is. If Programmers rewords it,
+classification degrades to plain UNKNOWN — correct — but now with a WARN naming the
+unrecognised text, so the drift is noticed rather than rediscovered by reading raw frames.
+The warning reads the same `boundErrorText ?: errorText` the verdict resolution reads, so the
+two can never disagree about what they saw.
+
+### The capture became a fixture
+
+`fixtures/algorithm-cached-result.jsonl` — our own live frames from 181952: `start` then a
+terminal `error`, no verdict frames at all. Registered in the fixture README with provenance.
+The lesson from `assumption-vs-measurement` applied in the same change the capture happened,
+rather than months later.

@@ -202,6 +202,36 @@ class ProblemReadmeTest {
         aSubmissionRecord(action = GradingAction.SUBMIT, attempt = attempt, elapsedSec = elapsedSec)
 
     // Every record written today looks like this: no catalog is wired, so the title arrives empty.
+    /**
+     * The browser can show a cached 100.0 while the row says UNKNOWN (#74). The measured
+     * reason rides in the row; an unmeasured one stays absent rather than guessed.
+     */
+    @Test
+    fun `a cached-result unknown names its reason in the attempt row`() {
+        val cached = aSubmissionRecord(
+            outcome = Outcome.UNKNOWN,
+            verdict = null,
+            errorText = "같은 코드로 채점한 결과가 있습니다.",
+        )
+
+        val text = Files.readString(write(listOf(cached)))
+
+        text shouldContain "UNKNOWN (cached result)"
+    }
+
+    @Test
+    fun `an unexplained unknown stays bare in the attempt row`() {
+        val odd = aSubmissionRecord(
+            outcome = Outcome.UNKNOWN,
+            verdict = null,
+            errorText = "서버 점검 중입니다.",
+        )
+
+        val text = Files.readString(write(listOf(odd)))
+
+        text shouldContain "| UNKNOWN |"
+    }
+
     private fun withoutCatalog() =
         aSubmissionRecord(title = "", level = null, part = null, acceptanceRate = null, tags = emptyList())
 }

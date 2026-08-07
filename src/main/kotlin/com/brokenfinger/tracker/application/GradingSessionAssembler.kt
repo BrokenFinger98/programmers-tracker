@@ -9,7 +9,9 @@ import com.brokenfinger.tracker.domain.TerminalKind
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TerminationRule
+import com.brokenfinger.tracker.domain.calc.UnknownReason
 import com.brokenfinger.tracker.domain.calc.VerdictResolver
+import org.slf4j.LoggerFactory
 
 /**
  * Accumulates the frames broadcast on one channel and settles them into a
@@ -77,8 +79,26 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
     // A terminal frame we cannot classify is UNKNOWN, never the nearest neighbour — the
     // memory-limit message has never been measured (protocol doc §14).
     private fun outcomeOf(verdict: Verdict?): Outcome {
-        if (verdict == null) return Outcome.UNKNOWN
-        return Outcome.JUDGED
+        if (verdict != null) return Outcome.JUDGED
+        warnIfUnexplained()
+        return Outcome.UNKNOWN
+    }
+
+    /**
+     * An UNKNOWN whose error text matches nothing measured is how a protocol change first
+     * shows up (#74) — the cached-result string is the only marker we have, and if Programmers
+     * rewords it, classification silently degrades. Degrading is correct; degrading *quietly*
+     * is how the drift stays unnoticed until someone reads raw frames again.
+     *
+     * The text itself is logged: it is a protocol message, not personal data — the same class
+     * of string the fixtures pin verbatim (dev rules §7.3).
+     */
+    private fun warnIfUnexplained() {
+        // The same text the verdict was resolved from, so the warning and the
+        // classification can never disagree about what they read.
+        val text = boundErrorText ?: errorText ?: return
+        if (UnknownReason.of(Outcome.UNKNOWN, text) != null) return
+        logger.warn("An UNKNOWN settled with an unmeasured error text — protocol drift? Text: {}", text)
     }
 
     /** Unverifiable is not the same as verified: with nothing promised, this stays false. */
@@ -107,5 +127,7 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
          */
         fun of(channel: ChannelKey, boundErrorText: String? = null) =
             GradingSessionAssembler(channel.kind, boundErrorText)
+
+        private val logger = LoggerFactory.getLogger(GradingSessionAssembler::class.java)!!
     }
 }
