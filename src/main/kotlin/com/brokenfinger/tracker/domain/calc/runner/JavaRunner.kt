@@ -24,6 +24,14 @@ sealed interface Runner {
 }
 
 /**
+ * Shared by every generator whose language declares a `main` (#91). Stated as a remedy
+ * because there is one, and the user is the only one who knows which reading is right.
+ */
+internal const val AMBIGUOUS_REASON =
+    "the solution declares both a main and a solution(...) — the runner cannot tell which " +
+        "one the judge grades. Remove the debug main, or move it to a scratch file."
+
+/**
  * `(user's code, measured examples) → RunnerTest.java`, or a refusal.
  *
  * The line that may not be crossed (#37): **a runner that compiles and tests the wrong thing
@@ -42,6 +50,7 @@ object JavaRunner {
             ProblemShape.SOLUTION_FUNCTION -> solutionRunner(code, examples)
             ProblemShape.STDIN_MAIN -> stdinRunner(examples)
             ProblemShape.UNRECOGNISED -> Runner.Refused("the solution matches neither measured shape (protocol §7.1)")
+            ProblemShape.AMBIGUOUS -> Runner.Refused(AMBIGUOUS_REASON)
         }
     }
 

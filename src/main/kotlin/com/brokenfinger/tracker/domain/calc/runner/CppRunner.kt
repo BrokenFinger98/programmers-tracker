@@ -34,6 +34,7 @@ object CppRunner {
             ProblemShape.SOLUTION_FUNCTION -> solutionRunner(code, examples)
             ProblemShape.STDIN_MAIN -> stdinRunner(code, examples)
             ProblemShape.UNRECOGNISED -> Runner.Refused("the solution matches neither measured shape (protocol §7.1)")
+            ProblemShape.AMBIGUOUS -> Runner.Refused(AMBIGUOUS_REASON)
         }
     }
 

@@ -111,6 +111,26 @@ class JavaRunnerExecutionTest {
         run.exitCode shouldBe 1
     }
 
+    /**
+     * The hijack this suite did not catch (#91): a solution-style problem with a debug
+     * `main` left in used to generate a stdin harness that never called `solution` — and
+     * printed `ALL PASS` while the graded code was wrong. Now refused, so there is no
+     * runner to run.
+     */
+    @Test
+    fun `a debug main beside a declared solution refuses instead of testing nothing`() {
+        val solution = """
+            public class Solution {
+                public String solution(String s) { return s; }
+                public static void main(String[] args) { System.out.println("CBA"); }
+            }
+        """.trimIndent()
+
+        val runner = JavaRunner.generate(solution, listOf(ProblemExample("\"abc\"", "\"CBA\"")))
+
+        runner.shouldBeInstanceOf<Runner.Refused>().reason shouldContain "both a main and a solution"
+    }
+
     // Harness ------------------------------------------------------------------------------
 
     private data class Run(val exitCode: Int, val output: String)
