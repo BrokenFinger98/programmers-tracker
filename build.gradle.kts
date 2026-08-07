@@ -70,6 +70,8 @@ dependencies {
     testImplementation(libs.spring.boot.webmvc.test)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
+    // The Kotlin runner's execution proof compiles generated source for real (#84).
+    testImplementation(libs.kotlin.compiler.embeddable)
 }
 
 // Coverage is report-only for now. A threshold belongs on domain/calc once the pure

@@ -28,6 +28,7 @@ enum class ProblemShape {
         private val CPP_MAIN = Regex("""\bint\s+main\s*\(""")
         private val JS_SOLUTION = Regex("""function\s+solution\s*\(""")
         private val JS_STDIN = Regex("""process\.stdin|require\s*\(\s*['"]readline['"]""")
+        private val KOTLIN_MAIN = Regex("""fun\s+main\s*\(""")
 
         fun of(code: String): ProblemShape = ofJava(code)
 
@@ -58,6 +59,18 @@ enum class ProblemShape {
         fun ofJavascript(code: String): ProblemShape = when {
             JS_SOLUTION.containsMatchIn(code) -> SOLUTION_FUNCTION
             JS_STDIN.containsMatchIn(code) -> STDIN_MAIN
+            else -> UNRECOGNISED
+        }
+
+        /**
+         * Kotlin: `main` wins, Java's priority for Java's reason. Measured skeletons
+         * (editor capture 2026-08-07): 181951 ships a top-level `fun main(args:
+         * Array<String>)`; the solution-style skeletons (120803, 120817, 12950) declare
+         * `fun solution` inside `class Solution` and never a `main`.
+         */
+        fun ofKotlin(code: String): ProblemShape = when {
+            KOTLIN_MAIN.containsMatchIn(code) -> STDIN_MAIN
+            SOLUTION_TOKEN.containsMatchIn(code) -> SOLUTION_FUNCTION
             else -> UNRECOGNISED
         }
 

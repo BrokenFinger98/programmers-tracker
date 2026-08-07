@@ -187,6 +187,49 @@ class ProblemShapeTest {
         ProblemShape.ofJavascript("console.log(1 + 1);") shouldBe ProblemShape.UNRECOGNISED
     }
 
+    // Kotlin -------------------------------------------------------------------------------
+
+    /** Measured skeleton, 120803 (editor capture 2026-08-07). */
+    @Test
+    fun `a kotlin solution function makes it solution-style`() {
+        val code = """
+            class Solution {
+                fun solution(num1: Int, num2: Int): Int {
+                    var answer: Int = 0
+                    return answer
+                }
+            }
+        """.trimIndent()
+
+        ProblemShape.ofKotlin(code) shouldBe ProblemShape.SOLUTION_FUNCTION
+    }
+
+    /** Measured skeleton, 181951 (editor capture 2026-08-07) — top-level fun main. */
+    @Test
+    fun `a kotlin main makes it main-style`() {
+        val code = """
+            fun main(args: Array<String>) {
+                val (a, b) = readLine()!!.split(' ').map(String::toInt)
+                println(a + b)
+            }
+        """.trimIndent()
+
+        ProblemShape.ofKotlin(code) shouldBe ProblemShape.STDIN_MAIN
+    }
+
+    /** Java's priority, Java's reason. */
+    @Test
+    fun `a kotlin main wins over a solution helper`() {
+        val code = "fun solution(n: Int): Int = n\nfun main(args: Array<String>) { println(solution(1)) }"
+
+        ProblemShape.ofKotlin(code) shouldBe ProblemShape.STDIN_MAIN
+    }
+
+    @Test
+    fun `kotlin code with neither is refused`() {
+        ProblemShape.ofKotlin("val x = 1") shouldBe ProblemShape.UNRECOGNISED
+    }
+
     @Test
     fun `neither shape is refused, not guessed`() {
         ProblemShape.of("SELECT * FROM FOODS_INFO;") shouldBe ProblemShape.UNRECOGNISED

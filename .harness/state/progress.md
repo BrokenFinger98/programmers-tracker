@@ -1627,3 +1627,27 @@ choice is also why `JavascriptSignature` admits only the declaration form: a
 Main-style (181951: top-level readline over process.stdin) re-runs as a fresh `node` child
 per example — Python's subprocess rationale. Deep comparison via `JSON.stringify`, which is
 order-sensitive over arrays like the judge. CI proof-ran loop now covers four suites.
+
+## [2026-08-07] Kotlin runner — fifth language, the two-main-traps one ✅
+
+Issue #84, branch `feat/84-kotlin-runner`. 947 tests, all gates 0.
+
+Measured (editor captures 2026-08-07): 120803 `fun solution(num1: Int, num2: Int): Int`
+inside `class Solution`; 120817 takes the **primitive** `IntArray`; 12950
+`Array<IntArray>`; 181951 a top-level `fun main(args: Array<String>)`.
+
+Both shapes compile in one unit with the user's file, and Kotlin's two traps are both about
+`main`: the harness entry is an `object RunnerTest { @JvmStatic fun main }` (a top-level
+one would collide with the user's), and the user's `main` is reached through a **top-level
+bridge function** — inside the object an unqualified `main(...)` resolves to the harness's
+own entry, and the `SolutionKt` facade is invisible to Kotlin resolution. No reflection.
+
+Equality is by content (`contentEquals`/`contentDeepEquals`) because Kotlin arrays compare
+by reference under `==` — the array execution cases exist to prove that dispatch for real.
+Kotlin strings interpolate `$`, so the quoting table grew one entry.
+
+The execution suite compiles generated source with `kotlin-compiler-embeddable` through
+`CLICompiler.doMainNoExit` — kotlinc's own entry minus the exit — so it is hermetic on all
+3 CI runners and can never skip. The **two-example main-style test settled the open
+question**: `readLine()`'s LineReader follows a swapped `System.in`, so the in-process
+harness stands, and that experiment is now pinned as a test.
