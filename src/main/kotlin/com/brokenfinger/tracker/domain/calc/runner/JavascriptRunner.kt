@@ -28,6 +28,9 @@ object JavascriptRunner {
             ProblemShape.SOLUTION_FUNCTION -> solutionRunner(code, examples)
             ProblemShape.STDIN_MAIN -> stdinRunner(examples)
             ProblemShape.UNRECOGNISED -> Runner.Refused("the solution matches neither measured shape (protocol §7.1)")
+            // Unreachable today: this language resolves the both-signals case in favour of
+            // the solution declaration rather than calling it ambiguous (see ProblemShape).
+            ProblemShape.AMBIGUOUS -> Runner.Refused(AMBIGUOUS_REASON)
         }
     }
 

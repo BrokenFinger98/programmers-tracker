@@ -1721,6 +1721,25 @@ root as real paths so a symlinked or `/private`-prefixed root still matches.
 
 The new test asserts on the thing that matters — the enclosing project's work is still
 uncommitted afterwards.
+## [2026-08-07] #91 — a debug main no longer hijacks the runner ✅
+
+"`main` wins when both appear" was right for main-style problems and wrong for
+solution-style ones, where the judge calls `solution(...)` and never touches `main`. A
+scratch `main` the user left behind produced a stdin harness containing no `solution` call
+at all — and it printed `ALL PASS` while the graded code was wrong. Reproduced under JDK 25
+before fixing; the same flip was confirmed for kotlin, csharp, cpp and c.
+
+The shape is genuinely undecidable from the code: a refactored main-style problem and a
+solution-style one with a leftover `main` are identical here. So `ProblemShape` gained an
+`AMBIGUOUS` state and the five affected generators refuse it with the remedy stated.
+
+The distinction that keeps the original intent alive is **declaration versus call**: a
+`main` program that merely *calls* a helper named `solution` is still main-style, and each
+language's own signature parser is what answers "declares". Java gets this for free — the
+parser requires `public`, which is what the judge's skeleton has.
+
+Python and JavaScript resolve the same collision the other way, which is their measured
+rule; the mirror-image risk there is unmeasured and left alone rather than guessed at.
 ## [2026-08-07] #92 — protocol values can no longer become code in a generated runner ✅
 
 Strict parsing was treated as sufficient and is not: kotlinx-serialization accepts bare
