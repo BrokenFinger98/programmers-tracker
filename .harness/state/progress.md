@@ -1844,3 +1844,29 @@ That file is also the one document `scripts/guards.sh` cannot check — every pa
 relative to a repository living elsewhere, which the guard deliberately skips. So the
 invariant is pinned as a test instead, and the test was proved by reintroducing both
 fabrications and watching it fail.
+
+## [2026-08-07] #97 — the sensor extension exists, and its limits are stated ✅
+
+The gap that kept this tool to one person: without a sensor, every problem had to be
+registered by hand through DevTools and `curl`, again after each language-tab switch and
+each server restart, and a submission on an unregistered problem is lost silently.
+
+Measured before writing, on a live page (lesson 120803): all five identifiers read exactly
+as design §8 sketched, and a language-tab switch replaces the code input — `language` and
+`codesKey` change, `challengeableId` does not. That last fact is what the change detection
+keys on.
+
+One thing the design predates: **a content script cannot make this request.** Its
+cross-origin fetch is subject to the page's CORS rules, and the server publishes none —
+correctly, since permissive CORS would let any page in the browser reach it. So the content
+script reads the DOM and hands the body to a service worker, whose `host_permissions` cover
+`127.0.0.1`. The badge is the entire UI, because a sensor that fails silently reproduces the
+exact failure it exists to remove.
+
+The request contract was exercised against a running server with the measured identifiers:
+`started`, then `refreshed` on the repeat, then `401` with the error body the badge shows.
+
+**Stated as unproven, not done**: nobody has loaded it in a browser end to end, so the
+manifest wiring, the worker relay and the badge are written and unexercised. The
+constitution's rule about external-interaction features applies, and the README, the
+bootstrap gap list and the README status table all say so rather than implying otherwise.

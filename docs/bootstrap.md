@@ -223,8 +223,25 @@ set `TRACKER_WATCH_TOKEN`; there is no way to turn the check off.
 
 ## 6. Tell the server which problem you are on
 
-Open a Programmers problem, then hand the server five identifiers from the page. In the
-browser's DevTools **Console**, on the problem page, run:
+The server only observes channels it has been told about, so this step is what makes a
+submission get recorded at all.
+
+### With the sensor extension
+
+Install [`extension/`](../extension/README.md) unpacked — `chrome://extensions` → Developer
+mode → **Load unpacked** — then open its options and paste the token from step 5. After
+that it announces every problem you open, re-announces on a language-tab switch, and
+re-registers itself after a server restart. The toolbar badge says whether the server
+accepted: green is watching, orange means no token yet, red carries the server's own error.
+
+Note the extension has not yet been loaded end to end by anyone; its README says exactly
+what is measured and what is not.
+
+### By hand, without the extension
+
+Still worth knowing — it is how you check the server directly when the badge says
+something you do not expect. In the browser's DevTools **Console**, on the problem page,
+run:
 
 ```js
 copy(JSON.stringify({
@@ -317,11 +334,10 @@ if the machine was asleep).
 
 Stated plainly, because finding these out by trial is worse.
 
-- **There is no browser extension in this repository.** The design has one (§8); it is not
-  written. Step 6 is the manual stand-in for it, which means: you must register each problem
-  by hand, re-register after a language-tab switch and after every server restart, and if
-  you forget, that submission is lost. This is the single biggest gap between the tool as
-  designed and the tool as it exists.
+- **The sensor extension is written but unproven.** [`extension/`](../extension/README.md)
+  exists and its selectors and request contract are measured, but nobody has loaded it in a
+  browser end to end yet. Until someone does, keep step 6's manual route in reach: a problem
+  you never registered records nothing, silently.
 - **The MCP server exposes three tools, not the design's twenty.** `submissions`,
   `get_problem` and `stats` are built and connectable today — see [`mcp.md`](mcp.md) for
   the client configuration. What is missing is the analysis half: review queue, warmup

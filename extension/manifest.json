@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "programmers-tracker sensor",
+  "version": "0.1.0",
+  "description": "Tells your local programmers-tracker which problem you are looking at. Reads five identifiers from the page and sends nothing else.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "action": {
+    "default_title": "programmers-tracker sensor"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://school.programmers.co.kr/learn/courses/*/lessons/*"],
+      "js": ["sensor.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
