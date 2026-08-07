@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TerminalKind
 import com.brokenfinger.tracker.domain.TestcaseResult
@@ -38,6 +39,7 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
     // A run announces a count rather than ids, so completeness is checked against whichever
     // of the two the stream actually promised.
     private var announcedCount: Int? = null
+    private var announcedExamples: List<ProblemExample> = emptyList()
     private val testcases = linkedMapOf<Long, TestcaseResult>()
     private var action: GradingAction? = null
     private var terminal: TerminalKind? = null
@@ -50,6 +52,9 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
         errorText = errorText ?: facts.errorText
         announcedIds += facts.announcedTestcaseIds
         announcedCount = announcedCount ?: facts.announcedTestcaseCount
+        // First announcement wins, like the count: the start frame is the one that carries
+        // them, and a re-announcement mid-stream would be a new grading, not this one.
+        if (announcedExamples.isEmpty()) announcedExamples = facts.announcedExamples
         facts.testcase?.let { testcases[it.id] = it }
         markTerminal(facts)
     }
@@ -115,6 +120,7 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
         testcases = graded,
         testcasesComplete = isComplete(),
         errorText = errorText,
+        examples = announcedExamples,
         frames = frames.toList(),
     )
 

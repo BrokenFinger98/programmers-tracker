@@ -1505,3 +1505,29 @@ two can never disagree about what they saw.
 terminal `error`, no verdict frames at all. Registered in the fixture README with provenance.
 The lesson from `assumption-vs-measurement` applied in the same change the capture happened,
 rather than months later.
+
+## [2026-08-07] Run examples reach the record repository ✅
+
+Issue #37 step 1, branch `feat/37-carry-run-examples`. 798 tests, all gates 0.
+
+The `run` `start` frame ships the judge's example pairs inline (protocol §7) and they
+stopped at the protocol boundary — `GradingMessageMapper` kept only the count. They now
+travel the whole pipeline: `ProblemExample` (domain, wire names stop at the mapper per the
+dependency direction) → `GradingFrameFacts.announcedExamples` → `GradingSession.examples` →
+written by the confined writer as `problems/<id>-<slug>/examples.json`.
+
+Decisions that will matter to step 2:
+
+- **Stored as strings, exactly as measured.** The values are JSON-*like*, not JSON — a
+  main-style expected output carries a raw newline inside its quotes (§7.1). Parsing them
+  into types at capture would bake one interpretation into every record; the generator
+  parses at generation time against the user's own signature, and refuses what it cannot.
+- **Replace-only, and an empty announcement is a no-op.** A submit announces no examples and
+  must not blank what the preceding run wrote; two tests pin the pair.
+- **Inside the confined section**, after the append — a derived write to the problem
+  directory must not interleave with another grading's (write-serialization decision 1).
+- **Best-effort**, like the raw move: the file regenerates on the next run, so losing a
+  write never costs the record it rode in with.
+
+The end-to-end tests are driven by the measured run capture; its example values are our #62
+substitutions, whose shape is the measurement.

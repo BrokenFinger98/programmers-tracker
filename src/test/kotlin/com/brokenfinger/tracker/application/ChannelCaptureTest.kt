@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.adapter.store.FileExampleStore
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.CaptureKey
@@ -24,6 +25,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -322,6 +324,33 @@ class ChannelCaptureTest {
         record.tags.shouldBeEmpty()
     }
 
+    // Examples ----------------------------------------------------------------------------
+
+    /**
+     * The run examples reach the problem directory (#37 step 1): the `start` frame ships
+     * them inline (protocol §7), and the runner is generated from this file. Driven by the
+     * measured run capture, whose example values are our substitutions of the site's (#62).
+     */
+    @Test
+    fun `a run's examples land beside the problem as examples json`() {
+        consume(capture(), "algorithm-run-pass.jsonl")
+
+        val file = root.resolve("problems/120804-두-수의-곱-구하기/examples.json")
+        Files.readString(file) shouldContain "6, 7"
+    }
+
+    /** A submit announces no examples and must not blank what the preceding run wrote. */
+    @Test
+    fun `a submit after a run leaves the examples file alone`() {
+        val capture = capture()
+        consume(capture, "algorithm-run-pass.jsonl")
+
+        consume(capture, "algorithm-pass.jsonl")
+
+        val file = root.resolve("problems/120804-두-수의-곱-구하기/examples.json")
+        Files.readString(file) shouldContain "6, 7"
+    }
+
     // Harness ------------------------------------------------------------------------------
 
     private fun recording(into: MutableList<SubmissionRecord>) = RecordAttachment {
@@ -346,6 +375,7 @@ class ChannelCaptureTest {
         recordRoot = root,
         git = aQuietGitSync(),
         submissionLog = RecordLayout(root).submissionLog(),
+        examples = FileExampleStore(RecordLayout(root)),
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         writerDispatcher = Dispatchers.Unconfined,
     )

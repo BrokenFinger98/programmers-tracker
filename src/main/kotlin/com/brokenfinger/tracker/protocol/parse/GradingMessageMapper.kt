@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.protocol.parse
 
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.GradingFrameFacts
+import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TerminalKind
 import com.brokenfinger.tracker.domain.TestcaseResult
@@ -40,6 +41,7 @@ object GradingMessageMapper {
         testcase = testcaseOf(message),
         announcedTestcaseIds = announcedTestcaseIds(message),
         announcedTestcaseCount = announcedTestcaseCount(message),
+        announcedExamples = announcedExamples(message),
         errorText = errorTextOf(message),
         startsGrading = message is SubmitMessage.Start,
     )
@@ -92,6 +94,17 @@ object GradingMessageMapper {
     fun announcedTestcaseCount(message: SubmitMessage): Int? = when (message) {
         is SubmitMessage.Start -> message.exampleTestcases?.size
         else -> null
+    }
+
+    /**
+     * The example pairs carried inline on `run`'s `start` (protocol §7), as domain values.
+     * The wire names (`ExampleTestcase`) stop here, per the dependency direction
+     * ([[decisions/2026-08-05-protocol-dependency-direction]]).
+     */
+    fun announcedExamples(message: SubmitMessage): List<ProblemExample> {
+        if (message !is SubmitMessage.Start) return emptyList()
+        val pairs = message.exampleTestcases?.map { it.input to it.output } ?: return emptyList()
+        return ProblemExample.ofReceived(pairs)
     }
 
     /** Full error text of a run-path failure, unescaped here so no caller has to (§7). */
