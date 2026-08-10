@@ -2016,3 +2016,25 @@ as nothing rather than announcing a channel with no language.
 
 Still unproven: nobody has loaded it in a browser. That is now the only thing standing
 between this tool and being usable by someone other than its author.
+
+## [2026-08-10] #118 — the sensor is proven, and the start command no longer hides the rebuild ✅
+
+**The extension works.** Loaded unpacked in Chrome, token pasted, a problem page opened:
+`watching lesson 181947 in java (refreshed)`, green. The server logged the same build
+answering. Every document that said "nobody has loaded this in a browser" now says what is
+true, with the evidence — that claim was right until today and wrong afterwards.
+
+This closes the last thing standing between the tool and someone other than its author
+using it. Steps 1–6 of the design's workflow now work end to end without DevTools.
+
+The first attempt failed, and the failure was mine to own. The badge read
+`400 INVALID_REQUEST — challengeableId is missing` — a field the current server does not
+look at — because the container was running a four-day-old image. `docs/bootstrap.md` gave
+the start command as plain `docker compose up -d` and explained the rebuild in a blockquote
+*below* it, which is not where a copied command comes from. `README.md` already had it
+right, so the two documents disagreed and the wrong one was the walkthrough. The command
+now rebuilds by itself, and the note carries the measured symptom so the next person
+recognises it.
+
+Also corrected while there: the gap list still said the MCP server exposes three tools;
+`list_problems` shipped in #110.
