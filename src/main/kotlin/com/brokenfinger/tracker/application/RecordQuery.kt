@@ -10,6 +10,8 @@ import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.ReviewQueue
 import com.brokenfinger.tracker.domain.calc.Since
+import com.brokenfinger.tracker.domain.calc.SlowPassReport
+import com.brokenfinger.tracker.domain.calc.SlowPasses
 import com.brokenfinger.tracker.domain.calc.SubmissionFilter
 import com.brokenfinger.tracker.domain.calc.SubmissionTally
 import com.brokenfinger.tracker.domain.calc.TallyBucket
@@ -78,6 +80,9 @@ class RecordQuery(private val store: RecordStore, private val catalog: ProblemCa
      * the calculator — everything else it needs is in the records.
      */
     fun reviewQueue(limit: Int?): List<ReviewItem> = ReviewQueue.due(history(), OffsetDateTime.now(clock), limit)
+
+    /** Passes ranked by their slowest testcase (design §6.5). No clock, and no baseline. */
+    fun slowPasses(thresholdMs: Double?): SlowPassReport = SlowPasses.of(history(), thresholdMs)
 
     /**
      * The shipped catalog joined against what was recorded (#100).

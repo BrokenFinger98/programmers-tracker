@@ -34,6 +34,7 @@ class McpToolInvoker(private val query: RecordQuery) {
         McpToolCatalog.STATS -> executed { stats(checked(arguments, STATS_ARGS)) }
         McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(arguments, LIST_ARGS)) }
         McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(arguments, REVIEW_ARGS)) }
+        McpToolCatalog.SLOW_PASSES -> executed { slowPasses(checked(arguments, SLOW_ARGS)) }
         else -> throw McpFailure(
             McpErrors.INVALID_PARAMS,
             400,
@@ -81,6 +82,25 @@ class McpToolInvoker(private val query: RecordQuery) {
         val limit = arguments.wholeNumber("limit") ?: return null
         require(limit > 0) { "limit must be a positive whole number" }
         return limit
+    }
+
+    private fun slowPasses(arguments: JsonObject): JsonObject {
+        val report = query.slowPasses(thresholdOf(arguments))
+        return buildJsonObject {
+            put("count", report.slow.size)
+            put("untimed", report.untimed)
+            put("slow", McpRecordJson.slowPasses(report.slow))
+        }
+    }
+
+    // A time cannot be negative and zero would keep everything, which is what absent means
+    // already. Both are refused rather than reinterpreted (dev rules §4).
+    private fun thresholdOf(arguments: JsonObject): Double? {
+        val raw = arguments["thresholdMs"] ?: return null
+        val ms = (raw as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()
+            ?: throw IllegalArgumentException("thresholdMs must be a number of milliseconds")
+        require(ms > 0) { "thresholdMs must be greater than zero" }
+        return ms
     }
 
     private fun stats(arguments: JsonObject): JsonObject {
@@ -167,5 +187,6 @@ class McpToolInvoker(private val query: RecordQuery) {
         val STATS_ARGS = setOf("groupBy")
         val LIST_ARGS = setOf("level", "part", "tag", "status")
         val REVIEW_ARGS = setOf("limit")
+        val SLOW_ARGS = setOf("thresholdMs")
     }
 }

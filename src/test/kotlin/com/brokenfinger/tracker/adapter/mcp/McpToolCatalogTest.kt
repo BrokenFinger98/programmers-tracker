@@ -18,15 +18,22 @@ class McpToolCatalogTest {
     private val tools = McpToolCatalog.definitions().map { it.jsonObject }
 
     /**
-     * Five, and the absence of the rest is the point. Design §7 lists about twenty; the
-     * others need exam state, a company profile or an analysis that does not exist. A tool
+     * Six, and the absence of the rest is the point. Design §7 lists about twenty; the
+     * others need exam state, a company profile or a write path that does not exist. A tool
      * that answered "not implemented" would be worse than an absent one, because a client
      * discovers it through `tools/list` and plans around it.
      */
     @Test
-    fun `exposes exactly the five tools that can be answered from what ships`() {
+    fun `exposes exactly the six tools that can be answered from what ships`() {
         tools.map { it["name"]!!.jsonPrimitive.content }
-            .shouldContainExactly("submissions", "get_problem", "stats", "list_problems", "review_queue")
+            .shouldContainExactly(
+                "submissions",
+                "get_problem",
+                "stats",
+                "list_problems",
+                "review_queue",
+                "slow_passes",
+            )
     }
 
     /** The spec asks for a deterministic order so clients can cache the list. */

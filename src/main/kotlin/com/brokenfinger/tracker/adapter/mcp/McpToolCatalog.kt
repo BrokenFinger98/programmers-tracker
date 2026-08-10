@@ -34,8 +34,9 @@ object McpToolCatalog {
     const val STATS = "stats"
     const val LIST_PROBLEMS = "list_problems"
     const val REVIEW_QUEUE = "review_queue"
+    const val SLOW_PASSES = "slow_passes"
 
-    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE)
+    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES)
 
     fun definitions(): JsonArray = buildJsonArray {
         add(submissions())
@@ -43,6 +44,29 @@ object McpToolCatalog {
         add(stats())
         add(listProblems())
         add(reviewQueue())
+        add(slowPasses())
+    }
+
+    private fun slowPasses(): JsonObject = tool(
+        name = SLOW_PASSES,
+        title = "Passes slow enough to fail an efficiency test",
+        description = "Every passed problem ranked by its slowest testcase, in milliseconds (design §6.5). " +
+            "Passing is not the end: a solution far slower than its neighbours missed the intended approach, " +
+            "and a real exam's efficiency tests score that as an outright fail. **No baseline is applied** — " +
+            "the design asks for a comparison against same-tag, same-level problems and there are not enough " +
+            "recorded passes to have peers, so the whole distribution comes back in one call and where the " +
+            "line falls is yours to decide. Each item carries the level, tags and language a fair comparison " +
+            "needs. `untimed` counts passes with no reading at all: SQL sends no per-case timing, and a " +
+            "runtime error or timeout drops it case by case — those are excluded from the ranking rather " +
+            "than ranked as instant.",
+    ) {
+        putJsonObject("properties") {
+            putJsonObject("thresholdMs") {
+                put("type", "number")
+                put("exclusiveMinimum", 0)
+                put("description", "Keep only passes whose slowest testcase reached this many milliseconds.")
+            }
+        }
     }
 
     private fun reviewQueue(): JsonObject = tool(

@@ -50,9 +50,10 @@ marked *designed* exists in `src/`.
 | A per-problem page, and diffs between attempts | **built** |
 | A per-problem runner from the judge's own examples | **built** — java · python3 · cpp · javascript · kotlin · c · csharp; the rest refuse with a reason |
 | Problem titles and tags from a catalog | **built** — 689 problems, shipped |
-| MCP server — Claude · Cursor · a local LLM reading the records | **built** — five read tools ([`mcp.md`](docs/mcp.md)) |
+| MCP server — Claude · Cursor · a local LLM reading the records | **built** — six read tools ([`mcp.md`](docs/mcp.md)) |
 | Review queue — spaced repetition over your own passes | **built** — `review_queue`, §6.4 |
-| Weakness by tag · passed-but-slow · per-company profiles | designed · §6 |
+| Passed-but-slow — a pass that would fail an efficiency test | **built** — `slow_passes`, §6.5 |
+| Weakness by tag · exam mode · per-company profiles | designed · §6 |
 
 One consequence of that table is worth stating outright, because it changes what the first
 hour with this tool feels like: **a submission on a problem the server was never told about
