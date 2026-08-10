@@ -28,9 +28,9 @@ function language() {
   return document.querySelector("input[data-type=code]")?.dataset.language ?? null;
 }
 
-// Measured 2026-08-10: the 질문하기 tab is a real navigation to /lessons/<id>/questions, and
-// unlike 다른 사람의 풀이 it opens on problems you have NOT solved — which is what makes it
-// a usable signal for "was help within reach while stuck".
+// Measured 2026-08-10: the questions tab is a real navigation to /lessons/<id>/questions,
+// and unlike the other-solutions tab it opens on problems you have NOT solved — which is
+// what makes it a usable signal for "was help within reach while stuck".
 function onQuestionsPage() {
   return /\/lessons\/\d+\/questions/.test(location.pathname);
 }

@@ -63,13 +63,50 @@ fi
 #    protocol data (`실패 (시간 초과)`), and fixtures, the protocol doc and the
 #    design doc all contain them on purpose. What must never be Korean is prose
 #    we wrote — and the automatable, false-positive-free slice of that is
-#    Kotlin comments.
+#    source comments.
+#
+#    MATCHED AS BYTES, NOT AS CHARACTERS. `[가-힣]` is a multi-byte range that
+#    git grep resolves against the locale, and it agreed with nobody (#123): on
+#    the CI runner's C.UTF-8 it died with `Invalid collation character`, in a
+#    bare C locale it matched 1006 English comments, and only the author's macOS
+#    en_US.UTF-8 gave the two real hits. Hangul syllables U+AC00–U+D7A3 are three
+#    UTF-8 bytes led by \xea-\xed; `§` (\xc2) and `—`/`→`/`⚠` (\xe2) fall outside
+#    that, so English comments using them stay clean. LC_ALL=C is pinned so the
+#    bytes stay bytes on every machine.
+#
+#    Untracked files are searched too. The gates were run before `git add` and
+#    the index held no such file, so the check passed on a tree whose new `.kt`
+#    it had never read.
 # ---------------------------------------------------------------------------
-korean_comments=$(git grep -nIE '^[[:space:]]*(//|\*|/\*).*[가-힣]' -- '*.kt' '*.kts' || true)
-if [ -n "$korean_comments" ]; then
-  report "Kotlin comments must be written in English:"$'\n'"$korean_comments"
-else
-  pass "no Korean prose in Kotlin comments"
+hangul=$'[\xea-\xed][\x80-\xbf][\x80-\xbf]'
+comment_hangul="^[[:space:]]*(//|\*|/\*).*$hangul"
+
+# What failed here was not a missed file but a search that never ran, and a search
+# that never ran is indistinguishable from a clean tree. So the machinery is proved
+# on two known comments before its silence is trusted: one that must match, one that
+# must not. Either canary firing means the check itself is broken, which is a louder
+# failure than anything it could find.
+korean_checked=1
+if ! printf '// %s\n' "$(printf '\xea\xb0\x80')" | LC_ALL=C grep -qE "$comment_hangul"; then
+  report "the English-only check cannot detect Korean at all — it would pass any tree"
+  korean_checked=0
+elif printf '%s\n' '// English prose with § and — and → in it' | LC_ALL=C grep -qE "$comment_hangul"; then
+  report "the English-only check matches English prose using § — → — it would fail every tree"
+  korean_checked=0
+fi
+
+if [ "$korean_checked" -eq 1 ]; then
+  # No `|| true`: git grep exits 0 with matches, 1 with none, and higher on error.
+  # Collapsing all three is what turned a crash into a pass.
+  korean_comments=$(LC_ALL=C git grep -nIE --untracked "$comment_hangul" -- '*.kt' '*.kts' '*.js')
+  korean_status=$?
+  if [ "$korean_status" -gt 1 ]; then
+    report "the English-only check could not run — git grep exited $korean_status"
+  elif [ -n "$korean_comments" ]; then
+    report "source comments must be written in English (development-rules §12):"$'\n'"$korean_comments"
+  else
+    pass "no Korean prose in Kotlin or JavaScript comments"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

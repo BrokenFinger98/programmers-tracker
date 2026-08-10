@@ -2068,3 +2068,37 @@ to start one.
 Schema change, so design §5.2 is amended in the same branch, with ADR
 `2026-08-10-sensor-observations` carrying the accepted costs: `focusedSec` is only as good
 as the extension, and `sawQuestions` says a tab was opened, not that help was taken.
+
+## [2026-08-10] #123 — the English-only guard was reporting on a search it never ran ✅
+
+`constitution guards` printed `ok  no Korean prose in Kotlin comments` on two green trees
+that contained exactly that: the branch `f4f77b3e` and, after the squash, `main` at
+`c5d2db51`. The guard did not miss the file. It never searched.
+
+Reproduced in an `ubuntu:24.04` container against this tree. `[가-힣]` is a multi-byte
+character range and `git grep` resolves it against the locale, which agreed with nobody —
+in a bare `C` locale it matched **1006** English comments, on the runner's `C.UTF-8` it died
+with `fatal: Invalid collation character` (exit 128) and printed nothing, and only the
+author's macOS `en_US.UTF-8` produced the two real hits. `|| true` then made exit 128
+indistinguishable from exit 1, so a crashed search read as a clean tree. The check had been
+vacuous on Linux since the day it was written.
+
+The local gate missed it for a second reason: `git grep` reads the index, the gates were run
+before `git add`, and a file that is not yet tracked is a file the guard has never seen.
+
+Fixed by matching the UTF-8 bytes of the Hangul block under a pinned `LC_ALL=C`, by treating
+`git grep` exit > 1 as a guard failure instead of as silence, and — the part that
+generalises — by making the guard prove itself on two known comments before its silence is
+believed: one that must match, one English comment using `§ — →` that must not. Every fix
+considered here, including the two that were rejected, would otherwise have "passed" while
+doing nothing.
+
+Scope widened where it was already leaking: `--untracked` closes the pre-`git add` hole, and
+`*.js` joined the pathspec because `extension/sensor.js` carried the same Korean prose with
+no guard over it at all. Shell scripts stay out on purpose — `guards.sh` quotes the measured
+protocol literal `실패 (시간 초과)` to explain why literals are legitimate.
+
+All four failure modes were exercised rather than argued: cannot-detect, over-matches,
+search-crashed, clean. The guard fails on the tree that shipped green and passes after the
+two comment sites are translated, identically on macOS and on Ubuntu under `C`, `C.UTF-8`
+and `en_US.UTF-8`. ADR `2026-08-10-guards-must-prove-they-ran`.
