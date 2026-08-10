@@ -33,14 +33,38 @@ object McpToolCatalog {
     const val GET_PROBLEM = "get_problem"
     const val STATS = "stats"
     const val LIST_PROBLEMS = "list_problems"
+    const val REVIEW_QUEUE = "review_queue"
 
-    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS)
+    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE)
 
     fun definitions(): JsonArray = buildJsonArray {
         add(submissions())
         add(getProblem())
         add(stats())
         add(listProblems())
+        add(reviewQueue())
+    }
+
+    private fun reviewQueue(): JsonObject = tool(
+        name = REVIEW_QUEUE,
+        title = "Problems due for re-solving",
+        description = "Spaced repetition over your own passes (design §6.4). Programmers knows only that a " +
+            "problem was solved; these records know how — the submits it took and whether the questions tab " +
+            "was open while you were stuck — and that is what sets the interval. Most overdue first. " +
+            "**The inputs come back with each item so you can disagree with the schedule**: this server " +
+            "computes a date, it does not judge the learner. `sawQuestions` is absent when no browser " +
+            "extension was watching, which is not the same as false. `focusedSec` is reported and never " +
+            "scored — calibrating it needs a per-level distribution of how long problems take, which does " +
+            "not exist yet, so weigh it yourself. Only problems with a recorded pass appear; one solved " +
+            "before this tool existed has no record here at all.",
+    ) {
+        putJsonObject("properties") {
+            putJsonObject("limit") {
+                put("type", "integer")
+                put("minimum", 1)
+                put("description", "Keep only this many, from the most overdue end.")
+            }
+        }
     }
 
     private fun listProblems(): JsonObject = tool(

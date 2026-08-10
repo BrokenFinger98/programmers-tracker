@@ -33,6 +33,7 @@ class McpToolInvoker(private val query: RecordQuery) {
         McpToolCatalog.GET_PROBLEM -> executed { problem(checked(arguments, PROBLEM_ARGS)) }
         McpToolCatalog.STATS -> executed { stats(checked(arguments, STATS_ARGS)) }
         McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(arguments, LIST_ARGS)) }
+        McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(arguments, REVIEW_ARGS)) }
         else -> throw McpFailure(
             McpErrors.INVALID_PARAMS,
             400,
@@ -64,6 +65,22 @@ class McpToolInvoker(private val query: RecordQuery) {
             put("count", found.size)
             put("problems", McpRecordJson.problems(found))
         }
+    }
+
+    private fun reviewQueue(arguments: JsonObject): JsonObject {
+        val due = query.reviewQueue(limitOf(arguments))
+        return buildJsonObject {
+            put("count", due.size)
+            put("due", McpRecordJson.reviewItems(due))
+        }
+    }
+
+    // Zero would ask for an empty answer and mean nothing; a negative cannot be honoured at
+    // all. Both are refused rather than rounded up into a question nobody asked (dev rules §4).
+    private fun limitOf(arguments: JsonObject): Int? {
+        val limit = arguments.wholeNumber("limit") ?: return null
+        require(limit > 0) { "limit must be a positive whole number" }
+        return limit
     }
 
     private fun stats(arguments: JsonObject): JsonObject {
@@ -149,5 +166,6 @@ class McpToolInvoker(private val query: RecordQuery) {
         val PROBLEM_ARGS = setOf("lessonId")
         val STATS_ARGS = setOf("groupBy")
         val LIST_ARGS = setOf("level", "part", "tag", "status")
+        val REVIEW_ARGS = setOf("limit")
     }
 }

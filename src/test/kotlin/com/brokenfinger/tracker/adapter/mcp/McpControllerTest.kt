@@ -41,6 +41,7 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * The contract test design §10 asks for, driven over the real endpoint.
@@ -56,7 +57,7 @@ class McpControllerTest {
     class Beans {
         @Bean
         fun mcpDispatcher(): McpDispatcher =
-            McpDispatcher(McpToolInvoker(RecordQuery(scratchStore(), anEmptyCatalog())))
+            McpDispatcher(McpToolInvoker(RecordQuery(scratchStore(), anEmptyCatalog(), Clock.systemUTC())))
 
         @Bean
         fun watchToken(): WatchToken = WatchToken(GRANTED, "build/tmp/mcp-token-should-not-be-created")

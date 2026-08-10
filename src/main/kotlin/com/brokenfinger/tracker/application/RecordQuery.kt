@@ -7,11 +7,15 @@ import com.brokenfinger.tracker.domain.calc.BrowsedProblem
 import com.brokenfinger.tracker.domain.calc.CatalogBrowse
 import com.brokenfinger.tracker.domain.calc.CatalogSummary
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
+import com.brokenfinger.tracker.domain.calc.ReviewItem
+import com.brokenfinger.tracker.domain.calc.ReviewQueue
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.SubmissionFilter
 import com.brokenfinger.tracker.domain.calc.SubmissionTally
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import java.time.Clock
+import java.time.OffsetDateTime
 
 /**
  * Everything recorded about one problem.
@@ -42,7 +46,7 @@ data class ProblemHistory(
  * leaves a torn final line, and refusing to answer because of it would hide every record
  * before it — a grading Programmers has already broadcast can never be fetched again.
  */
-class RecordQuery(private val store: RecordStore, private val catalog: ProblemCatalog) {
+class RecordQuery(private val store: RecordStore, private val catalog: ProblemCatalog, private val clock: Clock) {
     /**
      * The whole log, newest first, **each capture key at its latest state**.
      *
@@ -68,6 +72,12 @@ class RecordQuery(private val store: RecordStore, private val catalog: ProblemCa
         SubmissionFilter.matching(history(), since, verdict)
 
     fun tally(group: TallyGroup): List<TallyBucket> = SubmissionTally.of(history(), group)
+
+    /**
+     * What is worth re-solving today (design §6.4). The clock is the only thing this adds to
+     * the calculator — everything else it needs is in the records.
+     */
+    fun reviewQueue(limit: Int?): List<ReviewItem> = ReviewQueue.due(history(), OffsetDateTime.now(clock), limit)
 
     /**
      * The shipped catalog joined against what was recorded (#100).

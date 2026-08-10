@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.RatingChange
 import com.brokenfinger.tracker.domain.Score
+import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.TestcaseSummary
@@ -42,6 +43,7 @@ fun aSubmissionRecord(
     codePending: Boolean = false,
     diffFromPrev: String? = "@@ -3,1 +3,1 @@\n-        return num1 * num2;\n+        return (long) num1 * num2;",
     errorText: String? = null,
+    sensor: SensorObservation? = null,
 ) = SubmissionRecord(
     ts = ts,
     lessonId = lessonId,
@@ -68,7 +70,16 @@ fun aSubmissionRecord(
     codePending = codePending,
     diffFromPrev = diffFromPrev,
     errorText = errorText,
+    sensor = sensor,
 )
+
+/**
+ * What the browser extension saw. Absent by default, because absent is the normal case: a
+ * record written without the extension carries none, and a reader must be able to tell that
+ * from a reading of zero ([[decisions/2026-08-10-sensor-observations]]).
+ */
+fun aSensorObservation(focusedSec: Long = 612, sawQuestions: Boolean = false) =
+    SensorObservation(focusedSec = focusedSec, sawQuestions = sawQuestions)
 
 /**
  * A database submission. Everything protocol doc §6 says the SQL path never sends is null:

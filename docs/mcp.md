@@ -53,11 +53,16 @@ and changes between releases, so it is deliberately not reproduced here.
 
 ---
 
-## The four tools
+## The five tools
 
-Each returns stored records and counts. **None of them interprets, ranks or advises** — that
-is the AI's job, not the server's, and it is a rule rather than an omission
+Four return stored records and counts and nothing else. **None of them interprets, ranks or
+advises** — that is the AI's job, not the server's, and it is a rule rather than an omission
 ([`CLAUDE.md`](../CLAUDE.md), design §7).
+
+`review_queue` is the one that computes something, and the boundary it respects is worth
+knowing before you read its answers: it schedules, it does not diagnose. Every item carries
+the facts that set its date so you can disagree with the schedule — see
+[`decisions/2026-08-10-scheduling-is-not-diagnosis`](llm-wiki/wiki/decisions/2026-08-10-scheduling-is-not-diagnosis.md).
 
 | Tool | Arguments | Answers |
 |---|---|---|
@@ -65,6 +70,7 @@ is the AI's job, not the server's, and it is a rule rather than an omission
 | `get_problem` | `lessonId` | One lesson and every submission against it, in full — testcases and compiler output included. |
 | `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
+| `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. |
 
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
 offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
@@ -73,6 +79,21 @@ offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
 the records alone cannot tell that from "tried and failed", since both are simply absent
 from a verdict tally. Its filters all narrow, and a filter naming something the catalog does
 not contain returns nothing rather than everything.
+
+### What `review_queue` will and will not tell you
+
+The interval comes from two things: how many submits the pass took, and whether the questions
+tab was opened while you were stuck. It does **not** come from how long you spent —
+`focusedSec` is reported on every item and never scored, because calibrating it needs a
+per-level distribution of how long problems actually take and no such measurement exists yet.
+Weigh it yourself.
+
+A pass recorded with no browser extension watching has **no** `sawQuestions` key. That is not
+`false`. Such an item can never reach the longest interval, because reading "we were not
+watching" as "no help was taken" is the one error that pushes a shaky problem two months out.
+
+The numbers behind the four bands — 60, 21, 7 and 3 days — are chosen, not measured. They
+reproduce the two examples design §6.4 states and nothing more.
 
 ### Missing data looks missing
 

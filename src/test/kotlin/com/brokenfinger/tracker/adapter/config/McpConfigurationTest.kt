@@ -16,6 +16,7 @@ import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * Wiring, tested without a Spring context ([[decisions/2026-08-04-test-environment]]).
@@ -32,14 +33,15 @@ class McpConfigurationTest {
     fun `points the read side at the submission log of the configured record repository`() {
         aRecordRepository(root).containing(aSubmissionRecord(), aSubmissionRecord())
 
-        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog()).history().size shouldBe 2
+        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog(), Clock.systemUTC()).history().size shouldBe
+            2
     }
 
     @Test
     fun `assembles a dispatcher that answers a tool call over that repository`() {
         aRecordRepository(root).containing(aSubmissionRecord())
         val configuration = McpConfiguration()
-        val query = configuration.recordQuery(RecordLayout(root), anEmptyCatalog())
+        val query = configuration.recordQuery(RecordLayout(root), anEmptyCatalog(), Clock.systemUTC())
 
         val dispatcher = configuration.mcpDispatcher(configuration.mcpToolInvoker(query))
 
@@ -53,6 +55,7 @@ class McpConfigurationTest {
 
     @Test
     fun `answers an empty repository rather than failing to wire at all`() {
-        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog()).history().size shouldBe 0
+        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog(), Clock.systemUTC()).history().size shouldBe
+            0
     }
 }

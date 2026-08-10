@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.application.RecordQuery
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import java.time.Clock
 
 /**
  * Assembles the read side — the half of design §7 that hands records to an AI.
@@ -21,8 +22,8 @@ class McpConfiguration {
     // The catalog bean is shared with the capture path rather than loaded twice: it is an
     // immutable snapshot read from the classpath, so a second copy would only cost memory.
     @Bean
-    fun recordQuery(layout: RecordLayout, catalog: ProblemCatalog): RecordQuery =
-        RecordQuery(JsonlRecordStore(layout.submissionLog()), catalog)
+    fun recordQuery(layout: RecordLayout, catalog: ProblemCatalog, clock: Clock): RecordQuery =
+        RecordQuery(JsonlRecordStore(layout.submissionLog()), catalog, clock)
 
     @Bean
     fun mcpToolInvoker(query: RecordQuery): McpToolInvoker = McpToolInvoker(query)
