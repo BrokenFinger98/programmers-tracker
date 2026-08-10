@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.SensorObservation
+
 /**
  * A validated request to observe one problem channel (design §4.1).
  *
@@ -13,7 +15,16 @@ package com.brokenfinger.tracker.application
  * request, before anything has decided it names a real channel. [WatchService] wraps it
  * into a `ChannelKey`, and that construction is where the validation belongs.
  */
-data class WatchCommand(val lessonId: Long, val language: String)
+data class WatchCommand(
+    val lessonId: Long,
+    val language: String,
+    /**
+     * What the sensor saw, when there is a sensor (#120). Null for a watch started by hand,
+     * and for any extension build that does not report it — which is why nothing downstream
+     * may treat its absence as zero.
+     */
+    val observation: SensorObservation? = null,
+)
 
 /**
  * `/watch` is idempotent: the extension re-posts every 30 s per open tab, so a repeat for a

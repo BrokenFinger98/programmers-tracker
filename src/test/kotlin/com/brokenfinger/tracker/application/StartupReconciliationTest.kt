@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
+import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
@@ -160,4 +161,12 @@ private object StoppedTimer : ProblemTimer {
     override fun elapsedSecOf(lessonId: Long): Long = 0
 
     override fun startIfAbsent(lessonId: Long) = Unit
+
+    override fun observed(lessonId: Long, observation: SensorObservation) {
+        observations[lessonId] = observation
+    }
+
+    override fun observationOf(lessonId: Long): SensorObservation? = observations[lessonId]
+
+    val observations = mutableMapOf<Long, SensorObservation>()
 }

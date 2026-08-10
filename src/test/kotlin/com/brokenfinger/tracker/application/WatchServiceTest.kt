@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.ChallengeableId
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.LessonId
 import com.brokenfinger.tracker.domain.ProblemKind
+import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
@@ -117,6 +118,14 @@ class WatchServiceTest {
         override fun startIfAbsent(lessonId: Long) {
             started += lessonId
         }
+
+        override fun observed(lessonId: Long, observation: SensorObservation) {
+            observations[lessonId] = observation
+        }
+
+        override fun observationOf(lessonId: Long): SensorObservation? = observations[lessonId]
+
+        val observations = mutableMapOf<Long, SensorObservation>()
     }
 
     private class RecordingSubscriber : ChannelSubscriber {

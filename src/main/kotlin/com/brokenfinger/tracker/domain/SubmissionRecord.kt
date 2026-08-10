@@ -54,6 +54,16 @@ data class SubmissionRecord(
      * nothing and read like a path that had been lost (#99).
      */
     val rawPath: String?,
+    /**
+     * What the browser saw, when a sensor was watching (#120) — focused time and whether the
+     * questions tab was opened. **Null is the normal absence**: no extension, a watch started
+     * by hand, or an extension loaded after the problem was already open.
+     *
+     * Its own object because it comes from a different source than everything above it: the
+     * rest of this record came off the wire from Programmers, this came from a browser
+     * extension, and a reader weighing the two should be able to see which is which.
+     */
+    val sensor: SensorObservation? = null,
     val codePath: String? = null,
     /** True while the verdict is durable but the code fetch has not succeeded yet (design §5.2). */
     val codePending: Boolean = false,

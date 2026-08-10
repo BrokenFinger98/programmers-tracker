@@ -34,6 +34,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-07 [[decisions/2026-08-07-heartbeat-behind-the-lock]] — A liveness marker behind the lock, compared for change rather than age, for mounts that report a lock they do not enforce
 - 2026-08-07 [[decisions/2026-08-07-server-generated-runners]] — Server generates per-problem runners; refusal before guessing; a language is supported only when its generated runner actually ran
 - 2026-08-08 [[decisions/2026-08-08-run-raw-sessions]] — A run's frames are set aside outside the record repository; `rawPath` is null for a run
+- 2026-08-10 [[decisions/2026-08-10-sensor-observations]] — The sensor records focused time and a questions-tab visit; measured first, which kept a second dead field out
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)

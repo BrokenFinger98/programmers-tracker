@@ -2038,3 +2038,33 @@ recognises it.
 
 Also corrected while there: the gap list still said the MCP server exposes three tools;
 `list_problems` shipped in #110.
+
+## [2026-08-10] #120 — the sensor records what the grading stream cannot ✅
+
+Design §6.4 wants `confidence = f(attempts, hint level, elapsed, performance)` and two of
+those four did not work: `hintLevel` is a dead field with no writer, and `elapsedSec` is
+wall-clock, so a problem opened before dinner reads as three hours.
+
+Both fixes are only observable in the browser, only while solving, and impossible to
+backfill — which is what makes collecting them now right rather than speculative. Built
+today so tonight's problem is the first one recorded with them.
+
+**Measuring first kept a second dead field out.** An earlier sketch had "did you look at
+다른 사람의 풀이". Measured: that tab answers 401 until you have already solved the problem
+(120803 unsolved → 401; 120804, 181951 solved → open), so it could only ever have recorded
+false. The 질문하기 tab does open on unsolved problems and its first post is 문제 풀이
+공유합니다 — that is the real signal, and it is what shipped. Time-to-first-keystroke was
+dropped for having no consumer.
+
+The timers document changed shape to hold the readings, and **reads both forms**: the
+developer's live file had five clocks running in the old flat shape, and dropping them would
+have put a wrong `elapsedSec` on the next record. A wrong number is worse than an absent one.
+
+Absent stays distinguishable from zero throughout — a record written without an extension
+does not claim the learner spent no time. The reading is refused for a problem with no
+timer, because the clock starts when a problem is *announced* and telemetry must not be able
+to start one.
+
+Schema change, so design §5.2 is amended in the same branch, with ADR
+`2026-08-10-sensor-observations` carrying the accepted costs: `focusedSec` is only as good
+as the extension, and `sawQuestions` says a tab was opened, not that help was taken.

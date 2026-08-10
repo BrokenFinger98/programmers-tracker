@@ -1,11 +1,13 @@
 package com.brokenfinger.tracker.adapter.web
 
 import com.brokenfinger.tracker.application.WatchCommand
+import com.brokenfinger.tracker.domain.SensorObservation
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.longOrNull
 
 /**
  * The request was rejected before anything was observed. [field] names the offending
@@ -34,8 +36,20 @@ internal object WatchRequestPayload {
         return WatchCommand(
             lessonId = positiveId(body, "lessonId"),
             language = scalar(body, "language"),
+            observation = observation(body),
         )
     }
+
+    /**
+     * Lenient, unlike everything else here (#120). The two required fields decide whether a
+     * subscription happens at all, so they are strict; these only enrich a record, and
+     * refusing to watch a problem because a telemetry number arrived malformed would trade
+     * a verdict for a statistic.
+     */
+    private fun observation(body: JsonObject): SensorObservation? = SensorObservation.ofReceived(
+        focusedSec = (body["focusedSec"] as? JsonPrimitive)?.longOrNull,
+        sawQuestions = (body["sawQuestions"] as? JsonPrimitive)?.booleanOrNull,
+    )
 
     private fun asJsonObject(rawBody: String): JsonObject {
         if (rawBody.isBlank()) throw InvalidWatchRequestException(null, "the request body is missing")
