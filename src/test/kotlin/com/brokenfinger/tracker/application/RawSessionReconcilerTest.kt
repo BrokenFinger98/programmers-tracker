@@ -157,7 +157,37 @@ class RawSessionReconcilerTest {
 
         afterRestart shouldBe ReconcileReport(duplicates = 1)
         records().size shouldBe 1
+        // Retirement happens inside the writer, and a duplicate is dropped before the writer
+        // writes anything — so nothing used to take this file off the queue and every later
+        // boot re-read it (#130).
+        rawLog.unprocessed().shouldBeEmpty()
     }
+
+    /**
+     * The queue emptying is not enough on its own — deleting the file would empty it too, and
+     * the rule against discarding an original has no exception for a duplicate.
+     *
+     * A **submit** is what makes this visible. Its first pass copies the frames into the
+     * attempt file and discards the source, so `recorded/` does not exist yet; anything found
+     * there afterwards was put there by the duplicate pass. A run would prove nothing, because
+     * its own first pass sets a file aside already.
+     */
+    @Test
+    fun `a duplicate's frames are set aside rather than thrown away`() {
+        val frames = broadcastsOf("algorithm-pass.jsonl")
+        stage(LESSON_ID, frames)
+        reconcile() shouldBe ReconcileReport(recorded = 1)
+        stage(LESSON_ID, frames)
+
+        reconcile() shouldBe ReconcileReport(duplicates = 1)
+
+        Files.readAllLines(onlyRetiredFile()) shouldContainExactly frames
+    }
+
+    /** Fails loudly when nothing was set aside, which is the case this exists to catch. */
+    private fun onlyRetiredFile(): Path = Files.list(retired()).use { it.findFirst() }.orElseThrow()
+
+    private fun retired(): Path = root.resolve(".ps/raw").resolve(FileRawSessionLog.RETIRED)
 
     // Interrupted sessions -------------------------------------------------------------------
 

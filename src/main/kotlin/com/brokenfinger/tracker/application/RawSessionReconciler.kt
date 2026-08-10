@@ -61,8 +61,25 @@ class RawSessionReconciler(
 
     private suspend fun recorded(capture: SettledCapture, skipped: Int): ReconcileReport {
         val written = writer.write(capture)
-        if (written == null) return ReconcileReport(duplicates = 1, skippedLines = skipped)
+        if (written == null) return duplicate(capture, skipped)
         return ReconcileReport(recorded = 1, skippedLines = skipped)
+    }
+
+    /**
+     * Retirement lives inside [RecordWriter.write], and a duplicate is dropped by capture key
+     * before the writer writes anything — so it retires nothing, and nothing else took the
+     * session off the work list. It was re-read on every boot for the life of the repository
+     * (#130), which is the growing boot cost
+     * [[decisions/2026-08-08-run-raw-sessions]] removed from the live path and not from this one.
+     *
+     * Set aside rather than deleted: the frames are an original, and that rule has no
+     * exception for a duplicate. Failing to retire costs a repeated read, never the record —
+     * so it is logged and the pass continues.
+     */
+    private fun duplicate(capture: SettledCapture, skipped: Int): ReconcileReport {
+        runCatching { rawLog.setAside(capture.rawSessionId) }
+            .onFailure { logger.warn("Already-recorded frames stayed on the work list ({})", it.javaClass.simpleName) }
+        return ReconcileReport(duplicates = 1, skippedLines = skipped)
     }
 
     private fun replayed(channel: ChannelKey, lines: List<String>): SessionReplay {
