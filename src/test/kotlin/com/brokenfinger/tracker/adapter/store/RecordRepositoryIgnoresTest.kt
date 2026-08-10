@@ -11,11 +11,12 @@ import java.nio.file.Path
  * The record repository must ignore the state directory, because the state moved inside it
  * (#126) and reconciliation is `git add --all`.
  *
- * `.ps/raw/recorded/` holds a **copy** of every `attempts/00N.raw.jsonl` — [RecordWriter]
- * copies the frames in and retires the source. A repository that does not ignore it commits
- * the whole capture history twice and pushes it. Repositories created before #122 carry a
- * `.gitignore` that names `.ps/session` and `.ps/catalog.json` one at a time and ignores none
- * of this, and there is no upgrade path for a file the user owns other than adding the line.
+ * `.ps/raw/recorded/` holds one session per **run**, and a run "gets pressed dozens of times
+ * while writing code" — committing them is the repository inflation
+ * [[decisions/2026-08-08-run-raw-sessions]] weighed and rejected. Repositories created before
+ * #122 carry a `.gitignore` that names `.ps/session` and `.ps/catalog.json` one at a time and
+ * ignores none of this, and there is no upgrade path for a file the user owns other than
+ * adding the line.
  */
 class RecordRepositoryIgnoresTest {
     @TempDir

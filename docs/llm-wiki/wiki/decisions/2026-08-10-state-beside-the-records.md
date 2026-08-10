@@ -53,11 +53,15 @@ the records" is the kind of rule someone tidies into "all of it does".
 
 **The server adds `.ps/` to the record repository's `.gitignore` at startup**
 (`RecordRepositoryIgnores`). This is not tidiness. Reconciliation is `git add --all`, and
-`.ps/raw/recorded/` holds a copy of every `attempts/00N.raw.jsonl` — the writer copies frames
-into the attempt file and retires the source — so a repository that does not ignore it
-commits the entire capture history a second time and pushes it. The template carries the rule
-since #122, but a template is copied once at creation: repositories made earlier name
-`.ps/session` and `.ps/catalog.json` one at a time and ignore none of the rest. Their
+`.ps/raw/recorded/` is the directory [[decisions/2026-08-08-run-raw-sessions]] exists to keep
+out of a commit: one file per **run**, and a run "gets pressed dozens of times while writing
+code". That ADR weighed putting them in the repository and rejected it as the inflation §5.1
+prevents; ignoring the directory is what carries that decision now the state is inside the
+repository at all.
+
+The template has carried the rule since #122, but a template is copied once, at creation:
+repositories made earlier name `.ps/session` and `.ps/catalog.json` one at a time and ignore
+none of the rest. Their
 `.gitignore` belongs to the user, so one line is appended and nothing else is touched. It
 runs on every boot, appends at most once, and logs rather than throws — losing a capture to a
 `.gitignore` that would not write is the wrong trade in every direction.
@@ -92,10 +96,23 @@ rather than new machinery.
 
 ## Outcome
 
+⚠️ **Corrected 2026-08-10 (#128).** The paragraph above first justified the ignore rule by
+claiming `.ps/raw/recorded/` duplicates every `attempts/00N.raw.jsonl`. It is the reverse:
+`RecordWriter.retireRaw` discards a submit's source once the frames are in the attempt file
+and sets aside only a run, so `recorded/` holds runs and nothing else. The rule is right and
+the reason was wrong — and the wrong reason had been written by the server into a file in the
+user's own repository, which is the failure this project calls its worst outcome. The real
+justification was available in [[decisions/2026-08-08-run-raw-sessions]] the whole time, and
+`RecordWriterTest` now pins both sides so it cannot drift again.
+
 Verified against real git rather than argued: `RecordWriterGitTest` now places raw frames
 where production does and runs the startup rule, so its existing "what does a commit carry"
 assertions became the proof. Reconciliation's `git add --all` commits `.gitignore`,
 `log/submissions.jsonl` and the attempt file — and nothing under `.ps/`.
 
-The developer's own machine still needs a manual migration; there is no code for it, per
-[[concepts/assumption-vs-measurement]] on not building for users who do not exist.
+The developer's machine was migrated by hand — there is no code for it, per
+[[concepts/assumption-vs-measurement]] on not building for users who do not exist. Before the
+first boot `git check-ignore` reported the state directory as committable; after it, the
+repository was clean and the server's log line named the file it had edited. The one raw
+session left on the work list was recognised as already recorded (`duplicates=1`) rather than
+recorded a second time.

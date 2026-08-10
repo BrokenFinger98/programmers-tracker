@@ -138,6 +138,11 @@ class RecordWriterTest {
         record.rawPath shouldBe "problems/120804-두-수의-곱-구하기/attempts/001.raw.jsonl"
         Files.readString(root.resolve(record.rawPath)) shouldEndWith "\n"
         Files.exists(rawDirectory().resolve("live-1.jsonl")) shouldBe false
+        // Discarded rather than set aside: the frames are in the attempt file now, so a copy
+        // in `recorded/` would be the duplicate storage this pipeline exists to avoid. Which
+        // makes `recorded/` a directory of runs and nothing else — #128 was written on the
+        // opposite belief, into the user's own `.gitignore`.
+        Files.exists(rawDirectory().resolve("recorded/live-1.jsonl")) shouldBe false
     }
 
     @Test
