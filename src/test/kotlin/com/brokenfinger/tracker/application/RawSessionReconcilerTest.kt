@@ -15,6 +15,7 @@ import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -122,17 +123,33 @@ class RawSessionReconcilerTest {
     }
 
     /**
-     * A run's frames never move out of `.ps/raw` (design §5.1), so a crash after the record was
-     * written leaves the session on the work list forever. Nothing but the writer's capture-key
-     * index stands between that and a second record on every restart — including across the
-     * restart itself, which is why the second pass gets a writer that rebuilt its index from
-     * the log on disk.
+     * Recording a session takes it off the work list, so the next boot has nothing to redo
+     * (#99). A run's frames are set aside rather than deleted — they are the only original
+     * that grading will ever have — but set aside is invisible here, which is the point.
      */
     @Test
-    fun `reprocessing a session already recorded writes no second record`() {
+    fun `a recorded session leaves the work list, so a restart redoes nothing`() {
         stage(LESSON_ID, broadcastsOf("algorithm-run-pass.jsonl"))
+
         reconcile() shouldBe ReconcileReport(recorded = 1)
-        // Not vacuous: the second pass really is handed the same session again.
+
+        rawLog.unprocessed().shouldBeEmpty()
+        reconcile() shouldBe ReconcileReport()
+        records().size shouldBe 1
+    }
+
+    /**
+     * The capture-key index is still the thing that makes a replay safe, and it has to hold
+     * across a restart — so this puts the frames back on the work list, as a failed
+     * retirement would, and gives the second pass a writer that rebuilt its index from the
+     * log on disk.
+     */
+    @Test
+    fun `a session replayed after its record exists writes no second record`() {
+        val frames = broadcastsOf("algorithm-run-pass.jsonl")
+        stage(LESSON_ID, frames)
+        reconcile() shouldBe ReconcileReport(recorded = 1)
+        stage(LESSON_ID, frames)
         rawLog.unprocessed().size shouldBe 1
 
         val afterRestart = reconcile()

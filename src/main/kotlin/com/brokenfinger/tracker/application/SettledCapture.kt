@@ -55,7 +55,7 @@ data class SettledCapture(
      */
     fun movesRaw(attempt: Int): Boolean = action() == GradingAction.SUBMIT && attempt > AttemptAuthority.NONE
 
-    fun toRecord(ts: OffsetDateTime, attempt: Int, key: CaptureKey, rawPath: String) = SubmissionRecord(
+    fun toRecord(ts: OffsetDateTime, attempt: Int, key: CaptureKey, rawPath: String?) = SubmissionRecord(
         ts = ts,
         lessonId = lessonId,
         title = problem?.title.orEmpty(),

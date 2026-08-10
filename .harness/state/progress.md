@@ -1918,3 +1918,32 @@ exit 0 on code that was wrong or had crashed.
 
 Every regression test **executes** the generated runner. Text assertions would not have
 caught any of these, and did not.
+
+## [2026-08-08] #99 — a run's frames are set aside, and rawPath tells the truth ✅
+
+Traced from the symptom: four `action: run` sessions sitting in `.ps/raw` from two days of
+use. `SettledCapture.movesRaw` is false for a run — correctly, design §5.1 says a run
+creates no attempt file — so nothing copied the session and therefore nothing retired it.
+The reconciler re-read every one on every boot, and the record's `rawPath` carried a bare
+session id that resolves against the record repository and matches nothing there.
+
+Two rules pointed opposite ways: design §5.1 says no attempt file for a run, the
+constitution says never discard an original. Resolved by putting the frames where neither
+rule reaches — `.ps/raw/recorded/`, the tool's own state directory, outside the record
+repository in both supported layouts — and making `rawPath` nullable.
+
+Null is the honest statement. A path that resolves to nothing reads exactly like a file
+that was lost, which is the assumption-vs-measurement mistake this repository already made
+once.
+
+`unprocessed()` keeps only direct children whose name parses as a session, so a
+sub-directory is enough to take one off the work list — no marker file, no second index.
+
+Schema change, so design §5.2 is amended in the same branch and the reasoning is in ADR
+`2026-08-08-run-raw-sessions`, including the accepted costs: `.ps/raw/recorded/` grows
+unpruned, and a run's frames are no longer reachable *from* the record.
+
+Three tests pinned the old behaviour and were rewritten. One of them was the cross-restart
+dedup proof, which the retirement makes unreachable for runs — so it was split: one test
+proves a recorded session leaves the work list, another puts the frames back, as a failed
+retirement would, and proves the capture-key index still refuses the second record.

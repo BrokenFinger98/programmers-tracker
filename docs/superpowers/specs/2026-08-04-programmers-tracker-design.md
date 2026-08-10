@@ -582,7 +582,7 @@ payload carried in the `run` message's `start`. No need to parse the problem-sta
   "tcSummary": {"total": 16, "passed": 0, "failed": 16, "complete": true},
   "rating": {"old": 1372, "new": 1372, "changed": false},
 
-  "rawPath": "problems/120804-…/attempts/002.raw.jsonl",
+  "rawPath": "problems/120804-…/attempts/002.raw.jsonl",   // null for a run — see below
   "codePath": "problems/120804-…/attempts/002.java",
   "codePending": false,                  // true when CodeFetch has not succeeded yet
   "diffFromPrev": "@@ -3,1 +3,1 @@\n-        return num1 * num2;\n+        long r = 0; …",
@@ -599,7 +599,10 @@ Five fields exist because of the 2026-08-05 review:
 - **`tcSummary.complete`** — records whether the observed testcase count matched the expected
   one, so a partially observed grading can never masquerade as a full one.
 - **`rawPath`** — the original frames stay reachable from the record, which is what makes
-  re-analysis possible (development-rules §2.4).
+  re-analysis possible (development-rules §2.4). **Null for a `run`** (amended 2026-08-08,
+  ADR `2026-08-08-run-raw-sessions`): a run creates no attempt file, so its frames have no
+  home inside the record repository. They are kept outside it, under the tool's own state
+  directory, and null says that rather than naming a path that resolves to nothing.
 - **`codePending`** — a record whose verdict is durable but whose code attachment has not
   succeeded yet. Consumers must tolerate it.
 
