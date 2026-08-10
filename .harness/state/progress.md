@@ -2188,3 +2188,32 @@ stayed in the checkout, five stale timers (4–6 days old, which would have put 
 boot `git check-ignore` called the state committable; after it the repository was clean, and
 the leftover raw session was recognised as already recorded (`duplicates=1`) rather than
 recorded twice.
+
+## [2026-08-10] #130 — a reconciled duplicate never left the work list ✅
+
+Found by watching a running server rather than by reading code. Every boot logged the same
+two lines:
+
+```
+Reconciling 1 raw session(s) left behind by an earlier run
+ReconcileReport(recorded=0, duplicates=1, failed=0, skippedLines=0)
+```
+
+`.ps/raw/20260806T065702641Z-181951.jsonl` had been re-read on every restart since 2026-08-06.
+
+Retirement lives **inside** `RecordWriter.write`: a session is discarded or set aside as part
+of writing its record. A duplicate is dropped by capture key before the writer writes
+anything, so it retires nothing, and nothing else takes the file off `unprocessed()`. This is
+the growing boot cost `2026-08-08-run-raw-sessions` removed from the live path and left in
+this one — the ADR's Outcome now records that.
+
+Set aside rather than deleted: the frames are an original and that rule has no exception for
+a duplicate. Same `recorded/` directory as the run path, so no second notion of "already
+handled" was invented.
+
+**The first version of the test was vacuous and the fix looked verified.** Asserting that
+`recorded/` held one file passed with `discard` too, because the run fixture's *first* pass
+had already set a file aside there. The discriminating case is a **submit**: its first pass
+copies the frames into the attempt file and discards the source, so `recorded/` does not exist
+until the duplicate pass creates it. Swapping `setAside` for `discard` now fails the test,
+which is the only reason to believe it tests anything.

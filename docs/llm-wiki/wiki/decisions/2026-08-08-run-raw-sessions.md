@@ -91,6 +91,16 @@ never does, so a sub-directory is enough to take a session off the work list.
 
 ## Outcome
 
+**2026-08-10 (#130): the same mechanism was missing from the reconciliation path.** This ADR
+removed the growing boot cost from the live path — a session is retired as part of writing its
+record. Retirement lives *inside* `RecordWriter.write`, and a replayed session whose record
+already exists is dropped by capture key before the writer writes anything, so it retired
+nothing and stayed on the work list. Observed on a running server: the same file reconciled on
+every boot since 2026-08-06, reported `duplicates=1` each time and left where it was. A
+duplicate is now set aside like any other handled session — the same `recorded/` directory,
+for the same reason, so no second notion of "already handled" was invented.
+
+
 Shipped 2026-08-08 with #99. The four stale sessions on the developer's machine were the
 measurement that prompted it.
 
