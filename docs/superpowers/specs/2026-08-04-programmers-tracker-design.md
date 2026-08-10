@@ -485,12 +485,17 @@ ps-records/
 │           └── 003.sql   003.json  003.raw.jsonl
 ├── log/
 │   └── submissions.jsonl        append-only; newest line per captureKey is the record
-└── .ps/
+└── .ps/                         ignored by git; the state that made the records
     ├── raw/                     live session frames, before a session completes
-    ├── catalog.json             cached catalog of 689 problems
-    ├── timers.json              per-problem start times
-    └── hints.json               per-problem hint unlock level
+    ├── timers.json              per-problem start times and sensor readings
+    └── backup.json              when the daily push last succeeded
 ```
+
+The session cookie and the generated `/watch` token are **not** here. They are credentials
+and this repository is pushed, so they stay beside the tool
+([[decisions/2026-08-10-state-beside-the-records]]). `catalog.json` is gone as well — the
+catalog ships inside the jar ([[decisions/2026-08-06-shipped-problem-catalog]]) — and
+`hints.json` was never built; #120's sensor readings replaced what it was for.
 
 `attempts/` is the heart of this design. **The diff between 001 → 002 is precisely "what
 was missed".**

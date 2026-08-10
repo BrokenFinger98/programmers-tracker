@@ -141,7 +141,12 @@ class StartupReconciliationTest {
     /** 2026-08-06, 09:00 in Seoul — a morning start after a night nothing backed up. */
     private fun clock(): Clock = Clock.fixed(Instant.parse("2026-08-06T00:00:00Z"), ZoneOffset.UTC)
 
-    /** Outside the record repository, where the default `tracker.raw-dir` puts it. */
+    /**
+     * A directory of its own, which is all reconciliation cares about: it walks whatever raw
+     * log it is handed. Production puts that under the record repository (design §5.1, #126)
+     * and `RecordWriterGitTest` is where the consequence — that it never gets committed — is
+     * pinned against real git.
+     */
     private fun rawDirectory(): Path = base.resolve("raw")
 
     private fun stage(lessonId: Long, frames: List<String>) {

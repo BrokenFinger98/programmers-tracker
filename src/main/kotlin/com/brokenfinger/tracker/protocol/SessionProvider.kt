@@ -36,6 +36,10 @@ class ManualFileSessionProvider(val path: Path) : SessionProvider {
 
         // Project-local by design: distributed users find `.ps/` next to the tool, and the
         // repo's .gitignore shields it. Override with TRACKER_SESSION_FILE for other layouts.
+        //
+        // Deliberately NOT where the rest of the state went (#126). Timers, raw frames and the
+        // backup marker moved into the record repository because they describe the records;
+        // this is a credential, and the record repository is pushed.
         private const val DEFAULT_PATH = ".ps/session"
 
         fun fromEnvironment(env: (String) -> String? = System::getenv): ManualFileSessionProvider =

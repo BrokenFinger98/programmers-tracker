@@ -10,7 +10,7 @@ import java.nio.file.StandardCopyOption
  * A read-modify-write state document written temp-then-replace
  * ([[decisions/2026-08-05-write-serialization.md]] decision 3).
  *
- * `.ps/timers.json` and `.ps/hints.json` are rewritten whole on every change, so a plain
+ * The timer document and the backup marker are rewritten whole on every change, so a plain
  * write has a window in which the file on disk is neither the old document nor the new one.
  * A reader that lands in that window sees a truncated document — worse than a stale one,
  * because it looks like data rather than like a failure.

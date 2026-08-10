@@ -57,9 +57,14 @@ services:
       # solving history inside Docker's storage, where `docker compose down -v` deletes it.
       - ${TRACKER_RECORD_REPO:?set TRACKER_RECORD_REPO in .env to the absolute path of your record repository}:/records
 
-      # Process state — raw frames mid-grading, per-problem timers, the generated /watch
-      # token, the daily-backup marker. Survives the container because a raw session lost
-      # to a restart is a grading nobody can replay.
+      # The generated /watch token, and nothing else. Raw frames, timers and the backup
+      # marker used to live here too; they are in `<records>/.ps/` now, beside the records
+      # they describe, and so they persist through the mount above (#126). What is left is
+      # a credential, which is exactly what must NOT travel with a repository you push —
+      # so this mount stays, separate, for the one file.
+      #
+      # Still survives the container: a token regenerated on restart would 401 every one of
+      # the extension's 30-second heartbeats until the user pasted the new value.
       - ${TRACKER_STATE_DIR:-./.ps}:/app/.ps
 
       # PUSHING NEEDS CREDENTIALS, AND THERE IS NO DEFAULT WORTH INVENTING. Nothing below

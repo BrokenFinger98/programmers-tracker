@@ -351,9 +351,14 @@ Stated plainly, because finding these out by trial is worse.
   the git index, so run exactly one. Details and what is still unverified (Linux hosts,
   Windows, network filesystems):
   [`decisions/2026-08-06-record-repository-lock`](llm-wiki/wiki/decisions/2026-08-06-record-repository-lock.md).
-- **The lock covers the record repository, not `.ps/`.** Raw frames, per-problem timers, the
-  backup marker and the generated `/watch` token are shared by a container and a native run
-  just as your records are, and nothing serializes them either.
+- **The lock covers `.ps/` too, because that is inside the record repository.** Raw frames,
+  per-problem timers and the backup marker live in `<your records>/.ps/`, beside the records
+  they describe, so claiming the repository claims them with it. The server adds `.ps/` to
+  your repository's `.gitignore` on startup if it is not already there — **a repository
+  created before this change lists state files one at a time and ignores none of these**, and
+  without the rule `git add --all` would commit your whole capture history a second time.
+  Only the generated `/watch` token stays outside, next to the tool: it is a credential, and
+  the record repository is pushed.
 - **The daily backup defaults to `Asia/Seoul`.** Set `TRACKER_BACKUP_ZONE` to yours.
 
 ---

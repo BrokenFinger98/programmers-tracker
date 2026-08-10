@@ -2113,3 +2113,42 @@ retirement area. One of those is a credential.
 The enumeration was the bug, not the omissions: a list that must be extended whenever the
 server writes something new is a list that will be wrong, and it already was. `.ps/`
 wholesale, and the comment says why so nobody helpfully re-itemises it.
+
+## [2026-08-10] #126 — the state files move to where the design always said they were ✅
+
+Design §5.1 draws `.ps/` inside the record repository, four `under(recordRoot)` factories
+were written for it, and `FileRawSessionLog`'s KDoc asserts it outright. Production called
+none of them: `raw-dir`, `timers-file` and `backup.state-file` were CWD-relative, so state
+landed wherever the process started. Measured here — the record repository held no `.ps/` at
+all while the project checkout held four raw frame files, five running timers and the backup
+marker. Docker hides it because the working directory is a mount; natively, starting from
+another directory presents an empty raw queue and loses a grading that cannot be replayed.
+
+The three properties are gone rather than re-pointed. A raw-frame queue that can be aimed
+somewhere other than the records it is a queue for has no correct second value. They also
+used `Path.of` where every other consumer of a configured path used `ConfiguredPath`, so the
+shipped default `~/ps-records` would have made a directory literally named `~`.
+
+**`session` and `watch-token` stay outside, and now say why.** They are credentials; the
+record repository is pushed. "State lives with the records" is exactly the kind of rule
+someone later tidies into "all of it does".
+
+**The hazard the move created, and the guard for it.** Reconciliation is `git add --all`, and
+`.ps/raw/recorded/` is a copy of every `attempts/00N.raw.jsonl`. A repository whose
+`.gitignore` predates #122 names `.ps/session` and `.ps/catalog.json` one at a time and
+ignores none of this, so moving state in would have committed the whole capture history a
+second time and pushed it. `RecordRepositoryIgnores` appends the one line at startup — at
+most once, logging rather than throwing, leaving the rest of the user's file alone.
+
+Proved against real git rather than argued: `RecordWriterGitTest` now puts raw frames where
+production does and runs the startup rule, so its existing "what does a commit carry"
+assertions became the proof. `git add --all` commits `.gitignore`, `log/submissions.jsonl`
+and the attempt file — nothing under `.ps/`.
+
+A side effect worth naming: `RecordRepositoryLock`'s KDoc had a paragraph headed "What it
+does not cover", and what it did not cover was `.ps/`. Two instances sharing a raw queue and
+a timer document was unguarded; the state is now inside the repository the lock already
+claims. ADR `2026-08-10-state-beside-the-records`.
+
+Still owed: this machine's own migration. The live state sits in the project checkout and
+nothing moves it — deliberately, since the repository has no other users yet.

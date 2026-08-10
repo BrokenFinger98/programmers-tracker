@@ -2,7 +2,6 @@ package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.cable.CableChannelSubscriber
 import com.brokenfinger.tracker.adapter.catalog.ClasspathProblemCatalog
-import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileExampleStore
 import com.brokenfinger.tracker.adapter.store.FileProblemTimer
@@ -99,13 +98,25 @@ class CaptureConfiguration {
     @OptIn(ExperimentalCoroutinesApi::class)
     fun writerDispatcher(): CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
 
+    /**
+     * State lives in the record repository, beside the records it describes (design §5.1).
+     *
+     * Derived from `tracker.record-repo` rather than configured separately: a raw-frame queue
+     * that can be pointed somewhere other than the records it is a queue *for* has no correct
+     * second value, only wrong ones. What lands here is also covered by the lock the
+     * repository already holds ([[decisions/2026-08-05-write-serialization]] decision 5),
+     * which is what closes two instances sharing a queue.
+     *
+     * The two files that stay outside are `session` and `watch-token`. Both are credentials
+     * and this repository is pushed.
+     */
     @Bean
-    fun rawSessionLog(@Value("\${tracker.raw-dir}") rawDir: String, clock: Clock): RawSessionLog =
-        FileRawSessionLog(Path.of(rawDir), clock)
+    fun rawSessionLog(@Value("\${tracker.record-repo}") recordRepo: String, clock: Clock): RawSessionLog =
+        FileRawSessionLog.under(recordRoot(recordRepo), clock)
 
     @Bean
-    fun problemTimer(@Value("\${tracker.timers-file}") timersFile: String, clock: Clock): ProblemTimer =
-        FileProblemTimer(AtomicStateFile(Path.of(timersFile)), clock)
+    fun problemTimer(@Value("\${tracker.record-repo}") recordRepo: String, clock: Clock): ProblemTimer =
+        FileProblemTimer.under(recordRoot(recordRepo), clock)
 
     /**
      * Depends on the lock by name rather than by argument: this is the first bean that reads

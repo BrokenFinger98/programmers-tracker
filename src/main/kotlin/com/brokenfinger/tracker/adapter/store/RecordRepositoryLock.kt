@@ -73,11 +73,16 @@ class RecordRepositoryLockedException(
  * — a run before `git init`, then `git init` — is closed from both sides: the root file is
  * removed as soon as a `.git` exists, and its name is in the template `.gitignore`.
  *
- * **What it does not cover.** `.ps/` (raw frames, timers, the backup marker) is shared
- * between a container and a native run just as the records are, and is not the record
- * repository. Nothing here locks it. Neither is the guarantee universal: a lock is only as
- * good as the filesystem underneath, and virtualised Docker mounts and network filesystems
- * are unverified here (see the ADR).
+ * **What it covers, and what it does not.** `.ps/` — raw frames, timers, the backup marker —
+ * sits inside the record repository (design §5.1, #126), so claiming the repository claims
+ * the state with it. That was not always true: while the state lived in the process working
+ * directory, two instances could share a raw-frame queue that nothing here locked, and the
+ * relocation closed it as a side effect rather than by design.
+ *
+ * The guarantee still is not universal. A lock is only as good as the filesystem underneath,
+ * and virtualised Docker mounts and network filesystems are unverified here (see the ADR) —
+ * which is what [RepositoryHeartbeat] runs behind it for. Outside the repository, and so
+ * outside this claim, are the two credentials: the session cookie and the `/watch` token.
  */
 class RecordRepositoryLock(recordRoot: Path) : AutoCloseable {
     /** Where the claim physically sits — inside `.git` whenever the repository has one. */
