@@ -239,39 +239,30 @@ what is measured and what is not.
 
 ### By hand, without the extension
 
-Still worth knowing — it is how you check the server directly when the badge says
-something you do not expect. In the browser's DevTools **Console**, on the problem page,
-run:
-
-```js
-copy(JSON.stringify({
-  lessonId:          document.querySelector("[data-lesson-id]").dataset.lessonId,
-  challengeableId:   document.querySelector("[data-challengeable-id]").dataset.challengeableId,
-  challengeableType: document.querySelector("[data-challengeable-id]").dataset.challengeableType,
-  language:          document.querySelector("input[data-type=code]").dataset.language,
-  codesKey:          document.querySelector("input[data-type=code]").id,
-}));
-```
-
-That copies the body to your clipboard. Send it, with the token from step 5:
+No DevTools needed — the two things the server cannot work out for itself are the problem
+number, which is the last part of the URL, and the language tab you have open. It reads the
+rest off the problem page.
 
 ```bash
 curl -X POST http://127.0.0.1:8080/watch \
   -H "X-Tracker-Token: $(cat .ps/watch-token)" \
   -H 'Content-Type: application/json' \
-  -d 'PASTE_THE_JSON_HERE'
+  -d '{"lessonId":120803,"language":"java"}'
 ```
+
+Worth knowing even with the extension installed: it is how you check the server directly
+when the badge says something you do not expect.
 
 A success looks like this:
 
 ```json
-{"status":"subscribed","lessonId":120804,"challengeableId":12345}
+{"status":"started","lessonId":120803,"language":"java"}
 ```
 
 `{"status":"refreshed",...}` means it was already watching that problem. Repeating the call
 is safe.
 
-Re-send it when you switch the language tab (`codesKey` changes) and after restarting the
+Re-send it when you switch the language tab (a different tab is a different channel) and after restarting the
 server. Yes, this is manual — see [What you cannot do
 yet](#what-you-cannot-do-yet).
 

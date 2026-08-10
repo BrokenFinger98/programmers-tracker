@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.web
 import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchRequestHandler
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.PostMapping
@@ -10,14 +11,18 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 
-/** What `/watch` answers on success. `status` distinguishes a new subscription from a heartbeat refresh. */
+/**
+ * What `/watch` answers on success. `status` distinguishes a new subscription from a
+ * heartbeat refresh; `lessonId` echoes what the caller named, which is now all they sent
+ * (#114) — the channel identifiers the server resolved for itself are its own business.
+ */
 @Serializable
-data class WatchAccepted(val status: String, val lessonId: Long, val challengeableId: Long) {
+data class WatchAccepted(val status: String, val lessonId: Long, val language: String) {
     companion object {
         fun of(command: WatchCommand, outcome: WatchOutcome) = WatchAccepted(
             status = outcome.name.lowercase(),
             lessonId = command.lessonId,
-            challengeableId = command.challengeableId,
+            language = command.language,
         )
     }
 }
@@ -41,7 +46,9 @@ class WatchController(private val watcher: WatchRequestHandler, private val toke
     ): WatchAccepted {
         token.verify(presented)
         val command = WatchRequestPayload.parse(rawBody.orEmpty())
-        return WatchAccepted.of(command, watcher.watch(command))
+        // The resolver reaches the network, so this handler blocks — on a virtual thread,
+        // which is what the inbound half is for (decisions/2026-08-05-backend-stack).
+        return WatchAccepted.of(command, runBlocking { watcher.watch(command) })
     }
 
     companion object {

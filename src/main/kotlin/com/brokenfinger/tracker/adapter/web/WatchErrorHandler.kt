@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.web
 
+import com.brokenfinger.tracker.application.UnresolvableProblemException
 import com.brokenfinger.tracker.application.WatchCapacityExceededException
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -49,6 +50,17 @@ class WatchErrorHandler {
     fun unauthorized(thrown: UnauthorizedWatchException): ResponseEntity<WatchError> {
         log.warn("Refused an unauthorized /watch request")
         return respond(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "a valid ${WatchController.TOKEN_HEADER} is required")
+    }
+
+    /**
+     * The problem page could not be turned into a channel (#114). 502, not 400: the request
+     * was well formed and the failure is upstream — an expired session, or Programmers not
+     * answering — so a client that retries later is doing the right thing.
+     */
+    @ExceptionHandler(UnresolvableProblemException::class)
+    fun unresolvable(thrown: UnresolvableProblemException): ResponseEntity<WatchError> {
+        log.warn("Could not resolve lesson {} to a channel", thrown.lessonId)
+        return respond(HttpStatus.BAD_GATEWAY, "PROBLEM_UNRESOLVED", thrown.message.orEmpty(), "lessonId")
     }
 
     @ExceptionHandler(WatchCapacityExceededException::class)

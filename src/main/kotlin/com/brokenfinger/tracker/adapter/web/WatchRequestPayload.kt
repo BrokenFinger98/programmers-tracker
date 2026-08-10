@@ -1,7 +1,6 @@
 package com.brokenfinger.tracker.adapter.web
 
 import com.brokenfinger.tracker.application.WatchCommand
-import com.brokenfinger.tracker.domain.ProblemKind
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -17,9 +16,9 @@ class InvalidWatchRequestException(val field: String?, message: String) : Runtim
 /**
  * Reads the `/watch` body by hand instead of binding it to a data class.
  *
- * Two reasons. First, the extension reads DOM `data-*` attributes, so the identifiers
- * arrive as **strings** — but a future extension build (or a curl by hand) may just as
- * well send numbers, and a binder that accepts one and 500s on the other is a trap.
+ * Two reasons. First, the lesson id may arrive as a **string** (read from a DOM attribute
+ * or the URL) or as a number (typed by hand into a curl), and a binder that accepts one and
+ * 500s on the other is a trap.
  * Second, a binder's failure message is the binder's, not ours: this endpoint owes the
  * caller a stable error contract naming the exact field, because a `data-*` attribute
  * silently disappearing when Programmers changes its markup is the expected failure mode.
@@ -34,10 +33,7 @@ internal object WatchRequestPayload {
         val body = asJsonObject(rawBody)
         return WatchCommand(
             lessonId = positiveId(body, "lessonId"),
-            challengeableId = positiveId(body, "challengeableId"),
-            kind = problemKind(body),
             language = scalar(body, "language"),
-            codesKey = scalar(body, "codesKey"),
         )
     }
 
@@ -55,12 +51,6 @@ internal object WatchRequestPayload {
             ?: throw InvalidWatchRequestException(field, "$field must be a positive whole number, was ${quoted(raw)}")
     }
 
-    private fun problemKind(body: JsonObject): ProblemKind {
-        val raw = scalar(body, TYPE_FIELD)
-        return ProblemKind.entries.firstOrNull { it.name.equals(raw, ignoreCase = true) }
-            ?: throw InvalidWatchRequestException(TYPE_FIELD, "unknown $TYPE_FIELD ${quoted(raw)} — $KNOWN_TYPES")
-    }
-
     /** Accepts the string and the number form of a value; rejects null, booleans and containers. */
     private fun scalar(body: JsonObject, field: String): String {
         val element = body[field] ?: throw InvalidWatchRequestException(field, "$field is missing")
@@ -76,8 +66,5 @@ internal object WatchRequestPayload {
     /** Echoes the caller's own value back, bounded — an unbounded echo is a log- and body-bloat vector. */
     private fun quoted(raw: String): String = "'${raw.take(ECHO_LIMIT)}'"
 
-    private const val TYPE_FIELD = "challengeableType"
     private const val ECHO_LIMIT = 40
-    private val KNOWN_TYPES =
-        ProblemKind.entries.joinToString(prefix = "expected one of [", postfix = "]") { it.name.lowercase() }
 }

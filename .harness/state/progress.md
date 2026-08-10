@@ -1968,3 +1968,34 @@ sub-directory trick from #99 does the work again.
 The test that pinned the drop as intended behaviour (`a terminal frame with no grading in
 flight is ignored`) is replaced by two: one proving a grading frame is kept, one proving
 protocol noise still is not.
+
+## [2026-08-10] #114 — /watch now asks for only the two things the server cannot know ✅
+
+Came out of the owner asking a good question: the session cookie is fixed per user, so why
+does anything else need supplying? Answer: the cookie says *who*, the channel identifier
+says *which problem's broadcast* — and protocol §10 measured that there is no wildcard and
+no per-user channel, so the server must be told which problem is open.
+
+But it was being told far too much. Protocol §3 measured every identifier as extractable
+from the problem page with **no login required**, and `challengeable_id`/`challengeable_type`
+as fixed per lesson and language-independent. So the server can read them itself. `codesKey`
+was worse: carried through the payload into the command and consumed by nothing at all.
+
+`/watch` now takes `{lessonId, language}`. A `PageProblemIdentityResolver` reads the rest
+off the page and caches by lesson forever — the sensor heartbeats every 30 seconds, and a
+fetch on each of those would be one request per problem per half-minute against Programmers.
+Only successes are cached; a failure is usually an expired cookie and remembering the "no"
+would outlive the fix.
+
+Two things improved that were not the point. A request that cannot be resolved now answers
+**502 `PROBLEM_UNRESOLVED`** naming the likely cause, where the old path accepted anything
+well-formed and said `started` — that is a piece of the known "/watch always answers
+started" gap, closed as a side effect. And the manual route lost DevTools entirely: the
+problem number is in the URL.
+
+Measured before writing: the markup carrying the identifiers, on a live algorithm page and
+a live SQL page. It also carries `data-user-id`, which the new fixtures scrub.
+
+Verified against a running server, not only in tests: two-field start, heartbeat refresh,
+language switch, a SQL problem, an unresolvable lesson answering 502 with the reason, and a
+missing field answering 400.
