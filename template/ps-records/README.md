@@ -31,8 +31,9 @@ The design also calls for generated dashboard notes — `_dashboard`, `_weakness
 `_warmup`, `_exam` — built on Dataview. **Those are not written yet**, so do not expect to
 find them. This file will list them when they exist.
 
-⚠️ `.ps/` is the tracker's working state — frames captured mid-grading, per-problem timers,
-the daily-backup marker. It sits here so it is beside the records it describes, and
-`.gitignore` keeps it out of every commit. **Never commit it**: `.ps/raw/recorded/` alone is
-a second copy of every `attempts/00N.raw.jsonl` in this repository. The server adds the rule
-itself on startup if your `.gitignore` predates it.
+⚠️ `.ps/` is the tracker's working state — frames still being captured, per-problem timers,
+when the last push succeeded. It sits here so it is beside the records it describes, and
+`.gitignore` keeps it out of every commit. **Never commit it**: `.ps/raw/recorded/` keeps one
+file per code run, and a run gets pressed dozens of times while solving a single problem, so
+committing them would bury your solving history in its own scratch work. The server adds the
+rule itself on startup if your `.gitignore` predates it.

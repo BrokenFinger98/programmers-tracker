@@ -2134,7 +2134,8 @@ record repository is pushed. "State lives with the records" is exactly the kind 
 someone later tidies into "all of it does".
 
 **The hazard the move created, and the guard for it.** Reconciliation is `git add --all`, and
-`.ps/raw/recorded/` is a copy of every `attempts/00N.raw.jsonl`. A repository whose
+`.ps/raw/recorded/` is a copy of every `attempts/00N.raw.jsonl` — ⚠️ **wrong, corrected by
+#128 below: it is the reverse.** A repository whose
 `.gitignore` predates #122 names `.ps/session` and `.ps/catalog.json` one at a time and
 ignores none of this, so moving state in would have committed the whole capture history a
 second time and pushed it. `RecordRepositoryIgnores` appends the one line at startup — at
@@ -2152,3 +2153,38 @@ claims. ADR `2026-08-10-state-beside-the-records`.
 
 Still owed: this machine's own migration. The live state sits in the project checkout and
 nothing moves it — deliberately, since the repository has no other users yet.
+
+## [2026-08-10] #128 — the server was writing a false reason into the user's own repository ✅
+
+#126's ignore rule carried an explanation, and the explanation was backwards. It said
+`.ps/raw/recorded/` duplicates every `attempts/00N.raw.jsonl`. `RecordWriter.retireRaw` is
+`if (copied) discard else setAside`: a submit's frames are copied into the attempt file and
+the **source is deleted**, while a run — which has no attempt file, `rawPath` null since
+#99 — is the only thing set aside. So `recorded/` holds runs and nothing else, and each of
+those files is the sole copy of its frames rather than a duplicate of anything.
+
+Measured after migrating this machine: three files in `recorded/`, all three `"action":"run"`,
+and four `*.raw.jsonl` under `attempts/` with no counterpart there at all.
+
+The rule was right and its reason was wrong, which is worse than it sounds: #126 wrote that
+reason into a `.gitignore` inside the record repository, so a document asserting a property
+the code does not have had been placed in a file the user owns. The correct justification was
+sitting in [[decisions/2026-08-08-run-raw-sessions]] the whole time — a run "gets pressed
+dozens of times while writing code", so committing them is the inflation design §5.1 exists
+to prevent, which is exactly why that ADR rejected putting runs in the repository.
+
+`RecordWriterTest` now pins both sides: a run lands in `recorded/`, and a submit's source
+does **not**. The claim cannot drift again without a test failing.
+
+Two documents amended rather than rewritten. `2026-08-10-state-beside-the-records` carries a
+⚠️ correction in its Outcome. `2026-08-08-run-raw-sessions` said `.ps/` "sits outside the
+record repository in both supported layouts", which #126 quietly made false — it now carries
+a ⚠️ note that its substance is unchanged and only the mechanism keeping run frames out of
+the history has moved, from *being elsewhere* to *being ignored*.
+
+Also this session: the live migration. State moved to `<records>/.ps/`, the two credentials
+stayed in the checkout, five stale timers (4–6 days old, which would have put a wrong
+`elapsedSec` on the next record) and an unread `tag-vocab.json` were deleted. Before the first
+boot `git check-ignore` called the state committable; after it the repository was clean, and
+the leftover raw session was recognised as already recorded (`duplicates=1`) rather than
+recorded twice.

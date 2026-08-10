@@ -56,6 +56,14 @@ supported layouts — Docker mounts it separately from `/records`, and a native 
 it against the working directory. So the frames survive without a single file entering
 `ps-records`.
 
+> ⚠️ **Amended 2026-08-10 by [[decisions/2026-08-10-state-beside-the-records]].** The
+> paragraph above is no longer true of the layout: `.ps/` moved *inside* the record
+> repository, where design §5.1 had always drawn it. What the decision was protecting is
+> unchanged and is now protected differently — `RecordRepositoryIgnores` puts `.ps/` in the
+> repository's `.gitignore` at startup, so no run file enters a commit and `ps-records` still
+> does not grow by a run. The choice between options A, B and C is untouched; only the
+> mechanism that keeps C's frames out of the history is.
+
 `unprocessed()` keeps only direct children whose name parses as a session, and a directory
 never does, so a sub-directory is enough to take a session off the work list.
 

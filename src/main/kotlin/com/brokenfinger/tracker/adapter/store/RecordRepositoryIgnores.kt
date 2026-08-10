@@ -8,10 +8,17 @@ import java.nio.file.Path
  * Guarantees the record repository ignores the tracker's state directory.
  *
  * State lives at `<record-repo>/.ps/` (design §5.1) and reconciliation is `git add --all`, so
- * a repository that does not ignore it commits the state. That is not merely untidy:
- * `.ps/raw/recorded/` holds a **copy** of every `attempts/00N.raw.jsonl` — [RecordWriter]
- * copies the frames into the attempt file and retires the source — so the whole capture
- * history would be committed twice and then pushed.
+ * a repository that does not ignore it commits the state. That is not merely untidy —
+ * `.ps/raw/recorded/` is the one directory [[decisions/2026-08-08-run-raw-sessions]] exists
+ * to keep out of a commit. It holds a session per **run**, and a run "gets pressed dozens of
+ * times while writing code": committing them puts dozens of files per problem into the
+ * user's repository, which is the inflation design §5.1 exists to prevent. That ADR weighed
+ * putting them in the repository and rejected it; ignoring the directory is what carries the
+ * decision now that the state sits inside the repository at all.
+ *
+ * Submits are not the concern. Their frames are copied into `attempts/00N.raw.jsonl` and the
+ * source is discarded, so `recorded/` holds runs and only runs — pinned by `RecordWriterTest`
+ * from both sides, because this comment once said the opposite (#128).
  *
  * **Why the template is not enough.** `template/ps-records/.gitignore` carries the rule, but
  * a template is copied once, when the repository is created. Repositories made before #122
@@ -46,9 +53,11 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
     // A rule with no explanation invites a later tidy-up to remove it as leftovers.
     private fun preamble(existing: String?): String =
         (if (existing.isNullOrEmpty() || existing.endsWith("\n")) "" else "\n") +
-            "\n# The tracker's working state, added by the server itself: it lives here so that it\n" +
-            "# sits beside the records it describes, and `.ps/raw/recorded/` is a copy of every\n" +
-            "# attempts/00N.raw.jsonl. Committing it would push the whole capture history twice.\n"
+            "\n# The tracker's working state, added by the server itself. It lives here so that it sits\n" +
+            "# beside the records it describes, and it is not records: frames still being captured,\n" +
+            "# per-problem timers, when the last push succeeded. `.ps/raw/recorded/` keeps one file\n" +
+            "# per code run, and a run gets pressed dozens of times while solving one problem —\n" +
+            "# committing them would bury your solving history in its own scratch work.\n"
 
     private fun warn(cause: Throwable) {
         logger.warn(
