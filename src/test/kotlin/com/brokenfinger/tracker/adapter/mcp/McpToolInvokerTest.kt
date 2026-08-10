@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.support.fixtures.aCaptureKey
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
+import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
@@ -26,7 +27,10 @@ import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 /** Contract tests per tool (design §10), each against a record repository on disk. */
 class McpToolInvokerTest {
@@ -297,10 +301,88 @@ class McpToolInvokerTest {
         message(result).shouldContain("status")
     }
 
+    // review_queue -----------------------------------------------------------------------------
+
+    /**
+     * The schedule travels with the facts that produced it (#132). The server schedules and
+     * does not diagnose, which is only true if a reader can see the inputs and disagree.
+     */
+    @Test
+    fun `review_queue answers what is due with the facts that scheduled it`() {
+        val invoker = invokerOver(
+            aSubmissionRecord(
+                ts = OffsetDateTime.parse("2026-01-01T09:00:00+09:00"),
+                verdict = Verdict.PASS,
+                sensor = aSensorObservation(focusedSec = 612, sawQuestions = false),
+            ),
+            clock = Clock.fixed(Instant.parse("2026-03-10T00:00:00Z"), ZoneOffset.UTC),
+        )
+
+        val payload = structured(invoker.call("review_queue", JsonObject(emptyMap())))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 1
+        val item = payload["due"]!!.jsonArray.single().jsonObject
+        item["confidence"]!!.jsonPrimitive.content shouldBe "high"
+        item["attempts"]!!.jsonPrimitive.int shouldBe 1
+        item["focusedSec"]!!.jsonPrimitive.int shouldBe 612
+        item["dueAt"]!!.jsonPrimitive.content shouldBe "2026-03-02"
+        item["overdueDays"]!!.jsonPrimitive.int shouldBe 8
+    }
+
+    /** Absent, not `false`: a record nothing observed must not read as one that saw no help. */
+    @Test
+    fun `review_queue omits sawQuestions when nothing was watching`() {
+        val invoker = invokerOver(
+            aSubmissionRecord(ts = OffsetDateTime.parse("2026-01-01T09:00:00+09:00"), verdict = Verdict.PASS),
+            clock = Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC),
+        )
+
+        val item = structured(invoker.call("review_queue", JsonObject(emptyMap())))["due"]!!
+            .jsonArray.single().jsonObject
+
+        item.shouldNotContainKey("sawQuestions")
+        item["confidence"]!!.jsonPrimitive.content shouldBe "medium"
+    }
+
+    @Test
+    fun `review_queue caps at the requested limit`() {
+        val invoker = invokerOver(
+            aSubmissionRecord(lessonId = 1, verdict = Verdict.PASS),
+            aSubmissionRecord(lessonId = 2, verdict = Verdict.PASS),
+            clock = Clock.fixed(Instant.parse("2027-01-01T00:00:00Z"), ZoneOffset.UTC),
+        )
+
+        val payload = structured(invoker.call("review_queue", arguments("limit" to 1)))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 1
+    }
+
+    /** Strict about a value we cannot honour (dev rules §4) — never quietly widened. */
+    @Test
+    fun `review_queue refuses a limit that is not a positive number`() {
+        val invoker = invokerOver(aSubmissionRecord(verdict = Verdict.PASS))
+
+        val answer = invoker.call("review_queue", arguments("limit" to 0))
+
+        failed(answer).shouldBeTrue()
+        message(answer).shouldContain("limit")
+    }
+
+    @Test
+    fun `review_queue refuses an argument it does not have`() {
+        val invoker = invokerOver(aSubmissionRecord(verdict = Verdict.PASS))
+
+        val answer = invoker.call("review_queue", arguments("confidence" to "high"))
+
+        failed(answer).shouldBeTrue()
+        message(answer).shouldContain("confidence")
+    }
+
     private fun invokerOver(
         vararg records: com.brokenfinger.tracker.domain.SubmissionRecord,
         catalog: com.brokenfinger.tracker.application.ProblemCatalog = anEmptyCatalog(),
-    ): McpToolInvoker = McpToolInvoker(aRecordRepository(root).containing(*records).query(catalog))
+        clock: Clock = Clock.systemUTC(),
+    ): McpToolInvoker = McpToolInvoker(aRecordRepository(root).containing(*records).query(catalog, clock))
 
     private fun arguments(vararg pairs: Pair<String, Any>): JsonObject = buildJsonObject {
         pairs.forEach { (key, value) ->

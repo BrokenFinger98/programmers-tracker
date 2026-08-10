@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.mcp
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
+import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.UnknownReason
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -68,6 +69,26 @@ object McpRecordJson {
      * same rule the record serializers follow: an absent level and a level of zero mean
      * different things, and only one of them was measured.
      */
+    /**
+     * The schedule and every fact behind it. Absent stays absent: a sensor field is omitted
+     * rather than written as null, because `"sawQuestions": null` reads like an observation
+     * and "we were not watching" is not one (#132).
+     */
+    fun reviewItems(due: List<ReviewItem>): JsonArray = JsonArray(due.map(::reviewItem))
+
+    private fun reviewItem(item: ReviewItem): JsonObject = buildJsonObject {
+        put("lessonId", item.lessonId)
+        put("title", item.title)
+        item.level?.let { put("level", it) }
+        put("passedAt", item.passedAt.toString())
+        put("attempts", item.attempts)
+        item.sawQuestions?.let { put("sawQuestions", it) }
+        item.focusedSec?.let { put("focusedSec", it) }
+        put("confidence", item.confidence.wireName())
+        put("dueAt", item.dueAt.toString())
+        put("overdueDays", item.overdueDays)
+    }
+
     fun problems(found: List<BrowsedProblem>): JsonArray = JsonArray(
         found.map { problem ->
             buildJsonObject {

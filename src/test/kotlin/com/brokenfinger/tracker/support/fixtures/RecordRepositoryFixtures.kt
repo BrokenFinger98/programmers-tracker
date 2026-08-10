@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.StandardOpenOption.CREATE
+import java.time.Clock
 
 /**
  * A real record repository on disk (dev rules §6.4). Records go in through the real store,
@@ -35,7 +36,8 @@ class RecordRepositoryFixture(val root: Path) {
     fun store(): JsonlRecordStore = JsonlRecordStore(logFile())
 
     /** Catalogue-free by default: most read tests are about records, not about browsing. */
-    fun query(catalog: ProblemCatalog = anEmptyCatalog()): RecordQuery = RecordQuery(store(), catalog)
+    fun query(catalog: ProblemCatalog = anEmptyCatalog(), clock: Clock = Clock.systemUTC()): RecordQuery =
+        RecordQuery(store(), catalog, clock)
 
     fun logFile(): Path = RecordLayout(root).submissionLog()
 }

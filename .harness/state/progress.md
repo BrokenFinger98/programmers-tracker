@@ -2217,3 +2217,44 @@ had already set a file aside there. The discriminating case is a **submit**: its
 copies the frames into the attempt file and discards the source, so `recorded/` does not exist
 until the duplicate pass creates it. Swapping `setAside` for `discard` now fails the test,
 which is the only reason to believe it tests anything.
+
+## [2026-08-10] #132 — the review queue, and the boundary it had to settle first ✅
+
+The first tool that answers "what should I do next". Everything before it collects.
+
+**A conflict had to be resolved before any code.** Design §6.4 asks the server to compute
+`confidence` and a review date; CLAUDE.md's forbidden list says "rule-based analyzers inside
+the server — interpretation is the AI's job". Both were written the same week and neither
+mentions the other.
+
+The boundary that makes them decidable: **diagnosis is a claim about the learner, scheduling
+is a claim about a date.** "You are weak at DFS/BFS" is the misdiagnosis the wiki already
+records; it stays the AI's job. A date derived from recorded facts by a published formula
+says nothing the records do not. The server may do the second on two conditions — every item
+ships the facts that produced it, so the schedule is arguable rather than asserted, and the
+formula is written where a reader will find it. ADR
+`2026-08-10-scheduling-is-not-diagnosis`.
+
+**The formula, and what it refuses to do.** Penalties from attempts (0–3) plus the questions
+tab being opened (+2), banded into 60 / 21 / 7 / 3 days. It reproduces both worked examples
+§6.4 states, which is the only calibration in existence — the numbers are chosen, not
+measured, and the ADR, the tool description and `mcp.md` all say so.
+
+- `focusedSec` is **reported and never scored**. Calibrating it needs a per-level distribution
+  of how long problems take; there are four recorded problems. A level-blind threshold would
+  call 45 minutes on a Lv3 a struggle and on a Lv0 normal with the same number.
+- Performance versus expectation stays out — that is §6.6, and half of it here would leave two
+  places computing the same idea differently.
+- **Absence never buys confidence.** A pass with no extension watching cannot reach 60 days.
+  Reading "we were not watching" as "no help was taken" is the one error direction that pushes
+  a shaky problem two months out.
+
+**Two things earned tests rather than comments.** Attempts are counted from the *previous*
+pass, because counting the whole history would make a re-solve look shakier than the first
+pass and the queue would never release anything. And due-ness is decided in **the offset the
+pass was recorded in** — the container runs UTC, measured on the running image, while the
+learner is nine hours ahead, and a global timezone setting would be a second place for the day
+boundary to be wrong. Reverting either makes a test fail; both were run in both directions.
+
+`review_queue` is the fifth MCP tool. The catalog test that asserts the exact tool list caught
+README, `bootstrap.md` and `mcp.md` still saying four — the guard working as intended.
