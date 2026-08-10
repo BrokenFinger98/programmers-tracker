@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
@@ -296,4 +297,12 @@ private class StaleTimer(private val elapsedSec: Long) : ProblemTimer {
     override fun elapsedSecOf(lessonId: Long): Long = elapsedSec
 
     override fun startIfAbsent(lessonId: Long) = Unit
+
+    override fun observed(lessonId: Long, observation: SensorObservation) {
+        observations[lessonId] = observation
+    }
+
+    override fun observationOf(lessonId: Long): SensorObservation? = observations[lessonId]
+
+    val observations = mutableMapOf<Long, SensorObservation>()
 }

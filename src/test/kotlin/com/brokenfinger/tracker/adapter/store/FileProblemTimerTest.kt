@@ -1,7 +1,11 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.domain.SensorObservation
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -122,10 +126,79 @@ class FileProblemTimerTest {
     }
 
     @Test
-    fun `the document is a plain lesson-id to epoch-second map, readable without this class`() {
+    fun `the document is one plain entry per lesson, readable without this class`() {
         timer.startIfAbsent(120804)
 
-        Files.readString(timersFile()) shouldBe """{"120804":1785888000}"""
+        Files.readString(timersFile()) shouldBe """{"120804":{"startedAt":1785888000}}"""
+    }
+
+    /**
+     * The shape before #120 mapped a lesson straight to its epoch second, and files in that
+     * form exist on real machines — the developer's had five problems running when this
+     * changed. Dropping them would reset those clocks and put a wrong `elapsedSec` on the
+     * next record, which is worse than an absent one.
+     */
+    @Test
+    fun `a document in the pre-observation shape still yields its start times`() {
+        writeRaw("""{"120804":1785888000,"131528":1785887000}""")
+
+        timer.elapsedSecOf(120804) shouldBe 0
+        timer.elapsedSecOf(131528) shouldBe 1000
+        timer.observationOf(120804).shouldBeNull()
+    }
+
+    /** And a start on a legacy document neither loses the old entries nor rewrites them wrongly. */
+    @Test
+    fun `starting a new problem beside legacy entries keeps them`() {
+        writeRaw("""{"120804":1785888000}""")
+
+        timer.startIfAbsent(131528)
+
+        timer.elapsedSecOf(120804) shouldBe 0
+        timer.elapsedSecOf(131528) shouldBe 0
+    }
+
+    // Sensor observations (#120) --------------------------------------------------------------
+
+    @Test
+    fun `an observation is kept and read back`() {
+        timer.startIfAbsent(120804)
+
+        timer.observed(120804, SensorObservation(focusedSec = 420, sawQuestions = true))
+
+        timer.observationOf(120804) shouldBe SensorObservation(420, true)
+    }
+
+    /** Cumulative, not incremental: the newest heartbeat carries the whole answer. */
+    @Test
+    fun `a later observation replaces the earlier one`() {
+        timer.startIfAbsent(120804)
+        timer.observed(120804, SensorObservation(focusedSec = 60, sawQuestions = false))
+
+        timer.observed(120804, SensorObservation(focusedSec = 420, sawQuestions = true))
+
+        timer.observationOf(120804) shouldBe SensorObservation(420, true)
+    }
+
+    /**
+     * The clock starts when a problem is *announced*, so a telemetry message must not start
+     * one — that would put a measured-looking elapsed time on a problem nothing is watching.
+     */
+    @Test
+    fun `an observation for a problem with no timer is ignored`() {
+        timer.observed(120804, SensorObservation(focusedSec = 420, sawQuestions = true))
+
+        timer.observationOf(120804).shouldBeNull()
+        timer.elapsedSecOf(120804) shouldBe 0
+    }
+
+    /** Absent rather than zero: a reader must tell "not seen" from "seen and it was nothing". */
+    @Test
+    fun `a problem with no observation writes no observation fields`() {
+        timer.startIfAbsent(120804)
+
+        Files.readString(timersFile()) shouldContain "startedAt"
+        Files.readString(timersFile()) shouldNotContain "focusedSec"
     }
 
     private fun writeRaw(text: String) {

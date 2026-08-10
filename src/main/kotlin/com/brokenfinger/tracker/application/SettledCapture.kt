@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
 import java.time.OffsetDateTime
@@ -31,6 +32,11 @@ data class SettledCapture(
     val language: String,
     /** Time on this problem, measured by whoever owns the timer, never by the writer. */
     val elapsedSec: Long,
+    /**
+     * What the sensor saw for this problem, when there was a sensor (#120). Null for a watch
+     * started by hand, so nothing downstream may read its absence as zero.
+     */
+    val observation: SensorObservation? = null,
     /**
      * The frame that ended the stream, exactly as received. Null when none arrived — a
      * timeout or a disconnect — and the key then falls back to [rawSessionId], which a
@@ -67,6 +73,7 @@ data class SettledCapture(
         action = action(),
         attempt = attempt,
         elapsedSec = elapsedSec,
+        sensor = observation,
         captureKey = key,
         outcome = session.outcome,
         verdict = session.verdict,

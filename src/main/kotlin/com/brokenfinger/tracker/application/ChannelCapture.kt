@@ -131,6 +131,7 @@ class ChannelCapture(
         problem = catalog.find(channel.lessonId),
         language = channel.language,
         elapsedSec = timer.elapsedSecOf(lessonId()),
+        observation = timer.observationOf(lessonId()),
         terminalFrame = terminalFrame,
     )
 

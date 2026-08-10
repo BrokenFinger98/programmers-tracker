@@ -583,6 +583,7 @@ payload carried in the `run` message's `start`. No need to parse the problem-sta
   "rating": {"old": 1372, "new": 1372, "changed": false},
 
   "rawPath": "problems/120804-…/attempts/002.raw.jsonl",   // null for a run — see below
+  "sensor": {"focusedSec": 612, "sawQuestions": false},    // absent when no sensor was watching
   "codePath": "problems/120804-…/attempts/002.java",
   "codePending": false,                  // true when CodeFetch has not succeeded yet
   "diffFromPrev": "@@ -3,1 +3,1 @@\n-        return num1 * num2;\n+        long r = 0; …",
@@ -605,6 +606,11 @@ Five fields exist because of the 2026-08-05 review:
   directory, and null says that rather than naming a path that resolves to nothing.
 - **`codePending`** — a record whose verdict is durable but whose code attachment has not
   succeeded yet. Consumers must tolerate it.
+- **`sensor`** — what the browser saw and the grading stream cannot (added 2026-08-10, ADR
+  `2026-08-10-sensor-observations`): `focusedSec`, the time the tab was actually in front,
+  and `sawQuestions`, whether the problem's 질문하기 tab was opened. **Absent is normal** —
+  no extension, or a watch started by hand — and absent is not zero. `elapsedSec` stays as
+  it is; the two answer different questions and both are worth having.
 
 **A record is corrected by appending it again.** When the attachment finally succeeds, the
 whole record is written a second time with `codePending` false and `codePath`/`diffFromPrev`

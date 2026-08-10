@@ -30,6 +30,9 @@ class WatchService(
         // is the only place the clock can start. Without this every record carries
         // elapsedSec 0 — a measured-looking zero, which is worse than an absent value.
         timer.startIfAbsent(command.lessonId)
+        // After the start, so a first heartbeat carrying an observation still lands: the
+        // timer refuses a reading for a problem it has no clock for.
+        command.observation?.let { timer.observed(command.lessonId, it) }
         return outcomeOf(channel, registry.watch(channel, clock.instant()))
     }
 
