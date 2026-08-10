@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -149,6 +150,47 @@ class ReviewQueueTest {
         val queue = ReviewQueue.due(history, now = OffsetDateTime.parse("2026-03-01T15:30:00Z"))
 
         queue.single().overdueDays shouldBe 0
+    }
+
+    /**
+     * The bands between the two anchors, which the anchors alone never reach. A calculator
+     * whose middle is untested is one that only works at the ends — and the coverage gate
+     * said so before this was written.
+     */
+    @Test
+    fun `the bands between the two anchors`() {
+        val cases = listOf(
+            Triple(1, false, Confidence.HIGH),
+            Triple(2, false, Confidence.MEDIUM),
+            Triple(4, false, Confidence.MEDIUM),
+            Triple(5, false, Confidence.LOW),
+            Triple(3, true, Confidence.LOW),
+            Triple(5, true, Confidence.SHAKY),
+        )
+
+        cases.forEach { (attempts, sawQuestions, expected) ->
+            val history = failures(attempts - 1, from = 1) +
+                pass(day = 1, sensor = aSensorObservation(sawQuestions = sawQuestions))
+
+            val item = ReviewQueue.due(history, now = at(400)).single()
+
+            withClue("$attempts attempts, sawQuestions=$sawQuestions") {
+                item.attempts shouldBe attempts
+                item.confidence shouldBe expected
+            }
+        }
+    }
+
+    /**
+     * The cap only removes the top band. A pass that had already earned something lower keeps
+     * it — clamping everything to MEDIUM would make an unwatched five-attempt struggle look
+     * better than it was, which is the same error the cap exists to prevent.
+     */
+    @Test
+    fun `an unobserved pass keeps a band it had already earned`() {
+        val history = failures(4, from = 1) + pass(day = 1, sensor = null)
+
+        ReviewQueue.due(history, now = at(400)).single().confidence shouldBe Confidence.LOW
     }
 
     // Fixtures ---------------------------------------------------------------------------------
