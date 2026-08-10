@@ -86,4 +86,10 @@ never does, so a sub-directory is enough to take a session off the work list.
 Shipped 2026-08-08 with #99. The four stale sessions on the developer's machine were the
 measurement that prompted it.
 
+The same reasoning settled #107 the following change: a frame belonging to no grading — its
+`start` missed by a reconnect or by a late `/watch` — is kept under `.ps/raw/orphans/<lessonId>.jsonl`
+and never joins the work list, because without a `start` there is no action and no identity
+to derive a record from. Frames carrying no grading facts at all (welcome, the subscription
+confirmation) are still just dropped: they are protocol noise, not evidence.
+
 Related: [[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-06-record-corrections-by-append]].

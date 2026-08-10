@@ -227,12 +227,31 @@ class ChannelCaptureTest {
 
     // Failure paths ------------------------------------------------------------------------
 
+    /**
+     * A terminal frame with no grading open means its `start` was missed — a reconnect
+     * landed mid-grading, or the sensor announced the problem after Submit. No record can
+     * come of it, because the `start` is what carries the action and the identity. But
+     * dropping it silently is how a change in Programmers' framing stays invisible
+     * (dev rules §2.3), so it is kept where a person can read it (#107).
+     */
     @Test
-    fun `a terminal frame with no grading in flight is ignored`() {
-        consume(capture(), observedFrames("algorithm-pass.jsonl").takeLast(1))
+    fun `a grading frame with no grading in flight is kept, not dropped`() {
+        val capture = capture()
+
+        consume(capture, observedFrames("algorithm-pass.jsonl").takeLast(1))
+
+        journal shouldContainExactly listOf(ORPHANED)
+        rawLog.orphanedFrames() shouldHaveSize 1
+        records() shouldContainExactly emptyList()
+    }
+
+    /** Protocol noise is not evidence: a frame carrying no grading facts is still just dropped. */
+    @Test
+    fun `a frame carrying no grading facts is not kept`() {
+        consume(capture(), listOf(ObservedFrame("""{"type":"confirm_subscription","identifier":"{}"}""")))
 
         journal shouldContainExactly emptyList()
-        records() shouldContainExactly emptyList()
+        rawLog.orphanedFrames() shouldContainExactly emptyList()
     }
 
     /** More gradings will follow, so a write that failed must not end the subscription. */
@@ -398,6 +417,7 @@ class ChannelCaptureTest {
         const val ELAPSED_SEC = 847L
         const val APPEND = "append"
         const val WRITE = "write"
+        const val ORPHANED = "orphaned"
     }
 }
 
@@ -411,6 +431,7 @@ private class FixedTimer(private val elapsedSec: Long) : ProblemTimer {
 /** In-memory raw log that records the order of its appends against the record writes. */
 private class RecordingRawSessionLog(private val journal: MutableList<String>) : RawSessionLog {
     private val sessions = linkedMapOf<RawSessionId, MutableList<String>>()
+    private val orphans = mutableListOf<String>()
     private var opened = 0
 
     override fun start(lessonId: Long): RawSessionId {
@@ -434,10 +455,18 @@ private class RecordingRawSessionLog(private val journal: MutableList<String>) :
 
     override fun setAside(session: RawSessionId) = Unit
 
+    override fun orphaned(lessonId: Long, frameText: String) {
+        journal += "orphaned"
+        orphans += frameText
+    }
+
     override fun unprocessed(): List<RawSession> = emptyList()
 
     /** Every frame appended to the most recent session. */
     fun frames(): List<String> = sessions.values.last().toList()
+
+    /** Frames kept because they belonged to no grading (#107). */
+    fun orphanedFrames(): List<String> = orphans.toList()
 }
 
 /** Records that a write happened, so append-then-write ordering is observable. */
