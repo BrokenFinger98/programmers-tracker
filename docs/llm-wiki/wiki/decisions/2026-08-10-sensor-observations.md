@@ -90,4 +90,16 @@ extension that may not be installed. A reader weighing the two should see which 
 
 Shipped 2026-08-10 with #120, the day the extension was first verified in a browser.
 
+**`hintLevel` was removed rather than wired (#136).** This ADR left the dead field open —
+"removed or wired when the review queue lands" — and the review queue landed reading
+`sensor.sawQuestions` and never it, which is what made the field provably dead rather than
+merely unused. It turned out to be worse than unused: `hintLevel: 0` was going out over MCP
+on every submission, so an AI asked "does this learner lean on hints" had every reason to
+answer "no, zero across the board" from a number nobody ever measured. That is the failure
+[[concepts/assumption-vs-measurement]] names, live on the wire.
+
+The trade this ADR accepted is now paid in full and worth restating: a boolean that was
+measured replaced a level that never was. Design §6's hint-dependence trend is a coarser
+thing than it was drawn as, and it is the first version of it that is true.
+
 Related: [[decisions/2026-08-08-run-raw-sessions]] · [[decisions/2026-08-04-passive-broadcast-observation]].

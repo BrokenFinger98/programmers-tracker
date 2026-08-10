@@ -73,6 +73,25 @@ class SubmissionRecordJsonTest {
         SubmissionRecordJson.decode(extended) shouldBe record
     }
 
+    /**
+     * The specific unknown field that already exists on disk. `hintLevel` was written into
+     * every record until #136 removed it — a placeholder that was never measured — and every
+     * one of those lines has to keep decoding. Losing the history to a field removal would
+     * cost incomparably more than the field ever did.
+     */
+    @Test
+    fun `a record still carrying the removed hintLevel decodes`() {
+        val record = aSubmissionRecord()
+        val stored = SubmissionRecordJson.encode(record).replaceFirst("{", """{"hintLevel":0,""")
+
+        SubmissionRecordJson.decode(stored) shouldBe record
+    }
+
+    @Test
+    fun `the record no longer carries a hint level nobody ever wrote`() {
+        SubmissionRecordJson.encode(aSubmissionRecord()) shouldNotContain "hintLevel"
+    }
+
     @Test
     fun `the wire keys and enum spellings follow design section 5 point 2`() {
         // The key is pinned here rather than taken from the fixture: this test is about the

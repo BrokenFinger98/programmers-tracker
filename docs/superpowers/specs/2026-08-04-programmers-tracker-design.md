@@ -574,7 +574,6 @@ payload carried in the `run` message's `start`. No need to parse the problem-sta
   "attempt": 2,
   "elapsedSec": 847,                     // since the problem was first observed
   "sincePrevSec": 312,                   // since the previous submission
-  "hintLevel": 0,                        // 0 = none seen, 1–4
 
   "captureKey": "a3f1…",                 // terminal frame · dedup key · correction identity
   "outcome": "JUDGED",                   // JUDGED | INCOMPLETE | UNKNOWN
@@ -869,7 +868,7 @@ ps-records/                    ← open this folder as the Obsidian vault
 | **First-submission pass rate** — the metric that matters most in real exams | `attempt == 1 && verdict == PASS` |
 | Weakness by type | `tags` × `verdict` (not `part` — see 5.3) |
 | Time spent vs. difficulty | `elapsedSec` × `level` |
-| Hint-dependence trend | `hintLevel` time series |
+| Hint-dependence trend | `sensor.sawQuestions` per problem — a boolean that was measured, not the level that never was (#136) |
 | **Recurring mistakes** | AI reads `diffFromPrev` |
 | Untouched types | compare against the 689-problem catalog |
 
