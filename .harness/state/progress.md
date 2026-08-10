@@ -2315,3 +2315,32 @@ ever did.
 Design §5.2's record schema and §6's hint-dependence row now say what exists. The
 `2026-08-10-sensor-observations` ADR had left this open — "removed or wired when the review
 queue lands" — and its Outcome records which way it went.
+
+## [2026-08-10] #138 — three §6 features were mislabelled as pending server work ✅
+
+Not code. Measurement against the running server and the shipped catalog, so nobody builds
+the wrong thing later.
+
+**§6.2 company profiling needs no server work.** `list_problems` already returns `part` and
+`tags` per problem, so one unfiltered call hands a client all 689 and the grouping is theirs.
+Demonstrated: `list_problems{part:"2018 KAKAO BLIND RECRUITMENT"}` → 12 problems,
+implementation 8 · string 5 · simulation 3 · bruteforcing 2 · sorting 2. That is the whole
+feature, in one call, computed by the caller — which is the line §6's own first sentence draws.
+
+**And its premise does not hold.** The design calls `partTitle` "perfect as a company × period
+axis". Measured: 49 values, of which ~49% are learning tracks (코딩 기초 트레이닝 124, 연습문제
+114, 코딩테스트 입문 100) and ~13% SQL topics (SELECT 33, GROUP BY 24, JOIN 12). Real exam sets
+are the minority. Grouping them into companies means a hand-maintained map over labels
+Programmers can change at will — the same reason CLAUDE.md forbids inventing a tag vocabulary.
+
+**§6.1 exam mode and §6.9 retrospectives are blocked on a decision, not on effort.** Both
+write — `exam_start`/`exam_finish`, `append_retro` — and MCP is read-only by an accepted
+decision that exists for prompt-injection reasons: an AI holding the token cannot alter a
+record however it is prompted. §6.9's "the server only provides the hook" is precisely the
+hook that decision closed. Reversing it is the owner's call and needs its own ADR.
+
+§6 now carries a four-state table — shipped, already deliverable, needs a decision, deleted —
+because "not built" was hiding three different situations.
+
+**The read-only analysis half is therefore complete.** Everything left in §6 either needs no
+server or needs a decision I should not make alone.

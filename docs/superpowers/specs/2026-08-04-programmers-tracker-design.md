@@ -883,6 +883,16 @@ feature is exposed as an MCP tool.
 Priorities: **P1 = immediately useful even with little data**, **P2 = becomes meaningful
 after dozens of records.**
 
+**What is built, and what "not built" means (2026-08-10, #138).** Three states, and only the
+first is ordinary work:
+
+| | features |
+|---|---|
+| **shipped** | 6.4 review queue (`review_queue`, #132) · 6.5 passed-but-slow (`slow_passes`, #134) |
+| **already deliverable — no server work** | 6.2 · 6.6 · 6.7 · 6.8, through `list_problems` and `submissions`; the AI does the grouping, which is the line §6's own first sentence draws |
+| **needs a decision before any code** | 6.1 exam mode and 6.9 retrospectives both write, and MCP is read-only by an accepted decision that exists for prompt-injection reasons |
+| **deleted** | 6.3 reactivation diagnosis, by the owner: past problems are out of scope |
+
 ### 6.1 Past-exam set mode (P1)
 
 `partTitle` is useless as a weakness axis but **perfect as a company × period axis.**
@@ -913,17 +923,33 @@ and #5" only surface when solving as a set.
 
 `exam_start(partTitle)` / `exam_status()` / `exam_finish()`
 
+> ⚠️ **Blocked on a decision, not on effort (#138).** All three write. MCP is read-only by an
+> accepted decision, and that is a security property rather than a scope one: an AI holding
+> the MCP token cannot alter a solving record however it is prompted. Opening a write path
+> needs its own ADR weighing prompt injection against the feature.
+
 ### 6.2 Company question-style profiling (P1)
 
 Aggregating the AI-tagging results by company × period reveals **what each company asks.**
 Programmers itself does not provide this, and once target companies are decided it directly
 sets the study priorities.
 
-```
-Tag distribution over Kakao's 98 problems → top types and year-over-year trend
-```
-
-`company_profile(company?)`
+> ⚠️ **Already deliverable; no server work, and `company_profile(company?)` will not be
+> built (#138).** `list_problems` returns `part` and `tags` on every problem, so one
+> unfiltered call hands a client all 689 and the grouping is theirs. Measured against the
+> running server:
+>
+> ```
+> list_problems { part: "2018 KAKAO BLIND RECRUITMENT" }
+>   → 12 problems · implementation 8 · string 5 · simulation 3 · bruteforcing 2 · sorting 2
+> ```
+>
+> **And the company axis this section assumes does not exist in the catalog.** `partTitle` is
+> 49 values, of which roughly half are learning tracks (코딩 기초 트레이닝 124, 연습문제 114,
+> 코딩테스트 입문 100) and an eighth are SQL topics (SELECT 33, GROUP BY 24, JOIN 12). Real
+> exam sets are the minority. Grouping them into companies means a hand-maintained map over
+> labels Programmers can change at will — the same reason CLAUDE.md forbids inventing a tag
+> vocabulary.
 
 ### 6.3 Reactivation diagnosis (P0 — first)
 
@@ -1050,6 +1076,12 @@ and appends a one-paragraph summary to `README.md`.
 Combined with the review queue, **you read your past self before re-solving.**
 The server only provides the hook; the AI generates the summary.
 `append_retro(lessonId, text)`
+
+> ⚠️ **Blocked on the same decision as §6.1 (#138).** `append_retro` writes, and MCP is
+> read-only by an accepted decision. "The server only provides the hook" is exactly the hook
+> that decision closed: an AI that can append to a problem's README is an AI that can be
+> prompted into rewriting one. The review queue half of this pairing shipped in #132;
+> the writing half needs an ADR first.
 
 ### 6.10 Concept prerequisites (P2)
 
