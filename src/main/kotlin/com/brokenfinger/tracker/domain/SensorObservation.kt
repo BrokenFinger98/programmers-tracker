@@ -23,12 +23,13 @@ data class SensorObservation(
      */
     val focusedSec: Long,
     /**
-     * Whether the problem's 질문하기 tab was opened during this problem.
+     * Whether the problem's questions tab (`/lessons/<id>/questions`) was opened.
      *
      * The measured stand-in for the hint level design §6.4 asks for and nothing supplies:
-     * that tab is reachable **before** solving (unlike 다른 사람의 풀이, measured 401 until
-     * you pass) and its posts share solutions, so opening it while stuck is seeking help.
-     * It says nothing about how much help was taken — only that it was within reach.
+     * that tab is reachable **before** solving (unlike the other-solutions tab, measured
+     * 401 until you pass) and its posts share solutions, so opening it while stuck is
+     * seeking help. It says nothing about how much help was taken — only that it was
+     * within reach.
      */
     val sawQuestions: Boolean,
 ) {
