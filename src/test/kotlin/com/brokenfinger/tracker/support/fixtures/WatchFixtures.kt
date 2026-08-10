@@ -1,46 +1,29 @@
 package com.brokenfinger.tracker.support.fixtures
 
 import com.brokenfinger.tracker.application.WatchCommand
-import com.brokenfinger.tracker.domain.ProblemKind
 
 /**
  * Object mothers for the `/watch` request (dev rules §6.4).
  *
- * The values are the measured identifiers of lesson 120804 (design §4.1). Every field is
- * given as a **raw JSON fragment** so a test can express the string form the extension
- * actually sends (`"120804"`), the number form (`120804`), an explicit `null`, or a wrong
- * JSON kind — all through the same builder.
+ * The values are lesson 120804's, measured (design §4.1). Both fields are given as **raw
+ * JSON fragments** so a test can express the string form a DOM attribute produces
+ * (`"120804"`), the number form a hand-typed curl produces (`120804`), an explicit `null`,
+ * or a wrong JSON kind — all through one builder.
+ *
+ * Two fields, since #114: the channel identifiers are properties of the problem and the
+ * server reads them off its page, so a caller supplies only what the server cannot know.
  */
 fun aWatchBody(
     lessonId: String = "\"120804\"",
-    challengeableId: String = "\"14643\"",
-    challengeableType: String = "\"algorithm\"",
     language: String = "\"java\"",
-    codesKey: String = "\"49598\"",
     omit: Set<String> = emptySet(),
+    extra: Map<String, String> = emptyMap(),
 ): String {
-    val fields = linkedMapOf(
-        "lessonId" to lessonId,
-        "challengeableId" to challengeableId,
-        "challengeableType" to challengeableType,
-        "language" to language,
-        "codesKey" to codesKey,
-    )
+    val fields = linkedMapOf("lessonId" to lessonId, "language" to language) + extra
     return fields.filterKeys { it !in omit }
         .entries
         .joinToString(prefix = "{", postfix = "}") { (name, value) -> "\"$name\":$value" }
 }
 
-fun aWatchCommand(
-    lessonId: Long = 120804,
-    challengeableId: Long = 14643,
-    kind: ProblemKind = ProblemKind.ALGORITHM,
-    language: String = "java",
-    codesKey: String = "49598",
-) = WatchCommand(
-    lessonId = lessonId,
-    challengeableId = challengeableId,
-    kind = kind,
-    language = language,
-    codesKey = codesKey,
-)
+fun aWatchCommand(lessonId: Long = 120804, language: String = "java") =
+    WatchCommand(lessonId = lessonId, language = language)

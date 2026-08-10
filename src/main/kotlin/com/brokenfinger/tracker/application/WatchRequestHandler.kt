@@ -18,7 +18,7 @@ interface WatchRequestHandler {
      *
      * @throws WatchCapacityExceededException when no slot can be freed.
      */
-    fun watch(command: WatchCommand): WatchOutcome
+    suspend fun watch(command: WatchCommand): WatchOutcome
 }
 
 /**
@@ -30,3 +30,17 @@ interface WatchRequestHandler {
  * [[decisions/2026-08-05-failure-taxonomy]]).
  */
 class WatchCapacityExceededException(message: String) : RuntimeException(message)
+
+/**
+ * The problem page could not be turned into a channel, so there is nothing to subscribe to
+ * (#114).
+ *
+ * Answered rather than swallowed. The commonest cause by far is an expired session cookie —
+ * the page redirects to sign-in and carries no identifiers — and the user needs to hear that
+ * while they are looking at the problem, not discover it later from an empty record.
+ */
+class UnresolvableProblemException(val lessonId: Long) :
+    RuntimeException(
+        "lesson $lessonId could not be resolved to a channel — its problem page carried no " +
+            "identifiers. An expired session in .ps/session is the usual cause.",
+    )

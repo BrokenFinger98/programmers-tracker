@@ -32,6 +32,9 @@ object FixtureLoader {
     /** A capture as the facts the assembler is fed — what `application` sees of it. */
     fun facts(name: String): List<GradingFrameFacts> = messages(name).map(GradingMessageMapper::factsOf)
 
+    /** A whole fixture verbatim — for the captures that are markup rather than frames. */
+    fun text(name: String): String = resourceText(name)
+
     private fun resourceText(name: String): String =
         checkNotNull(FixtureLoader::class.java.getResource("/fixtures/$name")) {
             "Missing fixture file: $name"

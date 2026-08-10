@@ -33,12 +33,14 @@ One `POST /watch` with exactly these fields, read from the page:
 ```json
 {
   "lessonId": "120803",
-  "challengeableId": "14642",
-  "challengeableType": "algorithm",
-  "language": "java",
-  "codesKey": "49587"
+  "language": "java"
 }
 ```
+
+> The server resolves the channel identifiers from the problem page itself (#114), so the
+> two fields above are all it cannot work out for itself. An older build of this extension
+> that still sends `challengeableId`, `challengeableType` and `codesKey` keeps working —
+> those are ignored.
 
 Sent when the page opens, whenever those values change, and every 30 seconds. The server is
 idempotent — a repeat answers `refreshed` rather than `started` — which is what re-registers
@@ -64,8 +66,8 @@ There is no `tabs` permission, no history access, and no remote code.
 ## What is measured, and what is not
 
 The five selectors were **read off a live problem page** (lesson 120803, 2026-08-07), and a
-language-tab switch was measured to change `language` and `codesKey` while
-`challengeableId` stays. The request contract was exercised against a running server:
+language-tab switch was measured to change the language while the problem's own identifiers
+stay. The request contract was exercised against a running server:
 `started`, then `refreshed` on the repeat, and `401` with the error body the badge shows.
 
 **Not yet done: nobody has loaded this in a browser end to end.** The manifest wiring, the

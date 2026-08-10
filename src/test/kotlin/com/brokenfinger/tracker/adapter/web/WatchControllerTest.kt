@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.web
 
+import com.brokenfinger.tracker.application.UnresolvableProblemException
 import com.brokenfinger.tracker.application.WatchCapacityExceededException
 import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
@@ -11,10 +12,10 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.mockk.clearMocks
-import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
-import io.mockk.verify
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -61,7 +62,7 @@ class WatchControllerTest {
 
     @Test
     fun `starts watching and answers with the outcome`() {
-        every { handler.watch(any()) } returns WatchOutcome.STARTED
+        coEvery { handler.watch(any()) } returns WatchOutcome.STARTED
 
         val response = postWatch(aWatchBody())
 
@@ -73,7 +74,7 @@ class WatchControllerTest {
     @Test
     fun `hands the parsed command to the watcher`() {
         val captured = slot<WatchCommand>()
-        every { handler.watch(capture(captured)) } returns WatchOutcome.STARTED
+        coEvery { handler.watch(capture(captured)) } returns WatchOutcome.STARTED
 
         postWatch(aWatchBody())
 
@@ -82,7 +83,7 @@ class WatchControllerTest {
 
     @Test
     fun `reports a repeat of an already watched channel as a refresh`() {
-        every { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
 
         val response = postWatch(aWatchBody())
 
@@ -90,25 +91,30 @@ class WatchControllerTest {
         response.jsonBody().stringField("status") shouldBe "refreshed"
     }
 
+    /**
+     * The problem page could not be read, so there is no channel to subscribe to (#114).
+     * 502 rather than 400: the request was well formed and the failure is upstream, which an
+     * expired session is the commonest cause of.
+     */
     @Test
-    fun `rejects an unknown challengeable type without ever calling the watcher`() {
-        val response = postWatch(aWatchBody(challengeableType = "\"sql\""))
+    fun `answers a gateway error when the lesson cannot be resolved to a channel`() {
+        coEvery { handler.watch(any()) } throws UnresolvableProblemException(120804)
 
-        response.status shouldBe 400
+        val response = postWatch(aWatchBody())
+
+        response.status shouldBe 502
         val body = response.jsonBody()
-        body.stringField("error") shouldBe "INVALID_REQUEST"
-        body.stringField("field") shouldBe "challengeableType"
-        body.stringField("message")!!.shouldContain("sql")
-        verify(exactly = 0) { handler.watch(any()) }
+        body.stringField("error") shouldBe "PROBLEM_UNRESOLVED"
+        body.stringField("message") shouldContain "session"
     }
 
     @Test
-    fun `rejects a missing identifier`() {
-        val response = postWatch(aWatchBody(omit = setOf("challengeableId")))
+    fun `rejects a missing field, and never reaches the watcher`() {
+        val response = postWatch(aWatchBody(omit = setOf("language")))
 
         response.status shouldBe 400
-        response.jsonBody().stringField("field") shouldBe "challengeableId"
-        verify(exactly = 0) { handler.watch(any()) }
+        response.jsonBody().stringField("field") shouldBe "language"
+        coVerify(exactly = 0) { handler.watch(any()) }
     }
 
     @Test
@@ -141,7 +147,7 @@ class WatchControllerTest {
 
         response.status shouldBe 401
         response.jsonBody().stringField("error") shouldBe "UNAUTHORIZED"
-        verify(exactly = 0) { handler.watch(any()) }
+        coVerify(exactly = 0) { handler.watch(any()) }
     }
 
     @Test
@@ -149,7 +155,7 @@ class WatchControllerTest {
         val response = postWatch(aWatchBody(), credential = REFUSED)
 
         response.status shouldBe 401
-        verify(exactly = 0) { handler.watch(any()) }
+        coVerify(exactly = 0) { handler.watch(any()) }
     }
 
     @Test
@@ -161,7 +167,7 @@ class WatchControllerTest {
 
     @Test
     fun `answers a saturated watcher with service unavailable rather than a silent no-op`() {
-        every { handler.watch(any()) } throws
+        coEvery { handler.watch(any()) } throws
             WatchCapacityExceededException("all 8 subscription slots are held by live gradings")
 
         val response = postWatch(aWatchBody())

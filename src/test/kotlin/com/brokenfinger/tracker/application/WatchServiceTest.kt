@@ -1,11 +1,14 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.ChallengeableId
 import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.LessonId
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
@@ -21,10 +24,11 @@ class WatchServiceTest {
     private val registry = SubscriptionRegistry()
     private val subscriber = RecordingSubscriber()
     private val timer = RecordingTimer()
-    private val service = WatchService(registry, subscriber, timer, SteppingClock())
+    private val identities = RecordingResolver()
+    private val service = WatchService(registry, subscriber, timer, identities, SteppingClock())
 
     @Test
-    fun `a first watch subscribes and reports that it started`() {
+    fun `a first watch subscribes and reports that it started`() = runBlocking<Unit> {
         service.watch(aCommand(lessonId = 120804)) shouldBe WatchOutcome.STARTED
 
         subscriber.calls shouldContainExactly listOf("subscribe:120804")
@@ -33,14 +37,14 @@ class WatchServiceTest {
     /** The extension re-posts every 30 s per open tab (design §4.1). */
     /** Without this the clock never starts and every record reports a measured-looking 0. */
     @Test
-    fun `watching starts the problem timer`() {
+    fun `watching starts the problem timer`() = runBlocking<Unit> {
         service.watch(aCommand(lessonId = 120804))
 
         timer.started shouldContainExactly listOf(120804L)
     }
 
     @Test
-    fun `a repeat watch refreshes without touching the socket`() {
+    fun `a repeat watch refreshes without touching the socket`() = runBlocking<Unit> {
         service.watch(aCommand(lessonId = 120804))
         subscriber.calls.clear()
 
@@ -50,7 +54,7 @@ class WatchServiceTest {
     }
 
     @Test
-    fun `an eviction unsubscribes the evicted channel before subscribing the newcomer`() {
+    fun `an eviction unsubscribes the evicted channel before subscribing the newcomer`() = runBlocking<Unit> {
         fillEverySlot()
 
         service.watch(aCommand(lessonId = 120999))
@@ -60,7 +64,7 @@ class WatchServiceTest {
     }
 
     @Test
-    fun `a channel with a live grading is never evicted`() {
+    fun `a channel with a live grading is never evicted`() = runBlocking<Unit> {
         fillEverySlot()
         registry.markActive(channelOf(120801))
 
@@ -71,7 +75,7 @@ class WatchServiceTest {
 
     /** Silently declining to observe would let the user believe a solve was recorded. */
     @Test
-    fun `saturation fails loudly and changes no subscription`() {
+    fun `saturation fails loudly and changes no subscription`() = runBlocking<Unit> {
         fillEverySlot()
         (1..8).forEach { registry.markActive(channelOf(120800L + it)) }
 
@@ -80,20 +84,30 @@ class WatchServiceTest {
         subscriber.calls shouldContainExactly emptyList()
     }
 
-    private fun fillEverySlot() {
+    private suspend fun fillEverySlot() {
         (1..8).forEach { service.watch(aCommand(lessonId = 120800L + it)) }
         subscriber.calls.clear()
     }
 
     private fun channelOf(lessonId: Long) = anAlgorithmChannel(lessonId = lessonId)
 
-    private fun aCommand(lessonId: Long) = WatchCommand(
-        lessonId = lessonId,
-        challengeableId = 14643,
-        kind = ProblemKind.ALGORITHM,
-        language = "java",
-        codesKey = "49598",
-    )
+    private fun aCommand(lessonId: Long) = WatchCommand(lessonId = lessonId, language = "java")
+
+    /**
+     * Answers the measured identifiers of 120804 for any lesson, and counts the calls — the
+     * service must resolve before it decides anything, and must not resolve twice for a
+     * heartbeat it can already answer from the registry (#114).
+     */
+    private class RecordingResolver(
+        private val answer: ResolvedProblem? = ResolvedProblem(ChallengeableId(14643), ProblemKind.ALGORITHM),
+    ) : ProblemIdentityResolver {
+        var calls = 0
+
+        override suspend fun resolve(lessonId: LessonId, language: String): ResolvedProblem? {
+            calls += 1
+            return answer
+        }
+    }
 
     private class RecordingTimer : ProblemTimer {
         val started = mutableListOf<Long>()
