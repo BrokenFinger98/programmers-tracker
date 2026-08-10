@@ -29,6 +29,10 @@ class UnauthorizedWatchException : RuntimeException("a valid ${WatchController.T
  * extension heartbeats every 30 s, and a token that changed on every restart would turn
  * every heartbeat into a silent 401. The value is never logged — only the path is, so the
  * user can copy it into the extension.
+ *
+ * It stays beside the tool rather than joining the state that moved into the record
+ * repository (#126): that state describes the records and travels with them, while this is a
+ * credential and the record repository is pushed.
  */
 @Component
 class WatchToken(

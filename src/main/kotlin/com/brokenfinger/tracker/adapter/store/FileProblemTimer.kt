@@ -21,7 +21,7 @@ import java.time.Instant
 private data class ProblemState(val startedAt: Long, val observation: SensorObservation? = null)
 
 /**
- * File-backed [ProblemTimer] — `.ps/timers.json`, a lesson id to per-problem state map.
+ * File-backed [ProblemTimer] — `<record-repo>/.ps/timers.json`, a lesson id to state map.
  *
  * The document is rewritten whole on every change, so it goes through [AtomicStateFile]: a
  * plain write leaves a window in which a reader sees a truncated document, which looks like

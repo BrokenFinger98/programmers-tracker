@@ -36,6 +36,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-08 [[decisions/2026-08-08-run-raw-sessions]] — A run's frames are set aside outside the record repository; `rawPath` is null for a run
 - 2026-08-10 [[decisions/2026-08-10-sensor-observations]] — The sensor records focused time and a questions-tab visit; measured first, which kept a second dead field out
 - 2026-08-10 [[decisions/2026-08-10-guards-must-prove-they-ran]] — Guards match Korean as bytes under a pinned locale, never collapse an error into "clean", and canary themselves before their silence is believed
+- 2026-08-10 [[decisions/2026-08-10-state-beside-the-records]] — State moves into the record repository under the lock that already existed; the two credentials stay out, and the server adds the ignore rule itself
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)

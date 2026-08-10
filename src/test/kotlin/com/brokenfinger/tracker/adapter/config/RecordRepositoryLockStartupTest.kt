@@ -82,9 +82,6 @@ class RecordRepositoryLockStartupTest {
     private fun argumentsFor(base: Path, records: Path): Array<String> = arrayOf(
         "--server.port=0",
         "--tracker.record-repo=$records",
-        "--tracker.raw-dir=${base.resolve("raw")}",
-        "--tracker.timers-file=${base.resolve("timers.json")}",
-        "--tracker.backup.state-file=${base.resolve("backup.json")}",
         "--tracker.session-file=${base.resolve("session")}",
         "--tracker.watch.token=not-a-real-token",
         "--tracker.watch.token-file=${base.resolve("watch-token")}",

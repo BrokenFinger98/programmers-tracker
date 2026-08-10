@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
+import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
@@ -41,6 +42,9 @@ class RecordWriterGitTest {
     @BeforeEach
     fun openRecordRepository() {
         repo = GitWorkspace(base)
+        // What the server does at startup (#126). Without it every assertion below about
+        // what a commit carries would also carry `.ps/`, which is the point.
+        RecordRepositoryIgnores(repo.root).ensure()
     }
 
     @Test
@@ -102,7 +106,12 @@ class RecordWriterGitTest {
         CommandLineGitSync(repo.root).reconcile() shouldBe true
 
         repo.subjects().single() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
+        // Reconciliation is `git add --all`, so this list is the whole answer to "what does
+        // the record repository publish". The raw frames for this grading are sitting in
+        // `.ps/raw` one directory up from `attempts/`, and the only reason they are absent is
+        // the rule `RecordRepositoryIgnores` wrote — which is why `.gitignore` is here (#126).
         repo.filesInHead() shouldContainExactly listOf(
+            ".gitignore",
             "log/submissions.jsonl",
             "problems/120804-두-수의-곱-구하기/attempts/001.raw.jsonl",
         )
@@ -114,7 +123,7 @@ class RecordWriterGitTest {
         val layout = RecordLayout(repo.root)
         return RecordWriter.of(
             store = JsonlRecordStore.under(repo.root),
-            rawLog = FileRawSessionLog(rawDirectory()),
+            rawLog = FileRawSessionLog.under(repo.root),
             rawAttemptPath = AttemptRawPath(layout::rawAttemptFile),
             recordRoot = repo.root,
             git = git,
@@ -126,8 +135,8 @@ class RecordWriterGitTest {
 
     /**
      * One grading whose frames are already durable, exactly as stage 1 would have left them.
-     * The raw directory sits outside the record repository, which is where the default
-     * `tracker.raw-dir` puts it.
+     * The raw directory sits **inside** the record repository, where production puts it
+     * (design §5.1, #126) — so these tests are also what proves it never reaches a commit.
      */
     private fun aSubmit(fixture: String = "algorithm-wrong.jsonl", lessonId: Long = 120804, name: String = "wrong") =
         aCapture(fixture, lessonId, name)
@@ -142,10 +151,8 @@ class RecordWriterGitTest {
     )
 
     private fun staged(name: String) = aRawSessionId("$name.jsonl").also {
-        FileRawSessionLog(rawDirectory()).append(it, """{"type":"finish","grading":"$name"}""")
+        FileRawSessionLog.under(repo.root).append(it, """{"type":"finish","grading":"$name"}""")
     }
-
-    private fun rawDirectory(): Path = base.resolve("raw")
 
     private fun logLines(): List<String> =
         Files.readAllLines(repo.root.resolve("log/submissions.jsonl")).filter { it.isNotBlank() }

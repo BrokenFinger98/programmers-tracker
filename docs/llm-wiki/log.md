@@ -54,3 +54,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-10] ingest | sensor observations → 1 page created, index + design updated
 
 ## [2026-08-10] ingest | guards must prove they ran → 1 page created, index updated
+
+## [2026-08-10] ingest | state beside the records → 1 page created, index + design updated

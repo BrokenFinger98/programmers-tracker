@@ -1,8 +1,8 @@
 package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
-import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
+import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
 import com.brokenfinger.tracker.application.BackupLog
 import com.brokenfinger.tracker.application.DailyBackup
 import com.brokenfinger.tracker.application.GitSync
@@ -32,9 +32,22 @@ class GitConfiguration {
     fun gitSync(@Value("\${tracker.record-repo}") recordRepo: String): GitSync =
         CommandLineGitSync(recordRoot(recordRepo))
 
+    /** Beside the repository whose last successful push it records (design §5.1). */
     @Bean
-    fun backupLog(@Value("\${tracker.backup.state-file}") stateFile: String): BackupLog =
-        FileBackupLog(AtomicStateFile(Path.of(stateFile)))
+    fun backupLog(@Value("\${tracker.record-repo}") recordRepo: String): BackupLog =
+        FileBackupLog.under(recordRoot(recordRepo))
+
+    /**
+     * Does its work while being constructed, which is what puts it before the first
+     * `git add --all`: reconciliation is an `ApplicationRunner`, and every bean exists before
+     * any runner does.
+     *
+     * It exists because the state moved into the repository (#126) and a `.gitignore` written
+     * before that belongs to the user, not to us.
+     */
+    @Bean
+    fun recordRepositoryIgnores(@Value("\${tracker.record-repo}") recordRepo: String): RecordRepositoryIgnores =
+        RecordRepositoryIgnores(recordRoot(recordRepo)).also { it.ensure() }
 
     @Bean
     fun dailyBackup(

@@ -10,7 +10,7 @@ import java.nio.file.Path
 import java.time.Instant
 
 /**
- * File-backed [BackupLog] — `.ps/backup.json`, one ISO-8601 instant.
+ * File-backed [BackupLog] — `<record-repo>/.ps/backup.json`, one ISO-8601 instant.
  *
  * Rewritten whole on every backup, so it goes through [AtomicStateFile] like every other state
  * document ([[decisions/2026-08-05-write-serialization]] decision 3).
