@@ -2287,3 +2287,31 @@ The guard caught my own KDoc quoting the Korean protocol string as evidence for 
 It is right to be blunt: the fix was to state the measurement without the quotation rather
 than to widen the guard. Sixth MCP tool; the catalog test caught the three documents still
 saying five.
+
+## [2026-08-10] #136 — a number that was never measured was being served as one ✅
+
+Every submission the MCP server returned carried `"hintLevel": 0`. Confirmed live against the
+running server before anything was changed.
+
+`hintLevel` appeared twice in `src/main`: its own declaration, defaulted to 0, and nothing
+else. No code ever wrote it — the design assumed hints would arrive through a `mark_hint` tool
+that was never built, and MCP is read-only by decision, so nothing could write it now either.
+All 14 records on this machine hold 0.
+
+Not an unused field: a **placeholder that reads like a measurement**. An AI asked "does this
+learner lean on hints" had every reason to answer "no, zero across the board" — confidently,
+from nothing. That is exactly what `concepts/assumption-vs-measurement` was written about, and
+it was live on the wire rather than hypothetical.
+
+`sensor.sawQuestions` (#121) is the measured replacement and, unlike `hintLevel`, is **absent**
+when nothing observed, so it cannot be mistaken for a reading. It is a boolean where the design
+wanted a level — a real loss, and still the better trade.
+
+Removal is safe for the history because `SubmissionRecordJson` sets `ignoreUnknownKeys`, but
+that is a claim, so it is now a test: a stored line still carrying `hintLevel` decodes to the
+same record. Losing the history to a field removal would cost incomparably more than the field
+ever did.
+
+Design §5.2's record schema and §6's hint-dependence row now say what exists. The
+`2026-08-10-sensor-observations` ADR had left this open — "removed or wired when the review
+queue lands" — and its Outcome records which way it went.

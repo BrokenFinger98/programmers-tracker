@@ -33,7 +33,6 @@ data class SubmissionRecord(
     val elapsedSec: Long,
     /** Null for the first submission of a problem — there is no previous one to measure from. */
     val sincePrevSec: Long? = null,
-    val hintLevel: Int = 0,
     val captureKey: CaptureKey,
     val outcome: Outcome,
     /** Meaningful only when [outcome] is [Outcome.JUDGED] (design §3.3). */
