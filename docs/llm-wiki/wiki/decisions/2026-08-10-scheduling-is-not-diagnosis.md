@@ -114,3 +114,20 @@ the offset the pass was recorded in, not the server's.** The container runs UTC,
 the running image; a learner in Seoul is nine hours ahead of it, so a global timezone setting
 would have been a second place for the day boundary to be wrong. The record already carries
 the only offset that means anything.
+
+**Applied a second time, 2026-08-10 (#134).** `slow_passes` hit the same wall from the other
+side. Design §6.5 asks for "markedly slower than same-tag, same-level problems", which needs
+peers a two-pass record set does not have, and the boundary answered it without a fresh
+argument: the server ranks and reports, the caller decides where the line falls. The whole
+distribution comes back in one call, so the ordering *is* the comparison. Nothing invented a
+threshold, and the tool takes one instead.
+
+The absence rule transferred intact and mattered more here. A pass with no timing — every SQL
+pass, since the protocol sends no per-case time at all, and any case lost to a timeout — is
+excluded from the ranking and **counted in the answer**. Sorting a missing reading as zero
+would have put the problems we know least about at the fast end of a list whose entire subject
+is speed. Same shape as `sawQuestions`: absent is not zero, and the reader has to be able to
+see how much was absent.
+
+Two features now share one boundary rather than each having their own, which is the outcome
+this ADR was written to make possible.

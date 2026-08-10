@@ -53,14 +53,14 @@ and changes between releases, so it is deliberately not reproduced here.
 
 ---
 
-## The five tools
+## The six tools
 
 Four return stored records and counts and nothing else. **None of them interprets, ranks or
 advises** — that is the AI's job, not the server's, and it is a rule rather than an omission
 ([`CLAUDE.md`](../CLAUDE.md), design §7).
 
-`review_queue` is the one that computes something, and the boundary it respects is worth
-knowing before you read its answers: it schedules, it does not diagnose. Every item carries
+`review_queue` and `slow_passes` compute something, and the boundary they respect is worth
+knowing before you read their answers: they schedule and rank, they do not diagnose. Every item carries
 the facts that set its date so you can disagree with the schedule — see
 [`decisions/2026-08-10-scheduling-is-not-diagnosis`](llm-wiki/wiki/decisions/2026-08-10-scheduling-is-not-diagnosis.md).
 
@@ -71,6 +71,7 @@ the facts that set its date so you can disagree with the schedule — see
 | `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
 | `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. |
+| `slow_passes` | `thresholdMs?` | Every passed problem ranked by its slowest testcase in milliseconds, with the level, tags and language a comparison needs. |
 
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
 offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
@@ -94,6 +95,17 @@ watching" as "no help was taken" is the one error that pushes a shaky problem tw
 
 The numbers behind the four bands — 60, 21, 7 and 3 days — are chosen, not measured. They
 reproduce the two examples design §6.4 states and nothing more.
+
+### What `slow_passes` will not decide for you
+
+Design §6.5 asks for "markedly slower than same-tag, same-level problems". That needs peers,
+and a record set this young has none — so **no baseline is applied.** The whole distribution
+comes back in one call, slowest first, and where the line falls is yours.
+
+`untimed` is part of the answer, not a footnote. SQL sends no per-case timing at all, and a
+runtime error or timeout drops it case by case. Those passes are excluded from the ranking
+rather than ranked as instant, because a missing reading sorted as zero would put the problems
+you know least about at the fast end of a list about speed.
 
 ### Missing data looks missing
 

@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.assertions.throwables.shouldThrow
@@ -19,6 +20,7 @@ import io.kotest.matchers.string.shouldContain
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -377,6 +379,73 @@ class McpToolInvokerTest {
         failed(answer).shouldBeTrue()
         message(answer).shouldContain("confidence")
     }
+
+    // slow_passes ------------------------------------------------------------------------------
+
+    @Test
+    fun `slow_passes ranks passes by their slowest testcase`() {
+        val invoker = invokerOver(
+            passWith(lessonId = 1, times = listOf("70.0")),
+            passWith(lessonId = 2, times = listOf("68.0", "1636.97")),
+        )
+
+        val payload = structured(invoker.call("slow_passes", JsonObject(emptyMap())))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 2
+        val first = payload["slow"]!!.jsonArray.first().jsonObject
+        first["lessonId"]!!.jsonPrimitive.int shouldBe 2
+        first["slowestMs"]!!.jsonPrimitive.double shouldBe 1636.97
+        first["timedCases"]!!.jsonPrimitive.int shouldBe 2
+    }
+
+    @Test
+    fun `slow_passes narrows to the threshold`() {
+        val invoker = invokerOver(
+            passWith(lessonId = 1, times = listOf("70.0")),
+            passWith(lessonId = 2, times = listOf("1636.97")),
+        )
+
+        val payload = structured(invoker.call("slow_passes", arguments("thresholdMs" to 100)))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 1
+    }
+
+    /** SQL sends no per-case timing, and a gap the reader cannot see reads as no gap (#134). */
+    @Test
+    fun `slow_passes reports how many passes had no timing at all`() {
+        val invoker = invokerOver(
+            passWith(lessonId = 1, times = listOf("70.0")),
+            passWith(lessonId = 2, times = listOf(null)),
+        )
+
+        val payload = structured(invoker.call("slow_passes", JsonObject(emptyMap())))
+
+        payload["untimed"]!!.jsonPrimitive.int shouldBe 1
+    }
+
+    @Test
+    fun `slow_passes refuses a threshold that is not a positive number`() {
+        val result = invokerOver().call("slow_passes", arguments("thresholdMs" to -1))
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("thresholdMs")
+    }
+
+    @Test
+    fun `slow_passes refuses an argument it does not have`() {
+        val result = invokerOver().call("slow_passes", arguments("level" to 2))
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("level")
+    }
+
+    private fun passWith(lessonId: Long, times: List<String?>) = aSubmissionRecord(
+        lessonId = lessonId,
+        verdict = Verdict.PASS,
+        testcases = times.mapIndexed { index, time ->
+            aTestcaseResult(id = index + 1L, passed = true, runTime = time)
+        },
+    )
 
     private fun invokerOver(
         vararg records: com.brokenfinger.tracker.domain.SubmissionRecord,

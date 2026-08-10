@@ -2258,3 +2258,32 @@ boundary to be wrong. Reverting either makes a test fail; both were run in both 
 
 `review_queue` is the fifth MCP tool. The catalog test that asserts the exact tool list caught
 README, `bootstrap.md` and `mcp.md` still saying four — the guard working as intended.
+
+## [2026-08-10] #134 — slow_passes: passing is not the end ✅
+
+Design §6.5. `runTime` arrives per testcase and a pass far slower than its neighbours means
+the intended solution was missed — which an efficiency test in a real exam scores as an
+outright fail.
+
+**The unit was measured, not assumed.** `run_time` is a decimal string of milliseconds, and
+the protocol frame states it itself: the same message carries `"run_time":"0.01"` beside a
+`msg` spelling the same number as `(0.01ms, 75.3MB)`. The recorded passes here read 68–92 ms
+for Lv0 Java, which is JVM startup and consistent with that.
+
+**The same boundary decided it as the review queue.** §6.5 asks for "markedly slower than
+same-tag, same-level problems"; that needs peers, and there are two passed problems. So no
+baseline is applied — the whole distribution comes back in one call, slowest first, and the
+ordering *is* the comparison. `thresholdMs` is there for a caller who already knows. The ADR
+`2026-08-10-scheduling-is-not-diagnosis` records this as its second application rather than
+being restated in a new one; two features now share one boundary.
+
+**The absence rule mattered more here than in the review queue.** A pass with no timing —
+every SQL pass, since the protocol sends no per-case time at all, plus any case lost to a
+timeout — is excluded from the ranking and **counted** in the answer. Sorting a missing
+reading as zero would put the problems we know least about at the fast end of a list whose
+whole subject is speed.
+
+The guard caught my own KDoc quoting the Korean protocol string as evidence for the unit.
+It is right to be blunt: the fix was to state the measurement without the quotation rather
+than to widen the guard. Sixth MCP tool; the catalog test caught the three documents still
+saying five.

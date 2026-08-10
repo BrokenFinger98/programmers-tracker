@@ -4,10 +4,12 @@ import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
 import com.brokenfinger.tracker.domain.calc.ReviewItem
+import com.brokenfinger.tracker.domain.calc.SlowPass
 import com.brokenfinger.tracker.domain.calc.UnknownReason
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -87,6 +89,22 @@ object McpRecordJson {
         put("confidence", item.confidence.wireName())
         put("dueAt", item.dueAt.toString())
         put("overdueDays", item.overdueDays)
+    }
+
+    /** Milliseconds as a number, not a string: the record keeps the judge's own spelling, but
+     * a caller comparing speeds should not have to parse it back. */
+    fun slowPasses(slow: List<SlowPass>): JsonArray = JsonArray(slow.map(::slowPass))
+
+    private fun slowPass(pass: SlowPass): JsonObject = buildJsonObject {
+        put("lessonId", pass.lessonId)
+        put("title", pass.title)
+        pass.level?.let { put("level", it) }
+        put("tags", JsonArray(pass.tags.map(::JsonPrimitive)))
+        put("language", pass.language)
+        put("passedAt", pass.passedAt.toString())
+        put("slowestMs", pass.slowestMs)
+        put("slowestCaseId", pass.slowestCaseId)
+        put("timedCases", pass.timedCases)
     }
 
     fun problems(found: List<BrowsedProblem>): JsonArray = JsonArray(

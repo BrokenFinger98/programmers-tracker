@@ -332,10 +332,11 @@ Stated plainly, because finding these out by trial is worse.
   ([`extension/`](../extension/README.md)) exists to remove that burden and was verified in
   a browser on 2026-08-10, but it only announces pages it is loaded on. If the badge is not
   green, nothing is being watched — keep step 6's manual route in reach.
-- **The MCP server exposes five tools, not the design's twenty.** `submissions`,
-  `get_problem`, `stats`, `list_problems` and `review_queue` are built and connectable today —
-  see [`mcp.md`](mcp.md) for the client configuration. What is still missing is the rest of the
-  analysis half: passed-but-slow, warmup diagnosis, exam mode, and anything that writes.
+- **The MCP server exposes six tools, not the design's twenty.** `submissions`,
+  `get_problem`, `stats`, `list_problems`, `review_queue` and `slow_passes` are built and
+  connectable today — see [`mcp.md`](mcp.md) for the client configuration. What is still
+  missing is the rest of the analysis half: warmup diagnosis, exam mode, per-company profiles,
+  and anything that writes.
 - **Pushing from the container needs credentials you must supply.** There is no sane default
   and none is invented. `compose.yaml` carries two commented mounts — your SSH key, or a git
   credential store — and you choose. Over SSH, add GitHub to your host's
