@@ -53,6 +53,17 @@ interface RawSessionLog {
      */
     fun setAside(session: RawSessionId)
 
+    /**
+     * Keeps a frame that belongs to no grading, so a missed `start` costs the verdict but
+     * not the evidence (#107).
+     *
+     * Never on the [unprocessed] work list: without a `start` there is no action and no
+     * identity, so no record can be derived from these however often they are replayed.
+     * They are kept to be *read* — by a person asking why a grading went missing, or
+     * noticing that Programmers changed its framing (dev rules §2.3).
+     */
+    fun orphaned(lessonId: Long, frameText: String)
+
     /** Sessions still awaiting stage 2 — the crash-recovery work list, oldest first. */
     fun unprocessed(): List<RawSession>
 }

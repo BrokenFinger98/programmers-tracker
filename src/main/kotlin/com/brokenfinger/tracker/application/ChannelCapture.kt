@@ -42,8 +42,11 @@ class ChannelCapture(
     /** The preceding run's error text, waiting for the submit it may promote (design §3.3). */
     private var boundErrorText: String? = null
 
+    /** Grading frames seen with no grading open — counted so the log says how bad it is (#107). */
+    private var orphans = 0
+
     suspend fun onFrame(frame: ObservedFrame) {
-        val grading = gradingFor(frame) ?: return outsideGrading()
+        val grading = gradingFor(frame) ?: return outsideGrading(frame)
         rawLog.append(grading.rawSessionId, frame.rawText)
         assemble(grading, frame)
     }
@@ -153,11 +156,36 @@ class ChannelCapture(
         settle(abandoned, terminalFrame = null)
     }
 
-    // Welcome, confirmation, and anything trailing a terminal frame. The raw log's unit is one
-    // grading, so there is nowhere to append these and no verdict rides on them. The frame text
-    // itself is never logged — a broadcast carries a learner's solving history (dev rules §7).
-    private fun outsideGrading() {
-        logger.debug("Dropped a frame belonging to no grading on lesson {}", lessonId())
+    /**
+     * Two very different frames arrive here and used to be treated alike (#107).
+     *
+     * A frame carrying no facts is protocol noise — welcome, the subscription confirmation,
+     * anything trailing a terminal frame. Nothing rides on it and there is nowhere to put
+     * it; DEBUG is right.
+     *
+     * A frame that *does* carry facts is a **grading frame whose `start` we missed**: a
+     * reconnect landed mid-grading, or the sensor announced the problem after Submit was
+     * already pressed. It can never become a record — the `start` is what carries the action
+     * and the identity — but dropping it silently is how a change in Programmers' framing
+     * would stay invisible, which is the case dev rules §2.3 exists for. It is kept, and
+     * said out loud.
+     *
+     * The frame text is never logged either way: a broadcast carries a learner's solving
+     * history (dev rules §7).
+     */
+    private fun outsideGrading(frame: ObservedFrame) {
+        val facts =
+            frame.facts ?: return logger.debug("Dropped a frame belonging to no grading on lesson {}", lessonId())
+        orphans += 1
+        runCatching { rawLog.orphaned(channel.lessonId.value, frame.rawText) }
+            .onFailure { logger.warn("Lesson {}: an orphaned frame could not be kept", lessonId(), it) }
+        logger.warn(
+            "Lesson {}: a grading frame (action={}) belonged to no grading — its start was missed, " +
+                "so no record can be derived; {} so far on this channel, kept under the raw directory",
+            lessonId(),
+            facts.action,
+            orphans,
+        )
     }
 
     // The registry is bookkeeping and a grading is not: a channel it has already forgotten

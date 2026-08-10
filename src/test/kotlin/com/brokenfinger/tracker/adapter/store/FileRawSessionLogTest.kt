@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -194,6 +195,24 @@ class FileRawSessionLogTest {
 
         log.discard(session)
         log.unprocessed() shouldBe emptyList()
+    }
+
+    /**
+     * Kept so a person can read them, and never on the work list: without a `start` there is
+     * no action and no identity, so replaying them could only fail forever (#107).
+     */
+    @Test
+    fun `orphaned frames are kept per lesson and never join the work list`() {
+        val log = logAt(startedAt)
+
+        log.orphaned(120804, """{"n":1}""")
+        log.orphaned(120804, """{"n":2}""")
+        log.orphaned(181951, """{"n":3}""")
+
+        Files.readAllLines(rawDir().resolve("orphans/120804.jsonl"))
+            .shouldContainExactly("""{"n":1}""", """{"n":2}""")
+        Files.readAllLines(rawDir().resolve("orphans/181951.jsonl")).shouldContainExactly("""{"n":3}""")
+        log.unprocessed().shouldBeEmpty()
     }
 
     @Test

@@ -61,6 +61,19 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         Files.move(source, retired.resolve(session.value), StandardCopyOption.REPLACE_EXISTING)
     }
 
+    // A sub-directory again, for the same reason `setAside` uses one: the work-list walk keeps
+    // only direct children whose name parses as a session.
+    override fun orphaned(lessonId: Long, frameText: String) {
+        val orphans = directory.resolve(ORPHANS)
+        Files.createDirectories(orphans)
+        Files.writeString(
+            orphans.resolve("$lessonId$SUFFIX"),
+            frameText.trimEnd('\r', '\n') + "\n",
+            CHARSET,
+            *APPEND_MODE,
+        )
+    }
+
     override fun unprocessed(): List<RawSession> {
         if (!Files.isDirectory(directory)) return emptyList()
         return Files.list(directory).use { entries ->
@@ -90,6 +103,9 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
 
         /** Where a session goes once its record is durable but nothing copied it. */
         const val RETIRED = "recorded"
+
+        /** Where frames belonging to no grading are kept — readable, never replayable. */
+        const val ORPHANS = "orphans"
 
         /** Raw logs live under the record repository, not next to the tool (design §5.1). */
         fun under(recordRoot: Path, clock: Clock = Clock.systemUTC()): FileRawSessionLog =

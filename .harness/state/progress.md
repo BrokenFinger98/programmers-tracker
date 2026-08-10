@@ -1947,3 +1947,24 @@ Three tests pinned the old behaviour and were rewritten. One of them was the cro
 dedup proof, which the retirement makes unreachable for runs — so it was split: one test
 proves a recorded session leaves the work list, another puts the frames back, as a failed
 retirement would, and proves the capture-key index still refuses the second record.
+
+## [2026-08-08] #107 — a missed start now costs the verdict, not the evidence ✅
+
+`outsideGrading` treated two very different frames alike. A frame carrying no grading facts
+is protocol noise — welcome, the subscription confirmation, anything trailing a terminal
+frame — and DEBUG is right for it. A frame that *does* carry facts is a grading frame whose
+`start` was missed, and dropping that silently is exactly how a change in Programmers'
+framing would stay invisible (dev rules §2.3).
+
+They are now told apart by `frame.facts`, which is non-null precisely for a broadcast
+carrying a `SubmitMessage`. An orphaned grading frame is kept under
+`.ps/raw/orphans/<lessonId>.jsonl` and reported at WARN with its action and a running count
+— never its text, which carries solving history.
+
+It never joins the work list, and that is deliberate rather than incidental: without a
+`start` there is no action and no identity, so replaying it could only fail forever. The
+sub-directory trick from #99 does the work again.
+
+The test that pinned the drop as intended behaviour (`a terminal frame with no grading in
+flight is ignored`) is replaced by two: one proving a grading frame is kept, one proving
+protocol noise still is not.
