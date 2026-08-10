@@ -2102,3 +2102,14 @@ All four failure modes were exercised rather than argued: cannot-detect, over-ma
 search-crashed, clean. The guard fails on the tree that shipped green and passes after the
 two comment sites are translated, identically on macOS and on Ubuntu under `C`, `C.UTF-8`
 and `en_US.UTF-8`. ADR `2026-08-10-guards-must-prove-they-ran`.
+## [2026-08-10] #122 — the record repo ignores its .ps wholesale ✅
+
+The template's `.gitignore` named state files one at a time — `session`, `cookies*`,
+`catalog.json` — so everything the server learned to write afterwards was committed by
+default. Proved with a real `git add` in a scratch repo: the old rule staged `watch-token`,
+`timers.json`, `backup.json` and the whole raw-frame queue including #99's `recorded/`
+retirement area. One of those is a credential.
+
+The enumeration was the bug, not the omissions: a list that must be extended whenever the
+server writes something new is a list that will be wrong, and it already was. `.ps/`
+wholesale, and the comment says why so nobody helpfully re-itemises it.
