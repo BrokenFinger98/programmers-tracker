@@ -1,32 +1,44 @@
 // The sensor's whole job (design §8): announce "this problem is being viewed right now".
-// It reads five identifiers from the page and sends nothing else — no code, no results, no
-// cookies. It never talks to the server directly: a content script's cross-origin fetch is
-// subject to the page's CORS rules and the local server publishes none, so the request is
-// relayed through the service worker, which host_permissions covers.
+//
+// It sends two fields, because two is all the server cannot work out for itself (#114) —
+// the channel identifiers are properties of the problem and the server reads them off its
+// page. No code, no results, no cookies leave this script.
+//
+// It never talks to the server directly: a content script's cross-origin fetch is subject
+// to the page's CORS rules and the local server publishes none, so the request is relayed
+// through the service worker, which host_permissions covers.
 
 "use strict";
 
-// Measured on lesson 120803 (2026-08-07): all five read exactly like this, and a
-// language-tab switch changes `language` and `codesKey` while `challengeableId` stays.
-function identifiers() {
-  const challengeable = document.querySelector("[data-challengeable-id]");
-  const code = document.querySelector("input[data-type=code]");
-  const lesson = document.querySelector("[data-lesson-id]");
-  if (!challengeable || !code || !lesson) return null;
+const HEARTBEAT_MS = 30_000;
+const DEBOUNCE_MS = 400;
 
-  const read = {
-    lessonId: lesson.dataset.lessonId,
-    challengeableId: challengeable.dataset.challengeableId,
-    challengeableType: challengeable.dataset.challengeableType,
-    language: code.dataset.language,
-    codesKey: code.id,
-  };
-  return Object.values(read).every((v) => v) ? read : null;
+// The lesson number lives in the URL, which is the one place it is always present. The
+// `data-lesson-id` attribute this used to read is absent on a problem's sub-pages —
+// measured on /lessons/<id>/questions, 2026-08-10.
+function lessonId() {
+  const found = location.pathname.match(/\/lessons\/(\d+)/);
+  return found ? found[1] : null;
+}
+
+// The only field that genuinely needs the DOM. A language-tab switch replaces this input in
+// place, so its `data-language` is what says which tab is open (measured 2026-08-07: the
+// switch changes the input, the problem's own identifiers stay).
+function language() {
+  return document.querySelector("input[data-type=code]")?.dataset.language ?? null;
+}
+
+function identifiers() {
+  const lesson = lessonId();
+  const lang = language();
+  // A page with no editor — the questions list, say — is not a problem being solved, and
+  // announcing it would subscribe to a channel with no language.
+  return lesson && lang ? { lessonId: lesson, language: lang } : null;
 }
 
 let lastSent = null;
 
-// The server is idempotent — a repeat for a channel it already holds refreshes recency —
+// The server is idempotent — a repeat for a channel it already holds answers `refreshed` —
 // so a heartbeat costs nothing and is what re-registers after a server restart.
 function announce(reason) {
   const read = identifiers();
@@ -45,9 +57,6 @@ const observer = new MutationObserver(() => {
   clearTimeout(pending);
   pending = setTimeout(() => announce("changed"), DEBOUNCE_MS);
 });
-
-const DEBOUNCE_MS = 400;
-const HEARTBEAT_MS = 30_000;
 
 observer.observe(document.body, { subtree: true, childList: true, attributes: true });
 announce("opened");

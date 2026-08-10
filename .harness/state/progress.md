@@ -1999,3 +1999,20 @@ a live SQL page. It also carries `data-user-id`, which the new fixtures scrub.
 Verified against a running server, not only in tests: two-field start, heartbeat refresh,
 language switch, a SQL problem, an unresolvable lesson answering 502 with the reason, and a
 missing field answering 400.
+
+## [2026-08-10] #116 — the sensor catches up to the two-field contract ✅
+
+Small change, and the point of it is that the extension is now loadable.
+
+`lessonId` comes from the URL rather than `[data-lesson-id]`, because that attribute is
+absent on a problem's sub-pages — measured on `/lessons/<id>/questions` — and the URL is
+where the number always is. `language` still comes from the code input's `data-language`,
+the only field that genuinely needs the DOM. Everything else the extension used to read is
+the server's job now.
+
+Verified by running the rewritten reader against three live pages: a problem page gives the
+two fields, a SQL problem gives them with `mysql`, and a questions page with no editor reads
+as nothing rather than announcing a channel with no language.
+
+Still unproven: nobody has loaded it in a browser. That is now the only thing standing
+between this tool and being usable by someone other than its author.

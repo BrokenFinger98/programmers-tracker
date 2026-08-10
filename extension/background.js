@@ -36,7 +36,7 @@ async function watch(body) {
     });
     if (response.ok) {
       const answer = await response.json();
-      report("watching", `watching lesson ${answer.lessonId} (${answer.status})`);
+      report("watching", `watching lesson ${answer.lessonId} in ${answer.language} (${answer.status})`);
       return;
     }
     // The server's error contract carries a stable machine code and a message written for
