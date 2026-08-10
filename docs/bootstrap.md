@@ -149,14 +149,17 @@ echo "TRACKER_GID=$(id -g)" >> .env
 Then:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 docker compose logs -f
 ```
 
-> **After every `git pull`, run `docker compose build` first.**
-> `docker compose up` reuses an image that already carries the tag and does **not** rebuild,
-> so without this you keep running the code you built last time — and the only symptom is
-> behaviour that quietly does not happen. The first log line tells you which build you are on:
+> **`--build` is not optional, it is the default you want.**
+> Plain `docker compose up` reuses an image that already carries the tag and does **not**
+> rebuild, so you keep running the code you built last time — and the symptom is behaviour
+> that quietly does not happen, or an error naming a field the current code no longer has.
+> Measured 2026-08-10: a freshly written extension answered
+> `400 INVALID_REQUEST — challengeableId is missing` against a four-day-old container.
+> The first log line tells you which build you are on:
 >
 > ```
 > Running build 0.0.1-SNAPSHOT — compiled 2026-08-06 15:32:45 KST from commit unknown.
@@ -325,12 +328,12 @@ if the machine was asleep).
 
 Stated plainly, because finding these out by trial is worse.
 
-- **The sensor extension is written but unproven.** [`extension/`](../extension/README.md)
-  exists and its selectors and request contract are measured, but nobody has loaded it in a
-  browser end to end yet. Until someone does, keep step 6's manual route in reach: a problem
-  you never registered records nothing, silently.
-- **The MCP server exposes three tools, not the design's twenty.** `submissions`,
-  `get_problem` and `stats` are built and connectable today — see [`mcp.md`](mcp.md) for
+- **A problem you never registered records nothing, silently.** The sensor extension
+  ([`extension/`](../extension/README.md)) exists to remove that burden and was verified in
+  a browser on 2026-08-10, but it only announces pages it is loaded on. If the badge is not
+  green, nothing is being watched — keep step 6's manual route in reach.
+- **The MCP server exposes four tools, not the design's twenty.** `submissions`,
+  `get_problem`, `stats` and `list_problems` are built and connectable today — see [`mcp.md`](mcp.md) for
   the client configuration. What is missing is the analysis half: review queue, warmup
   diagnosis, exam mode, and anything that writes.
 - **Pushing from the container needs credentials you must supply.** There is no sane default

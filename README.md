@@ -45,7 +45,7 @@ marked *designed* exists in `src/`.
 | Records written to your own git repository — committed, pushed on a pass, backed up daily | **built** |
 | One instance per record repository, enforced at startup | **built** (with a measured macOS caveat — [`bootstrap.md`](docs/bootstrap.md)) |
 | Telling the server which problem you are on | **built** — a `curl` per problem, or the sensor below |
-| A browser sensor that tells it for you | **written, unproven** — [`extension/`](extension/README.md); measured selectors and contract, never loaded in a browser end to end |
+| A browser sensor that tells it for you | **built** — [`extension/`](extension/README.md), loaded unpacked; verified in a browser 2026-08-10 |
 | The failing code stored alongside the record | **built** |
 | A per-problem page, and diffs between attempts | **built** |
 | A per-problem runner from the judge's own examples | **built** — java · python3 · cpp · javascript · kotlin · c · csharp; the rest refuse with a reason |
@@ -55,9 +55,9 @@ marked *designed* exists in `src/`.
 
 One consequence of that table is worth stating outright, because it changes what the first
 hour with this tool feels like: **a submission on a problem the server was never told about
-is lost, silently.** The sensor extension exists to remove that burden, but until someone
-has actually run it in a browser, plan on registering each problem yourself — and again
-after a restart or a language-tab switch.
+is lost, silently.** The sensor extension removes that burden once it is loaded — but it is
+loaded unpacked, per browser profile, so on a machine where it is not, register each problem
+yourself with a two-field `curl`.
 [`docs/bootstrap.md`](docs/bootstrap.md) walks the whole gap.
 
 ---

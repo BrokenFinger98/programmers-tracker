@@ -72,7 +72,12 @@ page, a SQL problem, and a questions page with no editor, which correctly reads 
 The request contract was exercised against a running server:
 `started`, then `refreshed` on the repeat, and `401` with the error body the badge shows.
 
-**Not yet done: nobody has loaded this in a browser end to end.** The manifest wiring, the
-service-worker relay and the badge are written but unproven. Until someone runs step 1–3
-above and sees a green badge on a problem page, treat the extension as unverified — the
-constitution's rule about external-interaction features applies to it.
+**Loaded and seen to work, 2026-08-10.** Chrome, unpacked, token pasted, a problem page
+opened: the badge went green reading `watching lesson 181947 in java (refreshed)`, and the
+server logged the same build answering. The manifest wiring, the service-worker relay and
+the badge are proven, not merely written.
+
+One thing that first attempt caught, and it is worth knowing: the badge read
+`400 INVALID_REQUEST — challengeableId is missing` — a field the current server does not
+look at. The container was four days stale. `docker compose up -d --build`, and read the
+`Running build …` line the server prints on startup.
