@@ -14,6 +14,7 @@ import com.brokenfinger.tracker.support.fixtures.aTruncatedStream
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldEndWith
@@ -146,18 +147,26 @@ class RecordWriterTest {
         val record = writer().write(capture)!!
 
         record.attempt shouldBe 1
-        record.rawPath shouldBe "never-written.jsonl"
+        // The copy never happened, so there is no path inside the repository to name (#99).
+        record.rawPath.shouldBeNull()
         stored().single().outcome shouldBe Outcome.JUDGED
     }
 
+    /**
+     * A run creates no attempt file (design §5.1), so its frames have no home inside the
+     * record repository — `rawPath` is null rather than a bare session id resolving to
+     * nothing (#99). They are kept all the same, set aside where the reconciler will not
+     * re-read them on every boot.
+     */
     @Test
-    fun `a run writes no attempt file and leaves its frames in the raw directory`() = runBlocking<Unit> {
+    fun `a run has no rawPath, and its frames are kept off the work list`() = runBlocking<Unit> {
         val capture = aRun(rawSessionId = liveRaw("live-run.jsonl"))
 
         val record = writer().write(capture)!!
 
-        record.rawPath shouldBe "live-run.jsonl"
-        Files.exists(rawDirectory().resolve("live-run.jsonl")) shouldBe true
+        record.rawPath.shouldBeNull()
+        Files.exists(rawDirectory().resolve("live-run.jsonl")) shouldBe false
+        Files.exists(rawDirectory().resolve("recorded/live-run.jsonl")) shouldBe true
         Files.exists(root.resolve("problems")) shouldBe false
     }
 

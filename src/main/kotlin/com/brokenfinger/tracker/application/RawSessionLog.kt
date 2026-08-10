@@ -44,6 +44,15 @@ interface RawSessionLog {
     /** Retires a session whose record is durable; the frames now live at their destination. */
     fun discard(session: RawSessionId)
 
+    /**
+     * Retires a session that was never copied — a run owns no attempt file (design §5.1) —
+     * by taking it off the work list **without destroying it**. The frames are the only
+     * original that grading will ever have, and the constitution forbids discarding
+     * originals; leaving them on the work list instead made every boot re-read every run
+     * ever captured (#99).
+     */
+    fun setAside(session: RawSessionId)
+
     /** Sessions still awaiting stage 2 — the crash-recovery work list, oldest first. */
     fun unprocessed(): List<RawSession>
 }

@@ -8,6 +8,7 @@ import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.Instant
@@ -50,6 +51,16 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         Files.deleteIfExists(fileOf(session))
     }
 
+    // A sub-directory, so `unprocessed` stops seeing it: that walk keeps only direct children
+    // whose name parses as a session, and a directory never does.
+    override fun setAside(session: RawSessionId) {
+        val source = fileOf(session)
+        if (!Files.exists(source)) return
+        val retired = directory.resolve(RETIRED)
+        Files.createDirectories(retired)
+        Files.move(source, retired.resolve(session.value), StandardCopyOption.REPLACE_EXISTING)
+    }
+
     override fun unprocessed(): List<RawSession> {
         if (!Files.isDirectory(directory)) return emptyList()
         return Files.list(directory).use { entries ->
@@ -76,6 +87,9 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         private val CHARSET = StandardCharsets.UTF_8
         private const val SUFFIX = ".jsonl"
         private const val RAW_DIRECTORY = ".ps/raw"
+
+        /** Where a session goes once its record is durable but nothing copied it. */
+        const val RETIRED = "recorded"
 
         /** Raw logs live under the record repository, not next to the tool (design §5.1). */
         fun under(recordRoot: Path, clock: Clock = Clock.systemUTC()): FileRawSessionLog =

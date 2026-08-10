@@ -44,8 +44,16 @@ data class SubmissionRecord(
     val tcSummary: TestcaseSummary,
     /** Null for every database grading — the SQL path reports no rating (protocol doc §6). */
     val rating: RatingChange? = null,
-    /** Where the original frames live, which is what keeps re-analysis possible (dev rules §2.4). */
-    val rawPath: String,
+    /**
+     * Where the original frames live inside the record repository, which is what keeps
+     * re-analysis possible (dev rules §2.4).
+     *
+     * **Null for a run.** A run creates no attempt file (design §5.1), so its frames have no
+     * home inside the repository — they are kept outside it, under the tool's own state
+     * directory. Null says that plainly; the bare session id this used to carry resolved to
+     * nothing and read like a path that had been lost (#99).
+     */
+    val rawPath: String?,
     val codePath: String? = null,
     /** True while the verdict is durable but the code fetch has not succeeded yet (design §5.2). */
     val codePending: Boolean = false,

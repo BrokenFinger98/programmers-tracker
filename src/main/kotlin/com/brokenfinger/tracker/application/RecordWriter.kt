@@ -80,9 +80,9 @@ class RecordWriter private constructor(
     private fun record(capture: SettledCapture, key: CaptureKey): SubmissionRecord {
         val attempt = attempts.allocate(capture.lessonId, capture.action())
         val copied = copiedRawPath(capture, attempt)
-        val record = capture.toRecord(OffsetDateTime.now(clock), attempt, key, copied ?: capture.rawSessionId.value)
+        val record = capture.toRecord(OffsetDateTime.now(clock), attempt, key, copied)
         store.append(SubmissionRecordJson.encode(record))
-        if (copied != null) retireRaw(capture)
+        retireRaw(capture, copied != null)
         // After the append, inside the same confined section: the examples are a derived
         // write to the problem directory and must not interleave with another grading's
         // (write-serialization decision 1). The store itself is a no-op for a grading that
@@ -117,7 +117,7 @@ class RecordWriter private constructor(
      * best-effort — is left out rather than taking the commit down with it.
      */
     private fun pathsOf(record: SubmissionRecord): List<Path> =
-        listOf(submissionLog, recordRoot.resolve(record.rawPath)).filter { Files.exists(it) }
+        listOfNotNull(submissionLog, record.rawPath?.let { recordRoot.resolve(it) }).filter { Files.exists(it) }
 
     /**
      * Copies the frames to their resting place and answers where the record should point,
@@ -136,14 +136,20 @@ class RecordWriter private constructor(
     }
 
     /**
-     * Retires the source only once the record is durable, and only when the copy actually
-     * happened — a record still pointing at the raw directory must keep the file it names.
+     * Takes the source off the work list once the record is durable, either way — leaving it
+     * there made every boot re-read every run ever captured (#99).
+     *
+     * A copy exists only for a submit, so only then may the source be deleted. A run's
+     * frames are the sole original that grading will ever have, so they are set aside
+     * instead: preserved outside the record repository, and invisible to the reconciler
+     * that could never settle them into a second record anyway.
+     *
      * A failure here costs a stale file the reconciler replays and the capture key drops,
      * which is the safe direction.
      */
-    private fun retireRaw(capture: SettledCapture) {
-        runCatching { rawLog.discard(capture.rawSessionId) }
-            .onFailure { logger.warn("Raw frames were copied but not retired ({})", it.javaClass.simpleName) }
+    private fun retireRaw(capture: SettledCapture, copied: Boolean) {
+        runCatching { if (copied) rawLog.discard(capture.rawSessionId) else rawLog.setAside(capture.rawSessionId) }
+            .onFailure { logger.warn("Raw frames stayed on the work list ({})", it.javaClass.simpleName) }
     }
 
     // Stored with forward slashes whatever the host uses — a record repository is meant to
