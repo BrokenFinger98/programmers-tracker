@@ -1,9 +1,12 @@
-# Credentials — public repository, never commit
-.ps/session
-.ps/cookies*
-
-# Cache (regenerable, large)
-.ps/catalog.json
+# The tracker's working state, all of it. Never a list of individual files: this used to name
+# `.ps/session`, `.ps/cookies*` and `.ps/catalog.json`, so every state file added afterwards —
+# the watch token, the timers, the backup marker, the whole raw-frame queue — was committed
+# by default, and one of those is a credential (#122). A list that has to be extended every
+# time the server learns to write something is a list that will be wrong.
+#
+# Nothing under here belongs in a repository you push. The records do; this is how they were
+# made.
+.ps/
 
 # The tracker's exclusive lock on this repository. It normally lives inside .git/, where git
 # cannot see it; this covers the one case where it cannot — a run from before `git init`.
