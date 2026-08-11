@@ -204,15 +204,24 @@ class ChannelCaptureTest {
         attached.single().verdict shouldBe Verdict.PASS
     }
 
+    /**
+     * Two live gradings with identical frames are two gradings (#161). This used to assert the
+     * second was dropped, and that reading is what silently discarded a second SQL submission
+     * of the same query — SQL frames carry no timing, so identical bytes are the normal case
+     * rather than a sign of duplication.
+     *
+     * A live capture is a thing that just happened. The index that recognises a *replay* is
+     * consulted on the reconciliation path and nowhere else.
+     */
     @Test
-    fun `a duplicate is dropped before stage 3, because it has no record of its own`() {
+    fun `two live gradings with identical frames both reach stage 3`() {
         val attached = mutableListOf<SubmissionRecord>()
         val capture = capture(attachment = recording(attached))
 
         consume(capture, "algorithm-pass.jsonl")
         consume(capture, "algorithm-pass.jsonl")
 
-        attached shouldHaveSize 1
+        attached shouldHaveSize 2
     }
 
     /** The verdict is already durable; a fetch that blew up may not take the record with it. */

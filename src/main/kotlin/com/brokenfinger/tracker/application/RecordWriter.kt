@@ -62,9 +62,34 @@ class RecordWriter private constructor(
      */
     suspend fun write(capture: SettledCapture): SubmissionRecord? = withContext(writerDispatcher) {
         val key = capture.captureKey()
+        val added = captured.add(key)
+        // A write that never landed was never a capture, so a key this call introduced goes
+        // back: a retry from the raw log must not be mistaken for a replay of a stored record.
+        runCatching { record(capture, key) }.onFailure { if (added) captured.remove(key) }.getOrThrow()
+    }
+
+    /**
+     * Records a grading **replayed from the raw log**, or returns null when its record already
+     * exists.
+     *
+     * This is the only path that consults the dedup index, and #161 is why. The key was being
+     * asked a question it cannot answer on the live path — *"is this the same grading?"* — when
+     * all it can see is whether the bytes match. For SQL the bytes always match: its frames
+     * carry no `run_time` and no `memory_size`, so the same query submitted twice is
+     * byte-identical, and the second submission was dropped as a replay. Measured 2026-08-11 on
+     * lesson 151136. Java escaped only because its timings jitter, which is luck.
+     *
+     * A live capture is not a replay — it is a thing that just happened, and the socket does
+     * not redeliver: a reconnect loses whatever was broadcast meanwhile rather than repeating
+     * it. The one way one grading used to reach the writer twice was two channels on one
+     * problem, and #160 closed that at the subscription instead.
+     *
+     * Replay is different in kind. Reconciliation re-reads bytes already on disk, so matching
+     * bytes there really do mean the same grading, and the index is exactly right.
+     */
+    suspend fun replay(capture: SettledCapture): SubmissionRecord? = withContext(writerDispatcher) {
+        val key = capture.captureKey()
         if (!captured.add(key)) return@withContext duplicate(capture)
-        // A write that never landed was never a capture, so the key goes back: a retry from
-        // the raw log must not be mistaken for the reconnect replay this index exists to drop.
         runCatching { record(capture, key) }.onFailure { captured.remove(key) }.getOrThrow()
     }
 

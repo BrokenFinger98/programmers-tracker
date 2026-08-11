@@ -60,7 +60,7 @@ class RawSessionReconciler(
     }
 
     private suspend fun recorded(capture: SettledCapture, skipped: Int): ReconcileReport {
-        val written = writer.write(capture)
+        val written = writer.replay(capture)
         if (written == null) return duplicate(capture, skipped)
         return ReconcileReport(recorded = 1, skippedLines = skipped)
     }
