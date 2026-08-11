@@ -1,9 +1,10 @@
 # MCP — reading your records from an AI client
 
 > The server exposes your solving history over the Model Context Protocol so Claude, Cursor
-> or a local model can read it. **Three tools, all read-only.** What is not built is listed
-> at the bottom of this page, and the [README's table](../README.md) stays the authority on
-> build status.
+> or a local model can read it. **Six tools, none of which write.** Four hand back stored
+> records and counts; two compute a schedule or a ranking, under a boundary this page states
+> before it shows them. What is not built is listed at the bottom, and the
+> [README's table](../README.md) stays the authority on build status.
 
 ---
 
@@ -151,23 +152,37 @@ You do not have to configure this. The server decides from how your client opens
 
 ## What is not built
 
-Design §7 sketches about twenty tools. The other seventeen are absent rather than stubbed:
-a tool that answered "not implemented" would be worse than a missing one, because a client
-discovers it through `tools/list` and plans around it.
+Design §7 sketches about twenty tools. Nothing missing is **stubbed**: a tool that answered
+"not implemented" would be worse than a missing one, because a client discovers it through
+`tools/list` and plans around it.
 
-What they wait on has narrowed. `list_problems` shipped (#100) once the catalog was found
-to be loaded but unexposed. Exam state and a review schedule genuinely do not exist yet, and
-the tools built on them wait on that.
+"Not built" was hiding four different situations, so here they are apart (#140):
 
-Not built, and not stubbed:
+**Already deliverable — no tool will be added.** The data is in the tools above and the
+grouping is the client's, which is the line the design's own §6 opening draws.
 
-- `attempt_diff`, `tag_problem`, `untagged`
-- `warmup_plan` · `warmup_reset` · `warmup_report`
-- `review_queue` · `slow_passes` · `performance` · `stuck_testcases` · `company_profile`
+| sketched tool | do this instead |
+|---|---|
+| `attempt_diff` | `get_problem` returns `diffFromPrev` on every record |
+| `stuck_testcases` | `get_problem` returns the full `testcases` array |
+| `performance` | `acceptanceRate` and `level` are on every record and every catalog entry |
+| `company_profile` | `list_problems` returns `part` and `tags` on all 689 problems; group them yourself. A company axis is *not* built on purpose — `partTitle` is 49 values of which about half are learning tracks, so grouping them into companies would mean maintaining a map over labels Programmers can change at will |
+
+**Needs a decision before any code.** All of these write, and read-only is a security
+property here rather than a scope one: an AI holding the token cannot alter a solving record
+however it is prompted.
+
 - `exam_start` · `exam_status` · `exam_finish`
-- `append_retro` · `mark_hint` · `push`
-- MCP **resources** (`ps://…`) and **prompts** — the server declares only the `tools`
-  capability
+- `append_retro`
+- `push`
+
+**Deleted.** `warmup_plan` · `warmup_reset` · `warmup_report` — with design §6.3, because past
+problems are out of scope. `mark_hint` — with `hintLevel` in #136, which removed a field that
+was being served as a measurement nobody had taken. `tag_problem` · `untagged` — the catalog
+ships classified.
+
+**Genuinely absent.** MCP **resources** (`ps://…`) and **prompts**; the server declares only
+the `tools` capability.
 
 There is also no pagination: `submissions` with no arguments returns the whole log. That is
 fine for one person's history today and would need a bound before it is not.

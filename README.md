@@ -4,7 +4,8 @@ A local server that watches your Programmers grading stream and records **every 
 every `submit` — failures included** — into a git repository you own.
 
 > **Status: Phase 1, mid-build.** The design and the protocol reverse engineering are
-> finished. The capture half is built; the analysis half is not.
+> finished. The capture half is built, and so is the **read-only** analysis half — what is
+> left of the design either needs no server or needs a decision about letting an AI write.
 > **[What works today](#what-works-today) is the only section of this file that states what
 > is implemented.** Everything after it describes the design, and that table says which
 > parts of the design exist.

@@ -2344,3 +2344,22 @@ because "not built" was hiding three different situations.
 
 **The read-only analysis half is therefore complete.** Everything left in §6 either needs no
 server or needs a decision I should not make alone.
+
+## [2026-08-11] #140 — the user-facing documents described a server from four features ago ✅
+
+Done before translating rather than after, because a stale document translated is two wrong
+documents instead of one.
+
+Every claim checked against the running server. `README.md` still said "the analysis half is
+not [built]" after `review_queue` and `slow_passes` shipped. `mcp.md` opened with "Three
+tools, all read-only" and its "what is not built" list still named both of the tools it now
+serves — plus `company_profile`, `performance`, `stuck_testcases` and `attempt_diff`, all of
+which are already deliverable, and `mark_hint`, whose field #136 removed.
+
+"Not built" was hiding the same four situations design §6 was hiding until #138, so the list
+now separates them: **already deliverable** (with the tool and field that delivers each),
+**needs a decision** (everything that writes), **deleted**, and **genuinely absent**.
+
+Verified live rather than assumed: `get_problem` returns `diffFromPrev`, `testcases`,
+`acceptanceRate` and `level` on every record, and `list_problems` returns `part` and `tags`
+on all 689 — which is what makes four of the sketched tools unnecessary rather than pending.
