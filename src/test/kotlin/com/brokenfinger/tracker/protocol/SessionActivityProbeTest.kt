@@ -40,6 +40,36 @@ class SessionActivityProbeTest {
         probeOver(PageResponse(429, "")).probe() shouldBe SessionState.UNKNOWN
     }
 
+    /**
+     * The one the status alone gets wrong. §14: this API family throttles as **200 with an HTML
+     * error page**, so trusting the status would read a rate limit as "your session is fine"
+     * (#191). Whether this particular endpoint does that is unmeasured — the check is correct
+     * either way, and triggering a rate limit to find out would be hammering Programmers to
+     * prove a property we can simply stop claiming.
+     */
+    @Test
+    fun `a 200 carrying an error page is not a live session`() = runBlocking<Unit> {
+        val throttled = PageResponse(200, "<html><body>서비스 접속 오류</body></html>")
+
+        probeOver(throttled).probe() shouldBe SessionState.UNKNOWN
+    }
+
+    @Test
+    fun `an empty 200 is not a live session either`() = runBlocking<Unit> {
+        probeOver(PageResponse(200, "   ")).probe() shouldBe SessionState.UNKNOWN
+    }
+
+    /**
+     * The shape check must not swallow the answer that matters: a 401 whose body is the measured
+     * JSON is still an expired session.
+     */
+    @Test
+    fun `the shape check does not hide a real 401`() = runBlocking<Unit> {
+        val measured = PageResponse(401, """{"code":"authenticate_user","message":"…"}""")
+
+        probeOver(measured).probe() shouldBe SessionState.EXPIRED
+    }
+
     @Test
     fun `a probe that cannot reach Programmers is unknown`() = runBlocking<Unit> {
         val unreachable = SessionActivityProbe(pages = { throw java.io.IOException("no route") })
