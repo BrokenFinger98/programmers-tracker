@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.SessionState
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -97,6 +98,75 @@ class SessionHealthTest {
         health.state() shouldBe SessionState.EXPIRED
 
         asked.get() shouldBe 3
+    }
+
+    // A check that has stopped being able to answer (#189) --------------------------------
+
+    /**
+     * The endpoint this rests on is one Programmers never promised us. If it moves, every probe
+     * returns UNKNOWN, the badge stays quiet by design, and the expired-cookie detection is gone
+     * with nothing saying so.
+     */
+    @Test
+    fun `a sustained run of unknown is reported once`() = runBlocking<Unit> {
+        val health = healthAnswering(SessionState.UNKNOWN)
+
+        health.state()
+        clock.advance(Duration.ofMinutes(31))
+        health.state()
+
+        health.muteChanged() shouldBe true
+        health.muteChanged().shouldBeNull()
+    }
+
+    /** A laptop losing wifi for a moment is not a protocol change. */
+    @Test
+    fun `a short blip says nothing`() = runBlocking<Unit> {
+        val health = healthAnswering(SessionState.UNKNOWN)
+
+        health.state()
+        clock.advance(Duration.ofMinutes(5))
+        health.state()
+
+        health.muteChanged().shouldBeNull()
+    }
+
+    /** The all-clear, for the same reason the backup has one: a warning with no end is unreadable. */
+    @Test
+    fun `recovering is reported once`() = runBlocking<Unit> {
+        val answers = ArrayDeque(listOf(SessionState.UNKNOWN, SessionState.UNKNOWN, SessionState.ALIVE))
+        val health = SessionHealth({
+            asked.incrementAndGet()
+            answers.removeFirst()
+        }, clock)
+
+        health.state()
+        clock.advance(Duration.ofMinutes(31))
+        health.state()
+        health.muteChanged() shouldBe true
+
+        health.state()
+
+        health.muteChanged() shouldBe false
+        health.muteChanged().shouldBeNull()
+    }
+
+    /** EXPIRED is the check working, not failing — it must end the run like ALIVE does. */
+    @Test
+    fun `an expired answer ends the run of unknowns`() = runBlocking<Unit> {
+        val answers = ArrayDeque(listOf(SessionState.UNKNOWN, SessionState.EXPIRED, SessionState.UNKNOWN))
+        val health = SessionHealth({
+            asked.incrementAndGet()
+            answers.removeFirst()
+        }, clock)
+
+        health.state()
+        clock.advance(Duration.ofMinutes(20))
+        health.state()
+        clock.advance(Duration.ofMinutes(20))
+        health.state()
+
+        health.muteChanged().shouldBeNull()
     }
 
     private fun healthAnswering(state: SessionState) = SessionHealth({

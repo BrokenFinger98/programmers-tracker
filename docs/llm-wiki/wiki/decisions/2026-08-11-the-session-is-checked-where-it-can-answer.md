@@ -83,8 +83,9 @@ cookie dying mid-session is noticed inside one problem rather than after it.
   the endpoint still answers 200/401 on authentication, so the signal survives, but the request
   is meaningless in every other way.
 - **One more endpoint we depend on.** If Programmers removes it, the check degrades to `UNKNOWN`
-  forever — silently, which is the shape of failure this project keeps finding. Nothing currently
-  notices a probe that has answered `UNKNOWN` for a week.
+  forever. ⚠️ (old) — "silently … Nothing currently notices a probe that has answered `UNKNOWN`
+  for a week." **Closed the same day by #189**: a run of `UNKNOWN` longer than thirty minutes is
+  warned about once, and its end once. The dependency remains; the silence does not.
 
 ## Outcome
 
@@ -103,3 +104,32 @@ credential.
 Sixteen tests: every status class including the two that must not read as expired, the URL shape,
 that the request carries nothing about the user, and the cache — including a failed probe that
 must not leave a stale `ALIVE` standing.
+
+
+---
+
+## Extended 2026-08-11 (#189): a check that cannot answer says so
+
+The endpoint is one Programmers never promised us, so the interesting failure is not a wrong
+answer but **no answer, forever**: it moves or starts returning 403, every probe reads `UNKNOWN`,
+the badge stays quiet by design, and the detection above is simply gone.
+
+The project already had the rule for messages — an unrecognised type is kept as `Unknown(type,
+raw)` **and warned about**, because that is the only way to notice a protocol change. The session
+check had the first half and not the second.
+
+`SessionHealth` now tracks how long it has been unable to answer and reports the transition once
+in each direction, on the same reasoning as the backup all-clear
+([[decisions/2026-08-11-a-record-on-one-disk-says-so]]): a warning with no end leaves a reader
+unable to tell a fixed problem from an unreported one.
+
+Two judgements worth stating:
+
+- **Thirty minutes**, chosen not measured, so a laptop losing wifi mid-problem stays silent while
+  a protocol change is noticed the same session it happens.
+- **`EXPIRED` ends the run.** It is the check *working* — the temptation to treat any non-`ALIVE`
+  as trouble would fire the protocol-change warning at exactly the moment the tool is doing its
+  job.
+- **No badge state**, because the vocabulary is full and "we cannot tell whether you are
+  recording" is a diagnostic for whoever reads logs, not something to put in front of someone
+  mid-problem.
