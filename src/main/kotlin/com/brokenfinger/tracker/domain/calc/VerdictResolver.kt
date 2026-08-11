@@ -31,9 +31,27 @@ object VerdictResolver {
     private val compilerDiagnostic = Regex(""":\d+: error:""")
 
     fun resolve(testcases: List<TestcaseResult>, boundErrorText: String?): Verdict? {
-        if (testcases.isEmpty()) return null
+        if (testcases.isEmpty()) return nothingRanVerdict(boundErrorText)
         val failed = testcases.sortedBy { it.id }.firstOrNull { it.hasFailed() } ?: return Verdict.PASS
         return verdictOf(failed.msg, boundErrorText)
+    }
+
+    /**
+     * No testcase reported, which is what a compile failure looks like: the run path emits
+     * `start` and then error frames, and nothing ever ran (protocol doc §7). Until #151 this
+     * returned null and a compile error was filed as UNKNOWN — one of the five verdicts the
+     * README advertises, lost because the check that would have caught it sat behind an early
+     * return. Measured 2026-08-11 on lesson 181946.
+     *
+     * **A recognised unknown stays unknown.** A cached result is also a terminal error frame
+     * with no testcases, and reading its text as a failure would file a grading the learner
+     * never failed as a RUNTIME_ERROR — the silent-wrong-data outcome the constitution ranks
+     * worst.
+     */
+    private fun nothingRanVerdict(errorText: String?): Verdict? {
+        if (errorText == null) return null
+        if (UnknownReason.matching(errorText) != null) return null
+        return errorVerdictOf(errorText)
     }
 
     private fun verdictOf(msg: String?, boundErrorText: String?): Verdict? {

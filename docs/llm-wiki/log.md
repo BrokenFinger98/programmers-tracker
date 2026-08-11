@@ -62,3 +62,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-11] ingest | korean for the user-facing half → 1 page created, 1 amended, index updated
 
 ## [2026-08-11] ingest | a grading is its whole session → 1 page created, index updated
+
+## [2026-08-11] ingest | a failing run ends at its result → 1 page created, index updated

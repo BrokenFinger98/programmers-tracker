@@ -269,15 +269,21 @@ class ChannelCaptureTest {
     }
 
     /**
-     * The trailing error of `algorithm-run-error.jsonl` arrives after the first one already
-     * terminated the stream — a measured frame belonging to no grading (protocol doc §7).
+     * Both error frames of `algorithm-run-error.jsonl` belong to the **same** run: the run
+     * path reports one per diagnostic and ends on `result` (protocol doc §7). This test used
+     * to assert the opposite — that the second was an orphan "belonging to no grading" — and
+     * that reading was the defect, not the behaviour (#152).
+     *
+     * The capture therefore does not settle here: the fixture holds no `result`, so the
+     * grading stays open until the silence deadline abandons it. Nothing recorded is the
+     * honest answer to a stream that never ended.
      */
     @Test
-    fun `a frame trailing a settled grading is dropped rather than crashing the stream`() {
+    fun `both diagnostics of a failing run belong to one grading`() {
         consume(capture(), "algorithm-run-error.jsonl")
 
-        rawLog.frames().size shouldBe 2
-        records().single().outcome shouldBe Outcome.UNKNOWN
+        rawLog.frames().size shouldBe 3
+        records().shouldBeEmpty()
     }
 
     @Test

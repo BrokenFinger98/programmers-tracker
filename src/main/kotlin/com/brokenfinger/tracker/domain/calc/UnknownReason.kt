@@ -17,8 +17,11 @@ import com.brokenfinger.tracker.domain.Outcome
  * `Unknown` messages instead of dropping them (dev rules §2.3).
  */
 enum class UnknownReason(
-    /** What the measured terminal frame carried, verbatim. */
-    private val measuredText: String,
+    /**
+     * What the measured terminal frame carried, verbatim. Public so a test can assert against
+     * the same string the production path matches on, rather than a copy of it that drifts.
+     */
+    val measuredText: String,
     /** The short human label every consumer prints. */
     val label: String,
 ) {
@@ -40,7 +43,15 @@ enum class UnknownReason(
          */
         fun of(outcome: Outcome, errorText: String?): UnknownReason? {
             if (outcome != Outcome.UNKNOWN) return null
-            return entries.firstOrNull { it.measuredText == errorText }
+            return matching(errorText)
         }
+
+        /**
+         * The reason for a text alone, before any outcome exists. [VerdictResolver] asks
+         * this before reading an error text as a failure: a cached result is also a terminal
+         * error frame with no testcases, and classifying it by its text would file a
+         * grading the learner never failed as a RUNTIME_ERROR (#151).
+         */
+        fun matching(errorText: String?): UnknownReason? = entries.firstOrNull { it.measuredText == errorText }
     }
 }

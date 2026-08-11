@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.domain.calc
 
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
+import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -110,5 +111,42 @@ class VerdictResolverTest {
         )
 
         VerdictResolver.resolve(shuffled, boundErrorText = null) shouldBe Verdict.TIMEOUT
+    }
+
+    // Nothing ran ------------------------------------------------------------------------------
+
+    /**
+     * A compile failure reports no testcase at all — the run path emits `start` and then one
+     * error frame per diagnostic (protocol doc §7). Until #151 that returned null and the
+     * verdict the README advertises was filed as UNKNOWN. Measured 2026-08-11 on 181946.
+     */
+    @Test
+    fun `a compiler diagnostic with nothing run is a compile error`() {
+        val text = "/Solution.java:7: error: unreported exception IOException\n2 errors"
+
+        VerdictResolver.resolve(emptyList(), text) shouldBe Verdict.COMPILE_ERROR
+    }
+
+    @Test
+    fun `an error text that is not a compiler diagnostic with nothing run is a runtime error`() {
+        VerdictResolver.resolve(emptyList(), "Exception in thread \"main\"") shouldBe Verdict.RUNTIME_ERROR
+    }
+
+    /**
+     * The trap in the obvious fix. A cached result is also a terminal error frame with no
+     * testcases, and reading its text as a failure would invent one the learner never had.
+     */
+    @Test
+    fun `every recognised unknown stays unknown rather than becoming a failure`() {
+        UnknownReason.entries.forEach { reason ->
+            withClue(reason.label) {
+                VerdictResolver.resolve(emptyList(), reason.measuredText).shouldBeNull()
+            }
+        }
+    }
+
+    @Test
+    fun `nothing run and nothing said stays unknown`() {
+        VerdictResolver.resolve(emptyList(), null).shouldBeNull()
     }
 }
