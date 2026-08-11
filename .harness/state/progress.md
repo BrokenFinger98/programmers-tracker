@@ -2419,3 +2419,30 @@ principle as #140:
 `template/ps-records/README.ko.md` is a special case worth noting: the template is copied
 into the **user's own** repository, so the twin travels with it and the user keeps whichever
 they read.
+
+## [2026-08-11] #147 — the badge that meant "working" was the only one you could not see ✅
+
+Reported from a live browser: the tooltip read `watching lesson 181947 in java (refreshed)`
+— the server had accepted — while the toolbar showed nothing at all.
+
+A badge background is painted **behind its text**, and `watching` was the empty string. So the
+green was never drawn, and the one state meaning "it is working" was the only state with no
+visual: a working sensor and an unloaded one looked identical. Both READMEs documented it as
+"green, empty", which is not a thing a user can see.
+
+Every state carries a glyph now — `●` · `!` · `×` — and "no badge" is documented as its own
+meaning: the content script never ran. Badge text is pinned white, because Chrome picks black
+on the orange and that reads as a disabled control rather than a warning.
+
+**The extension also had no icon.** No `icons` key, no image files, so Chrome drew the grey
+letter tile every icon-less extension gets. There are real icons at 16/32/48/128 now, with the
+generator committed beside them so the mark can be changed rather than redrawn.
+
+The mark is a check whose descending arm is red and ascending arm green — this tool records
+the failures as well as the pass, which is the one thing BaekjoonHub structurally cannot do. A
+plain green check would have said what every other extension says. Drawn at 8× and
+downsampled, because Pillow does not antialias and a hard-edged 16px check is a smear.
+
+And the manifest still repeated the "reads five identifiers" claim #144 corrected in the
+README — the guard reads Kotlin comments and `*.ko.md` pairs, so a JSON description was
+outside everything that checks.

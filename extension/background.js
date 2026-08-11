@@ -14,11 +14,19 @@ async function settings() {
 // The badge is the whole user interface. A sensor that fails silently is the failure mode
 // this extension exists to remove: the user believes a solve is being recorded when it is
 // not (#97, and the /watch-always-200 gap it does not fix).
+//
+// Every state carries a glyph, including the good one. `watching` used to be the empty
+// string with a green background, and a badge background is painted *behind its text* — so
+// nothing was drawn at all and the one state meaning "it is working" was the only one with
+// no visual. A working sensor and an unloaded one looked identical (#147).
 function report(state, detail) {
-  const badge = { watching: "", missing: "!", failed: "×" }[state];
+  const badge = { watching: "●", missing: "!", failed: "×" }[state];
   const colour = { watching: "#2d7", missing: "#e90", failed: "#d33" }[state];
   chrome.action.setBadgeText({ text: badge });
   chrome.action.setBadgeBackgroundColor({ color: colour });
+  // White regardless of the browser's theme: Chrome picks a contrast colour on its own, and
+  // on the orange it picks black, which reads as a disabled control rather than a warning.
+  chrome.action.setBadgeTextColor({ color: "#fff" });
   chrome.action.setTitle({ title: `programmers-tracker sensor — ${detail}` });
 }
 
