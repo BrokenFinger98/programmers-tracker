@@ -239,7 +239,7 @@ class FileRawSessionLogTest {
      * Two gradings can open in the same millisecond — measured 2026-08-11, when two channels
      * for one lesson did exactly that. The name was `<stamp>-<lesson>.jsonl` and nothing else,
      * so both wrote into one file and one replaced the other on retirement: two gradings
-     * interleaved in a single capture, and the only copy of each destroyed (#158).
+     * interleaved in a single capture, and the only copy of each destroyed (#157).
      */
     @Test
     fun `two sessions opened in the same millisecond get different names`() {

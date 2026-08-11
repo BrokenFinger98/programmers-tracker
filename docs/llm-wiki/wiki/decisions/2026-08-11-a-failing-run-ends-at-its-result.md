@@ -5,7 +5,7 @@ tags: [protocol, verdicts, capture, measurement]
 author: BrokenFinger98
 created: 2026-08-11
 updated: 2026-08-11
-sources: [decisions/2026-08-05-failure-taxonomy, concepts/verdict-classification, concepts/assumption-vs-measurement]
+sources: [decisions/2026-08-05-failure-taxonomy, concepts/verdict-classification, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
 # A failing run ends at its result, and a compile error is a verdict
@@ -83,6 +83,7 @@ A test had been pinning the defect as intended behaviour — *"the trailing erro
 frame belonging to no grading"*. It was not an orphan; it was the second diagnostic of the
 same run. That is the part worth remembering: the capture had been split in half since the
 run path was first written, and a test explained the halves rather than questioning them.
+It happened twice more the same afternoon — see [[concepts/tests-that-explain-defects]].
 
 ---
 

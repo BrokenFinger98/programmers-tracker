@@ -205,7 +205,7 @@ class ChannelCaptureTest {
     }
 
     /**
-     * Two live gradings with identical frames are two gradings (#161). This used to assert the
+     * Two live gradings with identical frames are two gradings (#159). This used to assert the
      * second was dropped, and that reading is what silently discarded a second SQL submission
      * of the same query — SQL frames carry no timing, so identical bytes are the normal case
      * rather than a sign of duplication.

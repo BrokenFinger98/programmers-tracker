@@ -64,3 +64,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-11] ingest | a grading is its whole session → 1 page created, index updated
 
 ## [2026-08-11] ingest | a failing run ends at its result → 1 page created, index updated
+
+## [2026-08-11] ingest | capture defects found by solving → 1 raw saved, 2 pages created, 9 pages updated, index + guards updated

@@ -153,7 +153,7 @@ class VerdictResolverTest {
     /**
      * Python, measured 2026-08-11 on lesson 120805 — a `def` missing its colon. The whole
      * point of this case is that `:\d+: error:` is **javac's** shape and matches nothing here,
-     * so a compile failure was filed as RUNTIME_ERROR (#162).
+     * so a compile failure was filed as RUNTIME_ERROR (#160).
      */
     @Test
     fun `a python syntax error is a compile error`() {

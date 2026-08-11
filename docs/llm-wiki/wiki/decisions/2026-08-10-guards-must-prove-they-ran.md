@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [ci, guards, tooling, locale, english-only]
 author: BrokenFinger98
 created: 2026-08-10
-updated: 2026-08-10
-sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-05-ci-guard-scoping, concepts/assumption-vs-measurement]
+updated: 2026-08-11
+sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-05-ci-guard-scoping, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
 # A guard that cannot run must fail, not pass

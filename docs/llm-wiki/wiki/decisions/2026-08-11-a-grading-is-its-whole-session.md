@@ -5,7 +5,7 @@ tags: [capture, dedup, protocol, records, measurement]
 author: BrokenFinger98
 created: 2026-08-11
 updated: 2026-08-11
-sources: [decisions/2026-08-05-capture-pipeline-stages, decisions/2026-08-05-write-serialization, concepts/assumption-vs-measurement]
+sources: [decisions/2026-08-05-capture-pipeline-stages, decisions/2026-08-05-write-serialization, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
 # A grading is its whole session, not the frame that ended it
@@ -102,3 +102,21 @@ The lesson is not about frames. **The record repository was showing the symptom 
 days** — exactly one submit per problem — and it read as a fact about the owner rather than as
 a defect. [[concepts/assumption-vs-measurement]] is usually invoked about placeholders in the
 data; this was the same error made about a pattern *in* the data.
+
+### The first accepted cost came due the same day (#159)
+
+⚠️ (old) — "Two identical SQL submissions of the same query could still key alike. Stated
+rather than engineered around."
+
+It was not hypothetical for a day. The same SQL query submitted twice produced byte-identical
+frames, and the second submission was dropped.
+
+The resolution did not touch the key. It corrected **where the key may be consulted**:
+`RecordWriter.write` is the live path and records unconditionally, `RecordWriter.replay` is
+the reconciler's path and is the only one that dedups. Byte-equality is evidence that two
+*stored* sessions are one grading; it is not evidence about two things that arrived separately
+down the socket. The cost above is therefore retired for live capture and still stands, by
+design, for replay — which is the only place it was ever load-bearing.
+
+A test had asserted the discarded reading in so many words (`consume` the same fixture twice,
+expect one record). See [[concepts/tests-that-explain-defects]].

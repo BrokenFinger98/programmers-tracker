@@ -32,7 +32,7 @@ object VerdictResolver {
      *
      * Measured only, and that is the rule rather than an accident of effort. The javac shape
      * was here alone until 2026-08-11, when a Python `def` missing its colon was filed as
-     * RUNTIME_ERROR — the regex was javac's and nothing said so (#162). A language whose
+     * RUNTIME_ERROR — the regex was javac's and nothing said so (#160). A language whose
      * compiler is not in this list lands as RUNTIME_ERROR, which is the honest fallback:
      * guessing at a format buys nothing when it is right and misclassifies when it is wrong.
      *

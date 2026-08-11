@@ -34,7 +34,7 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
      * The stamp is millisecond-precise and two gradings can open inside one millisecond —
      * measured 2026-08-11, when two channels for one lesson did exactly that. Both wrote into
      * the same file and one replaced the other on retirement: two gradings interleaved in a
-     * single capture, and the only copy of each destroyed (#158).
+     * single capture, and the only copy of each destroyed (#157).
      *
      * So the name is **issued rather than computed**. A candidate already handed out by this
      * log, or already on disk from an earlier run, gets a discriminator until it is free.

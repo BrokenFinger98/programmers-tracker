@@ -51,6 +51,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-05 [[concepts/bom-version-shadowing]] — The dependency you declared is not the one that runs
 - 2026-08-05 [[concepts/assumption-vs-measurement]] — How our own claims became "facts", and the four that were caught
 - 2026-08-05 [[concepts/orchestrated-implementation]] — Building with supervised workers: three recurring failures and what supervision is for
+- 2026-08-11 [[concepts/tests-that-explain-defects]] — When a test goes green around the wrong behaviour and leaves a comment saying why it is correct
 
 ## Entities
 - 2026-08-04 [[entities/programmers-actioncable]] — What the Programmers judge actually is
@@ -65,3 +66,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
 - 2026-08-04 [[sources/2026-08-04-oss-workflow]]
 - 2026-08-05 [[sources/2026-08-05-design-review-and-stack-upgrade]]
+- 2026-08-11 [[sources/2026-08-11-capture-defects-found-by-solving]] — Nine capture defects, five of them found only by solving problems in a browser

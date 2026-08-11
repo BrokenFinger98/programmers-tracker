@@ -72,7 +72,7 @@ class RecordWriter private constructor(
      * Records a grading **replayed from the raw log**, or returns null when its record already
      * exists.
      *
-     * This is the only path that consults the dedup index, and #161 is why. The key was being
+     * This is the only path that consults the dedup index, and #159 is why. The key was being
      * asked a question it cannot answer on the live path — *"is this the same grading?"* — when
      * all it can see is whether the bytes match. For SQL the bytes always match: its frames
      * carry no `run_time` and no `memory_size`, so the same query submitted twice is
@@ -82,7 +82,7 @@ class RecordWriter private constructor(
      * A live capture is not a replay — it is a thing that just happened, and the socket does
      * not redeliver: a reconnect loses whatever was broadcast meanwhile rather than repeating
      * it. The one way one grading used to reach the writer twice was two channels on one
-     * problem, and #160 closed that at the subscription instead.
+     * problem, and #158 closed that at the subscription instead.
      *
      * Replay is different in kind. Reconciliation re-reads bytes already on disk, so matching
      * bytes there really do mean the same grading, and the index is exactly right.
