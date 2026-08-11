@@ -1,8 +1,10 @@
 # Sensor extension
 
-Its whole job (design §8): tell your local server **which problem you are looking at**. It
-reads five identifiers from the page and sends nothing else — no code, no results, no
-cookies, and it never contacts Programmers.
+**[한국어](README.ko.md)**
+
+Its whole job (design §8): tell your local server **which problem you are looking at**, and
+report the two things only a browser can see. It sends four fields and nothing else — no
+code, no results, no cookies — and it never contacts Programmers.
 
 Without it you must register every problem by hand through DevTools and `curl`, and repeat
 that after each language-tab switch and each server restart. That was the single biggest
@@ -15,7 +17,8 @@ Chrome or any Chromium browser, unpacked — this is not on any store:
 1. Open `chrome://extensions`, turn on **Developer mode**
 2. **Load unpacked**, choose this `extension/` directory
 3. Open the extension's **options** (the toolbar icon → ⋮ → Options), paste the contents of
-   `.ps/watch-token` from your record repository, and set the port if you changed
+   `.ps/watch-token` from **this repository's checkout** — not your record repository; it is
+   a credential and the record repository is pushed (#126) — and set the port if you changed
    `TRACKER_PORT`
 
 Then open any Programmers problem. The toolbar badge is the status:
@@ -28,17 +31,23 @@ Then open any Programmers problem. The toolbar badge is the status:
 
 ## What it sends
 
-One `POST /watch`, two fields:
+One `POST /watch`, four fields:
 
 ```json
-{ "lessonId": "120803", "language": "java" }
+{ "lessonId": "120803", "language": "java", "focusedSec": 612, "sawQuestions": false }
 ```
 
-That is everything the server cannot work out for itself (#114). The lesson number comes
+The first two are what the server cannot work out for itself (#114). The lesson number comes
 from the URL — the one place it is always present, including on a problem's sub-pages — and
 the language from the code editor's `data-language`, which is the only part that needs the
 DOM. The channel identifiers are properties of the problem, so the server reads them off
 its page and caches them.
+
+The other two are what the server can never learn at all (#120). `focusedSec` counts only the
+seconds this tab was visible **and** focused, which is the number that answers "how long did
+you work on it" — the record's own `elapsedSec` is wall-clock since the problem was announced,
+so a problem opened before dinner reads as three hours. `sawQuestions` says the questions tab
+was opened while you were stuck. Both feed `review_queue` (§6.4).
 
 A page with no editor announces nothing: the questions list is not a problem being solved.
 
@@ -59,13 +68,13 @@ browser reach it. So `sensor.js` reads the DOM and hands the body to `background
 |---|---|
 | `storage` | remembers your watch token and port |
 | `host_permissions: http://127.0.0.1/*` | the only place it ever sends anything |
-| content script on `school.programmers.co.kr/learn/courses/*/lessons/*` | reads the five identifiers |
+| content script on `school.programmers.co.kr/learn/courses/*/lessons/*` | reads the lesson number and the open language tab |
 
 There is no `tabs` permission, no history access, and no remote code.
 
 ## What is measured, and what is not
 
-The five selectors were **read off a live problem page** (lesson 120803, 2026-08-07), and a
+The selectors were **read off a live problem page** (lesson 120803, 2026-08-07), and a
 language-tab switch was measured to change the language while the problem's own identifiers
 stay, and on 2026-08-10 the rewritten reader was run against three live pages — a problem
 page, a SQL problem, and a questions page with no editor, which correctly reads as nothing.

@@ -1,5 +1,7 @@
 # MCP — reading your records from an AI client
 
+**[한국어](mcp.ko.md)**
+
 > The server exposes your solving history over the Model Context Protocol so Claude, Cursor
 > or a local model can read it. **Six tools, none of which write.** Four hand back stored
 > records and counts; two compute a schedule or a ranking, under a boundary this page states

@@ -1,14 +1,17 @@
 # Bootstrap — from nothing to a first record
 
+**[한국어](bootstrap.ko.md)**
+
 This walks you from a clean machine to a server that is watching a problem and writing a
 record when you submit. It assumes you have never seen this repository.
 
 If a step does not apply to you, it says so; do not skip one because it looks optional.
 
 > **Read this before you start.** The last section, *[What you cannot do
-> yet](#what-you-cannot-do-yet)*, lists what is genuinely missing today. One of those items
-> — there is no browser extension in this repository — changes how step 6 works. Nothing
-> below pretends otherwise, but you should know the shape before you invest the time.
+> yet](#what-you-cannot-do-yet)*, lists what is genuinely missing today. Nothing below
+> pretends otherwise, but you should know the shape before you invest the time. The shortest
+> version: a problem the server was never told about records **nothing**, silently, and the
+> sensor extension only removes that burden on a browser profile it is loaded into.
 
 ---
 
@@ -237,8 +240,9 @@ that it announces every problem you open, re-announces on a language-tab switch,
 re-registers itself after a server restart. The toolbar badge says whether the server
 accepted: green is watching, orange means no token yet, red carries the server's own error.
 
-Note the extension has not yet been loaded end to end by anyone; its README says exactly
-what is measured and what is not.
+It was loaded and watched working on 2026-08-10 — the badge read
+`watching lesson 181947 in java (refreshed)` against a live problem page. Its README says
+exactly what is measured and what is not.
 
 ### By hand, without the extension
 
@@ -370,4 +374,6 @@ Stated plainly, because finding these out by trial is worse.
 - [`docs/programmers-protocol.md`](programmers-protocol.md) — the protocol, and the measured
   evidence behind every claim above
 - [`docs/llm-wiki/index.md`](llm-wiki/index.md) — every decision and why it was made
-- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — issue-first, squash-only, English-only
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — issue-first, squash-only, and English for
+  everything a contributor writes (the five user-facing pages also carry a Korean twin —
+  [the decision](llm-wiki/wiki/decisions/2026-08-11-korean-for-the-user-facing-half.md))
