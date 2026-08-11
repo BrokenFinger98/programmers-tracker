@@ -83,3 +83,38 @@ A test had been pinning the defect as intended behaviour — *"the trailing erro
 frame belonging to no grading"*. It was not an orphan; it was the second diagnostic of the
 same run. That is the part worth remembering: the capture had been split in half since the
 run path was first written, and a test explained the halves rather than questioning them.
+
+---
+
+## Amended 2026-08-11 (#154): the exception was the rule
+
+This ADR scoped the change to `(RUN, ALGORITHM)` because that was all that had been measured,
+and kept the short circuit everywhere else on the strength of protocol §13.2.
+
+Four days of measurement later, on a cached-result resubmit of lesson 120802:
+
+```
+start · error 같은 코드로… · test_group · testcase ×18 · result_lesson_challenge · finish
+```
+
+**A cached-result submit grades anyway.** The error is a notice, not an ending. Stopping there
+recorded UNKNOWN and filed eighteen passing testcases as orphans — the same shape as the run
+defect, on the path this ADR had left alone.
+
+So `error` now terminates **nothing**, and the matrix is the only rule. Both measurements say
+the frame the matrix already named was sitting at the end of the stream; the short circuit was
+an inference from one sentence of documentation, and it was wrong on both paths it touched.
+
+Two further things follow, and both are worth more than the fix:
+
+- **`algorithm-cached-result.jsonl` was never the protocol.** It was a capture this bug
+  truncated, and its README entry said "no verdict frames at all" as though that were a
+  measured fact about Programmers. It is kept, relabelled as the half it is, and superseded
+  by `algorithm-cached-then-graded.jsonl` — reassembled from the two halves of one grading,
+  verified by their shared channel identifier.
+- **The orphan warning named a cause, and the cause was wrong every time.** "Its start was
+  missed" fired eleven times across two lessons on 2026-08-11, and not once was a start
+  missed: every one was the tail of a grading closed too early. A diagnostic that confidently
+  names the one thing that did not happen sends the next reader to the wrong place. It now
+  reports what is known — no grading was open — and offers both explanations without choosing.
+

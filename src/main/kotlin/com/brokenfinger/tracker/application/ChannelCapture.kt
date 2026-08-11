@@ -167,12 +167,18 @@ class ChannelCapture(
      * anything trailing a terminal frame. Nothing rides on it and there is nowhere to put
      * it; DEBUG is right.
      *
-     * A frame that *does* carry facts is a **grading frame whose `start` we missed**: a
-     * reconnect landed mid-grading, or the sensor announced the problem after Submit was
-     * already pressed. It can never become a record — the `start` is what carries the action
-     * and the identity — but dropping it silently is how a change in Programmers' framing
-     * would stay invisible, which is the case dev rules §2.3 exists for. It is kept, and
-     * said out loud.
+     * A frame that *does* carry facts belongs to no open grading. It can never become a
+     * record — the `start` is what carries the action and the identity — but dropping it
+     * silently is how a change in Programmers' framing would stay invisible, which is the
+     * case dev rules §2.3 exists for. It is kept, and said out loud.
+     *
+     * **The message no longer names a cause.** It used to say "its start was missed", and
+     * that was wrong every single time it fired: eleven frames across two lessons on
+     * 2026-08-11, all of them the tail of a grading this code had already closed too early
+     * (#152, #154). A diagnostic that confidently names the one thing that did not happen is
+     * worse than none — it sends the next reader looking at reconnects and sensor timing.
+     * What is known is that no grading was open; whether one was closed too soon, or a
+     * reconnect landed mid-stream, is for whoever reads the kept frames.
      *
      * The frame text is never logged either way: a broadcast carries a learner's solving
      * history (dev rules §7).
@@ -184,8 +190,9 @@ class ChannelCapture(
         runCatching { rawLog.orphaned(channel.lessonId.value, frame.rawText) }
             .onFailure { logger.warn("Lesson {}: an orphaned frame could not be kept", lessonId(), it) }
         logger.warn(
-            "Lesson {}: a grading frame (action={}) belonged to no grading — its start was missed, " +
-                "so no record can be derived; {} so far on this channel, kept under the raw directory",
+            "Lesson {}: a grading frame (action={}) arrived with no grading open, so no record can " +
+                "be derived; {} so far on this channel, kept under the raw directory. Either a " +
+                "grading was settled before its stream ended, or one began before we were watching.",
             lessonId(),
             facts.action,
             orphans,

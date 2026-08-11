@@ -35,27 +35,28 @@ class TerminationRuleTest {
         TerminationRule.terminalFor(GradingAction.RUN, ProblemKind.DATABASE) shouldBe TerminalKind.FINISH
     }
 
+    /**
+     * **An error ends nothing, in any cell.** Measured twice, four days apart, on both paths
+     * the old short circuit was applied to: a failing run reports one error per diagnostic
+     * and then a `result` (#152), and a cached-result submit reports its error and then
+     * grades anyway, ending on `finish` (#154). The matrix was right both times.
+     */
     @Test
-    fun `error terminates every cell except the one where something follows it`() {
+    fun `error terminates nothing, in any cell`() {
         val cells = GradingAction.entries.flatMap { action -> ProblemKind.entries.map { action to it } }
 
         cells.forEach { (action, kind) ->
-            val ends = !(action == GradingAction.RUN && kind == ProblemKind.ALGORITHM)
             withClue("$action on $kind") {
-                TerminationRule.isTerminal(TerminalKind.ERROR, action, kind) shouldBe ends
+                TerminationRule.isTerminal(TerminalKind.ERROR, action, kind) shouldBe false
             }
         }
     }
 
-    /**
-     * The measured exception (#152). The run path emits one error frame per diagnostic and
-     * then a `result` (protocol doc §7), so ending at the first error cuts a two-diagnostic
-     * compile failure in half and files the rest as orphans. Measured 2026-08-11 on 181946.
-     */
+    /** What does end them, measured: a run at its result, an algorithm submit at its finish. */
     @Test
-    fun `an error does not end an algorithm run, because its result still follows`() {
-        TerminationRule.isTerminal(TerminalKind.ERROR, GradingAction.RUN, ProblemKind.ALGORITHM) shouldBe false
+    fun `the frame the matrix names is the one that ends the stream`() {
         TerminationRule.isTerminal(TerminalKind.RESULT, GradingAction.RUN, ProblemKind.ALGORITHM) shouldBe true
+        TerminationRule.isTerminal(TerminalKind.FINISH, GradingAction.SUBMIT, ProblemKind.ALGORITHM) shouldBe true
     }
 
     @Test
