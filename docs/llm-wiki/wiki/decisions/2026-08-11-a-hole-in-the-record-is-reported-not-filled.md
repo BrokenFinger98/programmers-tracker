@@ -102,3 +102,26 @@ exists only to keep the field absent when the history is whole.
 
 Not closed by this: whether the two stranded gradings are ever recovered. That would need a way
 to bind frames to an attempt that is not a guess, and no such way exists in the protocol.
+
+
+---
+
+## Amended 2026-08-11 (#187): every answer admits the holes, from one place
+
+`stats` was the wrong scope, and the argument for it — a total is where a denominator matters
+most — was true and insufficient. A pass whose frames were orphaned is **a problem
+`review_queue` will never schedule** and **a reading `slow_passes` cannot rank**; neither said
+anything.
+
+The fix was not to copy the block into five more tools. `McpToolInvoker` already has one wrap
+point that every result passes through, so the field moved there: the special case was **removed**
+rather than multiplied.
+
+Two smaller decisions came with it:
+
+- **The answer carries counts; the prose moved to the tool descriptions.** A client receives
+  descriptions once from `tools/list`, and a full paragraph on every result is weight paid on
+  every call. The explanation belongs where explanations are read once.
+- **Still absent when the history is whole**, on every tool. Presence remains the signal, and
+  a test pins the absence on three tools rather than one — a field that is always there is a
+  field nobody notices.

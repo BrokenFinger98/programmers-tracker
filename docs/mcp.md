@@ -71,7 +71,7 @@ the facts that set its date so you can disagree with the schedule — see
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | Every recorded run and submit, newest first. Per-testcase detail, compiler output and diffs are omitted here. |
 | `get_problem` | `lessonId` | One lesson and every submission against it, in full — testcases and compiler output included. |
-| `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. Carries `incompleteHistory` when the record has holes. |
+| `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
 | `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. **One entry per language.** |
 | `slow_passes` | `thresholdMs?` | Every passed problem ranked by its slowest testcase in milliseconds, with the level, tags and language a comparison needs. |
@@ -136,14 +136,19 @@ an AI confidently describing solving habits you do not have.
 
 ### A history with holes says so
 
-`stats` carries `incompleteHistory` when frames were captured for gradings that **no record
-represents** — a grading whose opening frame was missed cannot be turned into a record, and two
+**Every answer** carries `incompleteHistory` when frames were captured for gradings that **no
+record represents** — a grading whose opening frame was missed cannot be turned into a record, and two
 of them exist on the author's machine from defects fixed on 2026-08-11. The field names the
 lessons and counts the frames.
 
-It is absent when there are none, so its presence is the signal. When it is there, every count
-in the same answer is taken over an incomplete denominator, and a conclusion drawn from those
-counts has to say so. This is the same rule as the paragraph above, one level up: the *record*
+It is absent when there are none, so its presence is the signal. It used to appear on `stats`
+alone, on the argument that a total is where a denominator matters most — true, and not enough: a
+pass whose frames were orphaned is a problem `review_queue` will never schedule and a reading
+`slow_passes` cannot rank, and neither said so. Every tool reads the same history, so every answer
+admits the same holes.
+
+The answer carries counts; the explanation is in each tool's description, which you receive once
+from `tools/list` rather than on every call. This is the same rule as the paragraph above, one level up: the *record*
 can be missing data too, not only a field.
 
 They are not recoverable, and that is deliberate. The missing `start` frame carries the testcase

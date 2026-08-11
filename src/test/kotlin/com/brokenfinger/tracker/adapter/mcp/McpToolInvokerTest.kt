@@ -166,6 +166,27 @@ class McpToolInvokerTest {
      * once, in a warning on the day, and nothing afterwards said the history was partial.
      */
     @Test
+    fun `every tool says so when gradings exist that no record represents`() {
+        val raw = FileRawSessionLog.under(root)
+        raw.orphaned(120802, """{"message":{"action":"submit","type":"finish"}}""")
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(aSubmissionRecord()).query(raw = raw))
+
+        // A pass that was lost is a problem review_queue will never schedule and a reading
+        // slow_passes cannot rank — every tool reads the same history (#187).
+        listOf(
+            "submissions" to JsonObject(emptyMap()),
+            "review_queue" to JsonObject(emptyMap()),
+            "slow_passes" to JsonObject(emptyMap()),
+            "list_problems" to JsonObject(emptyMap()),
+            "get_problem" to arguments("lessonId" to 120804),
+            "stats" to arguments("groupBy" to "verdict"),
+        ).forEach { (tool, args) ->
+            structured(invoker.call(tool, args))["incompleteHistory"]!!
+                .jsonObject["lessonsWithOrphanedFrames"]!!.jsonPrimitive.int shouldBe 1
+        }
+    }
+
+    @Test
     fun `stats says so when gradings exist that no record represents`() {
         val raw = FileRawSessionLog.under(root)
         raw.orphaned(120802, """{"message":{"action":"submit","type":"testcase"}}""")
@@ -181,12 +202,14 @@ class McpToolInvokerTest {
         gaps["lessons"]!!.jsonArray.map { it.jsonPrimitive.long } shouldBe listOf(120802L, 181946L)
     }
 
-    /** Absence is the signal, so a complete history must not carry the field at all. */
+    /** Absence is the signal, so a complete history must not carry the field on any tool. */
     @Test
-    fun `stats is silent about gaps when there are none`() {
-        val payload = structured(invokerOver(aSubmissionRecord()).call("stats", arguments("groupBy" to "verdict")))
+    fun `no tool mentions gaps when there are none`() {
+        val invoker = invokerOver(aSubmissionRecord())
 
-        payload.shouldNotContainKey("incompleteHistory")
+        structured(invoker.call("stats", arguments("groupBy" to "verdict"))).shouldNotContainKey("incompleteHistory")
+        structured(invoker.call("submissions", JsonObject(emptyMap()))).shouldNotContainKey("incompleteHistory")
+        structured(invoker.call("review_queue", JsonObject(emptyMap()))).shouldNotContainKey("incompleteHistory")
     }
 
     @Test
