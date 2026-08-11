@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Push gates — the constitution guards, then the wiki gate.
+#
 # wiki push gate — blocks the push when its range contains no docs/llm-wiki/ change.
 # Purpose: force per-branch distillation (/wiki-ingest). Prevents decisions and know-how
 # from being published unrecorded.
@@ -7,6 +9,27 @@
 # are recorded via the commit trailer `Wiki-Skip: <reason>`.
 # Rationale: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.3
 set -u
+
+# --- constitution guards -------------------------------------------------------------------
+# Ran only by a human or by CI until #194, which means a failing guard could reach the remote:
+# `./scripts/guards.sh | tail -2` in an `&&` chain takes *tail's* exit status, and one did. CI
+# catches it eventually; the push did not, and one of these checks is "no credentials committed".
+#
+# Fail-closed, unlike the wiki gate below. That gate exists to prevent unconscious omission and
+# says so; these are rules CLAUDE.md states as absolute, and there is no `--trailer` for them.
+# The script's own output is what says what to fix, so it is not swallowed.
+GUARDS="$(git rev-parse --show-toplevel)/scripts/guards.sh"
+if [ -x "$GUARDS" ]; then
+    if ! "$GUARDS" >&2; then
+        echo "" >&2
+        echo "✖ constitution guards failed — see above. Nothing was pushed." >&2
+        exit 1
+    fi
+else
+    # Fail-open on absence only: a checkout without the script is not a violated rule, and a
+    # hook that blocks every push in a worktree missing one file helps nobody.
+    echo "push-gate: skip guards (scripts/guards.sh not executable here)" >&2
+fi
 
 WIKI_DIR="docs/llm-wiki/"
 Z40="0000000000000000000000000000000000000000"
