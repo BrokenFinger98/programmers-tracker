@@ -54,6 +54,10 @@ class CommandLineGitSync(
 
     override fun push(): Boolean = inRepository("push") { pushed() }
 
+    // `git remote` lists names and prints nothing when there is none, so an empty answer is the
+    // whole signal. A failure to run it answers false: unknown is not "configured".
+    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.output.isNotBlank() }
+
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
         return neverThrowing(what, action)

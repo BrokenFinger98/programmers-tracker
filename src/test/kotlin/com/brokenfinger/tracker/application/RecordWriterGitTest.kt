@@ -173,4 +173,6 @@ private object BrokenGitSync : GitSync {
     override fun reconcile(): Boolean = error("git is unavailable")
 
     override fun push(): Boolean = error("git is unavailable")
+
+    override fun hasRemote(): Boolean = true
 }

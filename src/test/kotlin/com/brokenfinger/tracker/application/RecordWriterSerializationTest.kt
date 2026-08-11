@@ -212,4 +212,6 @@ private class ObservedGit(private val section: WriteSection) : GitSync {
     override fun reconcile(): Boolean = true
 
     override fun push(): Boolean = true
+
+    override fun hasRemote(): Boolean = true
 }
