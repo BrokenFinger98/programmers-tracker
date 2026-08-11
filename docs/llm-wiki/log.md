@@ -72,3 +72,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-11] ingest | a watch answer is not a promise → 1 page created, index updated
 
 ## [2026-08-11] ingest | a hole in the record is reported, not filled → 1 page created, index updated
+
+## [2026-08-11] ingest | a pass belongs to its language → 1 page created, index updated

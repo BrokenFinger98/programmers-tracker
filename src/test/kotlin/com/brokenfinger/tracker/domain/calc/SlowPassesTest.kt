@@ -118,14 +118,58 @@ class SlowPassesTest {
         answer.untimed shouldBe 1
     }
 
+    // A reading belongs to a language (#173) -----------------------------------------------------
+
+    /**
+     * Grouping by problem alone kept one pass — the latest — so a slow Java pass written the day
+     * after a fast Kotlin one disappeared entirely. That is the exact reading this calculator
+     * exists to surface, hidden by the calculator itself.
+     */
+    @Test
+    fun `a slow pass is not hidden by a faster one in another language`() {
+        val history = listOf(
+            pass(lessonId = 120804, times = listOf("0.01"), day = 1, language = "kotlin"),
+            pass(lessonId = 120804, times = listOf("9.90"), day = 2, language = "java"),
+        )
+
+        val report = SlowPasses.of(history)
+
+        report.slow.map { it.language } shouldContainExactly listOf("java", "kotlin")
+        report.slow.map { it.slowestMs } shouldContainExactly listOf(9.90, 0.01)
+    }
+
+    /** The order that used to lose the slow one outright — the newer pass was the fast one. */
+    @Test
+    fun `the slow reading survives when the faster language was recorded later`() {
+        val history = listOf(
+            pass(lessonId = 120804, times = listOf("9.90"), day = 1, language = "java"),
+            pass(lessonId = 120804, times = listOf("0.01"), day = 2, language = "kotlin"),
+        )
+
+        SlowPasses.of(history).slow.map { it.slowestMs } shouldContainExactly listOf(9.90, 0.01)
+    }
+
+    /** Within one language the latest pass still wins — re-solving replaces its own reading. */
+    @Test
+    fun `re-solving in the same language replaces that language's reading`() {
+        val history = listOf(
+            pass(lessonId = 120804, times = listOf("9.90"), day = 1),
+            pass(lessonId = 120804, times = listOf("0.02"), day = 2),
+        )
+
+        SlowPasses.of(history).slow.map { it.slowestMs } shouldContainExactly listOf(0.02)
+    }
+
     // Fixtures ---------------------------------------------------------------------------------
 
-    private fun pass(lessonId: Long, times: List<String?>, day: Long = 1) = aSubmissionRecord(
-        ts = OffsetDateTime.parse("2026-01-01T09:00:00+09:00").plusDays(day - 1),
-        lessonId = lessonId,
-        verdict = Verdict.PASS,
-        testcases = times.mapIndexed { index, time ->
-            aTestcaseResult(id = index + 1L, passed = true, runTime = time)
-        },
-    )
+    private fun pass(lessonId: Long, times: List<String?>, day: Long = 1, language: String = "java") =
+        aSubmissionRecord(
+            ts = OffsetDateTime.parse("2026-01-01T09:00:00+09:00").plusDays(day - 1),
+            lessonId = lessonId,
+            language = language,
+            verdict = Verdict.PASS,
+            testcases = times.mapIndexed { index, time ->
+                aTestcaseResult(id = index + 1L, passed = true, runTime = time)
+            },
+        )
 }

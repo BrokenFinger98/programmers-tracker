@@ -2895,3 +2895,40 @@ empty would pass any wiki, a raw-date list that parses as empty would fail every
 
 ADR: amended `decisions/2026-08-10-guards-must-prove-they-ran` rather than adding a new one —
 this is the same decision applied a third time, not a different one.
+
+## [2026-08-11] #173 — a pass belongs to its language, and the layout was never the blocker ✅
+
+**I had this wrong twice.** I reported per-language attempts as blocked on the record-repository
+layout — `attempts/001.raw.jsonl` carries no language, so per-language numbering would collide.
+Reading the code instead of repeating the claim: `attemptFile` is `attempts/NNN.<ext>` and the
+extension already carries the language, and attempt numbers are per problem and monotonic across
+languages by design (§5.1), so `001.raw.jsonl` is unambiguous. **No collision exists and no
+layout change was ever needed.**
+
+What is language-blind is the analysis. Both calculators grouped by lesson alone, so:
+
+- `review_queue` — a pass in Kotlin scheduled the problem as reviewed, and someone practising
+  Java because a company does not offer Kotlin was told they were done with a problem they had
+  never once solved in it
+- `slow_passes` — kept **one pass per problem, the latest**. A slow Java pass written the day
+  after a fast Kotlin one vanished entirely, which is the exact reading that tool exists to
+  surface, hidden by the tool
+
+Both now key on `(lessonId, language)`; `ReviewItem` carries the language and the ordering gains
+it as a final tie-break. Attempt counting follows the grouping, so Kotlin submits do not make a
+first Java attempt look shaky.
+
+The measurement argument is the strong one and has nothing to do with learning: **a runtime
+measures the solution you wrote**, so attributing a Kotlin reading to "this problem" and letting
+it displace a Java one is losing data, not a judgement call. Whether solving it once carries over
+is a claim about the learner, and [[decisions/2026-08-10-scheduling-is-not-diagnosis]] already
+settled that the server does not make those.
+
+SQL needs no special case — `mysql` and `oracle` are separate languages, so separate tracks.
+
+Seven tests, four of them for the direction that matters rather than the happy path. ADR:
+`decisions/2026-08-11-a-pass-belongs-to-its-language`. `docs/mcp.md` and its Korean twin updated.
+
+Remaining risk: **never exercised on real two-language data** — this machine's history has none
+yet. And `stats(groupBy=problem)` still counts by problem, so the two surfaces group differently;
+correct in both cases, and a thing a reader has to notice.

@@ -81,6 +81,9 @@ object McpRecordJson {
     private fun reviewItem(item: ReviewItem): JsonObject = buildJsonObject {
         put("lessonId", item.lessonId)
         put("title", item.title)
+        // Half the identity, not decoration: one problem appears once per language it was
+        // passed in, and a reader seeing the same lessonId twice needs this to tell them apart.
+        put("language", item.language)
         item.level?.let { put("level", it) }
         put("passedAt", item.passedAt.toString())
         put("attempts", item.attempts)
