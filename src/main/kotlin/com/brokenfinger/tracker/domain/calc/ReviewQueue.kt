@@ -36,6 +36,15 @@ enum class Confidence(val intervalDays: Long) {
 data class ReviewItem(
     val lessonId: Long,
     val title: String,
+    /**
+     * The language the pass was written in, and half of this item's identity.
+     *
+     * A problem can appear twice — a pass in Kotlin says nothing about whether the learner can
+     * write it in Java, and someone practising a second language because a company does not
+     * offer their first would otherwise be told they were done with a problem they have never
+     * solved in it (#173).
+     */
+    val language: String,
     val level: Int?,
     val passedAt: OffsetDateTime,
     /** Submits it took to pass, counted from the previous pass rather than from the beginning. */
@@ -61,6 +70,13 @@ data class ReviewItem(
  * a file, so the same computation serves a live query and a re-analysis of old records without
  * two implementations drifting apart.
  *
+ * **A pass is per language.** Grouping is by `(lesson, language)`, so a problem passed in two
+ * languages is two items on two schedules. The counter-argument is real — solving it once
+ * teaches the algorithm and the second language is largely syntax — but weighing that is a
+ * claim about the learner, and the server schedules rather than diagnoses
+ * ([[decisions/2026-08-10-scheduling-is-not-diagnosis]]). Both items carry the facts that
+ * scheduled them, and the reader decides.
+ *
  * **Scope falls out rather than being enforced.** Only problems with a recorded pass appear,
  * which is exactly "problems solved from now on" — one solved before this tool existed has no
  * record at all, so no date cutoff is needed and none is applied.
@@ -73,7 +89,7 @@ object ReviewQueue {
      * record already carries the only offset that means anything here.
      */
     fun due(history: List<SubmissionRecord>, now: OffsetDateTime, limit: Int? = null): List<ReviewItem> {
-        val items = history.groupBy { it.lessonId }.values
+        val items = history.groupBy { it.lessonId to it.language }.values
             .mapNotNull { itemOf(it, now) }
             .filter { it.overdueDays >= 0 }
             .sortedWith(MOST_OVERDUE_FIRST)
@@ -94,6 +110,7 @@ object ReviewQueue {
         return ReviewItem(
             lessonId = pass.lessonId,
             title = pass.title,
+            language = pass.language,
             level = pass.level,
             passedAt = pass.ts,
             attempts = attempts,
@@ -157,9 +174,11 @@ object ReviewQueue {
 
     private fun SubmissionRecord.passed(): Boolean = action == GradingAction.SUBMIT && verdict == Verdict.PASS
 
-    // Most overdue first, then the least confident, then by problem so the order is total —
-    // a queue that reshuffles between identical calls is one nobody can work through.
+    // Most overdue first, then the least confident, then by problem and language so the order
+    // is total — a queue that reshuffles between identical calls is one nobody can work through.
+    // Language is part of the tie-break because one problem can now produce two items.
     private val MOST_OVERDUE_FIRST = compareByDescending<ReviewItem> { it.overdueDays }
         .thenByDescending { it.confidence.ordinal }
         .thenBy { it.lessonId }
+        .thenBy { it.language }
 }

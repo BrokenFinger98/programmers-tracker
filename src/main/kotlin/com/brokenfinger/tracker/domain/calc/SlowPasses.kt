@@ -55,7 +55,11 @@ data class SlowPassReport(val slow: List<SlowPass>, val untimed: Int)
  */
 object SlowPasses {
     fun of(history: List<SubmissionRecord>, thresholdMs: Double? = null): SlowPassReport {
-        val passes = history.filter { it.passed() }.groupBy { it.lessonId }
+        // By (lesson, language), not by lesson. Grouping by problem alone kept one pass —
+        // the latest — so a slow Java pass vanished behind a fast Kotlin one written the day
+        // after, which is precisely the reading this calculator exists to surface (#173). A
+        // runtime is a property of the measurement, not of the problem.
+        val passes = history.filter { it.passed() }.groupBy { it.lessonId to it.language }
             .map { (_, records) -> records.maxBy { it.ts } }
         val timed = passes.mapNotNull { slowPassOf(it) }
         return SlowPassReport(

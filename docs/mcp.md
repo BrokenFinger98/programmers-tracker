@@ -73,7 +73,7 @@ the facts that set its date so you can disagree with the schedule — see
 | `get_problem` | `lessonId` | One lesson and every submission against it, in full — testcases and compiler output included. |
 | `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. Carries `incompleteHistory` when the record has holes. |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
-| `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. |
+| `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. **One entry per language.** |
 | `slow_passes` | `thresholdMs?` | Every passed problem ranked by its slowest testcase in milliseconds, with the level, tags and language a comparison needs. |
 
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
@@ -99,11 +99,25 @@ watching" as "no help was taken" is the one error that pushes a shaky problem tw
 The numbers behind the four bands — 60, 21, 7 and 3 days — are chosen, not measured. They
 reproduce the two examples design §6.4 states and nothing more.
 
+**A pass counts for the language it was written in, and no other.** The same `lessonId` can
+appear twice with two `language` values and two schedules, and the submits that led to one are
+not counted against the other. Someone practising Java because a company does not offer their
+usual language would otherwise be told a Kotlin pass had covered it.
+
+Whether solving it once "really" means you can write it in another language is a claim about the
+learner, and this server does not make those — it schedules. Both entries carry the facts that
+scheduled them; disagree with either and you can see exactly why.
+
 ### What `slow_passes` will not decide for you
 
 Design §6.5 asks for "markedly slower than same-tag, same-level problems". That needs peers,
 and a record set this young has none — so **no baseline is applied.** The whole distribution
 comes back in one call, slowest first, and where the line falls is yours.
+
+A reading belongs to a **(problem, language)** pair for the same reason: a runtime measures the
+solution you wrote, not the problem you solved. Grouping by problem alone kept only the latest
+pass, so a slow Java pass written the day after a fast Kotlin one disappeared — the exact reading
+this tool exists to surface, hidden by the tool.
 
 `untimed` is part of the answer, not a footnote. SQL sends no per-case timing at all, and a
 runtime error or timeout drops it case by case. Those passes are excluded from the ranking

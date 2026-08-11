@@ -193,6 +193,73 @@ class ReviewQueueTest {
         ReviewQueue.due(history, now = at(400)).single().confidence shouldBe Confidence.LOW
     }
 
+    // A pass is per language (#173) ------------------------------------------------------------
+    //
+    // The owner's case: someone who normally solves in Kotlin and has to practise Java because a
+    // company does not offer Kotlin. Grouping by lesson alone told them they were done with a
+    // problem they had never once solved in the language they were practising.
+
+    @Test
+    fun `a problem passed in two languages is two items on two schedules`() {
+        val history = listOf(
+            pass(day = 1, sensor = aSensorObservation(sawQuestions = false)),
+            pass(day = 40, language = "kotlin", sensor = aSensorObservation(sawQuestions = false)),
+        )
+
+        // Day 110: the java pass fell due on day 61, the kotlin one on day 100.
+        val due = ReviewQueue.due(history, now = at(110))
+
+        due.map { it.language } shouldContainExactly listOf("java", "kotlin")
+        due.map { it.lessonId } shouldContainExactly listOf(120804L, 120804L)
+    }
+
+    /**
+     * The direction that matters. A pass in one language must not schedule another, or a learner
+     * practising Java is told a Kotlin pass covered it.
+     */
+    @Test
+    fun `passing in one language leaves the other language's schedule untouched`() {
+        val history = listOf(
+            pass(day = 1, sensor = aSensorObservation(sawQuestions = false)),
+            pass(day = 60, language = "kotlin", sensor = aSensorObservation(sawQuestions = false)),
+        )
+
+        val due = ReviewQueue.due(history, now = at(65))
+
+        due.map { it.language } shouldContainExactly listOf("java")
+    }
+
+    /**
+     * Attempts are counted within the language too. Counting the problem's whole history would
+     * make a first Java attempt look shaky because of Kotlin submits that taught nothing about
+     * writing it in Java.
+     */
+    @Test
+    fun `a language's attempt count ignores the other language's submits`() {
+        val history = failures(count = 4, from = 1) +
+            listOf(pass(day = 1, language = "kotlin", sensor = aSensorObservation(sawQuestions = false)))
+
+        val kotlin = ReviewQueue.due(history, now = at(200)).single { it.language == "kotlin" }
+
+        kotlin.attempts shouldBe 1
+        kotlin.confidence shouldBe Confidence.HIGH
+    }
+
+    /** One problem now yields two items, so the order has to stay total across them. */
+    @Test
+    fun `two items for one problem keep a stable order`() {
+        val history = listOf(
+            pass(day = 1, language = "kotlin", sensor = aSensorObservation(sawQuestions = false)),
+            pass(day = 1, language = "java", sensor = aSensorObservation(sawQuestions = false)),
+        )
+
+        val first = ReviewQueue.due(history, now = at(70)).map { it.language }
+        val second = ReviewQueue.due(history.reversed(), now = at(70)).map { it.language }
+
+        first shouldContainExactly listOf("java", "kotlin")
+        second shouldContainExactly first
+    }
+
     // Fixtures ---------------------------------------------------------------------------------
 
     private fun day(n: Long): LocalDate = LocalDate.parse("2026-01-01").plusDays(n - 1)
@@ -201,8 +268,14 @@ class ReviewQueueTest {
     private fun at(day: Long, seq: Long = 0) =
         OffsetDateTime.parse("2026-01-01T09:00:00+09:00").plusDays(day - 1).plusSeconds(seq)
 
-    private fun pass(day: Long, lessonId: Long = 120804, sensor: SensorObservation?) =
-        aSubmissionRecord(ts = at(day, PASSES_LAST), lessonId = lessonId, verdict = Verdict.PASS, sensor = sensor)
+    private fun pass(day: Long, lessonId: Long = 120804, language: String = "java", sensor: SensorObservation?) =
+        aSubmissionRecord(
+            ts = at(day, PASSES_LAST),
+            lessonId = lessonId,
+            language = language,
+            verdict = Verdict.PASS,
+            sensor = sensor,
+        )
 
     private fun failures(count: Int, from: Long) = (0 until count).map {
         aSubmissionRecord(ts = at(from, it.toLong()), verdict = Verdict.WRONG, sensor = null)
