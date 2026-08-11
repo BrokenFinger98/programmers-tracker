@@ -24,7 +24,7 @@ class WatchService(
      * channel never happened, and starting a timer for it would put a measured-looking
      * elapsed time on a problem nobody is watching.
      */
-    override suspend fun watch(command: WatchCommand): WatchOutcome {
+    override suspend fun watch(command: WatchCommand): WatchStatus {
         val channel = channelOf(command) ?: throw UnresolvableProblemException(command.lessonId)
         // The sensor's first report is the only moment we learn a problem was opened, so it
         // is the only place the clock can start. Without this every record carries
@@ -33,7 +33,10 @@ class WatchService(
         // After the start, so a first heartbeat carrying an observation still lands: the
         // timer refuses a reading for a problem it has no clock for.
         command.observation?.let { timer.observed(command.lessonId, it) }
-        return outcomeOf(channel, registry.watch(channel, clock.instant()))
+        val outcome = outcomeOf(channel, registry.watch(channel, clock.instant()))
+        // Asked after the subscription rather than assumed from it: whether the socket lives
+        // is not something this call can promise (#167).
+        return WatchStatus(outcome, subscriber.healthOf(channel))
     }
 
     private fun outcomeOf(channel: ChannelKey, result: WatchResult): WatchOutcome = when (result) {

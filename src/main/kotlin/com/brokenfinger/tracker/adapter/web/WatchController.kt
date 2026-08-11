@@ -2,8 +2,8 @@ package com.brokenfinger.tracker.adapter.web
 
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.application.WatchCommand
-import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchRequestHandler
+import com.brokenfinger.tracker.application.WatchStatus
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
@@ -17,20 +17,28 @@ import org.springframework.web.bind.annotation.RestController
  * What `/watch` answers on success. `status` distinguishes a new subscription from a
  * heartbeat refresh; `lessonId` echoes what the caller named, which is now all they sent
  * (#114) — the channel identifiers the server resolved for itself are its own business.
+ *
+ * [subscription] is the field that stops `status` from being a promise it cannot keep.
+ * Subscribing is fire-and-forget, so `started` only ever meant "the request was accepted";
+ * a socket the judge refused answered exactly the same way, and the badge stayed green while
+ * every grading was lost (#167).
  */
 @Serializable
 data class WatchAccepted(
     val status: String,
     val lessonId: Long,
     val language: String,
+    /** Whether the channel is actually being observed: pending · live · rejected · unreachable. */
+    val subscription: String,
     /** The newest grading recorded for this problem. Absent when there is none (#156). */
     val lastRecord: RecordedGrading? = null,
 ) {
     companion object {
-        fun of(command: WatchCommand, outcome: WatchOutcome, last: SubmissionRecord?) = WatchAccepted(
-            status = outcome.name.lowercase(),
+        fun of(command: WatchCommand, status: WatchStatus, last: SubmissionRecord?) = WatchAccepted(
+            status = status.outcome.name.lowercase(),
             lessonId = command.lessonId,
             language = command.language,
+            subscription = status.health.name.lowercase(),
             lastRecord = last?.let(RecordedGrading::from),
         )
     }
@@ -90,10 +98,10 @@ class WatchController(
         val command = WatchRequestPayload.parse(rawBody.orEmpty())
         // The resolver reaches the network, so this handler blocks — on a virtual thread,
         // which is what the inbound half is for (decisions/2026-08-05-backend-stack).
-        val outcome = runBlocking { watcher.watch(command) }
+        val status = runBlocking { watcher.watch(command) }
         // Read after the subscription, so a heartbeat that arrives while a grading is settling
         // reports the record once it exists rather than a stale one from before it.
-        return WatchAccepted.of(command, outcome, records.lastRecordOf(command.lessonId))
+        return WatchAccepted.of(command, status, records.lastRecordOf(command.lessonId))
     }
 
     companion object {

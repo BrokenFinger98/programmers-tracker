@@ -7,11 +7,13 @@ import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchRequestHandler
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aWatchBody
 import com.brokenfinger.tracker.support.fixtures.aWatchCommand
+import com.brokenfinger.tracker.support.fixtures.aWatchStatus
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -81,7 +83,7 @@ class WatchControllerTest {
 
     @Test
     fun `starts watching and answers with the outcome`() {
-        coEvery { handler.watch(any()) } returns WatchOutcome.STARTED
+        coEvery { handler.watch(any()) } returns aWatchStatus(WatchOutcome.STARTED)
 
         val response = postWatch(aWatchBody())
 
@@ -90,10 +92,32 @@ class WatchControllerTest {
         response.jsonBody().stringField("lessonId") shouldBe "120804"
     }
 
+    /**
+     * The field that stops `status` being a promise. Before #167 the body said `started` for
+     * a socket the judge had refused, and the badge had nothing to go on.
+     */
+    @Test
+    fun `the answer says whether the channel is actually being observed`() {
+        coEvery { handler.watch(any()) } returns aWatchStatus(health = SubscriptionHealth.REJECTED)
+
+        val response = postWatch(aWatchBody())
+
+        response.status shouldBe 200
+        response.jsonBody().stringField("status") shouldBe "started"
+        response.jsonBody().stringField("subscription") shouldBe "rejected"
+    }
+
+    @Test
+    fun `a live subscription says so`() {
+        coEvery { handler.watch(any()) } returns aWatchStatus(health = SubscriptionHealth.LIVE)
+
+        postWatch(aWatchBody()).jsonBody().stringField("subscription") shouldBe "live"
+    }
+
     @Test
     fun `hands the parsed command to the watcher`() {
         val captured = slot<WatchCommand>()
-        coEvery { handler.watch(capture(captured)) } returns WatchOutcome.STARTED
+        coEvery { handler.watch(capture(captured)) } returns aWatchStatus(WatchOutcome.STARTED)
 
         postWatch(aWatchBody())
 
@@ -102,7 +126,7 @@ class WatchControllerTest {
 
     @Test
     fun `reports a repeat of an already watched channel as a refresh`() {
-        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        coEvery { handler.watch(any()) } returns aWatchStatus(WatchOutcome.REFRESHED)
 
         val response = postWatch(aWatchBody())
 
@@ -214,7 +238,7 @@ class WatchControllerTest {
      */
     @Test
     fun `the answer carries the newest grading recorded for that problem`() {
-        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        coEvery { handler.watch(any()) } returns aWatchStatus(WatchOutcome.REFRESHED)
         every { records.lastRecordOf(120804) } returns aSubmissionRecord(
             lessonId = 120804,
             verdict = Verdict.PASS,
@@ -236,7 +260,7 @@ class WatchControllerTest {
      */
     @Test
     fun `an unclassified grading is reported with an outcome and no verdict`() {
-        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        coEvery { handler.watch(any()) } returns aWatchStatus(WatchOutcome.REFRESHED)
         every { records.lastRecordOf(120804) } returns aSubmissionRecord(
             lessonId = 120804,
             verdict = null,
@@ -252,7 +276,7 @@ class WatchControllerTest {
 
     @Test
     fun `a problem with nothing recorded carries no record at all`() {
-        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        coEvery { handler.watch(any()) } returns aWatchStatus(WatchOutcome.REFRESHED)
 
         postWatch(aWatchBody()).jsonBody().shouldNotContainKey("lastRecord")
     }

@@ -16,7 +16,10 @@ class SubscriptionProtocol(private val identifier: ChannelIdentifier) {
         // after the deadline has seen it.
         ActionCableFrame.Ping -> Step.Emit(CableEvent.Heartbeat(rawText))
         is ActionCableFrame.ConfirmSubscription -> Step.Emit(CableEvent.SubscriptionConfirmed(rawText))
-        is ActionCableFrame.RejectSubscription -> Step.Fail("subscription rejected for ${identifier.asJson()}")
+        // The identifier is deliberately not in the reason. The subscriber's log line already
+        // names the lesson, and StoredChannel states the policy for this value; an exception
+        // message is the one place it was contradicted (2026-08-07 review, MINOR).
+        is ActionCableFrame.RejectSubscription -> Step.Fail(REJECTED)
         is ActionCableFrame.Broadcast -> broadcast(rawText, frame)
         is ActionCableFrame.Unknown -> Step.Emit(CableEvent.Unhandled(rawText, frame))
         is ActionCableFrame.Malformed -> Step.Emit(CableEvent.Unhandled(rawText, frame))
@@ -24,6 +27,11 @@ class SubscriptionProtocol(private val identifier: ChannelIdentifier) {
 
     private fun broadcast(rawText: String, frame: ActionCableFrame.Broadcast): Step =
         Step.Emit(CableEvent.MessageReceived(rawText, frame.identifier, SubmitMessage.ofReceived(frame.message)))
+
+    private companion object {
+        /** Written for the person reading a badge tooltip, not for a stack trace. */
+        const val REJECTED = "the judge refused the subscription — the session cookie is the usual cause"
+    }
 
     sealed interface Step {
         data class Send(val frameText: String) : Step

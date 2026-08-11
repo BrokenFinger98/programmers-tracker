@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.LessonId
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SensorObservation
+import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
@@ -30,7 +31,7 @@ class WatchServiceTest {
 
     @Test
     fun `a first watch subscribes and reports that it started`() = runBlocking<Unit> {
-        service.watch(aCommand(lessonId = 120804)) shouldBe WatchOutcome.STARTED
+        service.watch(aCommand(lessonId = 120804)).outcome shouldBe WatchOutcome.STARTED
 
         subscriber.calls shouldContainExactly listOf("subscribe:120804")
     }
@@ -49,7 +50,7 @@ class WatchServiceTest {
         service.watch(aCommand(lessonId = 120804))
         subscriber.calls.clear()
 
-        service.watch(aCommand(lessonId = 120804)) shouldBe WatchOutcome.REFRESHED
+        service.watch(aCommand(lessonId = 120804)).outcome shouldBe WatchOutcome.REFRESHED
 
         subscriber.calls shouldContainExactly emptyList()
     }
@@ -128,7 +129,25 @@ class WatchServiceTest {
         val observations = mutableMapOf<Long, SensorObservation>()
     }
 
-    private class RecordingSubscriber : ChannelSubscriber {
+    /**
+     * The defect #167 removed: `started` was returned whether or not the socket lived, so a
+     * refused subscription and a working one were the same answer. The service must report
+     * what the subscriber says rather than what the registry decided.
+     */
+    @Test
+    fun `the answer carries the subscription's own verdict, not the registry's`() = runBlocking<Unit> {
+        val refused = RecordingSubscriber(health = SubscriptionHealth.REJECTED)
+        val service = WatchService(SubscriptionRegistry(), refused, timer, identities, SteppingClock())
+
+        val status = service.watch(aCommand(lessonId = 120804))
+
+        status.outcome shouldBe WatchOutcome.STARTED
+        status.health shouldBe SubscriptionHealth.REJECTED
+        status.health.observing() shouldBe false
+    }
+
+    private class RecordingSubscriber(private val health: SubscriptionHealth = SubscriptionHealth.LIVE) :
+        ChannelSubscriber {
         val calls = mutableListOf<String>()
 
         override fun subscribe(channel: ChannelKey) {
@@ -138,6 +157,8 @@ class WatchServiceTest {
         override fun unsubscribe(channel: ChannelKey) {
             calls += "unsubscribe:${channel.lessonId.value}"
         }
+
+        override fun healthOf(channel: ChannelKey) = health
     }
 
     /** Each read advances a second, so heartbeat order is deterministic without sleeping. */

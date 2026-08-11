@@ -2,9 +2,11 @@ package com.brokenfinger.tracker.adapter.cable
 
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEvent
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
+import com.brokenfinger.tracker.protocol.SubscriptionRejectedException
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.matchers.shouldBe
 import io.mockk.coVerify
@@ -177,6 +179,132 @@ class CableChannelSubscriberTest {
         subscriber.subscribe(anAlgorithmChannel(lessonId = HEALTHY))
 
         awaitAtLeast(alive, 1)
+    }
+
+    // --- subscription health (#167) ------------------------------------------------------
+    //
+    // `/watch` answered `started` whether the socket confirmed, was refused, or never opened,
+    // so an expired cookie looked exactly like a working sensor. These pin the four answers
+    // that make it conditional, including the one that must survive the retry loop.
+
+    /**
+     * The optimistic default is the defect. A channel this class holds no job for is not
+     * being watched, and PENDING here would have the badge say it is.
+     */
+    @Test
+    fun `a channel nobody subscribed to is not reported as observing`() {
+        val subscriber = subscriberOver { neverEnding() }
+
+        subscriber.healthOf(channel) shouldBe SubscriptionHealth.UNREACHABLE
+    }
+
+    @Test
+    fun `a frame arriving makes the subscription live`() = runBlocking<Unit> {
+        val subscriber = subscriberOver {
+            flow {
+                emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                delay(FOREVER_MS)
+            }
+        }
+
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+    }
+
+    /**
+     * The one the user can act on: a refusal means the session cookie, and retrying with the
+     * same one cannot succeed. It must not read as a flaky network.
+     */
+    @Test
+    fun `a refused subscription is reported as rejected`() = runBlocking<Unit> {
+        val subscriber = subscriberOver {
+            flow<CableEvent> { throw SubscriptionRejectedException("the judge refused the subscription") }
+        }
+
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.REJECTED)
+    }
+
+    @Test
+    fun `any other failure is reported as unreachable`() = runBlocking<Unit> {
+        val subscriber = subscriberOver { flow<CableEvent> { throw IllegalStateException("socket died") } }
+
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.UNREACHABLE)
+    }
+
+    /**
+     * The ~30-minute silent close throws nothing, so nothing would demote the channel — it
+     * would keep reporting whatever it last said while connected to nothing.
+     */
+    @Test
+    fun `an attempt that ends without a single frame stops counting as observing`() = runBlocking<Unit> {
+        val subscriber = subscriberOver { emptyFlow() }
+
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.UNREACHABLE)
+    }
+
+    /**
+     * The retry loop runs continuously, so a refusal must not blink out of view between
+     * attempts. Re-marking PENDING at the top of each attempt would pass every other test
+     * here and leave the badge green on an expired cookie — the original defect, restored.
+     */
+    @Test
+    fun `a refusal survives the reconnect that follows it`() = runBlocking<Unit> {
+        val attempts = AtomicInteger()
+        val subscriber = subscriberOver(attempts = attempts) {
+            flow<CableEvent> { throw SubscriptionRejectedException("the judge refused the subscription") }
+        }
+
+        subscriber.subscribe(channel)
+        awaitAtLeast(attempts, 3)
+
+        subscriber.healthOf(channel) shouldBe SubscriptionHealth.REJECTED
+    }
+
+    /** Pasting a fresh cookie must heal it without a restart — only a frame clears a failure. */
+    @Test
+    fun `a rejected channel becomes live again once frames arrive`() = runBlocking<Unit> {
+        val opened = AtomicInteger()
+        val subscriber = subscriberOver {
+            if (opened.incrementAndGet() == 1) {
+                flow { throw SubscriptionRejectedException("the judge refused the subscription") }
+            } else {
+                flow {
+                    emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                    delay(FOREVER_MS)
+                }
+            }
+        }
+
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+    }
+
+    @Test
+    fun `unsubscribing forgets the channel rather than leaving a stale health`() = runBlocking<Unit> {
+        val started = AtomicInteger()
+        val subscriber = subscriberOver {
+            flow {
+                started.incrementAndGet()
+                emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                delay(FOREVER_MS)
+            }
+        }
+
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        subscriber.unsubscribe(channel)
+
+        subscriber.healthOf(channel) shouldBe SubscriptionHealth.UNREACHABLE
+    }
+
+    private suspend fun awaitHealth(subscriber: CableChannelSubscriber, target: SubscriptionHealth) {
+        withTimeout(PATIENCE_MS) {
+            while (subscriber.healthOf(channel) != target) delay(POLL_MS)
+        }
+        subscriber.healthOf(channel) shouldBe target
     }
 
     /** Waits for the behaviour itself; the timeout only bounds a genuine failure. */

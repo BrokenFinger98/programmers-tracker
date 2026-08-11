@@ -2786,3 +2786,41 @@ six. Then the real 35 MB transcript of this session was snapshotted into this re
 
 Not done: the existing 2.8 GB is untouched. Deleting a user's data is not something to bundle
 into a mechanism change.
+
+## [2026-08-11] #167 — /watch said `started` for a subscription the judge had refused ✅
+
+The oldest open defect in the project: found as M1 on 2026-08-07, fixed today.
+
+Subscribing is fire-and-forget, so `/watch` returned 200 `started` before the socket had done
+anything — the same answer whether it confirmed, was refused, or never opened. What made it
+silent rather than merely imprecise is the identity cache: `PageProblemIdentityResolver` caches
+a resolved problem **forever**, so for a problem the server has already seen, an expired cookie
+never touches the page fetch that raises `UnresolvableProblemException`. It goes straight to the
+socket, the judge refuses, and `report()` logged only `cause.javaClass.simpleName` — throwing
+away the one sentence that says what to do.
+
+Green badge, 200 on every heartbeat, a warn line that looks like a flaky network, and every
+grading lost. The constitution's worst outcome in its purest form.
+
+`watch()` now answers `WatchStatus(outcome, health)` and `/watch` carries `subscription` beside
+`status`. Three rules keep it honest, and each has a test:
+
+- **absent means UNREACHABLE, never PENDING** — the optimistic default *is* the defect
+- **a failure is cleared only by a frame, never reset per attempt** — the retry loop runs
+  continuously, so re-marking PENDING would make a refusal blink out of view every second and
+  restore the bug while passing every other test
+- **an attempt that ends without a single frame demotes** — the measured ~30-minute silent close
+  throws nothing, so nothing else would notice
+
+The badge gains red `!` and it **outranks the record state**: a `✓` from an hour ago is true and
+irrelevant if nothing is being watched now. REJECTED and UNREACHABLE stay separate all the way
+to the tooltip because they ask for different things — replace `.ps/session`, or wait.
+
+Also settled the same review's MINOR on the same line: the rejection reason no longer embeds the
+channel identifier, which was the one place `StoredChannel`'s stated policy was contradicted.
+
+ADR: `decisions/2026-08-11-a-watch-answer-is-not-a-promise`. The Korean twin of
+`extension/README.md` was updated with it, marker resynced.
+
+**Not verified live.** The badge path is exercised by tests and the JSON contract by a controller
+test, but no expired cookie has been driven through a real browser. That is the honest status.
