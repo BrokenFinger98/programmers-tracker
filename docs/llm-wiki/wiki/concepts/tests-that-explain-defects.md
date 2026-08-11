@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [discipline, testing, fixtures, protocol, failed-attempts]
 created: 2026-08-11
 updated: 2026-08-12
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md]
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md]
 ---
 
 # Tests That Explain the Defect Instead of Catching It
