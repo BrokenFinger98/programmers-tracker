@@ -5,8 +5,10 @@ import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldMatch
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -230,4 +232,55 @@ class FileRawSessionLogTest {
     private fun rawDir(): Path = root.resolve("raw")
 
     private fun lines(session: RawSessionId): List<String> = Files.readAllLines(rawDir().resolve(session.value))
+
+    // Unique names ------------------------------------------------------------------------------
+
+    /**
+     * Two gradings can open in the same millisecond — measured 2026-08-11, when two channels
+     * for one lesson did exactly that. The name was `<stamp>-<lesson>.jsonl` and nothing else,
+     * so both wrote into one file and one replaced the other on retirement: two gradings
+     * interleaved in a single capture, and the only copy of each destroyed (#158).
+     */
+    @Test
+    fun `two sessions opened in the same millisecond get different names`() {
+        val log = logAt(sameMillisecond)
+
+        val first = log.start(120805)
+        val second = log.start(120805)
+
+        first shouldNotBe second
+    }
+
+    /**
+     * And the second must still be a session. A discriminator the work-list walk cannot parse
+     * would take the capture off the reconciler entirely — a quieter loss than the one this
+     * fixes.
+     */
+    @Test
+    fun `a session that had to be discriminated is still on the work list`() {
+        val log = logAt(sameMillisecond)
+        val first = log.start(120805)
+        val second = log.start(120805)
+
+        log.append(first, """{"a":1}""")
+        log.append(second, """{"b":2}""")
+
+        log.unprocessed().map { it.id } shouldContainExactlyInAnyOrder listOf(first, second)
+        log.unprocessed().map { it.lessonId }.toSet() shouldBe setOf(120805L)
+    }
+
+    /** A name already on disk from an earlier run is not handed out again either. */
+    @Test
+    fun `a name already taken on disk is not reissued`() {
+        val earlier = logAt(sameMillisecond)
+        val taken = earlier.start(120805)
+        earlier.append(taken, """{"a":1}""")
+
+        val restarted = logAt(sameMillisecond)
+
+        restarted.start(120805) shouldNotBe taken
+    }
+
+    /** One instant, so every session opened with it collides unless the log prevents it. */
+    private val sameMillisecond: Instant = Instant.parse("2026-08-11T05:26:42.748Z")
 }

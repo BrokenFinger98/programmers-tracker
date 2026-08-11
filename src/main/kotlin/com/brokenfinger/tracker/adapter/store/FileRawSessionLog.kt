@@ -15,6 +15,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * File-backed [RawSessionLog]: one `.jsonl` per live session under [directory]
@@ -24,10 +25,44 @@ import java.time.format.DateTimeFormatter
  * system clock inside would make the name untestable.
  */
 class FileRawSessionLog(private val directory: Path, private val clock: Clock = Clock.systemUTC()) : RawSessionLog {
+    /** Names this log has handed out. One instance serves every channel, so this is the whole set. */
+    private val issued = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * A name no other session holds.
+     *
+     * The stamp is millisecond-precise and two gradings can open inside one millisecond —
+     * measured 2026-08-11, when two channels for one lesson did exactly that. Both wrote into
+     * the same file and one replaced the other on retirement: two gradings interleaved in a
+     * single capture, and the only copy of each destroyed (#158).
+     *
+     * So the name is **issued rather than computed**. A candidate already handed out by this
+     * log, or already on disk from an earlier run, gets a discriminator until it is free.
+     * Deterministic — no clock precision assumed, no randomness for a test to work around.
+     *
+     * The file is not created here. Reserving by touching an empty file would leave a
+     * frameless session on the work list whenever a process died between the two, and a
+     * capture that fails every reconciliation forever is worse than the collision this fixes.
+     */
     override fun start(lessonId: Long): RawSessionId {
         require(lessonId > 0) { "lessonId must be positive: $lessonId" }
-        return RawSessionId("${STAMP.format(clock.instant())}-$lessonId$SUFFIX")
+        return RawSessionId(unusedName("${STAMP.format(clock.instant())}-$lessonId"))
     }
+
+    private fun unusedName(stem: String): String {
+        var candidate = "$stem$SUFFIX"
+        var discriminator = 1
+        while (!issued.add(candidate) || onDisk(candidate)) {
+            discriminator += 1
+            candidate = "$stem-$discriminator$SUFFIX"
+        }
+        return candidate
+    }
+
+    // Retired sessions count: a name reissued after a restart would write into the copy of a
+    // grading already recorded, which is the same loss by a slower route.
+    private fun onDisk(name: String): Boolean =
+        Files.exists(directory.resolve(name)) || Files.exists(directory.resolve(RETIRED).resolve(name))
 
     override fun append(session: RawSessionId, frameText: String) {
         Files.createDirectories(directory)
@@ -95,7 +130,11 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         // Basic ISO, UTC, millisecond precision: sortable as text and colon-free, because
         // Windows rejects a colon in a file name and CI runs windows-latest.
         private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'").withZone(ZoneOffset.UTC)
-        private val NAME = Regex("""(\d{8}T\d{9}Z)-(\d+)\.jsonl""")
+
+        // The trailing group is the collision discriminator `unusedName` adds. Without it here
+        // a discriminated session would parse as nothing and drop off the work list entirely —
+        // a quieter loss than the collision it exists to prevent.
+        private val NAME = Regex("""(\d{8}T\d{9}Z)-(\d+)(?:-\d+)?\.jsonl""")
         private val APPEND_MODE = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
         private val CHARSET = StandardCharsets.UTF_8
         private const val SUFFIX = ".jsonl"

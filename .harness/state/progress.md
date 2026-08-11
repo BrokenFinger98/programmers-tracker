@@ -2579,3 +2579,26 @@ for that. Doing better would mean watching the page, which this extension does n
 
 The guard caught three of my own comments quoting the Korean UI string in prose. Rewritten in
 English rather than widening the guard.
+
+## [2026-08-11] #158 — two gradings could share one raw session file, and one destroyed the other ✅
+
+Measured while testing Python on lesson 120805. Two channels for one problem opened a grading
+**in the same millisecond**, and the session name was `<stamp>-<lesson>.jsonl` and nothing
+else. Both wrote into the same file — the capture on disk holds `start ×2 · error ×4 ·
+result ×2`, two gradings interleaved — and on retirement one `Files.move` replaced the other.
+
+The originals are the thing this project promises never to lose (dev rules §2.4), and a
+millisecond of clock precision was the whole guarantee.
+
+Names are **issued rather than computed** now: a candidate already handed out by this log, or
+already on disk from an earlier run, takes a discriminator until it is free. Deterministic —
+no clock precision assumed, no randomness for a test to work around, and the retired directory
+is checked too so a restart cannot reissue into a copy of a grading already recorded.
+
+**The discriminator had to reach the work-list walk as well.** `NAME` parsed
+`<stamp>-<lesson>.jsonl` exactly, so a discriminated session would have matched nothing and
+dropped off the reconciler entirely — a quieter loss than the collision it fixes.
+
+The file is deliberately not created at `start`. Reserving by touching an empty file would
+leave a frameless session on the work list whenever a process died between the two, and a
+capture that fails every reconciliation forever is worse than what this fixes.
