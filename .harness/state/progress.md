@@ -2602,3 +2602,27 @@ dropped off the reconciler entirely — a quieter loss than the collision it fix
 The file is deliberately not created at `start`. Reserving by touching an empty file would
 leave a frameless session on the work list whenever a process died between the two, and a
 capture that fails every reconciliation forever is worse than what this fixes.
+
+## [2026-08-11] #160 — one grading became one record per open channel ✅
+
+Measured on lesson 120805. The problem was opened in Java and then in Python3, both
+subscriptions stayed live, and a **single Python run produced two records** — one labelled
+`java`, carrying Python's traceback. A record for code that was never run is the worst thing
+this tool can produce, and it took nothing unusual to make one: switching the language tab is
+ordinary use.
+
+The frames escaped the duplicate check because each subscription receives the broadcast with
+**its own identifier stamped in**, so the two byte streams differ by the `language` field and
+key differently.
+
+**One channel per problem now.** A language switch supersedes the channel it switches from,
+reported through the `evicted` path the registry already had for capacity eviction, so the
+caller unsubscribes it on the socket exactly as before.
+
+The owner's point stands and is preserved: solving one problem in Kotlin and then in Java is
+**two gradings and stays two records** — someone whose target company forbids Kotlin has to
+practise both. What this forbids is one grading becoming two, which is a different thing.
+
+Not established: *why* the broadcast reached both channels. The Java channel's raw session was
+the one #158's collision destroyed, so its identifier was never seen. The fix does not depend
+on knowing — with one channel there is nothing to duplicate.
