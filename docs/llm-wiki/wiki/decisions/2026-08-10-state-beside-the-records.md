@@ -5,7 +5,7 @@ tags: [storage, configuration, git, credentials, deployment]
 author: BrokenFinger98
 created: 2026-08-10
 updated: 2026-08-11
-sources: [decisions/2026-08-05-write-serialization, decisions/2026-08-06-record-repository-lock, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+sources: [decisions/2026-08-05-write-serialization, decisions/2026-08-06-record-repository-lock, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-10-sensor-verified.md]
 ---
 
 # State lives beside the records, except the two things that are credentials

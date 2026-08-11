@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [concurrency, filesystem, docker, liveness, single-writer]
 created: 2026-08-07
-updated: 2026-08-07
-sources: [decisions/2026-08-06-record-repository-lock]
+updated: 2026-08-11
+sources: [decisions/2026-08-06-record-repository-lock, raw/sessions/2026-08-07-adversarial-review.md]
 ---
 
 # A liveness marker behind the lock, for filesystems that report a lock they do not enforce

@@ -2710,3 +2710,39 @@ requires (CLAUDE.md, "no work without an issue"). Each heading has been correcte
 that actually landed the change — the one number that exists — so `#158` now means PR 157
 rather than an issue nobody created, and `#162`, which pointed at nothing at all, is gone.
 Prediction had been substituting for allocation, which is how `raw/sessions/` emptied too.
+
+## [2026-08-11] #163 — the six empty days, back-filled from the transcript ✅
+
+#161 closed the wiki gap by admitting it. This closes it by filling it.
+
+**Where the material was.** The owner spotted files accumulating in the central wiki
+(`~/Desktop/llm-wiki/`) and asked. The mechanism is a `PreCompact` hook that snapshots the
+session transcript — and it writes to a hardcoded `$HOME/Desktop/llm-wiki/raw/inbox`, while the
+rule agreed for this project on 2026-08-04 was *repo-local when the repo has `docs/llm-wiki/`*.
+This repo has no `raw/inbox/` at all, so that half was never built and four compactions' worth of
+conversation went where this project never looks. **Nothing was lost** — the original is still
+under `~/.claude/projects/` and is a superset of the dump.
+
+The owner's stated reason for building that harness, the same day, is the sharpest line in the
+record: *"auto-compact가 진행되면 대화 내용이 날라가고 만약 wiki-ingest를 안했을때 그대로 손실되는
+문제가 있거든 그걸 강제하고 싶은거야."* The harness preserved the material and forced nothing,
+because preservation and ingestion are separate steps and only the first was automated.
+
+**What was written.** Five raw sessions and five source stubs, from the transcript, the git
+history and the PR record: 2026-08-05 afternoon (#14–#40), 2026-08-06, 2026-08-07 (the four-critic
+adversarial review), 2026-08-08/10 (the sensor proven), and the provenance page for this
+back-fill. Sixteen pages picked up a real source; the two citations #161 deleted are restored,
+now pointing at files that exist. 102 citations resolve.
+
+**The find worth more than the pages.** critic-pipeline's 2026-08-07 verdict already said it:
+*"each currently has a test that walks past the defect without asserting on it"* — with a worked
+example (the ping test stubbed the layer that swallowed the ping, and asserted the idle reconnect
+as desired behaviour). The four defects were fixed and the sentence went with them. Four days
+later the same pattern cost five more. `concepts/tests-that-explain-defects` now carries it:
+**a finding stated inside a fix is not recorded.**
+
+**What this is not.** These pages are honest but not equivalent to same-day ingests — the
+assistant's in-turn reasoning is largely absent, and the selection was made six days later by a
+participant. Reconstructing from the wiki pages that cite a source stayed refused; the transcript
+changed the situation, not the principle. A first pass sliced days on the transcript's UTC
+timestamps and would have filed every evening under the following day; KST slicing was required.

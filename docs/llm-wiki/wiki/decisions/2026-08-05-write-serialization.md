@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [concurrency, storage, git, idempotency, single-writer]
 created: 2026-08-05
-updated: 2026-08-05
-sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md]
+updated: 2026-08-11
+sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Write serialization: confined single writer, JSONL as the attempt authority

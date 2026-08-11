@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [concurrency, storage, docker, filesystem, single-writer, measurement]
 created: 2026-08-06
-updated: 2026-08-06
-sources: [decisions/2026-08-05-write-serialization]
+updated: 2026-08-11
+sources: [decisions/2026-08-05-write-serialization, raw/sessions/2026-08-06-catalog-runners-and-the-record-repository.md]
 ---
 
 # The record-repository lock: a kernel lock in `.git/`, and the mount where it does nothing

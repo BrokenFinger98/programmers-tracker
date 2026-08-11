@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [capture, durability, pipeline, raw-log, codefetch]
 created: 2026-08-05
-updated: 2026-08-05
-sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md]
+updated: 2026-08-11
+sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Capture is three stages, and the raw log is the durable queue

@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [actioncable, architecture, websocket]
 created: 2026-08-04
-updated: 2026-08-05
-sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md]
+updated: 2026-08-11
+sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-07-adversarial-review.md]
 ---
 
 # ActionCable Passive Broadcast Observation

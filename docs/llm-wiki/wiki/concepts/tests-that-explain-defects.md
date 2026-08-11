@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [discipline, testing, fixtures, protocol, failed-attempts]
 created: 2026-08-11
 updated: 2026-08-11
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md]
 ---
 
 # Tests That Explain the Defect Instead of Catching It
@@ -71,6 +71,28 @@ which is a virtue. What it actually encodes is **byte-equality as grading identi
 SQL submission carries no timing, so submitting the identical query twice produces byte-identical
 frames and the second submission was silently dropped. The test was the defect, written down
 and asserted ([[decisions/2026-08-11-a-grading-is-its-whole-session]]).
+
+## It was named four days earlier and not extracted
+
+The 2026-08-11 finding was not the first sighting. On 2026-08-07 an adversarial reviewer, having
+found four CRITICAL defects in the capture pipeline, closed its verdict with this
+(`raw/sessions/2026-08-07-adversarial-review.md`):
+
+> each currently has a test that walks past the defect without asserting on it
+
+Its worked example is the sharpest one in the record. The ping never reset the silence deadline,
+so an idle channel reconnected every fifteen seconds forever — and the reason it survived was
+that `CableChannelSubscriberTest` stubbed the client with a hand-built flow, **bypassing the
+layer that swallowed the ping**. One of its tests fed an empty flow and asserted the reconnect
+*as desired behaviour*. That is the idle case, pinned as correct.
+
+The sentence was read, the four defects were fixed, and the pattern was not written down.
+Four days later it cost five more.
+
+That is worth more than the pattern itself: **a finding stated inside a fix is not recorded.**
+The fix closes the issue and the sentence goes with it. Whatever generalises has to be lifted
+out deliberately, into a page that outlives the branch — which is the entire argument for the
+wiki having a concepts layer at all.
 
 ## Why it happens
 
