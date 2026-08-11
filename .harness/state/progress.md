@@ -2650,3 +2650,31 @@ Four tests had been pinning live dedup. Three were modelling a replay and now sa
 fourth asserted that feeding one fixture twice yields one record — the exact reading that
 discarded the second SQL submission — and now asserts two, because that is what two live
 gradings are.
+
+## [2026-08-11] #162 — a Python compile failure was filed as a runtime error ✅
+
+Measured on lesson 120805, a `def` missing its colon:
+
+```
+  File "/solution.py", line 3
+    def solution(num1, num2) return num1 // num2
+                             ^^^^^^
+SyntaxError: expected ':'
+```
+
+Recorded as `RUNTIME_ERROR`. The classifier had one pattern — `:\d+: error:` — and that is
+**javac's** shape. Nothing in the code said so, so it read as "a compile diagnostic" rather
+than "a Java compile diagnostic", and every other language fell through the default.
+
+It is a list now, one entry per toolchain whose output has actually been captured, and the
+comment says that measurement is the rule rather than an accident of effort. A language whose
+compiler is not in it lands as RUNTIME_ERROR — guessing at a format buys nothing when it is
+right and misclassifies when it is wrong.
+
+`IndentationError` and `TabError` are deliberately absent: they are SyntaxError subclasses that
+print their own names, neither has been captured, and each is one line when it is. Saying so
+in the comment is the difference between a gap and an oversight.
+
+The second test is the one that matters more — a Python traceback with no compile diagnostic
+(`ZeroDivisionError`) must stay RUNTIME_ERROR, so the new pattern cannot swallow the case it
+sits next to.
