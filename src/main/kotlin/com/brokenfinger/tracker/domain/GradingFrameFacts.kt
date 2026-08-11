@@ -33,6 +33,15 @@ data class GradingFrameFacts(
     val errorText: String? = null,
     /** Whether this frame opens a grading rather than continuing one. */
     val startsGrading: Boolean = false,
+    /**
+     * What the judge scored, when the frame reported it (#193).
+     *
+     * Parsed since the beginning and dropped here: there was no field for it, so 76 records in a
+     * row said `score: null` while the record's own KDoc explained that null as a SQL-only fact.
+     */
+    val score: Score? = null,
+    /** The rating the solve moved, when the frame reported it — the clearest progress signal. */
+    val rating: RatingChange? = null,
 ) {
     /** Only a submit may be promoted by a preceding run's error text (design §3.3). */
     fun isSubmit(): Boolean = action == GradingAction.SUBMIT

@@ -5,6 +5,8 @@ import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.ProblemKind
+import com.brokenfinger.tracker.domain.RatingChange
+import com.brokenfinger.tracker.domain.Score
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
 
@@ -32,6 +34,10 @@ data class GradingSession(
     val errorText: String?,
     /** The examples the stream announced (protocol §7) — what the runner is generated from. */
     val examples: List<ProblemExample> = emptyList(),
+    /** What the judge scored, when it reported one. Null for every SQL grading (protocol §6). */
+    val score: Score? = null,
+    /** The rating this solve moved, when it reported one. Null for every SQL grading. */
+    val rating: RatingChange? = null,
     /**
      * What every accepted frame said, in arrival order, including the frames nothing
      * recognised — those contribute an empty record and still hold their position, so a

@@ -3201,3 +3201,43 @@ error page, and the 401-with-measured-JSON that the shape check must **not** swa
 
 Also cleaned: §14's `reject_subscription` entry still trailed "what would serve is unmeasured"
 after §15.4 answered it, and now names what was chosen.
+
+## [2026-08-12] #193 — score and rating were parsed, promised, and never written ✅
+
+76 of 76 real records: `score: null`, `rating: null`. Including algorithm submits that passed
+18/18.
+
+The data was there all along. `algorithm-pass.jsonl`'s `result_lesson_challenge`:
+
+```json
+"userScore": "100.0", "perfectScore": "100.0",
+"isNewRating": true, "oldUserRating": 1000, "newUserRating": 1001
+```
+
+`SubmitMessage.Result` parsed every field of it, and **`GradingFrameFacts` had no field for any of
+it**, so nothing crossed the `protocol → application` boundary. Three places claimed otherwise —
+the record's class KDoc, both field KDocs, and `aSubmissionRecord()`, which populates a score and
+a rating production had never once produced. #136 (`hintLevel` served as a measurement never
+taken) inverted: promised by the schema, never delivered.
+
+The rating is the clearest progress signal the judge gives — the one number that says a solve
+moved something — and `review_queue` and `slow_passes` reason about confidence and speed without
+it.
+
+**The test found a second, older defect.** I wrote the SQL assertion from
+`SubmissionRecord.score`'s KDoc — *"Null for every database grading — the SQL path reports no
+score"* — and it failed: `sql-pass.jsonl` carries `userScore`/`perfectScore`, and so does
+protocol §6's own measured example. The KDoc had been wrong since it was written and **nothing
+caught it, because the field was null for every grading anyway** — a wrong explanation of a right
+observation. What SQL genuinely never sends is the per-category `scores` array and the rating
+(dev rules §2.2, which says exactly that).
+
+`scores` stays unwired on purpose: §14 lists its two-entry shape for efficiency-test problems as
+never triggered, so mapping it would be guessing a shape.
+
+Three tests, all from measured captures — a synthetic frame would have proved the mapper and
+missed the missing wire, which is the whole shape of this defect.
+
+Not in scope: exposing them over MCP. The record carries them now; whether `review_queue` should
+weigh a rating change is a claim about the learner
+([[decisions/2026-08-10-scheduling-is-not-diagnosis]]).
