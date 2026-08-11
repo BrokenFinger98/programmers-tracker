@@ -28,6 +28,7 @@ Then open any Programmers problem. The toolbar badge is the status:
 | green `●` | watching — the server accepted the announcement, and nothing is recorded for this problem yet |
 | green `✓` | the last grading on this problem **was recorded**, whatever its verdict |
 | purple `?` | recorded, but the server could not classify it — `UNKNOWN` or `INCOMPLETE` |
+| red `!` | the server is up, but **this problem is not being observed** — hover for which credential to fix |
 | orange `!` | no token configured yet |
 | red `×` | the server refused or could not be reached; hover for its own message |
 | no badge | the content script never ran — you are not on a problem page, or the extension is not loaded in this profile |
@@ -42,6 +43,13 @@ to read your own wrong answers as a broken sensor.
 classify, which is what a grading looks like when it goes missing. On 2026-08-11 a passing
 submit was recorded as `UNKNOWN` and nothing on screen disagreed with anything else; the loss
 was silent for twenty minutes (#154). This badge is the disagreement.
+
+**Red `!` outranks everything else.** `/watch` used to answer `started` whether or not the
+subscription lived, so an expired session cookie produced a green badge, a 200 on every
+heartbeat, and nothing in the record (#167). The server now reports the socket's own verdict,
+and a channel that is refused or unreachable says so — a `✓` from an hour ago is true and
+irrelevant if nothing is being watched now. The tooltip names the fix: a refusal means
+replacing `.ps/session`, and it heals on the next heartbeat without a restart.
 
 Every state has a glyph, the good one included. It used to be green with no text, and a badge
 background is painted behind its text — so nothing was drawn and a working sensor looked

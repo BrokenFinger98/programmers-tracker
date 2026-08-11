@@ -20,9 +20,9 @@ async function settings() {
 // nothing was drawn at all and the one state meaning "it is working" was the only one with
 // no visual. A working sensor and an unloaded one looked identical (#147).
 function report(state, detail) {
-  const badge = { watching: "●", recorded: "✓", unclear: "?", missing: "!", failed: "×" }[state];
+  const badge = { watching: "●", recorded: "✓", unclear: "?", blind: "!", missing: "!", failed: "×" }[state];
   const colour = {
-    watching: "#2d7", recorded: "#2d7", unclear: "#96f", missing: "#e90", failed: "#d33",
+    watching: "#2d7", recorded: "#2d7", unclear: "#96f", blind: "#d33", missing: "#e90", failed: "#d33",
   }[state];
   chrome.action.setBadgeText({ text: badge });
   chrome.action.setBadgeBackgroundColor({ color: colour });
@@ -41,6 +41,23 @@ function report(state, detail) {
 //
 // `unclear` is the state that did not exist. It means the server wrote a record it could not
 // classify — the exact shape of that lost submit — and it is the only one worth alarming on.
+// Whether the server is observing this problem *right now*, which `status` never said: it
+// answers `started` for a subscription the judge refused, so a stale session cookie looked
+// exactly like a working sensor while every grading was lost (#167).
+//
+// This outranks the record state on purpose. A `✓` from an hour ago is true and irrelevant if
+// nothing is being watched now — the question the badge answers is "will my next submit be
+// recorded", and the honest answer here is no.
+function subscriptionState(subscription) {
+  if (subscription === "rejected") {
+    return ["blind", "the judge refused the subscription — your session cookie has expired. Replace .ps/session and it heals without a restart"];
+  }
+  if (subscription === "unreachable") {
+    return ["blind", "the server cannot hold this problem's channel open — it is retrying. Nothing you solve right now is being recorded"];
+  }
+  return null;
+}
+
 function recordState(last) {
   if (!last) return ["watching", ""];
   const when = agoOf(last.at);
@@ -72,6 +89,11 @@ async function watch(body) {
     });
     if (response.ok) {
       const answer = await response.json();
+      const blind = subscriptionState(answer.subscription);
+      if (blind) {
+        report(blind[0], `lesson ${answer.lessonId} in ${answer.language} — ${blind[1]}`);
+        return;
+      }
       const [state, note] = recordState(answer.lastRecord);
       report(state, `watching lesson ${answer.lessonId} in ${answer.language} (${answer.status})${note}`);
       return;

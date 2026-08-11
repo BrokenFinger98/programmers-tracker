@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.ChannelKey
+import com.brokenfinger.tracker.domain.SubscriptionHealth
 
 /**
  * Outbound port for holding a channel subscription open. Separated from [WatchRequestHandler]
@@ -15,4 +16,14 @@ interface ChannelSubscriber {
     fun subscribe(channel: ChannelKey)
 
     fun unsubscribe(channel: ChannelKey)
+
+    /**
+     * Whether that subscription is actually observing right now.
+     *
+     * Subscribing is fire-and-forget by design — the socket outlives the request that asked
+     * for it — so the only honest way to answer "is this being watched" is to ask afterwards
+     * (#167). A channel this subscriber holds nothing for answers
+     * [SubscriptionHealth.UNREACHABLE]: the optimistic default is the bug.
+     */
+    fun healthOf(channel: ChannelKey): SubscriptionHealth
 }

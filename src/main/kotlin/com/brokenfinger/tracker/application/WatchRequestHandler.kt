@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.SubscriptionHealth
+
 /**
  * Inbound port for "start observing this channel". Two consumers are planned — the web
  * adapter and, later, MCP — which is exactly the case where dev rules §1 calls for an
@@ -18,8 +20,17 @@ interface WatchRequestHandler {
      *
      * @throws WatchCapacityExceededException when no slot can be freed.
      */
-    suspend fun watch(command: WatchCommand): WatchOutcome
+    suspend fun watch(command: WatchCommand): WatchStatus
 }
+
+/**
+ * What the request did, and whether the channel is actually being observed as a result.
+ *
+ * The two are separate answers and were conflated until #167: `started` said the request was
+ * accepted, and a caller reasonably read it as "this problem is now being watched". A
+ * subscription refused on the socket produced exactly the same answer.
+ */
+data class WatchStatus(val outcome: WatchOutcome, val health: SubscriptionHealth)
 
 /**
  * Every subscription slot is held by a live grading, so this request cannot be observed.
