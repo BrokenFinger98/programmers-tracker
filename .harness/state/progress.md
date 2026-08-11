@@ -2479,3 +2479,34 @@ The regression is built from the two measured `finish` frames rather than a hand
 and reverting the basis to the last frame fails it. Today's submit is committed as a scrubbed
 fixture — `surveyUrl`, `finishModalLink` and both ratings substituted per dev rules §7.3.
 ADR `2026-08-11-a-grading-is-its-whole-session`.
+
+## [2026-08-11] #151 · #152 — a compile error was neither classified nor captured whole ✅
+
+Two defects from one live capture — lesson 181946, a Java solution that did not compile. Kept
+together because neither is visible without the other: fixing the truncation alone still
+leaves the record UNKNOWN, and fixing the verdict alone still splits the grading in two.
+
+**The run was cut in half (#152).** The run path emits one `error` frame per diagnostic and
+then a `result` (protocol §7), and `TerminationRule` ended the stream at the first error —
+directly beneath a matrix that already said `(RUN, ALGORITHM) -> RESULT`. The second error and
+the result arrived 0.3 s later to a closed grading and were filed under `orphans/` as *"its
+start was missed"*, which is the one thing that had not happened. `error` now ends every cell
+except that one; the cached-result submit still ends on it (§13.2).
+
+**The compile error was not a verdict (#151).** `VerdictResolver` opened with
+`if (testcases.isEmpty()) return null` — before reading the error text it had already been
+handed, and before reaching the `compilerDiagnostic` regex three lines below. A compile
+failure runs nothing, so it reports no testcases, so one of the five verdicts the README
+advertises was filed as UNKNOWN. It also tripped the drift warning on every occurrence, which
+trains you to ignore the one alarm that exists to catch Programmers rewording something.
+
+**The trap was the cached result**, which is also a terminal error frame with no testcases.
+Reading its text as a failure would invent a RUNTIME_ERROR the learner never had, so the
+resolver asks `UnknownReason.matching` first and a recognised unknown stays unknown.
+
+A test had been pinning the defect as intended behaviour — *"the trailing error … a measured
+frame belonging to no grading"*. It was not an orphan; it was the second diagnostic of the
+same run. The capture had been split in half since the run path was written, and a test
+explained the halves instead of questioning them.
+
+ADR `2026-08-11-a-failing-run-ends-at-its-result`.

@@ -154,14 +154,18 @@ class GradingSessionAssemblerTest {
         assembler.settle().frames shouldContainExactly frames
     }
 
-    // An error ends every cell (protocol doc §7, §13.2) and its text is what later promotes
-    // an indistinguishable submit response to COMPILE_ERROR.
+    /**
+     * The run path reports one error frame per diagnostic and ends on `result` (protocol doc
+     * §7), so this capture — `start`, `error`, `error` — never terminated: the `result` was
+     * not captured with it. What matters is that the text is exposed either way, because
+     * that text is what later promotes an indistinguishable submit response (#152).
+     */
     @Test
-    fun `a run error terminates the stream and exposes its text for promotion`() {
+    fun `a run error does not end the stream, and its text is exposed for promotion anyway`() {
         val session = anAssembledSession("algorithm-run-error.jsonl")
 
         session.action shouldBe GradingAction.RUN
-        session.outcome shouldBe Outcome.UNKNOWN
+        session.outcome shouldBe Outcome.INCOMPLETE
         session.verdict.shouldBeNull()
         checkNotNull(session.errorText) shouldContain "/Solution.java:3: error:"
     }

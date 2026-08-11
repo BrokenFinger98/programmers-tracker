@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.domain.calc
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.TerminalKind
+import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -35,12 +36,26 @@ class TerminationRuleTest {
     }
 
     @Test
-    fun `error terminates every cell`() {
+    fun `error terminates every cell except the one where something follows it`() {
         val cells = GradingAction.entries.flatMap { action -> ProblemKind.entries.map { action to it } }
 
         cells.forEach { (action, kind) ->
-            TerminationRule.isTerminal(TerminalKind.ERROR, action, kind) shouldBe true
+            val ends = !(action == GradingAction.RUN && kind == ProblemKind.ALGORITHM)
+            withClue("$action on $kind") {
+                TerminationRule.isTerminal(TerminalKind.ERROR, action, kind) shouldBe ends
+            }
         }
+    }
+
+    /**
+     * The measured exception (#152). The run path emits one error frame per diagnostic and
+     * then a `result` (protocol doc §7), so ending at the first error cuts a two-diagnostic
+     * compile failure in half and files the rest as orphans. Measured 2026-08-11 on 181946.
+     */
+    @Test
+    fun `an error does not end an algorithm run, because its result still follows`() {
+        TerminationRule.isTerminal(TerminalKind.ERROR, GradingAction.RUN, ProblemKind.ALGORITHM) shouldBe false
+        TerminationRule.isTerminal(TerminalKind.RESULT, GradingAction.RUN, ProblemKind.ALGORITHM) shouldBe true
     }
 
     @Test
