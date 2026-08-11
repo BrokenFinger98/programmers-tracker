@@ -41,19 +41,37 @@ class GradingSessionAssemblerTest {
      * (fixtures/algorithm-run-pass.jsonl, issues #6 and #10).
      */
     /**
-     * The cached-result path, from our own live capture (#74, protocol §13.2, §15 #16): a
-     * submit answered from cache carries `start` then a terminal `error` and **no verdict
-     * frames at all** — while the browser renders the cached scoreboard. UNKNOWN is correct;
-     * the error text must survive onto the session so the classifier can name the reason.
+     * The cached-result path, measured whole (#154). A submit answered from cache carries
+     * `start`, then an `error` saying so — **and then grades anyway**: `test_group`, eighteen
+     * testcases, `result_lesson_challenge`, `finish`. Measured on lesson 120802, 2026-08-11.
+     *
+     * The earlier fixture stopped at the error and was read as "no verdict frames at all".
+     * It was not the protocol; it was this code closing the stream and filing the remaining
+     * twenty-one frames as orphans. The verdict below is the one the learner actually got.
      */
     @Test
-    fun `a cached-result submit settles UNKNOWN with the measured error text preserved`() {
+    fun `a cached-result submit is graded anyway, and the grading is what counts`() {
+        val session = anAssembledSession("algorithm-cached-then-graded.jsonl")
+
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.PASS
+        session.testcases.size shouldBe 18
+        // The cache notice survives onto the session even though it no longer decides anything.
+        session.errorText shouldBe "같은 코드로 채점한 결과가 있습니다."
+    }
+
+    /**
+     * The truncated half, kept as the capture it is. It never terminates now, which is the
+     * honest answer to a stream whose end was never recorded — and it is exactly what a
+     * grading interrupted mid-flight looks like.
+     */
+    @Test
+    fun `the half of a cached-result submit that was captured before 154 never terminates`() {
         val session = anAssembledSession("algorithm-cached-result.jsonl")
 
-        session.outcome shouldBe Outcome.UNKNOWN
+        session.outcome shouldBe Outcome.INCOMPLETE
         session.verdict shouldBe null
-        session.errorText shouldBe "같은 코드로 채점한 결과가 있습니다."
-        UnknownReason.of(session.outcome, session.errorText) shouldBe UnknownReason.CACHED_RESULT
+        UnknownReason.of(session.outcome, session.errorText) shouldBe null
     }
 
     @Test

@@ -2510,3 +2510,39 @@ same run. The capture had been split in half since the run path was written, and
 explained the halves instead of questioning them.
 
 ADR `2026-08-11-a-failing-run-ends-at-its-result`.
+
+## [2026-08-11] #154 — error terminates nothing, and the exception was the rule ✅
+
+Found by driving Chrome directly: wrote a compile error, ran it, fixed it, ran, submitted, and
+submitted the same code again.
+
+**The three earlier fixes held.** Compile error → `COMPILE_ERROR / JUDGED`; the fixed run →
+`PASS 2/2`; the submit → `PASS 18/18`, committed as
+`[Lv0] 두 수의 합 구하기 — PASS (18/18, attempt 1, 8m50s)`. Zero warnings throughout.
+
+**The resubmit reproduced #154 exactly.** A cached-result submit reports its error and then
+**grades anyway** — `start · error · test_group · testcase ×18 · result_lesson_challenge ·
+finish`. Closing at the error recorded UNKNOWN and filed all twenty-one remaining frames,
+eighteen of them passing testcases, as orphans.
+
+#152 had scoped the change to `(RUN, ALGORITHM)` because that was all that had been measured.
+The same defect was waiting on the submit path. `error` now terminates **nothing**; the matrix
+is the only rule, and it had the right answer both times.
+
+**Two things that mattered more than the fix:**
+
+`algorithm-cached-result.jsonl` was never the protocol — it was a capture this bug truncated,
+and the fixtures README described it as "no verdict frames at all" as though that were a
+measured fact about Programmers. It is relabelled as the half it is and superseded by
+`algorithm-cached-then-graded.jsonl`, reassembled from the two halves of one grading and
+verified by their shared channel identifier.
+
+The orphan warning said "its start was missed" — **wrong every one of the eleven times it
+fired today.** Every one was the tail of a grading closed too early. A diagnostic that names
+the one thing that did not happen is worse than none; it now reports what is known and offers
+both explanations without choosing.
+
+**My own mistake, recorded because it cost the owner's account.** Mid-test I pressed Run and
+then `cmd+a`, but focus had left the editor, so the page was selected and the typing never
+reached the code. Two more runs of the same broken code went out (`03:57:39 INCOMPLETE`,
+`03:57:41 COMPILE_ERROR`). Click into the editor before selecting.
