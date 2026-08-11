@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.LessonId
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SensorObservation
+import com.brokenfinger.tracker.domain.SessionState
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
@@ -27,7 +28,7 @@ class WatchServiceTest {
     private val subscriber = RecordingSubscriber()
     private val timer = RecordingTimer()
     private val identities = RecordingResolver()
-    private val service = WatchService(registry, subscriber, timer, identities, SteppingClock())
+    private val service = WatchService(registry, subscriber, timer, identities, aLiveSession(), SteppingClock())
 
     @Test
     fun `a first watch subscribes and reports that it started`() = runBlocking<Unit> {
@@ -137,7 +138,7 @@ class WatchServiceTest {
     @Test
     fun `the answer carries the subscription's own verdict, not the registry's`() = runBlocking<Unit> {
         val refused = RecordingSubscriber(health = SubscriptionHealth.REJECTED)
-        val service = WatchService(SubscriptionRegistry(), refused, timer, identities, SteppingClock())
+        val service = WatchService(SubscriptionRegistry(), refused, timer, identities, aLiveSession(), SteppingClock())
 
         val status = service.watch(aCommand(lessonId = 120804))
 
@@ -145,6 +146,9 @@ class WatchServiceTest {
         status.health shouldBe SubscriptionHealth.REJECTED
         status.health.observing() shouldBe false
     }
+
+    /** The session half is #179's business and has its own tests; here it is simply healthy. */
+    private fun aLiveSession() = SessionHealth({ SessionState.ALIVE }, Clock.systemUTC())
 
     private class RecordingSubscriber(private val health: SubscriptionHealth = SubscriptionHealth.LIVE) :
         ChannelSubscriber {

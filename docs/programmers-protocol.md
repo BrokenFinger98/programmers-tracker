@@ -487,7 +487,7 @@ Everything needed for local scaffolding is available here.
 - Oracle submissions
 - Memory-limit-exceeded (`메모리 초과`) message — never triggered
 - ~~`reject_subscription` as the signal for an expired session~~ — **answered 2026-08-11, see
-  §15.3: it never arrives.** An unauthenticated subscription is confirmed and pinged normally
+  §15.3 and §15.4: it never arrives, and the check now runs over HTTP instead.** An unauthenticated subscription is confirmed and pinged normally
   and simply receives no broadcasts, so **the socket carries no signal for session expiry at
   all**. Any detection has to come from an authenticated HTTP request, and §3 records that the
   problem page yields identifiers *without* login — so a 200 there proves nothing. What would
@@ -496,6 +496,36 @@ Everything needed for local scaffolding is available here.
   problems), or the submission-history page
 
 ## 15. Verification Log
+
+### 15.4 Which endpoint answers "is this session still signed in" — measured 2026-08-11 (issue #179)
+
+**Question.** §15.3 established that the socket carries no expiry signal. Four candidates were
+compared with and without the session cookie, three requests each, alternating.
+
+| endpoint | signed in | signed out |
+|---|---|---|
+| `/learn/courses/30/lessons/120802?language=java` | 200, 24797 B | **200**, 21971 B |
+| `/learn/courses/30/lessons/120802/solution_groups?language=java` | 200 | 302 → `programmers.co.kr/users/login` |
+| `/api/v2/school/challenges/?statuses[]=solved&perPage=1&page=1` | 200, 510 B | **200**, 184 B |
+| **`/api/v1/main/open-challenge-activities?year=2026`** | **200** | **401** |
+
+The 401 body is JSON and machine-readable:
+
+```json
+{"code":"authenticate_user","message":"계속하려면 로그인하거나 가입해주세요."}
+```
+
+**Why the others do not serve.** The lesson page answers 200 either way — §3 already records that
+it yields identifiers without login, so only its *content* differs. `solution_groups` redirects
+cleanly but is problem-scoped and was measured 401-until-solved on 2026-08-10, so what it answers
+depends on the problem. The challenges API answers 200 with a shorter payload — an emptiness
+indistinguishable from a user who has solved nothing.
+
+`open-challenge-activities` is user-scoped, problem-independent, and returns JSON in **both**
+states, so it also avoids the 200-with-HTML throttling shape §14 records for the other API. The
+status is the whole signal; the body is deliberately not parsed.
+
+Stable across three alternating runs at 3-second spacing.
 
 ### 15.3 What an expired session does to a subscription — measured 2026-08-11 (issue #175)
 

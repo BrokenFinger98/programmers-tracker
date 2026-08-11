@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.SessionState
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 
 /**
@@ -30,7 +31,18 @@ interface WatchRequestHandler {
  * accepted, and a caller reasonably read it as "this problem is now being watched". A
  * subscription refused on the socket produced exactly the same answer.
  */
-data class WatchStatus(val outcome: WatchOutcome, val health: SubscriptionHealth)
+data class WatchStatus(
+    val outcome: WatchOutcome,
+    val health: SubscriptionHealth,
+    /**
+     * Whether the session cookie still authenticates — which the socket cannot answer.
+     *
+     * An unauthenticated subscription is confirmed and pinged normally and receives nothing
+     * (protocol doc §15.3), so [health] can read LIVE while every grading is lost. This is the
+     * field that catches that (#179).
+     */
+    val session: SessionState,
+)
 
 /**
  * Every subscription slot is held by a live grading, so this request cannot be observed.

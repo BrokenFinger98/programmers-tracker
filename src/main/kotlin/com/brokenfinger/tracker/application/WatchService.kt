@@ -17,6 +17,7 @@ class WatchService(
     private val subscriber: ChannelSubscriber,
     private val timer: ProblemTimer,
     private val identities: ProblemIdentityResolver,
+    private val sessions: SessionHealth,
     private val clock: Clock = Clock.systemUTC(),
 ) : WatchRequestHandler {
     /**
@@ -36,7 +37,10 @@ class WatchService(
         val outcome = outcomeOf(channel, registry.watch(channel, clock.instant()))
         // Asked after the subscription rather than assumed from it: whether the socket lives
         // is not something this call can promise (#167).
-        return WatchStatus(outcome, subscriber.healthOf(channel))
+        //
+        // Two independent answers, because a healthy socket does not imply a valid session —
+        // an unauthenticated subscription is confirmed and pinged and delivers nothing (#179).
+        return WatchStatus(outcome, subscriber.healthOf(channel), sessions.state())
     }
 
     private fun outcomeOf(channel: ChannelKey, result: WatchResult): WatchOutcome = when (result) {
