@@ -19,7 +19,7 @@ fun main(args: Array<String>) {
     val cookie = ManualFileSessionProvider.fromEnvironment().cookie()
 
     KtorPageSource { cookie.headerValue() }.use { pages ->
-        val fetcher = ProblemPageCodeFetcher(cookie, pages = pages)
+        val fetcher = ProblemPageCodeFetcher(pages = pages)
         report(runBlocking { fetcher.fetch(lessonId, args[1]) })
     }
 }

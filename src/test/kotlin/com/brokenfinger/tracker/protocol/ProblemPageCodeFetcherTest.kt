@@ -34,7 +34,7 @@ class ProblemPageCodeFetcherTest {
     @Test
     fun `the request carries the lesson and language of the problem`() = runBlocking<Unit> {
         var requested = ""
-        val fetcher = ProblemPageCodeFetcher(aFakeCookie(), pageBase = "https://example.test") { url ->
+        val fetcher = ProblemPageCodeFetcher(pageBase = "https://example.test") { url ->
             requested = url
             PageResponse(200, page)
         }
@@ -73,32 +73,47 @@ class ProblemPageCodeFetcherTest {
         fetcher.fetch(120804, "java").shouldBeInstanceOf<CodeFetch.Unavailable>()
     }
 
-    /** Dev rules §7.2 — the cookie must not surface in any message, at any level. */
+    /**
+     * Dev rules §7.2 — the cookie must not surface in any message, at any level.
+     *
+     * This used to plant a value in the fetcher's own `SessionCookie` and assert it did not
+     * reach the failure reason. The fetcher no longer takes one (#180), so the guarantee is
+     * now structural, and that is what is pinned: **no constructor parameter can carry a
+     * credential.** A test that reads a value the class cannot hold would pass forever without
+     * checking anything, which is the failure mode this repository keeps finding.
+     */
     @Test
-    fun `the failure reason never contains the session value`() = runBlocking<Unit> {
-        val planted = "synthetic-value-for-this-test"
-        val fetcher = ProblemPageCodeFetcher(aFakeCookie(planted), pageBase = "https://example.test") {
+    fun `the fetcher cannot hold a credential at all`() {
+        val carries = ProblemPageCodeFetcher::class.constructors
+            .flatMap { it.parameters }
+            .map { it.type.toString() }
+
+        carries.none { it.contains("SessionCookie") } shouldBe true
+    }
+
+    @Test
+    fun `a failure reason says only what went wrong`() = runBlocking<Unit> {
+        val fetcher = ProblemPageCodeFetcher(pageBase = "https://example.test") {
             PageResponse(500, "boom")
         }
 
         val outcome = fetcher.fetch(120804, "java") as CodeFetch.Unavailable
 
-        outcome.reason shouldNotContain planted
+        outcome.reason shouldContain "500"
+        outcome.reason shouldNotContain "_session_production"
     }
 
     @Test
     fun `a transport failure is unavailable rather than a thrown exception`() = runBlocking<Unit> {
-        val fetcher = ProblemPageCodeFetcher(aFakeCookie(), pageBase = "https://example.test") {
+        val fetcher = ProblemPageCodeFetcher(pageBase = "https://example.test") {
             throw java.io.IOException("connection reset")
         }
 
         fetcher.fetch(120804, "java").shouldBeInstanceOf<CodeFetch.Unavailable>()
     }
 
-    private fun aFakeCookie(value: String = "fake-value-for-tests") = SessionCookie("_session_production=$value")
-
     private fun fetcherReturning(response: PageResponse) =
-        ProblemPageCodeFetcher(aFakeCookie(), pageBase = "https://example.test") { response }
+        ProblemPageCodeFetcher(pageBase = "https://example.test") { response }
 
     private fun readFixture(name: String): String =
         checkNotNull(javaClass.classLoader.getResourceAsStream("fixtures/$name")) { "missing fixture $name" }
