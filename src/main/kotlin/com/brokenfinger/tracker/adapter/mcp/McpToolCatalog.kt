@@ -163,7 +163,9 @@ object McpToolCatalog {
         title = "Counts by group",
         description = "Counts submissions per bucket. Counts only — it ranks nothing and concludes nothing. " +
             "An entry with no `key` counts the submissions whose grouping value was never recorded, which " +
-            "is not the same as a bucket named unknown.",
+            "is not the same as a bucket named unknown. When `incompleteHistory` is present, gradings were " +
+            "captured that no record represents: the counts are taken over a history with holes, and any " +
+            "conclusion drawn from them must say so.",
     ) {
         putJsonObject("properties") {
             putJsonObject("groupBy") {

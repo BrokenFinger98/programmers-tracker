@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
@@ -107,11 +108,35 @@ class McpToolInvoker(private val query: RecordQuery) {
         val raw = arguments.text("groupBy") ?: throw IllegalArgumentException("groupBy is required")
         val group = TallyGroup.from(raw)
         val buckets = query.tally(group)
+        val orphans = query.orphanedFrames()
         return buildJsonObject {
             put("groupBy", group.wireName())
             put("total", buckets.sumOf { it.count })
             put("entries", JsonArray(buckets.map(::bucketOf)))
+            // Only when there are any: an always-present zero would be noise on every call,
+            // and the point of this field is that its presence means something (#169).
+            if (orphans.isNotEmpty()) put("incompleteHistory", incompleteHistory(orphans))
         }
+    }
+
+    /**
+     * Says the denominator is wrong before anything is concluded from it.
+     *
+     * Frames exist on disk for gradings that no record represents, so every count above is
+     * taken over a history with holes. A diagnosis drawn confidently from an incomplete record
+     * is worse than no diagnosis, and the client cannot know unless it is told here.
+     */
+    private fun incompleteHistory(orphans: List<OrphanedFrames>): JsonObject = buildJsonObject {
+        put("lessonsWithOrphanedFrames", orphans.size)
+        put("frames", orphans.sumOf { it.frames })
+        put(
+            "note",
+            "Frames were captured for these lessons but belong to no grading, so no record " +
+                "represents them and the counts above are taken over an incomplete history. " +
+                "They are not recoverable: the missing `start` frame carries the testcase ids " +
+                "and the problem's examples, and pairing them with an attempt would be a guess.",
+        )
+        put("lessons", JsonArray(orphans.map { JsonPrimitive(it.lessonId) }))
     }
 
     // An absent key is omitted rather than written as null — it means the grouping value

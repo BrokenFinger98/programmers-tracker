@@ -97,7 +97,7 @@ class StartupReconciliationTest {
 
     private fun reconciliation(): StartupReconciliation {
         val git = CommandLineGitSync(repo.root)
-        return StartupReconciliation(rawSessions(), attachment(), git, DailyBackup(git, backupLog(), clock()))
+        return StartupReconciliation(rawSessions(), rawLog(), attachment(), git, DailyBackup(git, backupLog(), clock()))
     }
 
     /**
@@ -120,6 +120,8 @@ class StartupReconciliationTest {
      * The writer's own commit is switched off here. What a git failure leaves behind is a
      * record with no commit, and that is exactly the state these tests hand the boot.
      */
+    private fun rawLog(): RawSessionLog = FileRawSessionLog(rawDirectory(), clock())
+
     private fun rawSessions(): RawSessionReconciler {
         val rawLog = FileRawSessionLog(rawDirectory(), clock())
         val layout = RecordLayout(repo.root)

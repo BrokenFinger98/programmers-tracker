@@ -42,6 +42,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-11 [[decisions/2026-08-11-a-grading-is-its-whole-session]] — The capture key digests every frame, not the last one, which was a constant per problem and dropped every submit after the first
 - 2026-08-11 [[decisions/2026-08-11-a-failing-run-ends-at-its-result]] — `error` stops ending an algorithm run, and a compile failure with no testcases is a verdict rather than an UNKNOWN
 - 2026-08-11 [[decisions/2026-08-11-a-watch-answer-is-not-a-promise]] — `/watch` reports the socket's own verdict, because `started` said the same thing whether the judge confirmed or refused
+- 2026-08-11 [[decisions/2026-08-11-a-hole-in-the-record-is-reported-not-filled]] — Orphaned frames are announced at every boot and on `stats`, because a diagnosis over a silently incomplete history is worse than none
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)

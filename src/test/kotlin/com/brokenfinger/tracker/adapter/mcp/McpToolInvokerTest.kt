@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aCaptureKey
@@ -25,6 +26,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -156,6 +158,35 @@ class McpToolInvokerTest {
         val entries = structured(invoker.call("stats", arguments("groupBy" to "verdict")))["entries"]!!.jsonArray
 
         entries.last().jsonObject.shouldNotContainKey("key")
+    }
+
+    /**
+     * The counts are the basis of every claim about the learner, so the client has to be able
+     * to see that the denominator is incomplete (#169). Before this the holes were announced
+     * once, in a warning on the day, and nothing afterwards said the history was partial.
+     */
+    @Test
+    fun `stats says so when gradings exist that no record represents`() {
+        val raw = FileRawSessionLog.under(root)
+        raw.orphaned(120802, """{"message":{"action":"submit","type":"testcase"}}""")
+        raw.orphaned(120802, """{"message":{"action":"submit","type":"finish"}}""")
+        raw.orphaned(181946, """{"message":{"action":"submit","type":"finish"}}""")
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(aSubmissionRecord()).query(raw = raw))
+
+        val gaps = structured(invoker.call("stats", arguments("groupBy" to "verdict")))["incompleteHistory"]!!
+            .jsonObject
+
+        gaps["lessonsWithOrphanedFrames"]!!.jsonPrimitive.int shouldBe 2
+        gaps["frames"]!!.jsonPrimitive.int shouldBe 3
+        gaps["lessons"]!!.jsonArray.map { it.jsonPrimitive.long } shouldBe listOf(120802L, 181946L)
+    }
+
+    /** Absence is the signal, so a complete history must not carry the field at all. */
+    @Test
+    fun `stats is silent about gaps when there are none`() {
+        val payload = structured(invokerOver(aSubmissionRecord()).call("stats", arguments("groupBy" to "verdict")))
+
+        payload.shouldNotContainKey("incompleteHistory")
     }
 
     @Test
