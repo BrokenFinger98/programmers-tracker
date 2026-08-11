@@ -2363,3 +2363,35 @@ now separates them: **already deliverable** (with the tool and field that delive
 Verified live rather than assumed: `get_problem` returns `diffFromPrev`, `testcases`,
 `acceptanceRate` and `level` on every record, and `list_problems` returns `part` and `tags`
 on all 689 — which is what makes four of the sketched tools unnecessary rather than pending.
+
+## [2026-08-11] #142 — Korean for the user-facing half, and a guard for the reason it was refused ✅
+
+The owner asked for Korean docs. `2026-08-04-english-only-artifacts` had already considered
+exactly that as its option B and rejected it in one line — "every page twice; guaranteed
+drift". **That objection is correct**, and in a single-language repository 2026-08-10 alone
+produced three live examples of it, the last cleaned up in #140 that morning. So the reversal
+could not be a preference for the newer goal; it had to answer the objection.
+
+**Split, not reversal.** The original rationale — "the push gate's stderr is read by
+strangers" — is an argument about contributors, and it survives untouched. Five *user-facing*
+pages get a Korean twin; `CLAUDE.md`, development rules, the protocol doc, specs, the wiki,
+commits, comments and tool output stay English-only. The old ADR is marked superseded **in
+part**, not replaced.
+
+**Drift is now a build failure.** Each twin declares the blob hash of the page it was
+translated from on its first line, and `guards.sh` recomputes `git rev-parse :<source>`.
+Editing an English page without touching its twin fails the build — the only thing that would
+have caught any of the three drifts.
+
+Hashes rather than commit ancestry, deliberately: CI checks out at `fetch-depth: 1`, so an
+ancestry guard would pass vacuously on every shallow clone — which is precisely how the
+English-only check itself sat broken for weeks (#123). A blob hash needs no history, and is
+read from the index so a dirty workspace cannot satisfy it.
+
+Proved in four states before being trusted, having learned that lesson twice this week:
+source moved → FAIL naming the expected hash; in sync → pass; marker missing → FAIL naming the
+required line; twin naming an untracked source → FAIL. Verified on macOS and in an
+`ubuntu:24.04` container under the CI locale.
+
+`README.ko.md` ships in the same change so the mechanism is proved on a real pair rather than
+on a promise. Four twins remain: bootstrap, mcp, extension, the ps-records template.

@@ -58,3 +58,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-10] ingest | state beside the records → 1 page created, index + design updated
 
 ## [2026-08-10] ingest | scheduling is not diagnosis → 1 page created, index updated
+
+## [2026-08-11] ingest | korean for the user-facing half → 1 page created, 1 amended, index updated
