@@ -24,11 +24,27 @@ object VerdictResolver {
     // A wrong answer is the only failure that still reports timing, as in "(0.01ms, 75.3MB)".
     private val measuredMessage = Regex("""\d+(\.\d+)?ms""")
 
-    // The javac diagnostic shape, as in "/Solution.java:5: error: ';' expected". A submit
-    // response reports compile and runtime errors identically; only the run path separates
-    // them (protocol doc §7). Matching stays tolerant of HTML escaping, which the run path
-    // applies to the whole message.
-    private val compilerDiagnostic = Regex(""":\d+: error:""")
+    /**
+     * Compile failures, **by the shape each toolchain actually prints**. A submit response
+     * reports compile and runtime errors identically; only the run path separates them
+     * (protocol doc §7). Matching stays tolerant of HTML escaping, which the run path applies
+     * to the whole message.
+     *
+     * Measured only, and that is the rule rather than an accident of effort. The javac shape
+     * was here alone until 2026-08-11, when a Python `def` missing its colon was filed as
+     * RUNTIME_ERROR — the regex was javac's and nothing said so (#162). A language whose
+     * compiler is not in this list lands as RUNTIME_ERROR, which is the honest fallback:
+     * guessing at a format buys nothing when it is right and misclassifies when it is wrong.
+     *
+     * Not here on purpose: `IndentationError` and `TabError`, which are SyntaxError subclasses
+     * that print their own names. Neither has been captured. One line each when they are.
+     */
+    private val compilerDiagnostics = listOf(
+        // javac — "/Solution.java:5: error: ';' expected"
+        Regex(""":\d+: error:"""),
+        // python3 — a traceback ending "SyntaxError: expected ':'", measured on lesson 120805
+        Regex("""SyntaxError:"""),
+    )
 
     fun resolve(testcases: List<TestcaseResult>, boundErrorText: String?): Verdict? {
         if (testcases.isEmpty()) return nothingRanVerdict(boundErrorText)
@@ -64,7 +80,7 @@ object VerdictResolver {
 
     private fun errorVerdictOf(boundErrorText: String?): Verdict {
         if (boundErrorText == null) return Verdict.RUNTIME_ERROR
-        if (compilerDiagnostic.containsMatchIn(boundErrorText)) return Verdict.COMPILE_ERROR
+        if (compilerDiagnostics.any { it.containsMatchIn(boundErrorText) }) return Verdict.COMPILE_ERROR
         return Verdict.RUNTIME_ERROR
     }
 }
