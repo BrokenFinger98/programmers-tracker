@@ -108,34 +108,23 @@ class McpToolInvoker(private val query: RecordQuery) {
         val raw = arguments.text("groupBy") ?: throw IllegalArgumentException("groupBy is required")
         val group = TallyGroup.from(raw)
         val buckets = query.tally(group)
-        val orphans = query.orphanedFrames()
         return buildJsonObject {
             put("groupBy", group.wireName())
             put("total", buckets.sumOf { it.count })
             put("entries", JsonArray(buckets.map(::bucketOf)))
-            // Only when there are any: an always-present zero would be noise on every call,
-            // and the point of this field is that its presence means something (#169).
-            if (orphans.isNotEmpty()) put("incompleteHistory", incompleteHistory(orphans))
         }
     }
 
     /**
      * Says the denominator is wrong before anything is concluded from it.
      *
-     * Frames exist on disk for gradings that no record represents, so every count above is
-     * taken over a history with holes. A diagnosis drawn confidently from an incomplete record
-     * is worse than no diagnosis, and the client cannot know unless it is told here.
+     * Counts, not prose: the explanation is in every tool's description, which a client receives
+     * once from `tools/list`, and repeating a paragraph on every answer is weight the client
+     * pays for on every call (#187).
      */
     private fun incompleteHistory(orphans: List<OrphanedFrames>): JsonObject = buildJsonObject {
         put("lessonsWithOrphanedFrames", orphans.size)
         put("frames", orphans.sumOf { it.frames })
-        put(
-            "note",
-            "Frames were captured for these lessons but belong to no grading, so no record " +
-                "represents them and the counts above are taken over an incomplete history. " +
-                "They are not recoverable: the missing `start` frame carries the testcase ids " +
-                "and the problem's examples, and pairing them with an attempt would be a guess.",
-        )
         put("lessons", JsonArray(orphans.map { JsonPrimitive(it.lessonId) }))
     }
 
@@ -179,10 +168,30 @@ class McpToolInvoker(private val query: RecordQuery) {
 
     // The JSON goes back twice on purpose: `structuredContent` for the client, and the same
     // text for clients on revisions that predate it (spec, Tools — Structured Content).
-    private fun succeeded(payload: JsonObject): JsonObject = buildJsonObject {
-        putJsonArray("content") { add(textOf(payload.toString())) }
-        put("structuredContent", payload)
-        put("isError", false)
+    private fun succeeded(payload: JsonObject): JsonObject {
+        val answer = withGaps(payload)
+        return buildJsonObject {
+            putJsonArray("content") { add(textOf(answer.toString())) }
+            put("structuredContent", answer)
+            put("isError", false)
+        }
+    }
+
+    /**
+     * Every tool reads the same history, so every answer admits the same holes (#187).
+     *
+     * It used to be on `stats` alone, on the argument that a total is where a denominator matters
+     * most. True, and not enough: a pass whose frames were orphaned is a problem `review_queue`
+     * will never schedule and a reading `slow_passes` cannot rank, and neither said so.
+     *
+     * **Absent when the history is whole**, which is what makes its presence mean something. This
+     * is the one wrap point every result passes through, so putting it here removes a special
+     * case rather than adding one per tool.
+     */
+    private fun withGaps(payload: JsonObject): JsonObject {
+        val orphans = query.orphanedFrames()
+        if (orphans.isEmpty()) return payload
+        return JsonObject(payload + ("incompleteHistory" to incompleteHistory(orphans)))
     }
 
     private fun failed(message: String): JsonObject = buildJsonObject {
