@@ -99,3 +99,36 @@ in the code review could catch that — only running it against a broken credent
 The server logged `Refused an unauthorized /watch request` throughout. The extension's stored
 watch token no longer matches the server's, so the sensor on this machine has been blind —
 separately from everything above, and not noticed until an unrelated log was read.
+
+---
+
+## Correction appended 2026-08-11 (#177) — the last section above is wrong
+
+The raw layer is immutable (schema §1), so this is appended rather than edited, the same way a
+record is corrected instead of rewritten
+([[decisions/2026-08-06-record-corrections-by-append]]).
+
+**"Also observed" claims the sensor has been blind. It has not.** That was written from
+`docker compose logs --tail 12`, which showed one `Refused an unauthorized /watch request`.
+
+Measured immediately afterwards:
+
+| check | result |
+|---|---|
+| 401s over the container's entire lifetime | **1** |
+| watch token, checkout vs container | identical (compared by hash, never by value) |
+| `POST /watch` with that token | **200 `refreshed`** — the channel was already being watched |
+| the `run` triggered for the measurement above | **recorded**: `120802 java run PASS 2/2`, 12:39:42 |
+
+So the extension was working the whole time, the server was already subscribed, and the run this
+session triggered was captured normally. The single 401 was a one-off, most likely a service
+worker waking before its options were read.
+
+**The error is the one this page is about.** Protocol §10 turned "two sockets, one user" into
+"not by connection"; this turned **one log line** into "throughout". Both times the observation
+was real and the quantifier was invented — and here it happened in the same hour as writing the
+page that names the pattern.
+
+Worth keeping for one more reason: the wrong claim was *plausible and alarming*, which is the
+combination that gets believed. A blind sensor is exactly the failure this project fears, so the
+claim fit the story being told — and fitting the story is not evidence.
