@@ -3035,6 +3035,31 @@ hands it out through a dead accessor, flagged as a MINOR on 2026-08-07. Noticed 
 this probe, which deliberately takes no cookie for exactly that reason. Kept out of this PR because
 removing it touches four test call sites and two production ones.
 
+## [2026-08-11] #180 — the fetcher held a cookie it never read ✅
+
+A MINOR from the 2026-08-07 security review, still open four days later:
+
+> `fun cookieHeader(): String = cookie.headerValue()` is dead (nothing in `src/` calls it). A
+> public accessor handing out the raw cookie; it falsifies `SessionCookie`'s claim that the raw
+> value is reachable solely through `headerValue()`. Delete it.
+
+Worse than dead. The class never needed the cookie at all — `KtorPageSource` carries it, and the
+fetcher's own comment said so. The property existed only to feed an accessor nothing called.
+
+Noticed again while writing `SessionActivityProbe` (#179), which takes no cookie for exactly this
+reason, and kept out of that PR because removing it touches four test call sites and two
+production ones.
+
+**The leak test kept its subject by changing what it pins.** It used to plant a value in the
+fetcher's own `SessionCookie` and assert the failure reason did not contain it. With no cookie to
+hold, that test would pass forever while checking nothing — the failure mode this repository
+keeps finding. It now asserts the structural fact instead: **no constructor parameter can carry a
+`SessionCookie`.** A second test keeps the message-content check where it still means something.
+
+`CaptureConfiguration` keeps `runCatching { sessions.cookie() }` — that is the "is there a session
+at all" guard, and a missing session file is `Unauthenticated` rather than a fetch that will
+surely fail. The value simply goes no further.
+
 ## [2026-08-11] #183 — nothing said how long the records had been on one disk ✅
 
 A push can fail forever and the only surface was one WARN on the day it happened.

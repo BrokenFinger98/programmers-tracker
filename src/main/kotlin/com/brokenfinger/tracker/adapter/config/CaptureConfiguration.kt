@@ -200,8 +200,11 @@ class CaptureConfiguration {
         lessonId: Long,
         language: String,
     ): CodeFetch {
-        val cookie = runCatching { sessions.cookie() }.getOrNull() ?: return CodeFetch.Unauthenticated
-        return ProblemPageCodeFetcher(cookie, pageBase, pages).fetch(lessonId, language)
+        // Asked for, never passed on: this is the "is there a session at all" guard, and a
+        // missing session file is Unauthenticated rather than a fetch that will surely fail.
+        // The value itself goes no further — the PageSource is what carries it (#180).
+        runCatching { sessions.cookie() }.getOrNull() ?: return CodeFetch.Unauthenticated
+        return ProblemPageCodeFetcher(pageBase, pages).fetch(lessonId, language)
     }
 
     /** The one crossing out of the wire format, shared by the live path and the replay. */
