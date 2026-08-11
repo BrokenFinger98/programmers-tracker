@@ -185,7 +185,7 @@ class RecordWriterTest {
 
     @Test
     fun `a session that never terminated is still recorded, marked incomplete`() = runBlocking<Unit> {
-        val capture = aSettledCapture(session = aSessionOf(aTruncatedStream()), terminalFrame = null)
+        val capture = aSettledCapture(session = aSessionOf(aTruncatedStream()), frames = emptyList())
 
         writer().write(capture)!!.outcome shouldBe Outcome.INCOMPLETE
         logLines().size shouldBe 1
@@ -225,7 +225,7 @@ class RecordWriterTest {
     }
 
     // Each grading of one problem ends on its own terminal frame, so each has its own key.
-    private fun aSubmit(nth: Int) = aSettledCapture(terminalFrame = """{"type":"finish","nth":$nth}""")
+    private fun aSubmit(nth: Int) = aSettledCapture(frames = listOf("""{"type":"finish","nth":$nth}"""))
 
     private fun aRun(rawSessionId: RawSessionId = aRawSessionId()) = aSettledCapture(
         session = anAssembledSession("algorithm-run-pass.jsonl"),

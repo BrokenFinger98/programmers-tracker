@@ -39,6 +39,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-10 [[decisions/2026-08-10-state-beside-the-records]] — State moves into the record repository under the lock that already existed; the two credentials stay out, and the server adds the ignore rule itself
 - 2026-08-10 [[decisions/2026-08-10-scheduling-is-not-diagnosis]] — The server may compute a review date but never a diagnosis; every item ships the facts that scheduled it, and absence never buys confidence
 - 2026-08-11 [[decisions/2026-08-11-korean-for-the-user-facing-half]] — Five user-facing pages get a Korean twin; the drift objection that refused this once is now a guard on a blob hash
+- 2026-08-11 [[decisions/2026-08-11-a-grading-is-its-whole-session]] — The capture key digests every frame, not the last one, which was a constant per problem and dropped every submit after the first
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)

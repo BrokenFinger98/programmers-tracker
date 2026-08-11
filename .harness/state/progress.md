@@ -2446,3 +2446,36 @@ downsampled, because Pillow does not antialias and a hard-edged 16px check is a 
 And the manifest still repeated the "reads five identifiers" claim #144 corrected in the
 README — the guard reads Kotlin comments and `*.ko.md` pairs, so a JSON description was
 outside everything that checks.
+
+## [2026-08-11] #149 — only the first submit of a problem could ever be recorded ✅
+
+The owner solved lesson 181947 on the current build — four runs and a submit. **The submit
+passed and was dropped**, along with two of the runs.
+
+Its capture key was `7f0beaa55092fc63`: the key of a submit recorded on 6 August **with
+verdict WRONG**. An algorithm submit terminates on `finish`, and the two `finish` frames are
+byte-identical — `{"action":"submit","type":"finish"}` beside the channel identifier, carrying
+no verdict, no score, no timing. So the key was a **constant per problem**, and every submit
+after the first collided with it.
+
+The record repository had been saying this for five days. Every problem in it had exactly one
+submit, and I read that as someone who passes first try. It was the defect — in a tool whose
+first paragraph is "of 449 attempts, only the 43 successes are knowable".
+
+**Fixed by digesting every accepted frame**, in order, verbatim. Both properties hold: a
+replay derives the same key, because the raw log keeps frames verbatim and both paths skip
+the same non-fact lines; two real gradings differ, because testcase frames carry `run_time`
+and `memory_size`. Verified against all nine captures on disk — nine keys, no collisions,
+including two passing runs five seconds apart.
+
+The residual is stated rather than engineered around: two gradings whose every frame is
+byte-identical still collide, and **SQL is where that is plausible**, since it sends no
+per-case timing at all.
+
+Nothing was lost. The writer drops the *record*, not the capture, so all four stranded
+sessions were still in `.ps/raw/` and still on the work list.
+
+The regression is built from the two measured `finish` frames rather than a hand-written pair,
+and reverting the basis to the last frame fails it. Today's submit is committed as a scrubbed
+fixture — `surveyUrl`, `finishModalLink` and both ratings substituted per dev rules §7.3.
+ADR `2026-08-11-a-grading-is-its-whole-session`.

@@ -16,7 +16,7 @@ import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
-import com.brokenfinger.tracker.support.fixtures.aTerminalFrame
+import com.brokenfinger.tracker.support.fixtures.acceptedFrames
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.fixtures.anObservedFrame
@@ -129,10 +129,10 @@ class ChannelCaptureTest {
     }
 
     @Test
-    fun `the exact terminal frame keys the capture`() {
+    fun `the whole grading keys the capture, not only the frame that ended it`() {
         consume(capture(), "algorithm-pass.jsonl")
 
-        val expected = CaptureKey.of(LESSON_ID, GradingAction.SUBMIT, aTerminalFrame("algorithm-pass.jsonl"))
+        val expected = CaptureKey.of(LESSON_ID, GradingAction.SUBMIT, acceptedFrames("algorithm-pass.jsonl"))
         records().single().captureKey shouldBe expected
     }
 
