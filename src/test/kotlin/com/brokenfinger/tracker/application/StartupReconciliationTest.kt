@@ -142,8 +142,7 @@ class StartupReconciliationTest {
         return StartupReconciliation(
             rawSessions(),
             rawLog(),
-            backupLog(),
-            clock(),
+            BackupReporter(backupLog(), git, clock()),
             attachment(),
             git,
             DailyBackup(git, backupLog(), clock()),

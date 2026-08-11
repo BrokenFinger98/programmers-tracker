@@ -8,7 +8,7 @@ import com.brokenfinger.tracker.adapter.store.FileProblemTimer
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
-import com.brokenfinger.tracker.application.BackupLog
+import com.brokenfinger.tracker.application.BackupReporter
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
 import com.brokenfinger.tracker.application.CodeAttachment
@@ -153,9 +153,8 @@ class CaptureConfiguration {
         attachment: CodeAttachment,
         git: GitSync,
         backup: DailyBackup,
-        backupLog: BackupLog,
-        clock: Clock,
-    ) = StartupReconciliation(sessions, raw, backupLog, clock, attachment, git, backup)
+        backupReporter: BackupReporter,
+    ) = StartupReconciliation(sessions, raw, backupReporter, attachment, git, backup)
 
     /**
      * Picks up whatever an earlier run left behind — orphaned raw sessions, records still
