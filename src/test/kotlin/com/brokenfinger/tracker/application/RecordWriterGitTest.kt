@@ -147,7 +147,7 @@ class RecordWriterGitTest {
         session = anAssembledSession(fixture),
         rawSessionId = staged(name),
         lessonId = lessonId,
-        terminalFrame = """{"type":"finish","grading":"$name"}""",
+        frames = listOf("""{"type":"finish","grading":"$name"}"""),
     )
 
     private fun staged(name: String) = aRawSessionId("$name.jsonl").also {

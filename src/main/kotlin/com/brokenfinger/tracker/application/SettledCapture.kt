@@ -38,11 +38,15 @@ data class SettledCapture(
      */
     val observation: SensorObservation? = null,
     /**
-     * The frame that ended the stream, exactly as received. Null when none arrived — a
-     * timeout or a disconnect — and the key then falls back to [rawSessionId], which a
-     * replay of the same raw log repeats exactly.
+     * Every frame the assembler accepted, in arrival order and exactly as received — the
+     * basis the capture key is derived from (#149). Empty when the grading was abandoned
+     * before any frame landed, and the key then falls back to [rawSessionId].
+     *
+     * Only the accepted frames, so the live path and a replay of the same raw log agree:
+     * both skip a line that yields no facts, and a key that disagreed between them would
+     * make every reconciliation a duplicate record.
      */
-    val terminalFrame: String? = null,
+    val frames: List<String> = emptyList(),
 ) {
     /**
      * The action this grading was requested with. Throws when the stream announced none:
@@ -86,5 +90,8 @@ data class SettledCapture(
         errorText = session.errorText,
     )
 
-    private fun keyBasis(): String = terminalFrame?.takeIf { it.isNotBlank() } ?: rawSessionId.value
+    // A grading abandoned before any frame was accepted has nothing to digest, and the
+    // session id is unique per capture — the right fallback for something that will never
+    // be replayed, because there is nothing to replay.
+    private fun keyBasis(): List<String> = frames.filter { it.isNotBlank() }.ifEmpty { listOf(rawSessionId.value) }
 }

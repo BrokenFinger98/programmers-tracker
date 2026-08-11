@@ -105,7 +105,7 @@ class CodeAttachmentSerializationTest {
         val id = aRawSessionId("live-$nth.jsonl")
         val frame = """{"type":"finish","nth":$nth}"""
         FileRawSessionLog(rawDirectory()).append(id, frame)
-        return writer.write(aSettledCapture(rawSessionId = id, terminalFrame = frame))!!
+        return writer.write(aSettledCapture(rawSessionId = id, frames = listOf(frame)))!!
     }
 
     private fun attachment(onFetch: () -> Unit) = CodeAttachment(

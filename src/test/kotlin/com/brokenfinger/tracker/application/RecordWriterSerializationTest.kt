@@ -126,7 +126,7 @@ class RecordWriterSerializationTest {
     private fun capture(nth: Int): SettledCapture {
         val id = aRawSessionId("live-$nth.jsonl")
         FileRawSessionLog(rawDirectory()).append(id, """{"type":"finish","nth":$nth}""")
-        return aSettledCapture(rawSessionId = id, terminalFrame = """{"type":"finish","nth":$nth}""")
+        return aSettledCapture(rawSessionId = id, frames = listOf("""{"type":"finish","nth":$nth}"""))
     }
 
     private fun writer(store: RecordStore, git: GitSync = aQuietGitSync()): RecordWriter {

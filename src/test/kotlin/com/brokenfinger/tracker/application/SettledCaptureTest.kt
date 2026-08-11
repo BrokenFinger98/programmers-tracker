@@ -6,8 +6,8 @@ import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
-import com.brokenfinger.tracker.support.fixtures.aTerminalFrame
 import com.brokenfinger.tracker.support.fixtures.aTruncatedStream
+import com.brokenfinger.tracker.support.fixtures.acceptedFrames
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
@@ -25,8 +25,8 @@ class SettledCaptureTest {
 
     @Test
     fun `a different terminal frame is a different grading`() {
-        val pass = aSettledCapture(terminalFrame = aTerminalFrame("algorithm-pass.jsonl"))
-        val wrong = aSettledCapture(terminalFrame = aTerminalFrame("algorithm-wrong.jsonl"))
+        val pass = aSettledCapture(frames = acceptedFrames("algorithm-pass.jsonl"))
+        val wrong = aSettledCapture(frames = acceptedFrames("algorithm-wrong.jsonl"))
 
         pass.captureKey() shouldNotBe wrong.captureKey()
     }
@@ -41,7 +41,7 @@ class SettledCaptureTest {
 
     @Test
     fun `a session that never terminated falls back to the raw session id, which replay repeats`() {
-        val incomplete = { aSettledCapture(session = truncated(), terminalFrame = null) }
+        val incomplete = { aSettledCapture(session = truncated(), frames = emptyList()) }
 
         incomplete().captureKey() shouldBe incomplete().captureKey()
     }
@@ -56,8 +56,8 @@ class SettledCaptureTest {
 
     @Test
     fun `a blank terminal frame falls back too, instead of throwing the record away`() {
-        aSettledCapture(terminalFrame = "  ").captureKey() shouldBe
-            aSettledCapture(session = truncated(), terminalFrame = null).captureKey()
+        aSettledCapture(frames = listOf("  ")).captureKey() shouldBe
+            aSettledCapture(session = truncated(), frames = emptyList()).captureKey()
     }
 
     @Test
@@ -132,7 +132,7 @@ class SettledCaptureTest {
     private fun truncated() = aSessionOf(aTruncatedStream())
 
     private fun anUnterminatedCapture(rawName: String) =
-        aSettledCapture(session = truncated(), terminalFrame = null, rawSessionId = aRawSessionId(rawName))
+        aSettledCapture(session = truncated(), frames = emptyList(), rawSessionId = aRawSessionId(rawName))
 
     private fun now(): OffsetDateTime = OffsetDateTime.parse("2026-08-04T14:23:01+09:00")
 }

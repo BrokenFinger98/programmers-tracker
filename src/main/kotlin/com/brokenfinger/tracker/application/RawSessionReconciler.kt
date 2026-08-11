@@ -98,7 +98,7 @@ class RawSessionReconciler(
         language = channel.language,
         elapsedSec = elapsedOf(session),
         observation = timer.observationOf(session.lessonId),
-        terminalFrame = replay.terminalFrame,
+        frames = replay.accepted.toList(),
     )
 
     /**
@@ -164,17 +164,20 @@ data class ReconcileReport(
 private class SessionReplay(channel: ChannelKey, private val frames: FrameReader) {
     private val assembler = GradingSessionAssembler.of(channel)
 
-    /** The stored line that ended the stream — the basis the capture key is derived from. */
-    var terminalFrame: String? = null
-        private set
+    /**
+     * Every stored line the reader turned into facts, in order — the basis the capture key
+     * is derived from (#149). The live path keeps exactly the same set, skipping the lines
+     * that yield nothing, so a replay derives the key its capture derived.
+     */
+    val accepted = mutableListOf<String>()
 
     var skipped = 0
         private set
 
     fun feed(line: String) {
         val facts = frames.factsOf(line) ?: return skip(line)
+        accepted += line
         assembler.accept(facts)
-        if (hasTerminated()) terminalFrame = terminalFrame ?: line
     }
 
     fun hasTerminated(): Boolean = assembler.hasTerminated()

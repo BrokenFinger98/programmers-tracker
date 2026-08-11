@@ -34,13 +34,29 @@ value class CaptureKey(val value: String) {
         private const val SEPARATOR = '\u001F'
 
         /**
-         * Derives the key from the frame that ended the stream, bound to the lesson and the
+         * Derives the key from **every frame of the grading**, bound to the lesson and the
          * action that produced it. Deterministic: identical inputs give an identical key in
          * any process, on any host, at any time.
+         *
+         * **It used to be the terminal frame alone, and that made the key a constant.** An
+         * algorithm submit terminates on `finish`, and a measured `finish` is
+         * `{"action":"submit","type":"finish"}` beside the channel identifier — nothing that
+         * varies between gradings. So every submit of a problem after the first collided with
+         * it and was dropped as a replay. Measured 2026-08-11 on lesson 181947: a passing
+         * submit derived the key of a WRONG submit from five days earlier, byte-identical
+         * frames (#149).
+         *
+         * The whole session distinguishes them because the testcase frames carry `run_time`
+         * and `memory_size`, and it stays stable under replay because the raw log keeps every
+         * frame verbatim. Frames are trimmed, because the live path holds the text as it
+         * arrived and the replay path reads it back without its line break.
          */
-        fun of(lessonId: Long, action: GradingAction, terminalFrame: String): CaptureKey {
-            require(terminalFrame.isNotBlank()) { "capture key cannot be derived from a blank terminal frame" }
-            return CaptureKey(digestOf("$lessonId$SEPARATOR${action.name}$SEPARATOR$terminalFrame"))
+        fun of(lessonId: Long, action: GradingAction, frames: List<String>): CaptureKey {
+            val basis = frames.map { it.trim() }.filter { it.isNotEmpty() }
+            require(basis.isNotEmpty()) { "capture key cannot be derived from a grading with no frames" }
+            return CaptureKey(
+                digestOf("$lessonId$SEPARATOR${action.name}$SEPARATOR${basis.joinToString(SEPARATOR.toString())}"),
+            )
         }
 
         /** Lenient read-back from storage (dev rules §4) — a torn line must not throw. */

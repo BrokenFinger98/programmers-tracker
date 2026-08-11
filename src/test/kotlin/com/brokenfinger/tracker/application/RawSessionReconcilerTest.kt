@@ -110,8 +110,10 @@ class RawSessionReconcilerTest {
     // Duplicate safety ---------------------------------------------------------------------
 
     /**
-     * The key is derived from the terminal frame (design §5.2), so a replay of the same stored
-     * bytes derives the same key — which is what makes reprocessing safe at all.
+     * The key is derived from every accepted frame (#149), so a replay of the same stored
+     * bytes derives the same key — which is what makes reprocessing safe at all. The live
+     * path and this one must agree on *which* frames those are, or every reconciliation
+     * would look like a grading nobody had recorded.
      */
     @Test
     fun `the reconciled record is keyed exactly as the live capture keyed it`() {
@@ -120,7 +122,7 @@ class RawSessionReconcilerTest {
 
         reconcile()
 
-        records().single().captureKey shouldBe CaptureKey.of(LESSON_ID, GradingAction.SUBMIT, frames.last())
+        records().single().captureKey shouldBe CaptureKey.of(LESSON_ID, GradingAction.SUBMIT, frames)
     }
 
     /**

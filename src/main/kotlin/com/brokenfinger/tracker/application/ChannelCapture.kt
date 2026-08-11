@@ -82,17 +82,20 @@ class ChannelCapture(
 
     private suspend fun assemble(grading: LiveGrading, frame: ObservedFrame) {
         val facts = frame.facts ?: return
+        // Kept before the accept, and only for frames that yielded facts: the replay path
+        // skips the others too, and the two must agree or every reconciliation looks new.
+        grading.frames += frame.rawText
         grading.assembler.accept(facts)
         if (!grading.assembler.hasTerminated()) return
-        settle(grading, frame.rawText)
+        settle(grading)
     }
 
-    private suspend fun settle(grading: LiveGrading, terminalFrame: String?) {
+    private suspend fun settle(grading: LiveGrading) {
         live = null
         bookkeeping(registry::markSettled)
         val session = grading.assembler.settle()
         rebind(session)
-        record(grading.rawSessionId, session, terminalFrame)
+        record(grading.rawSessionId, session, grading.frames.toList())
     }
 
     /**
@@ -107,8 +110,8 @@ class ChannelCapture(
 
     // Logged, never rethrown: the verdict is unrecoverable but this write is not — it is
     // retryable from the raw log — and the next grading on this channel still needs us.
-    private suspend fun record(rawSessionId: RawSessionId, session: GradingSession, terminalFrame: String?) {
-        val written = runCatching { writer.write(captureOf(rawSessionId, session, terminalFrame)) }
+    private suspend fun record(rawSessionId: RawSessionId, session: GradingSession, frames: List<String>) {
+        val written = runCatching { writer.write(captureOf(rawSessionId, session, frames)) }
             .onFailure { logger.error("Lesson {} settled but was not recorded; its frames are kept", lessonId(), it) }
             .getOrNull() ?: return
         attach(written)
@@ -124,7 +127,7 @@ class ChannelCapture(
             .onFailure { logger.warn("Lesson {} was recorded but its code was not attached", lessonId(), it) }
     }
 
-    private fun captureOf(rawSessionId: RawSessionId, session: GradingSession, terminalFrame: String?) = SettledCapture(
+    private fun captureOf(rawSessionId: RawSessionId, session: GradingSession, frames: List<String>) = SettledCapture(
         session = session,
         rawSessionId = rawSessionId,
         lessonId = lessonId(),
@@ -132,7 +135,7 @@ class ChannelCapture(
         language = channel.language,
         elapsedSec = timer.elapsedSecOf(lessonId()),
         observation = timer.observationOf(lessonId()),
-        terminalFrame = terminalFrame,
+        frames = frames,
     )
 
     /**
@@ -143,7 +146,7 @@ class ChannelCapture(
     private suspend fun abandonInFlight() {
         val abandoned = live ?: return
         logger.warn("A grading started on lesson {} before the previous one terminated", lessonId())
-        settle(abandoned, terminalFrame = null)
+        settle(abandoned)
     }
 
     /**
@@ -154,7 +157,7 @@ class ChannelCapture(
     suspend fun connectionLost() {
         val abandoned = live ?: return
         logger.warn("Observation of lesson {} dropped mid-grading; settling it incomplete", lessonId())
-        settle(abandoned, terminalFrame = null)
+        settle(abandoned)
     }
 
     /**
@@ -204,4 +207,7 @@ class ChannelCapture(
 }
 
 /** The grading in flight on a channel: where its frames are kept and what interprets them. */
-private class LiveGrading(val rawSessionId: RawSessionId, val assembler: GradingSessionAssembler)
+private class LiveGrading(val rawSessionId: RawSessionId, val assembler: GradingSessionAssembler) {
+    /** Accepted frames, verbatim and in order — what the capture key is derived from (#149). */
+    val frames = mutableListOf<String>()
+}

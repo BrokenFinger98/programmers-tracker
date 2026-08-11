@@ -19,7 +19,7 @@ fun aSettledCapture(
     problem: CatalogEntry? = aCatalogEntry(id = lessonId),
     language: String = "java",
     elapsedSec: Long = 847,
-    terminalFrame: String? = aTerminalFrame("algorithm-pass.jsonl"),
+    frames: List<String> = acceptedFrames("algorithm-pass.jsonl"),
 ) = SettledCapture(
     session = session,
     rawSessionId = rawSessionId,
@@ -27,13 +27,17 @@ fun aSettledCapture(
     problem = problem,
     language = language,
     elapsedSec = elapsedSec,
-    terminalFrame = terminalFrame,
+    frames = frames,
 )
 
 fun aRawSessionId(name: String = "20260804T142301000Z-120804.jsonl") = RawSessionId(name)
 
-/** The last frame of a measured capture — what actually ended that stream (dev rules §6.2). */
-fun aTerminalFrame(fixture: String): String = FixtureLoader.rawFrames(fixture).last()
+/**
+ * The frames of a measured capture that the assembler would accept — the basis the capture
+ * key is derived from (#149). Welcome and ping lines are not among them, on the live path or
+ * on the replay, so they are not among them here either.
+ */
+fun acceptedFrames(fixture: String): List<String> = FixtureLoader.broadcastLines(fixture)
 
 /** A measured stream with every terminal frame removed — the shape a timeout leaves (design §4.2). */
 fun aTruncatedStream(fixture: String = "algorithm-pass.jsonl"): List<GradingFrameFacts> =
