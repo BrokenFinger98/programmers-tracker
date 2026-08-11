@@ -14,6 +14,12 @@ compose.override.yml
 # Personal work state (progress IS committed)
 .harness/state/goal.md
 
+# Session transcripts dropped here by the PreCompact/SessionEnd hooks, waiting for
+# /wiki-ingest. A transcript is the whole conversation — every file read, every command run —
+# so one `git add -A` would publish it. This rule is what lets the hook write here at all: it
+# checks `git check-ignore` and falls back to the global inbox when the path is committable.
+docs/llm-wiki/raw/inbox/
+
 # Build
 build/
 .gradle/

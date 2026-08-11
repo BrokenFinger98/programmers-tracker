@@ -14,8 +14,15 @@ You are this wiki's **editor**. Always follow the `docs/llm-wiki/CLAUDE.md` sche
 2. **Pin down the sources** — arguments take priority if given. Otherwise, pick from the
    current conversation only what is worth revisiting
    (key decisions · work deliverables · reusable know-how · measured results · **hypotheses that turned out wrong**).
+   **Check `docs/llm-wiki/raw/inbox/` first.** Hooks drop a transcript snapshot there before a
+   compaction and at session end, so anything compacted out of context is still on disk. Slice
+   it by **KST**, not by the transcript's UTC timestamps — otherwise every evening lands under
+   the following day.
 3. **Save raw** — `docs/llm-wiki/raw/sessions/YYYY-MM-DD-<title>.md` (immutable, never edit).
    If the path exists, use a `-2` suffix.
+   **Then delete the snapshots you consumed** (`raw/inbox/*.jsonl`). They are copies — the
+   original stays under `~/.claude/projects/` — and an inbox nobody empties is how 2.8 GB of
+   duplicate transcripts accumulated. Delete only what this ingest actually read.
 4. **Integrate into the wiki (never overwrite — merge)** — update existing pages by weaving
    into the body (`updated:` to today, add the new raw to `sources:`. On conflict, preserve
    the old content as `⚠️ (old) ...`).
