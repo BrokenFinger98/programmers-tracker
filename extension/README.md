@@ -25,14 +25,31 @@ Then open any Programmers problem. The toolbar badge is the status:
 
 | Badge | Meaning |
 |---|---|
-| green `●` | watching — the server accepted the announcement |
+| green `●` | watching — the server accepted the announcement, and nothing is recorded for this problem yet |
+| green `✓` | the last grading on this problem **was recorded**, whatever its verdict |
+| purple `?` | recorded, but the server could not classify it — `UNKNOWN` or `INCOMPLETE` |
 | orange `!` | no token configured yet |
 | red `×` | the server refused or could not be reached; hover for its own message |
 | no badge | the content script never ran — you are not on a problem page, or the extension is not loaded in this profile |
 
+Hover for the detail: the verdict, the testcase counts and how long ago.
+
+**A recorded wrong answer is `✓`.** The badge answers "is the tool working", not "did you
+pass" — recording a failure is this tool doing its job, and a red mark there would teach you
+to read your own wrong answers as a broken sensor.
+
+**`?` is the one worth stopping for.** It means the server wrote a record it could not
+classify, which is what a grading looks like when it goes missing. On 2026-08-11 a passing
+submit was recorded as `UNKNOWN` and nothing on screen disagreed with anything else; the loss
+was silent for twenty minutes (#154). This badge is the disagreement.
+
 Every state has a glyph, the good one included. It used to be green with no text, and a badge
 background is painted behind its text — so nothing was drawn and a working sensor looked
 exactly like an unloaded one (#147). "No badge" now means what it says.
+
+The state comes from the heartbeat, so it can lag a grading by up to thirty seconds. That is
+fine for a signal whose job is verification, and it is why there is no spinner: a progress
+indicator would need to watch the page, which this extension deliberately does not do.
 
 ## What it sends
 

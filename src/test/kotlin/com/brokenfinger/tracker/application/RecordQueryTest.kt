@@ -226,4 +226,33 @@ class RecordQueryTest {
 
         query.problem(120804).submissions shouldHaveSize 1
     }
+
+    // lastRecordOf — what the badge asks on every heartbeat (#156) -----------------------------
+
+    @Test
+    fun `the newest grading recorded for a lesson is the one reported`() {
+        val older = aSubmissionRecord(lessonId = 120802, ts = OffsetDateTime.parse("2026-08-11T13:01:00+09:00"))
+        val newer = aSubmissionRecord(
+            lessonId = 120802,
+            ts = OffsetDateTime.parse("2026-08-11T13:24:00+09:00"),
+            verdict = Verdict.PASS,
+        )
+        val other = aSubmissionRecord(lessonId = 181946, ts = OffsetDateTime.parse("2026-08-11T14:00:00+09:00"))
+
+        val query = aRecordRepository(root).containing(older, newer, other).query()
+
+        query.lastRecordOf(120802)?.ts shouldBe newer.ts
+    }
+
+    /**
+     * Absent, not a placeholder. The badge reads this as "nothing recorded here yet", which is
+     * a different thing from "recorded and unclassified" — and telling those two apart is the
+     * whole reason the field exists.
+     */
+    @Test
+    fun `a lesson with nothing recorded reports nothing`() {
+        val query = aRecordRepository(root).containing(aSubmissionRecord(lessonId = 120804)).query()
+
+        query.lastRecordOf(999999).shouldBeNull()
+    }
 }

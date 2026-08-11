@@ -20,14 +20,42 @@ async function settings() {
 // nothing was drawn at all and the one state meaning "it is working" was the only one with
 // no visual. A working sensor and an unloaded one looked identical (#147).
 function report(state, detail) {
-  const badge = { watching: "●", missing: "!", failed: "×" }[state];
-  const colour = { watching: "#2d7", missing: "#e90", failed: "#d33" }[state];
+  const badge = { watching: "●", recorded: "✓", unclear: "?", missing: "!", failed: "×" }[state];
+  const colour = {
+    watching: "#2d7", recorded: "#2d7", unclear: "#96f", missing: "#e90", failed: "#d33",
+  }[state];
   chrome.action.setBadgeText({ text: badge });
   chrome.action.setBadgeBackgroundColor({ color: colour });
   // White regardless of the browser's theme: Chrome picks a contrast colour on its own, and
   // on the orange it picks black, which reads as a disabled control rather than a warning.
   chrome.action.setBadgeTextColor({ color: "#fff" });
   chrome.action.setTitle({ title: `programmers-tracker sensor — ${detail}` });
+}
+
+// What the server actually wrote down, which is the question the badge could not answer
+// before (#156). A page announcing a correct answer and a server recording nothing looked identical
+// from the toolbar, and a passing submit went missing for twenty minutes on 2026-08-11.
+//
+// A recorded failure is `recorded`, not a warning. This tool exists to record failures; a red
+// mark there would teach the user to read their own wrong answers as a broken sensor.
+//
+// `unclear` is the state that did not exist. It means the server wrote a record it could not
+// classify — the exact shape of that lost submit — and it is the only one worth alarming on.
+function recordState(last) {
+  if (!last) return ["watching", ""];
+  const when = agoOf(last.at);
+  const classified = last.verdict != null;
+  const what = `${last.action} ${last.verdict ?? last.outcome} ${last.passed}/${last.total}`;
+  if (!classified) return ["unclear", ` — last recorded ${when}: ${what}, which the server could not classify`];
+  return ["recorded", ` — last recorded ${when}: ${what}`];
+}
+
+function agoOf(iso) {
+  const seconds = Math.round((Date.now() - Date.parse(iso)) / 1000);
+  if (!Number.isFinite(seconds) || seconds < 0) return "just now";
+  if (seconds < 90) return `${seconds}s ago`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
+  return `${Math.round(seconds / 3600)}h ago`;
 }
 
 async function watch(body) {
@@ -44,7 +72,8 @@ async function watch(body) {
     });
     if (response.ok) {
       const answer = await response.json();
-      report("watching", `watching lesson ${answer.lessonId} in ${answer.language} (${answer.status})`);
+      const [state, note] = recordState(answer.lastRecord);
+      report(state, `watching lesson ${answer.lessonId} in ${answer.language} (${answer.status})${note}`);
       return;
     }
     // The server's error contract carries a stable machine code and a message written for

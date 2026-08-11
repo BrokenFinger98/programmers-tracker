@@ -1,12 +1,18 @@
 package com.brokenfinger.tracker.adapter.web
 
+import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.application.UnresolvableProblemException
 import com.brokenfinger.tracker.application.WatchCapacityExceededException
 import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchRequestHandler
+import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aWatchBody
 import com.brokenfinger.tracker.support.fixtures.aWatchCommand
+import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -14,11 +20,14 @@ import io.kotest.matchers.string.shouldNotContain
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -47,6 +56,10 @@ class WatchControllerTest {
 
         @Bean
         fun watchToken(): WatchToken = WatchToken(GRANTED, "build/tmp/watch-token-should-not-be-created")
+
+        /** Read-only, and mocked: this slice is about the wire contract, not about the log. */
+        @Bean
+        fun recordQuery(): RecordQuery = mockk()
     }
 
     @Autowired
@@ -55,9 +68,15 @@ class WatchControllerTest {
     @Autowired
     private lateinit var handler: WatchRequestHandler
 
+    @Autowired
+    private lateinit var records: RecordQuery
+
     @BeforeEach
     fun resetHandler() {
         clearMocks(handler)
+        clearMocks(records)
+        // The common case: nothing recorded for this problem yet, so the field is absent.
+        every { records.lastRecordOf(any()) } returns null
     }
 
     @Test
@@ -187,6 +206,55 @@ class WatchControllerTest {
         raw.shouldNotContain(REFUSED)
         raw.shouldNotContain("Exception")
         response.jsonBody()["trace"].shouldBeNull()
+    }
+
+    /**
+     * What the badge reads on every heartbeat (#156). Before this, a page announcing a pass and
+     * a server that recorded nothing were indistinguishable from the toolbar.
+     */
+    @Test
+    fun `the answer carries the newest grading recorded for that problem`() {
+        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        every { records.lastRecordOf(120804) } returns aSubmissionRecord(
+            lessonId = 120804,
+            verdict = Verdict.PASS,
+            testcases = listOf(aTestcaseResult(), aTestcaseResult()),
+        )
+
+        val last = postWatch(aWatchBody()).jsonBody()["lastRecord"]!!.jsonObject
+
+        last["verdict"]!!.jsonPrimitive.content shouldBe "PASS"
+        last["outcome"]!!.jsonPrimitive.content shouldBe "JUDGED"
+        last["passed"]!!.jsonPrimitive.int shouldBe 2
+        last["action"]!!.jsonPrimitive.content shouldBe "submit"
+    }
+
+    /**
+     * Absent, not null and not a placeholder. A grading the server could not classify is the
+     * one case worth alarming on, and it is told apart from "nothing recorded here yet" only
+     * by this key being present while `verdict` is not.
+     */
+    @Test
+    fun `an unclassified grading is reported with an outcome and no verdict`() {
+        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+        every { records.lastRecordOf(120804) } returns aSubmissionRecord(
+            lessonId = 120804,
+            verdict = null,
+            outcome = Outcome.UNKNOWN,
+            testcases = emptyList(),
+        )
+
+        val last = postWatch(aWatchBody()).jsonBody()["lastRecord"]!!.jsonObject
+
+        last.shouldNotContainKey("verdict")
+        last["outcome"]!!.jsonPrimitive.content shouldBe "UNKNOWN"
+    }
+
+    @Test
+    fun `a problem with nothing recorded carries no record at all`() {
+        coEvery { handler.watch(any()) } returns WatchOutcome.REFRESHED
+
+        postWatch(aWatchBody()).jsonBody().shouldNotContainKey("lastRecord")
     }
 
     private fun postWatch(body: String, credential: String? = GRANTED): MockHttpServletResponse = mvc.post("/watch") {

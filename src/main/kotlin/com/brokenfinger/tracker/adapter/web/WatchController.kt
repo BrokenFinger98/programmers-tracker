@@ -1,8 +1,10 @@
 package com.brokenfinger.tracker.adapter.web
 
+import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchRequestHandler
+import com.brokenfinger.tracker.domain.SubmissionRecord
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import org.springframework.http.MediaType
@@ -17,12 +19,48 @@ import org.springframework.web.bind.annotation.RestController
  * (#114) — the channel identifiers the server resolved for itself are its own business.
  */
 @Serializable
-data class WatchAccepted(val status: String, val lessonId: Long, val language: String) {
+data class WatchAccepted(
+    val status: String,
+    val lessonId: Long,
+    val language: String,
+    /** The newest grading recorded for this problem. Absent when there is none (#156). */
+    val lastRecord: RecordedGrading? = null,
+) {
     companion object {
-        fun of(command: WatchCommand, outcome: WatchOutcome) = WatchAccepted(
+        fun of(command: WatchCommand, outcome: WatchOutcome, last: SubmissionRecord?) = WatchAccepted(
             status = outcome.name.lowercase(),
             lessonId = command.lessonId,
             language = command.language,
+            lastRecord = last?.let(RecordedGrading::from),
+        )
+    }
+}
+
+/**
+ * What the server actually wrote down, for the badge to compare against what the page showed.
+ *
+ * [verdict] is absent when the grading was not classified, and that absence is the point: an
+ * UNKNOWN here is the one signal that the learner saw a result the server could not record as
+ * one. Everything else a client might want is in the MCP tools; this is deliberately the
+ * smallest answer that makes the badge honest.
+ */
+@Serializable
+data class RecordedGrading(
+    val action: String,
+    val outcome: String,
+    val verdict: String? = null,
+    val passed: Int,
+    val total: Int,
+    val at: String,
+) {
+    companion object {
+        fun from(record: SubmissionRecord) = RecordedGrading(
+            action = record.action.name.lowercase(),
+            outcome = record.outcome.name,
+            verdict = record.verdict?.name,
+            passed = record.tcSummary.passed,
+            total = record.tcSummary.total,
+            at = record.ts.toString(),
         )
     }
 }
@@ -38,7 +76,11 @@ data class WatchAccepted(val status: String, val lessonId: Long, val language: S
  * and never echo a credential.
  */
 @RestController
-class WatchController(private val watcher: WatchRequestHandler, private val token: WatchToken) {
+class WatchController(
+    private val watcher: WatchRequestHandler,
+    private val token: WatchToken,
+    private val records: RecordQuery,
+) {
     @PostMapping(PATH, produces = [MediaType.APPLICATION_JSON_VALUE])
     fun watch(
         @RequestHeader(name = TOKEN_HEADER, required = false) presented: String?,
@@ -48,7 +90,10 @@ class WatchController(private val watcher: WatchRequestHandler, private val toke
         val command = WatchRequestPayload.parse(rawBody.orEmpty())
         // The resolver reaches the network, so this handler blocks — on a virtual thread,
         // which is what the inbound half is for (decisions/2026-08-05-backend-stack).
-        return WatchAccepted.of(command, runBlocking { watcher.watch(command) })
+        val outcome = runBlocking { watcher.watch(command) }
+        // Read after the subscription, so a heartbeat that arrives while a grading is settling
+        // reports the record once it exists rather than a stale one from before it.
+        return WatchAccepted.of(command, outcome, records.lastRecordOf(command.lessonId))
     }
 
     companion object {
