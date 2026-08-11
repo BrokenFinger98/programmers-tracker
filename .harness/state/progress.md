@@ -2626,3 +2626,27 @@ practise both. What this forbids is one grading becoming two, which is a differe
 Not established: *why* the broadcast reached both channels. The Java channel's raw session was
 the one #158's collision destroyed, so its identifier was never seen. The fix does not depend
 on knowing — with one channel there is nothing to duplicate.
+
+## [2026-08-11] #161 — the capture key was answering a question it cannot answer live ✅
+
+Measured on lesson 151136: the same SQL query submitted twice, and the second was dropped as
+a replay. SQL frames carry no `run_time` and no `memory_size`, so the same query is
+**byte-identical** down to the last character. Java escapes only because its timings jitter,
+which is luck rather than design.
+
+The key was doing two jobs. It is good at one: *a replay of stored bytes must not write a
+second record*, which is what makes reconciliation safe. It cannot do the other — *is this the
+same grading?* — because live, all it sees is whether the bytes match.
+
+So the paths are separate now. `write` is live and asks nothing; `replay` is reconciliation
+and asks the index. Both still populate it.
+
+Two things make dropping the live check safe, and both were established this week rather than
+assumed. The socket does not redeliver — a reconnect **loses** what was broadcast meanwhile,
+which the log has always said. And the one path that did deliver one grading twice was two
+channels on a problem, closed at the subscription in #160.
+
+Four tests had been pinning live dedup. Three were modelling a replay and now say so. The
+fourth asserted that feeding one fixture twice yields one record — the exact reading that
+discarded the second SQL submission — and now asserts two, because that is what two live
+gradings are.

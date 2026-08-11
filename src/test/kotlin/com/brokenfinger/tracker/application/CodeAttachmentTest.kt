@@ -170,7 +170,7 @@ class CodeAttachmentTest {
         val record = writer().write(capture).shouldNotBeNull()
         attachment(fetches(CODE_V2)).attach(record)
 
-        writer().write(capture) shouldBe null
+        writer().replay(capture) shouldBe null
 
         keysInLog() shouldContainExactly listOf(record.captureKey, record.captureKey)
     }

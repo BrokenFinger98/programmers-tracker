@@ -14,6 +14,7 @@ import com.brokenfinger.tracker.support.fixtures.aTruncatedStream
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -90,32 +91,44 @@ class RecordWriterTest {
         writer().write(aSubmit(2))!!.attempt shouldBe 2
     }
 
+    /**
+     * Reconciliation re-reading bytes already on disk is the case the index exists for, and it
+     * is the only one that asks it now (#161). A live capture no longer does: the socket does
+     * not redeliver — a reconnect loses what was broadcast meanwhile rather than repeating it —
+     * and the one path that did deliver one grading twice was two channels on a problem, closed
+     * at the subscription in #160.
+     */
     @Test
-    fun `a reconnect replaying the same grading writes exactly one record`() = runBlocking<Unit> {
+    fun `a replay of a grading already written adds no second record`() = runBlocking<Unit> {
         val writer = writer()
 
         writer.write(aSettledCapture())
-        val replay = writer.write(aSettledCapture())
+        val replay = writer.replay(aSettledCapture())
 
         replay shouldBe null
         logLines().size shouldBe 1
     }
 
     @Test
-    fun `a dropped duplicate does not consume an attempt number`() = runBlocking<Unit> {
+    fun `a dropped replay does not consume an attempt number`() = runBlocking<Unit> {
         val writer = writer()
         writer.write(aSettledCapture())
 
-        writer.write(aSettledCapture())
+        writer.replay(aSettledCapture())
 
         writer.write(aSubmit(2))!!.attempt shouldBe 2
     }
 
+    /**
+     * The index is rebuilt from the log, so a replay after a restart is still recognised —
+     * which is the whole reason the log is the index (#161 keeps this; it only stops the live
+     * path from asking).
+     */
     @Test
     fun `dedup survives a restart, because the log is also the dedup index`() = runBlocking<Unit> {
         writer().write(aSettledCapture())
 
-        writer().write(aSettledCapture()) shouldBe null
+        writer().replay(aSettledCapture()) shouldBe null
         logLines().size shouldBe 1
     }
 
@@ -225,6 +238,42 @@ class RecordWriterTest {
     }
 
     // Each grading of one problem ends on its own terminal frame, so each has its own key.
+    // Live is not replay ------------------------------------------------------------------------
+
+    /**
+     * Two submissions with byte-identical frames are two gradings when they arrive live (#161).
+     *
+     * SQL is where this bites. Its frames carry no `run_time` and no `memory_size`, so the same
+     * query submitted twice produces the same bytes down to the last character — measured
+     * 2026-08-11 on lesson 151136, where the second submit was dropped as a replay. Java only
+     * escapes because its timings jitter, which is luck rather than design.
+     *
+     * The capture key exists so a **replay of stored bytes** does not write a second record.
+     * A live capture is not a replay: it is a thing that just happened.
+     */
+    @Test
+    fun `two live gradings with identical frames are both recorded`() = runBlocking<Unit> {
+        val writer = writer()
+        val frames = listOf("""{"type":"finish","sql":"identical"}""")
+
+        writer.write(aSettledCapture(rawSessionId = liveRaw("one.jsonl"), frames = frames)) shouldNotBe null
+        writer.write(aSettledCapture(rawSessionId = liveRaw("two.jsonl"), frames = frames)) shouldNotBe null
+
+        stored() shouldHaveSize 2
+    }
+
+    /** And the property the key exists for is untouched: a replay of the same bytes is dropped. */
+    @Test
+    fun `a replay of a capture already written is still dropped`() = runBlocking<Unit> {
+        val writer = writer()
+        val frames = listOf("""{"type":"finish","sql":"identical"}""")
+
+        writer.write(aSettledCapture(rawSessionId = liveRaw("one.jsonl"), frames = frames)) shouldNotBe null
+        writer.replay(aSettledCapture(rawSessionId = liveRaw("one.jsonl"), frames = frames)) shouldBe null
+
+        stored() shouldHaveSize 1
+    }
+
     private fun aSubmit(nth: Int) = aSettledCapture(frames = listOf("""{"type":"finish","nth":$nth}"""))
 
     private fun aRun(rawSessionId: RawSessionId = aRawSessionId()) = aSettledCapture(
