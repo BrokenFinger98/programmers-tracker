@@ -45,6 +45,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-11 [[decisions/2026-08-11-a-hole-in-the-record-is-reported-not-filled]] — Orphaned frames are announced at every boot and on `stats`, because a diagnosis over a silently incomplete history is worse than none
 - 2026-08-11 [[decisions/2026-08-11-a-pass-belongs-to-its-language]] — `review_queue` and `slow_passes` key on (problem, language); the layout I kept calling the blocker was never one
 - 2026-08-11 [[decisions/2026-08-11-the-session-is-checked-where-it-can-answer]] — The socket cannot see an expired cookie, so the server asks the one endpoint measured to answer 200/401
+- 2026-08-11 [[decisions/2026-08-11-a-record-on-one-disk-says-so]] — Startup says how long the records have not left the machine, and why a repository with no remote is not a fault
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)

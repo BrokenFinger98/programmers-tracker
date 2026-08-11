@@ -78,3 +78,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-11] ingest | an expired session has no socket signal → 1 raw saved, 1 page created, 3 pages updated, index updated
 
 ## [2026-08-11] ingest | the session is checked where it can answer → 1 page created, index updated
+
+## [2026-08-11] ingest | a record on one disk says so → 1 page created, index updated
