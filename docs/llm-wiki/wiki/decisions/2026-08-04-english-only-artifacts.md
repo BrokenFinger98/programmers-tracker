@@ -10,6 +10,15 @@ sources: [raw/sessions/2026-08-04-oss-workflow.md]
 
 # All work artifacts in English
 
+> ⚠️ **Superseded in part, 2026-08-11, by
+> [[decisions/2026-08-11-korean-for-the-user-facing-half]].** This decision still governs
+> everything a *contributor* reads — the constitution, development rules, the protocol
+> document, specs, the wiki, commit messages, code comments, hook and tool output. Five
+> *user-facing* pages now ship a Korean twin. Option B below was rejected on one ground,
+> "guaranteed drift", and the reversal only holds because that ground is now a guard: a twin
+> declares the blob hash of the page it was translated from, and `scripts/guards.sh` fails the
+> build when the English page moves ahead of it.
+
 ## Context
 development-rules §12 said "write in Korean — the audience is Korean job-seekers."
 The repo went public with external issues/PRs expected; Korean-only docs,

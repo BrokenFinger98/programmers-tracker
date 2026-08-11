@@ -235,6 +235,56 @@ else
   pass "every repository path named in a maintained document exists"
 fi
 
+# ---------------------------------------------------------------------------
+# 5. A Korean twin must not fall behind the English page it was translated from.
+#    Bilingual docs were rejected once (2026-08-04-english-only-artifacts option B)
+#    on exactly one ground — "every page twice; guaranteed drift" — and the
+#    reversal only holds while something mechanical catches the drift. This is
+#    that something.
+#
+#    Each `<name>.ko.md` carries the blob hash of its source on its first line:
+#        <!-- translated-from: README.md@<40 hex> -->
+#    Editing the English page without touching the twin changes the hash and
+#    fails the build.
+#
+#    HASHES, NOT HISTORY. A guard comparing commit ancestry would need the log,
+#    and CI checks out at fetch-depth 1 — it would pass vacuously on every
+#    shallow clone, which is precisely how the English-only check itself was
+#    broken for weeks (#123). A blob hash needs no history at all.
+#
+#    Read from the index, like the path check above, so a dirty workspace cannot
+#    make it pass. Twins opt in by existing, so translations can land one at a
+#    time.
+#
+#    It catches forgetting, not lying: the hash can be bumped without
+#    translating anything, exactly as `Wiki-Skip:` can carry any reason.
+# ---------------------------------------------------------------------------
+stale_twins=""
+missing_marker=""
+for twin in $(git ls-files '*.ko.md'); do
+  source_page="${twin%.ko.md}.md"
+  if ! git ls-files --error-unmatch "$source_page" >/dev/null 2>&1; then
+    missing_marker="$missing_marker"$'\n'"  $twin  names $source_page, which is not tracked"
+    continue
+  fi
+  declared=$(git show ":$twin" | sed -n \
+    's|.*translated-from: *[^@]*@\([0-9a-f]\{40\}\).*|\1|p' | head -1)
+  actual=$(git rev-parse ":$source_page")
+  if [ -z "$declared" ]; then
+    missing_marker="$missing_marker"$'\n'"  $twin  has no <!-- translated-from: $source_page@<sha> --> line"
+  elif [ "$declared" != "$actual" ]; then
+    stale_twins="$stale_twins"$'\n'"  $source_page changed since $twin was written (expected $actual, twin says $declared)"
+  fi
+done
+
+if [ -n "$missing_marker" ]; then
+  report "a Korean twin cannot say what it was translated from:$missing_marker"
+elif [ -n "$stale_twins" ]; then
+  report "a Korean twin is behind its English source:$stale_twins"$'\n'"  Update the translation, then set its translated-from hash to the value above."
+else
+  pass "every Korean twin matches the English page it names"
+fi
+
 printf '\n'
 if [ "$fail" -ne 0 ]; then
   echo "guards: FAILED"
