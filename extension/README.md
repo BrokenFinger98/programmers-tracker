@@ -45,11 +45,17 @@ submit was recorded as `UNKNOWN` and nothing on screen disagreed with anything e
 was silent for twenty minutes (#154). This badge is the disagreement.
 
 **Red `!` outranks everything else.** `/watch` used to answer `started` whether or not the
-subscription lived, so an expired session cookie produced a green badge, a 200 on every
-heartbeat, and nothing in the record (#167). The server now reports the socket's own verdict,
-and a channel that is refused or unreachable says so — a `✓` from an hour ago is true and
-irrelevant if nothing is being watched now. The tooltip names the fix: a refusal means
-replacing `.ps/session`, and it heals on the next heartbeat without a restart.
+subscription lived, so a channel that never connected produced a green badge and a 200 on every
+heartbeat (#167). The server now reports the socket's own verdict, and a channel that is
+unreachable or refused says so — a `✓` from an hour ago is true and irrelevant if nothing is
+being watched now.
+
+⚠️ **It does not catch an expired session cookie**, and nothing currently does. Measured
+2026-08-11 (#175, protocol §15.3): an unauthenticated subscription is **confirmed in half a
+second and pinged normally**, and simply receives no broadcasts. Every liveness signal a passive
+observer has is identical between a working session and a dead one, so the badge stays green
+while nothing is recorded. If your records stop appearing while the badge looks healthy, replace
+`.ps/session` — that is the failure this badge cannot see.
 
 Every state has a glyph, the good one included. It used to be green with no text, and a badge
 background is painted behind its text — so nothing was drawn and a working sensor looked

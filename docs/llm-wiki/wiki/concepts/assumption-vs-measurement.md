@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
 updated: 2026-08-11
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
+sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -24,7 +24,7 @@ confidently; none were measured.
 
 | Claim, stated as fact | What the evidence actually said |
 |---|---|
-| "`reject_subscription` is the measured signal for cookie expiry" | The protocol document never mentions `reject_subscription` **anywhere**. The design (§4.3) had built the entire expiry-detection mechanism on a message no one had ever seen. |
+| "`reject_subscription` is the measured signal for cookie expiry" | The protocol document never mentions `reject_subscription` **anywhere**. The design (§4.3) had built the entire expiry-detection mechanism on a message no one had ever seen. **Measured 2026-08-11 (#175): it never arrives.** An unauthenticated subscription is confirmed in 0.49 s and pinged normally and receives nothing, so the socket carries no expiry signal at all — and by then a health state had been built on it, see below. |
 | "SQL terminates at `result_lesson_challenge`; algorithm terminates at `finish`" | Termination is an **(action × type)** matrix. SQL *submit* never sends `finish`, but SQL *run* does; algorithm *run* ends at `result`, or `error` on the error path. The half-truth would have hung every SQL run capture. |
 | "Writes have no concurrency problem — there is only one writer" | Nothing in the design *created* that property. Single-writer is something you build, not something you inherit. |
 | "5 verdicts cover every grading outcome" | The memory-limit message has **never been triggered**, so its string is unknown (protocol §14). A 5-way classifier silently misfiles it. |
@@ -237,6 +237,25 @@ compounding of the classpath lesson above, with the tests not merely blind to th
 agreeing with it. Full pattern and its counter-practice:
 [[concepts/tests-that-explain-defects]].
 
+## The worst case: a fix built on the unmeasured claim
+
+Claim #1 above sat labelled and unmeasured for six days. On 2026-08-11 it was *built on*:
+`SubscriptionHealth.REJECTED` fires on `reject_subscription`, and the badge state telling a user
+to replace `.ps/session` was wired to it. Then it was measured.
+
+An invalid session is **confirmed in 0.49 s and pinged for as long as you watch**. It is never
+rejected. A ping is a frame, so the health reads `LIVE`, and the badge is green while every
+grading is lost (`raw/sessions/2026-08-11-expiry-has-no-socket-signal.md`).
+
+The part worth keeping is what the fix did to the *quality* of the wrong answer. Before it,
+`/watch` said `started` unconditionally — obviously uninformative. After it, the same request
+says `subscription: "live"`, which is a **reason to believe**. Building on an unmeasured claim
+did not leave the confidence where it was; it raised it.
+
+**A health check has to be built on a signal observed to differ between health and failure.**
+Nothing in a code review can catch a check wired to a frame nobody has seen — only running it
+against a broken credential can.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -255,6 +274,9 @@ agreeing with it. Full pattern and its counter-practice:
 - When a live run produces frames, transcribe them into a fixture in the same change —
   not "later". The protocol document's verification log records *that* it happened; the
   fixture is what keeps it testable.
+- **Never wire a failure state to a frame that has not been observed.** If the failure signal
+  cannot be produced on demand, the check is unverifiable by construction — say so where it is
+  written rather than shipping it as working.
 - Confirmation is not validation: a wrong `challengeable_id` still returns
   `confirm_subscription` and still runs testcases (protocol §3). Success signals can lie
   about the thing you actually wanted to know — see [[concepts/verdict-classification]].

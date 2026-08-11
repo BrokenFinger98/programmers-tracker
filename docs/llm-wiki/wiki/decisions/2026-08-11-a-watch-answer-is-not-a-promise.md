@@ -5,7 +5,7 @@ tags: [capture, sensor, credentials, failure-taxonomy, api]
 author: BrokenFinger98
 created: 2026-08-11
 updated: 2026-08-11
-sources: [raw/sessions/2026-08-07-adversarial-review.md, decisions/2026-08-05-failure-taxonomy, decisions/2026-08-10-sensor-observations]
+sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-07-adversarial-review.md, decisions/2026-08-05-failure-taxonomy, decisions/2026-08-10-sensor-observations]
 ---
 
 # A `/watch` answer is not a promise that anything is being watched
@@ -108,3 +108,44 @@ regression — a refusal must survive the reconnect that follows it. The badge g
 Not closed by this: whether the *user* ever sees it depends on the extension being loaded. A
 server watched by nothing still answers `started` to nobody. That is the sensor's job and it
 already has a badge for it ([[decisions/2026-08-10-sensor-observations]]).
+
+
+---
+
+## ⚠️ Amended the same day (#175): `REJECTED` is unreachable for the case it was built for
+
+Measured hours after this shipped, and it undoes the headline claim.
+
+Two observers on the **identical** channel identifier at the same moment — one with the real
+session, one with an invalid string:
+
+| | confirm | pings | broadcasts |
+|---|---|---|---|
+| valid session | 1 | 110 | **4** — the whole run |
+| invalid session | 1 | 160 | **0** |
+
+The invalid-session subscription was **confirmed in 0.49 s** and pinged normally throughout.
+`reject_subscription` never arrived. It does not exist for this case (protocol doc §15.3).
+
+So on an expired cookie:
+
+- a ping is a frame, so `health` reaches **`LIVE`**
+- the badge is **green**
+- and nothing is recorded
+
+**This decision's `REJECTED` state is dead code for session expiry.** What it still does is
+real — a socket that cannot connect, or an attempt that ends without a frame, now demotes and
+reaches the badge, and those were previously invisible too. But the motivating scenario in the
+Context above ("when the session cookie expires…") is *not* solved by it.
+
+⚠️ (old) — "The two failing states are kept apart because they ask the user for different
+things — `REJECTED` means paste a fresh session cookie". `REJECTED` still means that **if it
+ever fires**; nothing observed has made it fire.
+
+The deeper lesson is the one this ADR half-stated and did not follow through: an answer must
+report what was measured, not what the design expects. `Step.Fail` was wired to a frame nobody
+had seen, and building a health state on it produced a *more* confident wrong answer than the
+unconditional `started` it replaced — green with a reason behind it.
+
+Detection has to come from an authenticated HTTP request, and what to use is unmeasured — see
+#175 and protocol §14.
