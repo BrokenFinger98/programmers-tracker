@@ -102,3 +102,34 @@ The broader lesson belongs with [[concepts/assumption-vs-measurement]]: a green 
 evidence only if something proves the check ran. This one had been reporting on a search it
 never performed, and no amount of reading the script would have shown that — only running it
 somewhere other than the machine that wrote it.
+
+---
+
+## Applied again 2026-08-11 (#165, #169, #171): three more layers of the same failure
+
+The canary pattern turned out to be the reusable half. Three guards now open with a proof of
+their own machinery before their silence is trusted, and each closes a place where the visible
+half of a practice survived while the substance stopped:
+
+| § | Catches | The failure it is drawn from |
+|---|---|---|
+| 5 | a Korean twin whose English source moved past its `translated-from` hash | the objection that refused the twins once ("guaranteed drift") |
+| 6 | a `sources:` entry that resolves to nothing | two ADRs citing raw sessions that were never written |
+| 7 | a `log.md` ingest line with no raw session of that date | 33 logged ingests over an empty `raw/sessions/` |
+
+§7 is the one the whole week was about, and two things in it are decisions rather than
+mechanics.
+
+**No date floor.** The obvious design is to grandfather history — every existing line would
+fail an added rule, so exempt them and start counting from today. That was checked instead of
+assumed, and it was wrong: after the #163 back-fill **every ingest date already had a raw
+session**, so the rule applies to the whole file with no exemption. Worth stating because an
+exemption list is what a rule decays into, and the cheapest moment to avoid one is before it is
+written.
+
+**A date is matched from a raw session's filename *or its H1*.** A day's work does not always
+get its own file — 2026-08-08 is one question, recorded inside a page named for 2026-08-10
+whose heading reads `# 2026-08-08 / 2026-08-10 — …`. Filename-or-heading is as much prose as a
+guard should be willing to read: structured enough to be mechanical, loose enough to describe
+sessions the way they actually happened. Negative-tested by removing the date from that heading,
+which is what makes the dependency real rather than incidental.

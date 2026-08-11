@@ -336,6 +336,56 @@ else
   pass "all $cited wiki source citations resolve"
 fi
 
+# ---------------------------------------------------------------------------
+# 7. Every log.md ingest line has a raw session of that date.
+#    The original failure (#161): `log.md` recorded 33 ingests while
+#    raw/sessions/ had been empty since 2026-08-05. The log line is the visible
+#    half of the ritual so it kept being copied; saving the raw has no immediate
+#    consumer, so it stopped. Guard §6 catches a citation pointing at nothing —
+#    it cannot catch a claim with nothing beside it.
+#
+#    A date is matched from a raw session's FILENAME or its H1, because a day's
+#    work does not always get its own file: 2026-08-08 is one question, recorded
+#    inside a page named for 2026-08-10 whose H1 reads `# 2026-08-08 / 2026-08-10`.
+#    Filename-or-heading is as much prose as this is willing to read.
+#
+#    No date floor, and that was checked rather than assumed — the #163 back-fill
+#    left every ingest date covered, so the rule applies to the whole file. An
+#    exemption is what a rule decays into.
+# ---------------------------------------------------------------------------
+ingest_dates=$(git show ":docs/llm-wiki/log.md" \
+  | grep -oE '^## \[[0-9]{4}-[0-9]{2}-[0-9]{2}\] ingest' \
+  | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort -u)
+
+# Filenames and first-line headings, both read from the index like the checks above,
+# so an uncommitted raw session cannot satisfy a log line that lands without it.
+raw_dates=$(
+  for raw in $(git ls-files 'docs/llm-wiki/raw/sessions/*.md'); do
+    basename "$raw"
+    git show ":$raw" | sed -n '1{/^# /p;}'
+  done | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort -u
+)
+
+unbacked=""
+for date in $ingest_dates; do
+  printf '%s\n' "$raw_dates" | grep -qx "$date" && continue
+  unbacked="$unbacked"$'\n'"  $date  is logged as ingested and has no raw session"
+done
+
+# An extraction that quietly stopped matching would report a clean wiki forever —
+# the #123 failure one level over. Prove both halves before trusting the silence.
+if [ -z "$ingest_dates" ]; then
+  report "the ingest-log check parsed no ingest dates at all — it would pass any wiki"
+elif [ -z "$raw_dates" ]; then
+  report "the ingest-log check found no raw session dates — it would fail every wiki"
+elif printf '%s\n' "$raw_dates" | grep -qx "1999-01-01"; then
+  report "the ingest-log check matches a date that is not there — it would pass any log line"
+elif [ -n "$unbacked" ]; then
+  report "a log.md ingest line claims a session that was never saved:$unbacked"$'\n'"  Write the raw session, or drop the log line. The log entry is not the record."
+else
+  pass "every log.md ingest date has a raw session ($(printf '%s\n' "$ingest_dates" | wc -l | tr -d ' ') dates)"
+fi
+
 printf '\n'
 if [ "$fail" -ne 0 ]; then
   echo "guards: FAILED"

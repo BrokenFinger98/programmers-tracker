@@ -2870,3 +2870,28 @@ Korean twin updated; marker resynced.
 
 Remaining risk: the two records stay wrong, and `incompleteHistory` appears only on `stats` —
 `submissions`, `review_queue` and `slow_passes` read the same incomplete history and say nothing.
+
+## [2026-08-11] #171 — a log line can no longer claim a session that was never saved ✅
+
+The original failure of the week, finally guarded. `log.md` recorded 33 ingests over an empty
+`raw/sessions/`; §6 catches a citation pointing at nothing, but nothing caught a claim with
+nothing beside it.
+
+**No date floor, and that is the part worth reporting.** I said in #166 and #170 that this would
+need one — every historical line failing an added rule is the usual reason a guard gets a
+grandfather clause. Checked instead: after the #163 back-fill, all seven ingest dates already
+have a raw session, so §7 applies to the whole file with no exemption. An exemption list is what
+a rule decays into, and the cheapest moment to avoid one is before it exists.
+
+A date is matched from a raw session's **filename or its H1**, because a day's work does not
+always get its own file — 2026-08-08 is one question, recorded inside a page named for 2026-08-10
+whose heading reads `# 2026-08-08 / 2026-08-10 — …`. That is as much prose as a guard should
+read.
+
+Negative-tested in both directions: a log line for a date with no raw fails, and **removing the
+date from that H1** makes 2026-08-08 fail — which is what proves the heading is load-bearing
+rather than decorative. Canaries cover the two silent deaths: an ingest-date list that parses as
+empty would pass any wiki, a raw-date list that parses as empty would fail every one.
+
+ADR: amended `decisions/2026-08-10-guards-must-prove-they-ran` rather than adding a new one —
+this is the same decision applied a third time, not a different one.
