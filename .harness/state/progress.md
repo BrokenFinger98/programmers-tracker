@@ -3094,3 +3094,26 @@ logger — a check whose only output is a log line is one nobody asserts on.
 
 Remaining risk: the warning fires at boot, so a machine left running for a week does not see it
 change. A periodic check would, and is not built — the daily backup tick is the obvious place.
+
+## [2026-08-11] #185 — the staleness warning now survives a machine that is never restarted ✅
+
+#183's own ADR named this: *"It only fires at boot. A machine left running for a week never sees
+it change."* The sequence that ended in silence — deploy key expires Tuesday, every night's push
+fails, machine never restarted — now produces one warning when it starts and one all-clear when
+it stops.
+
+The whole design question was **not becoming noise**. The tick fires 1,440 times a day, and a
+warning repeated that often is one nobody reads — the same failure the `NoRemote` distinction was
+introduced to avoid. So `BackupReporter` announces on **change of kind**:
+
+- a `Stale` growing from 9 days to 10 is the same news; comparing the number would fire once a day
+  forever. The current number is stated at boot, where it is new information
+- **recovering is announced too** — a warning with no matching all-clear leaves a reader unable to
+  tell a fixed problem from an unreported one
+- boot states unconditionally, the tick only on change, and they share one reporter — two
+  instances would each announce the same transition
+
+Seven tests on the reporter, all asserting a returned verdict rather than scraping a logger.
+
+ADR: `2026-08-11-a-record-on-one-disk-says-so` amended — its remaining-risk entry is now ⚠️ (old)
+with a pointer to what closed it, rather than deleted.

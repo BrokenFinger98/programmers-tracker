@@ -76,8 +76,11 @@ scrolls past with it.
 
 ## Accepted costs
 
-- **It only fires at boot.** A machine left running for a week never sees it change. The daily
-  backup tick is the obvious place for a periodic version and it is not built.
+- ⚠️ (old) — "**It only fires at boot.** A machine left running for a week never sees it change.
+  The daily backup tick is the obvious place for a periodic version and it is not built."
+  **Closed the same day by #185**: the tick now announces a change of kind, and the sequence that
+  ended in silence — key expires Tuesday, every night's push fails, machine never restarted —
+  now produces one warning when it starts and one all-clear when it stops. See the Outcome.
 - **Two days is a guess.** Nothing measured says a day of unpushed records is acceptable and
   three is not; it is a compromise between a weekend and a real gap, stated rather than derived.
 - **It counts time, not commits.** "Ahead 2 for ten minutes" is normal and invisible here, which
@@ -95,3 +98,27 @@ through a logger.
 Verified live only on the silent path: a real boot with a push from yesterday reported nothing,
 which is correct and does not prove the warning. The failing path is covered by tests over a real
 git repository, not by a live broken remote.
+
+
+---
+
+## Extended 2026-08-11 (#185): announced on change, not on state
+
+The boot report leaves the machine that is never restarted, so `BackupReporter` now also answers
+the minute tick — and the design question is entirely about **not** becoming noise. The tick fires
+1,440 times a day; a warning repeated that often is one nobody reads, which is the same failure
+the `NoRemote` case was introduced to avoid.
+
+Three rules, each with a test:
+
+- **Compared by kind, not by value.** A `Stale` that grew from nine days to ten is the same news.
+  Comparing the number would fire once a day forever. The current number is stated at boot, where
+  it is new information.
+- **Recovering is announced.** A warning with no matching all-clear leaves a reader unable to tell
+  a fixed problem from an unreported one.
+- **Boot states unconditionally, the tick only on change**, and they share one reporter — two
+  instances would each announce the same transition.
+
+`never pushed` and `gone stale` stay separate kinds, so a deploy key that never worked and one
+that stopped working are two announcements rather than one. They ask the user for different
+things.

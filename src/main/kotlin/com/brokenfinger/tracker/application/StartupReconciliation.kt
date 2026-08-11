@@ -17,8 +17,7 @@ import org.slf4j.LoggerFactory
 class StartupReconciliation(
     private val sessions: RawSessionReconciler,
     private val raw: RawSessionLog,
-    private val backupLog: BackupLog,
-    private val clock: java.time.Clock,
+    private val backupReporter: BackupReporter,
     private val attachment: CodeAttachment,
     private val git: GitSync,
     private val backup: DailyBackup,
@@ -50,8 +49,11 @@ class StartupReconciliation(
     /**
      * Separated from the logging so a test can assert the verdict rather than scrape a logger.
      * A check whose only output is a log line is one that gets asserted on by nobody.
+     *
+     * Unconditional, unlike the tick's: a boot is a new context and the operator has seen
+     * nothing yet, so the current state is stated whatever it was last time (#185).
      */
-    internal fun backupAge(): BackupAge = BackupAge.of(backupLog.lastSuccessAt(), git.hasRemote(), clock.instant())
+    internal fun backupAge(): BackupAge = backupReporter.current()
 
     private fun reportBackupAge() {
         when (val age = backupAge()) {
