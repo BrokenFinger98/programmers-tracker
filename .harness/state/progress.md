@@ -2976,6 +2976,13 @@ amendment with its old claim preserved as ⚠️ (old).
 that the problem page yields identifiers without login, so a 200 there proves nothing either.
 Candidates are listed in §14 and none is measured.
 
-Separately noticed while reading the server log: `Refused an unauthorized /watch request` —
-the extension's stored watch token no longer matches the server's, so the sensor on this machine
-is currently blind. Not related to the above and not fixed here.
+⚠️ **A claim in the first version of this entry was wrong (#177).** It said the server was
+logging `Refused an unauthorized /watch request` throughout and the sensor was blind. That came
+from `--tail 12` showing the line once. Measured: **one** 401 over the container's entire
+lifetime, the token is identical in the checkout and the container, `POST /watch` answers
+`200 refreshed`, and the run triggered for the measurement was recorded normally
+(`120802 java run PASS 2/2`). The extension was working the whole time.
+
+The error is the same one this entry is about: §10 turned "two sockets, one user" into "not by
+connection"; I turned one log line into "throughout". The observation was real and the quantifier
+was invented — and the claim was believed because it *fitted the story*, which is not evidence.
