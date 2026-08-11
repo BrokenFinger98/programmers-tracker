@@ -2824,3 +2824,49 @@ ADR: `decisions/2026-08-11-a-watch-answer-is-not-a-promise`. The Korean twin of
 
 **Not verified live.** The badge path is exercised by tests and the JSON contract by a controller
 test, but no expired cookie has been driven through a real browser. That is the honest status.
+
+## [2026-08-11] #169 — the two orphaned gradings, and what could honestly be done about them ✅
+
+Opened the two files. They are not what the work list called them:
+
+| file | contents |
+|---|---|
+| `181946.jsonl` | a failing run, and **a complete submit grading minus its `start`** — 4 testcases through to `finish` |
+| `120802.jsonl` | two failing runs, and a complete submit minus its `start` — 18 testcases through to `finish` |
+
+And the records they produced exist:
+
+```
+181946  submit 3  UNKNOWN  0/0     ← the frames say 4/4
+120802  submit 2  UNKNOWN  0/0     ← the frames say 18/18
+```
+
+So this was never "two gradings are missing". It is **two records are wrong**, which the failure
+taxonomy calls the worse half, with the evidence sitting next to them.
+
+**Reconstruction was rejected, and that is the decision.** `SubmitMessage.Start` carries
+`testcaseIds`, `exampleTestcases` and the challengeable identity — no later frame repeats them,
+so a reconstructed grading is already less than a real one. The deciding objection is sharper:
+binding a stretch of an orphan file to the attempt it belongs to is **inference**. The file is
+per-lesson and append-only, several gradings sit in it end to end with no separator and no
+timestamp, and today's match is unique by accident. Attaching an 18/18 PASS to the wrong attempt
+is the thing CLAUDE.md forbids by name.
+
+What was actually wrong was different: they were announced **once**, in a warning on the day, and
+nothing mentioned them again. Not at startup, not over MCP. The record has holes and every
+consumer believes it is complete — including the AI whose entire job is to diagnose weaknesses
+from it.
+
+`RawSessionLog.orphans()` now answers what is stranded, startup reports it at every boot, and
+`stats` carries `incompleteHistory` naming the lessons and counting the frames. **Absent when
+there is nothing stranded**, so its presence is the signal — the same rule `docs/mcp.md` already
+applies to missing fields, one level up: what can be missing is not only a field but the record.
+
+Deliberately a count and a path, never a parse. "3 gradings" would be a claim the store cannot
+support without the same inference that was just refused.
+
+ADR: `decisions/2026-08-11-a-hole-in-the-record-is-reported-not-filled`. `docs/mcp.md` and its
+Korean twin updated; marker resynced.
+
+Remaining risk: the two records stay wrong, and `incompleteHistory` appears only on `stats` —
+`submissions`, `review_queue` and `slow_passes` read the same incomplete history and say nothing.

@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.adapter.web.WatchToken
@@ -56,8 +57,16 @@ class McpControllerTest {
     @TestConfiguration
     class Beans {
         @Bean
-        fun mcpDispatcher(): McpDispatcher =
-            McpDispatcher(McpToolInvoker(RecordQuery(scratchStore(), anEmptyCatalog(), Clock.systemUTC())))
+        fun mcpDispatcher(): McpDispatcher = McpDispatcher(
+            McpToolInvoker(
+                RecordQuery(
+                    scratchStore(),
+                    anEmptyCatalog(),
+                    Clock.systemUTC(),
+                    FileRawSessionLog.under(Path.of("build/tmp/mcp-controller-test")),
+                ),
+            ),
+        )
 
         @Bean
         fun watchToken(): WatchToken = WatchToken(GRANTED, "build/tmp/mcp-token-should-not-be-created")

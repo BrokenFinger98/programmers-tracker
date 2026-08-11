@@ -48,7 +48,12 @@ data class ProblemHistory(
  * leaves a torn final line, and refusing to answer because of it would hide every record
  * before it — a grading Programmers has already broadcast can never be fetched again.
  */
-class RecordQuery(private val store: RecordStore, private val catalog: ProblemCatalog, private val clock: Clock) {
+class RecordQuery(
+    private val store: RecordStore,
+    private val catalog: ProblemCatalog,
+    private val clock: Clock,
+    private val raw: RawSessionLog,
+) {
     /**
      * The whole log, newest first, **each capture key at its latest state**.
      *
@@ -74,6 +79,15 @@ class RecordQuery(private val store: RecordStore, private val catalog: ProblemCa
         SubmissionFilter.matching(history(), since, verdict)
 
     fun tally(group: TallyGroup): List<TallyBucket> = SubmissionTally.of(history(), group)
+
+    /**
+     * Gradings whose frames are on disk but which no record represents (#169).
+     *
+     * Reported beside every tally on purpose. These counts are the basis of any claim about
+     * the learner, and a claim drawn from a history with silent holes is worse than no claim —
+     * the reader has to be able to see that the denominator is incomplete.
+     */
+    fun orphanedFrames(): List<OrphanedFrames> = raw.orphans()
 
     /**
      * What is worth re-solving today (design §6.4). The clock is the only thing this adds to

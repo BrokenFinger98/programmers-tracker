@@ -16,12 +16,14 @@ import org.slf4j.LoggerFactory
  */
 class StartupReconciliation(
     private val sessions: RawSessionReconciler,
+    private val raw: RawSessionLog,
     private val attachment: CodeAttachment,
     private val git: GitSync,
     private val backup: DailyBackup,
 ) {
     suspend fun run() {
         logger.info("Startup reconciliation: {}", sessions.reconcile())
+        reportOrphans()
         // Between the sessions and the commit, not after it. Whatever the pass above recovered
         // is written `codePending`, and code attached after `git.reconcile` would sit
         // uncommitted until the next capture happened to sweep it up.
@@ -30,6 +32,28 @@ class StartupReconciliation(
         // leaves exactly this, and "commit whatever is uncommitted" is how it heals.
         git.reconcile()
         backup.runIfDue()
+    }
+
+    /**
+     * Announced at every boot, not once when it happened. Orphaned frames are the part of the
+     * history that will never become records, and a warning that scrolled past on the day is
+     * indistinguishable from a complete record afterwards (#169).
+     *
+     * Reported, never repaired. The missing `start` carries the testcase ids and the problem's
+     * examples, and pairing a stretch of these frames with the attempt it belongs to would be
+     * inference — the file is per-lesson and append-only, so several gradings sit in it end to
+     * end with nothing between them.
+     */
+    private fun reportOrphans() {
+        val orphans = raw.orphans()
+        if (orphans.isEmpty()) return
+        logger.warn(
+            "{} lesson(s) have frames that belong to no grading and will never become records: {}. " +
+                "Read them at {} — they are evidence, not a work list",
+            orphans.size,
+            orphans.joinToString { "lesson ${it.lessonId} (${it.frames} frames)" },
+            orphans.first().path.parent,
+        )
     }
 
     private companion object {

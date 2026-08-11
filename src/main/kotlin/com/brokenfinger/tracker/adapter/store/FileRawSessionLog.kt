@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.RawSessionLog
@@ -109,6 +110,23 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         )
     }
 
+    override fun orphans(): List<OrphanedFrames> {
+        val orphans = directory.resolve(ORPHANS)
+        if (!Files.isDirectory(orphans)) return emptyList()
+        return Files.list(orphans).use { entries ->
+            entries.toList().mapNotNull { orphanOf(it) }.sortedBy { it.lessonId }
+        }
+    }
+
+    // A count of lines, not of gradings: several gradings sit in one file end to end with no
+    // separator, and saying "3 gradings" would be a claim this class cannot support.
+    private fun orphanOf(file: Path): OrphanedFrames? {
+        val lessonId = ORPHAN_NAME.matchEntire(file.fileName.toString())?.groupValues?.get(1)?.toLongOrNull()
+            ?: return null
+        val frames = runCatching { Files.readAllLines(file, CHARSET).count { it.isNotBlank() } }.getOrElse { 0 }
+        return OrphanedFrames(lessonId, frames, file)
+    }
+
     override fun unprocessed(): List<RawSession> {
         if (!Files.isDirectory(directory)) return emptyList()
         return Files.list(directory).use { entries ->
@@ -135,6 +153,7 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         // a discriminated session would parse as nothing and drop off the work list entirely —
         // a quieter loss than the collision it exists to prevent.
         private val NAME = Regex("""(\d{8}T\d{9}Z)-(\d+)(?:-\d+)?\.jsonl""")
+        private val ORPHAN_NAME = Regex("""(\d+)\.jsonl""")
         private val APPEND_MODE = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
         private val CHARSET = StandardCharsets.UTF_8
         private const val SUFFIX = ".jsonl"

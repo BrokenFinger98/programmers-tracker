@@ -66,7 +66,29 @@ interface RawSessionLog {
 
     /** Sessions still awaiting stage 2 — the crash-recovery work list, oldest first. */
     fun unprocessed(): List<RawSession>
+
+    /**
+     * What has been orphaned, per lesson, so it can be reported rather than merely written.
+     *
+     * [orphaned] announces each frame once, in a warning, at the moment it arrives. After
+     * that nothing mentions them again — not at startup, not over MCP — so the record has
+     * holes while every consumer believes it is complete (#169). The consumer that matters
+     * is an AI asked to diagnose weaknesses from this history, and a confident diagnosis over
+     * a record with silent holes is worse than no diagnosis.
+     */
+    fun orphans(): List<OrphanedFrames>
 }
+
+/**
+ * Frames kept for one lesson that belong to no grading.
+ *
+ * Deliberately a count and a path, not a parse. These frames cannot become records — the
+ * missing `start` carries the testcase ids and the problem's examples, and binding a segment
+ * of this file to the attempt it belongs to would be inference, which is the one thing the
+ * constitution forbids doing with an identifier. So this type says *that* something is
+ * stranded and *where to read it*, and stops.
+ */
+data class OrphanedFrames(val lessonId: Long, val frames: Int, val path: Path)
 
 /**
  * Identity of one raw session log. It doubles as a file name, so it is constrained to

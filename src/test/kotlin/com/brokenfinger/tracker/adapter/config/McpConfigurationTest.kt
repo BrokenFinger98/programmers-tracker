@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.mcp.McpHeaders
+import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
@@ -33,7 +34,12 @@ class McpConfigurationTest {
     fun `points the read side at the submission log of the configured record repository`() {
         aRecordRepository(root).containing(aSubmissionRecord(), aSubmissionRecord())
 
-        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog(), Clock.systemUTC()).history().size shouldBe
+        McpConfiguration().recordQuery(
+            RecordLayout(root),
+            anEmptyCatalog(),
+            Clock.systemUTC(),
+            FileRawSessionLog.under(root),
+        ).history().size shouldBe
             2
     }
 
@@ -41,7 +47,12 @@ class McpConfigurationTest {
     fun `assembles a dispatcher that answers a tool call over that repository`() {
         aRecordRepository(root).containing(aSubmissionRecord())
         val configuration = McpConfiguration()
-        val query = configuration.recordQuery(RecordLayout(root), anEmptyCatalog(), Clock.systemUTC())
+        val query = configuration.recordQuery(
+            RecordLayout(root),
+            anEmptyCatalog(),
+            Clock.systemUTC(),
+            FileRawSessionLog.under(root),
+        )
 
         val dispatcher = configuration.mcpDispatcher(configuration.mcpToolInvoker(query))
 
@@ -55,7 +66,12 @@ class McpConfigurationTest {
 
     @Test
     fun `answers an empty repository rather than failing to wire at all`() {
-        McpConfiguration().recordQuery(RecordLayout(root), anEmptyCatalog(), Clock.systemUTC()).history().size shouldBe
+        McpConfiguration().recordQuery(
+            RecordLayout(root),
+            anEmptyCatalog(),
+            Clock.systemUTC(),
+            FileRawSessionLog.under(root),
+        ).history().size shouldBe
             0
     }
 }

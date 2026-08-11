@@ -1,8 +1,10 @@
 package com.brokenfinger.tracker.support.fixtures
 
+import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.application.ProblemCatalog
+import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
@@ -36,8 +38,11 @@ class RecordRepositoryFixture(val root: Path) {
     fun store(): JsonlRecordStore = JsonlRecordStore(logFile())
 
     /** Catalogue-free by default: most read tests are about records, not about browsing. */
-    fun query(catalog: ProblemCatalog = anEmptyCatalog(), clock: Clock = Clock.systemUTC()): RecordQuery =
-        RecordQuery(store(), catalog, clock)
+    fun query(
+        catalog: ProblemCatalog = anEmptyCatalog(),
+        clock: Clock = Clock.systemUTC(),
+        raw: RawSessionLog = FileRawSessionLog.under(root),
+    ): RecordQuery = RecordQuery(store(), catalog, clock, raw)
 
     fun logFile(): Path = RecordLayout(root).submissionLog()
 }

@@ -148,10 +148,11 @@ class CaptureConfiguration {
     @Bean
     fun startupReconciliation(
         sessions: RawSessionReconciler,
+        raw: RawSessionLog,
         attachment: CodeAttachment,
         git: GitSync,
         backup: DailyBackup,
-    ) = StartupReconciliation(sessions, attachment, git, backup)
+    ) = StartupReconciliation(sessions, raw, attachment, git, backup)
 
     /**
      * Picks up whatever an earlier run left behind — orphaned raw sessions, records still
