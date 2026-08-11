@@ -180,11 +180,22 @@ object McpToolCatalog {
     // `additionalProperties: false` on every schema: an argument we do not understand is a
     // client bug or a stale tool list, and silently ignoring it would answer a question
     // narrower than the one that was asked.
+    /**
+     * Appended to every description rather than repeated in every answer (#187). A client
+     * receives this once from `tools/list`; the results carry counts.
+     */
+    const val INCOMPLETE_HISTORY: String =
+        " If `incompleteHistory` is present in an answer, gradings were captured that no record " +
+            "represents — every tool here reads that same history, so the answer is drawn over a " +
+            "record with holes and any conclusion from it must say so. They are not recoverable: " +
+            "the missing `start` frame carries the testcase ids and the problem's examples, and " +
+            "pairing them with an attempt would be a guess."
+
     private fun tool(name: String, title: String, description: String, schema: JsonObjectBuilderScope): JsonObject =
         buildJsonObject {
             put("name", name)
             put("title", title)
-            put("description", description)
+            put("description", description + INCOMPLETE_HISTORY)
             putJsonObject("inputSchema") {
                 put("type", "object")
                 schema()

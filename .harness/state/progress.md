@@ -3094,3 +3094,26 @@ logger — a check whose only output is a log line is one nobody asserts on.
 
 Remaining risk: the warning fires at boot, so a machine left running for a week does not see it
 change. A periodic check would, and is not built — the daily backup tick is the obvious place.
+
+## [2026-08-11] #187 — the other five tools read the same holes and said nothing ✅
+
+#169's own ADR named this: `incompleteHistory` appeared on `stats` alone, on the argument that a
+total is where a denominator matters most. True, and not enough — a pass whose frames were
+orphaned is **a problem `review_queue` will never schedule** and **a reading `slow_passes` cannot
+rank**, and neither said so. `submissions`, `get_problem` and `list_problems` are the same.
+
+**The fix removed a special case rather than copying it five times.** `McpToolInvoker` already
+had one wrap point every result passes through — `succeeded(payload)` — so the field moved there.
+
+Two smaller calls came with it:
+
+- **the answer carries counts; the prose moved to the tool descriptions.** A client receives those
+  once from `tools/list`, and a full paragraph on every result is weight paid on every call
+- **still absent when the history is whole**, and the absence test now covers three tools rather
+  than one — a field that is always present is a field nobody notices
+
+Tests: one loop asserting all six tools carry it, one asserting three carry nothing when the
+history is whole.
+
+ADR `2026-08-11-a-hole-in-the-record-is-reported-not-filled` amended; its remaining-risk entry is
+⚠️ (old) with a pointer, not deleted.
