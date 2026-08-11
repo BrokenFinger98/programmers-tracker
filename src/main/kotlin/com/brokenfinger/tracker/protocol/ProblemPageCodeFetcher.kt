@@ -13,11 +13,8 @@ import org.slf4j.LoggerFactory
  * already been recorded, and a thrown error here must not be able to unwind anything that
  * matters (ADR 2026-08-05-capture-pipeline-stages).
  */
-class ProblemPageCodeFetcher(
-    private val cookie: SessionCookie,
-    private val pageBase: String = DEFAULT_BASE,
-    private val pages: PageSource,
-) : CodeFetcher {
+class ProblemPageCodeFetcher(private val pageBase: String = DEFAULT_BASE, private val pages: PageSource) :
+    CodeFetcher {
     override suspend fun fetch(lessonId: Long, language: String): CodeFetch =
         runCatching { outcomeOf(pages.get(urlOf(lessonId, language))) }
             .getOrElse { CodeFetch.Unavailable("page fetch failed: ${it.javaClass.simpleName}") }
@@ -47,11 +44,11 @@ class ProblemPageCodeFetcher(
         return CodeFetch.Unauthenticated
     }
 
-    // The cookie is carried by the PageSource, never interpolated into a URL or a message.
+    // The cookie is carried by the PageSource. This class never holds one, which is why it
+    // cannot interpolate one into a URL or a message — structural rather than remembered
+    // (#180; flagged as a MINOR by the 2026-08-07 security review).
     private fun urlOf(lessonId: Long, language: String): String =
         "$pageBase/learn/courses/30/lessons/$lessonId?language=$language"
-
-    fun cookieHeader(): String = cookie.headerValue()
 
     companion object {
         private val logger = LoggerFactory.getLogger(ProblemPageCodeFetcher::class.java)
