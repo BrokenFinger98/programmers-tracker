@@ -2395,3 +2395,27 @@ required line; twin naming an untracked source → FAIL. Verified on macOS and i
 
 `README.ko.md` ships in the same change so the mechanism is proved on a real pair rather than
 on a promise. Four twins remain: bootstrap, mcp, extension, the ps-records template.
+
+## [2026-08-11] #144 — the remaining four Korean twins ✅
+
+`bootstrap.md`, `mcp.md`, `extension/README.md` and the `ps-records` template now have twins.
+Five pairs, all markers matching, and the guard still isolates a single drifted pair —
+bumping `bootstrap.md` alone names `bootstrap.ko.md` and nothing else.
+
+**Two English pages were wrong and were fixed before being translated**, on the same
+principle as #140:
+
+- `extension/README.md` said it "reads five identifiers" and sends "two fields". It sends
+  **four** — `lessonId` and `language` from the page (#114), `focusedSec` and `sawQuestions`
+  measured by the extension itself (#120). Checked against `sensor.js`.
+- The same page told the reader to paste `.ps/watch-token` "from your record repository".
+  The token lives in **this repository's checkout**; #126 kept it out of the record
+  repository precisely because it is a credential and that repository is pushed. Verified:
+  `~/Desktop/ps-records/.ps/watch-token` does not exist.
+- `bootstrap.md` contradicted itself — its opening said "there is no browser extension in
+  this repository" while its closing section said the extension was verified in a browser on
+  2026-08-10. The opening was four days stale.
+
+`template/ps-records/README.ko.md` is a special case worth noting: the template is copied
+into the **user's own** repository, so the twin travels with it and the user keeps whichever
+they read.
