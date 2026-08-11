@@ -39,6 +39,7 @@ docs/llm-wiki/
 ├── log.md             # ingest/query/lint history (append-only)
 ├── README.md          # how to use
 ├── raw/sessions/      # ingest sources (YYYY-MM-DD-title.md)
+├── raw/inbox/         # transcript snapshots waiting to be ingested — GITIGNORED, see §6
 └── wiki/
     ├── sources/       # one summary stub per source (traceability anchor)
     ├── decisions/     # significant decisions (ADR: context/decision/rationale/options/outcome)
@@ -159,3 +160,25 @@ Real examples:
 
 In this project, a single conversation settles many things. When a piece of work wraps up,
 leave that session in `raw/sessions/` and extract the decisions separately.
+
+---
+
+## 6. `raw/inbox/` — the snapshot the ingest reads from
+
+Claude Code hooks drop a copy of the session transcript into `raw/inbox/` before a compaction
+and at session end, so a conversation that gets compacted away is still on disk when
+`/wiki-ingest` runs later. **A repository adopting this wiki must gitignore that directory.**
+
+Two reasons, and the first is not negotiable:
+
+1. **A transcript is the whole conversation** — every file read, every command and its output.
+   One `git add -A` would publish it. The hook therefore checks `git check-ignore` and refuses
+   to write here when the path is committable, falling back to a global inbox instead. Without
+   the ignore rule the repo-local inbox simply never fills.
+2. It is a **copy**. The authoritative transcript lives under `~/.claude/projects/`, so nothing
+   here is the only copy of anything, and `/wiki-ingest` deletes what it has consumed.
+
+`raw/sessions/` is the source of truth (§1); `raw/inbox/` is a staging area with a shelf life.
+The distinction matters — a snapshot nobody turned into a session page has not been recorded,
+which is exactly how six days of work left no raw layer
+([[decisions/2026-08-10-guards-must-prove-they-ran]] is the same lesson one level down).

@@ -2746,3 +2746,43 @@ assistant's in-turn reasoning is largely absent, and the selection was made six 
 participant. Reconstructing from the wiki pages that cite a source stayed refused; the transcript
 changed the situation, not the principle. A first pass sliced days on the transcript's UTC
 timestamps and would have filed every evening under the following day; KST slicing was required.
+
+## [2026-08-11] #165 — the harness had implemented only the half that stays quiet ✅
+
+#163 back-filled six empty days. Looking at the other two hooks explained *why* nobody noticed.
+
+Three hooks make the "never lose a conversation" harness, and all three were wrong in the same
+direction:
+
+| Hook | Was | Now |
+|---|---|---|
+| `wiki-archive-precompact.sh` (PreCompact) | hardcoded global inbox | repo-local when an ancestor has `docs/llm-wiki/` **and** the path is gitignored; global otherwise |
+| `wiki-archive-session.sh` (SessionEnd) | keyed by **timestamp** — a session ending twice was copied whole twice | keyed by session id; also deletes its own precompact twin, which it supersedes |
+| `wiki-remind.sh` (SessionStart) | **`exit 0` when the repo has its own wiki** | counts that repo's own inbox and names its own `/wiki-ingest` |
+
+The reminder is the one that explains the six days. Its bail-out cites *"2026-08-04
+programmers-tracker 설계 D3"* in its own comment — so the harness knew about the repo-local rule
+and implemented only the half that **suppresses** the reminder. The half that would have nagged
+us locally was never written. Archiver writing to the wrong place, reminder silent by design,
+nothing pointing at the gap. Same shape as everything else this week: the visible half of a
+practice survives, the substance does not.
+
+**Nothing was ever pruned either.** `~/Desktop/llm-wiki/raw/inbox` is **2.8 GB / 90 files** —
+13 snapshots of one project, 9 of another, one day producing eight ~162 MB copies of the same
+session in two hours. Both archivers now retire snapshots older than 14 days
+(`INBOX_RETENTION_DAYS`). The inbox is a *copy*; the original stays under `~/.claude/projects/`.
+
+**Repo side (this PR):** `.gitignore` covers `docs/llm-wiki/raw/inbox/` — the enabling condition,
+because a transcript is the whole conversation and one `git add -A` would publish it. The hook
+checks `git check-ignore` and falls back to global rather than write somewhere committable. Wiki
+schema §6 states the rule for any repo adopting this wiki. `/wiki-ingest` now reads the inbox
+first, slices by KST, and **deletes what it consumed**.
+
+**Verified live, not argued.** Six routing cases (repo root · subdirectory · no wiki · another
+repo that adopted the setup · ignored · not-ignored), the retention sweep on a backdated file,
+and the dedup: six writes across two sessions produce **two** files where the old hooks produced
+six. Then the real 35 MB transcript of this session was snapshotted into this repo's inbox and
+`git status` stayed blind to it. Originals backed up to `~/.claude/hooks/backup-2026-08-11/`.
+
+Not done: the existing 2.8 GB is untouched. Deleting a user's data is not something to bundle
+into a mechanism change.
