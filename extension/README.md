@@ -25,9 +25,14 @@ Then open any Programmers problem. The toolbar badge is the status:
 
 | Badge | Meaning |
 |---|---|
-| green, empty | watching — the server accepted the announcement |
+| green `●` | watching — the server accepted the announcement |
 | orange `!` | no token configured yet |
 | red `×` | the server refused or could not be reached; hover for its own message |
+| no badge | the content script never ran — you are not on a problem page, or the extension is not loaded in this profile |
+
+Every state has a glyph, the good one included. It used to be green with no text, and a badge
+background is painted behind its text — so nothing was drawn and a working sensor looked
+exactly like an unloaded one (#147). "No badge" now means what it says.
 
 ## What it sends
 
