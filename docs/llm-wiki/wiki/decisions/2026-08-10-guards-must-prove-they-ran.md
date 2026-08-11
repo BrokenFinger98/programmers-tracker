@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [ci, guards, tooling, locale, english-only]
 author: BrokenFinger98
 created: 2026-08-10
-updated: 2026-08-11
+updated: 2026-08-12
 sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-05-ci-guard-scoping, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-10-sensor-verified.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md]
 ---
 
@@ -133,3 +133,39 @@ whose heading reads `# 2026-08-08 / 2026-08-10 — …`. Filename-or-heading is 
 guard should be willing to read: structured enough to be mechanical, loose enough to describe
 sessions the way they actually happened. Negative-tested by removing the date from that heading,
 which is what makes the dependency real rather than incidental.
+
+
+---
+
+## Applied again 2026-08-12 (#194): a gate nothing was gated on
+
+The guards had never been wired to a push. `.githooks/pre-push` enforced the wiki gate and
+nothing else, so `scripts/guards.sh` ran only when a human or CI ran it — and on 2026-08-12 a
+human ran it like this:
+
+```bash
+git add -A && ./scripts/guards.sh 2>&1 | tail -2 && git commit ... && git push
+```
+
+`| tail -2` takes **tail's** exit status. The guard printed `guards: FAILED`, the `&&` chain saw
+success, and the push went through. **A gate piped into anything is not a gate.**
+
+The hook now runs the guards first, and **fails closed** — unlike the wiki gate below it, which
+is explicitly fail-open because it exists to prevent unconscious omission and offers a
+`Wiki-Skip:` trailer. These are rules CLAUDE.md states as absolute, one of them being "no
+credentials committed", and there is no trailer for those.
+
+Two details are deliberate:
+
+- **The script's own output is not swallowed.** The guard already says what to fix; a hook that
+  re-words it would drift from it, which is the failure this ADR's original subject was about.
+- **Fail-open on absence only.** A checkout where `scripts/guards.sh` is missing or not executable
+  passes with a note. A hook that blocks every push in a worktree missing one file helps nobody,
+  and "the file is not there" is not a violated rule.
+
+Negative-tested by pushing a branch that deliberately breaks §7: the guard's own message appeared,
+`Nothing was pushed`, and `git ls-remote` confirmed the branch never reached the remote.
+
+The pattern across all four amendments is now hard to miss. A check is worth what it is **wired
+to**: §3 was a search that never ran, §5–§7 were checks with nothing calling them until CI, and
+this one was a gate whose caller could discard its verdict.

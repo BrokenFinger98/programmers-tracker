@@ -3241,3 +3241,33 @@ missed the missing wire, which is the whole shape of this defect.
 Not in scope: exposing them over MCP. The record carries them now; whether `review_queue` should
 weigh a rating change is a claim about the learner
 ([[decisions/2026-08-10-scheduling-is-not-diagnosis]]).
+
+## [2026-08-12] #194 — a failing guard let a push through ✅
+
+Found by doing it. Pushing #193:
+
+```bash
+git add -A && ./scripts/guards.sh 2>&1 | tail -2 && git commit ... && git push
+```
+
+`| tail -2` takes **tail's** exit status. The guard printed `guards: FAILED` — correctly, for a
+`log.md` line with no raw beside it — the `&&` chain saw success, and the push went through.
+
+The deeper hole: `.githooks/pre-push` enforced the **wiki gate only**. `scripts/guards.sh` — seven
+checks including *no credentials committed* and *no records committed* — ran when a human or CI
+ran it, and nothing else. So the guards read like a pre-push gate and were a pre-merge one.
+
+The hook now runs them first and **fails closed**, unlike the wiki gate below it: that one is
+explicitly fail-open with a `Wiki-Skip:` escape because it prevents unconscious omission; these
+are absolutes with no trailer.
+
+Two deliberate details: the script's own output is not re-worded (a hook that paraphrases a guard
+drifts from it), and absence fails **open** — a checkout missing the script passes with a note,
+because "the file is not here" is not a violated rule.
+
+Negative-tested: a branch deliberately breaking §7 printed the guard's message, said `Nothing was
+pushed`, and `git ls-remote` confirmed it never reached the remote.
+
+The pattern across four amendments to `guards-must-prove-they-ran` is now plain: **a check is
+worth what it is wired to.** §3 was a search that never ran; §5–§7 were checks nothing called
+until CI; this was a gate whose caller could discard its verdict.
