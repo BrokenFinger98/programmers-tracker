@@ -78,3 +78,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-11 [[sources/2026-08-11-backfilling-the-raw-layer]] — Where the transcripts had been going, and what a six-day-late ingest can and cannot recover
 - 2026-08-11 [[sources/2026-08-11-capture-defects-found-by-solving]] — Nine capture defects, five of them found only by solving problems in a browser
 - 2026-08-11 [[sources/2026-08-11-expiry-has-no-socket-signal]] — An invalid session is confirmed and pinged normally and receives nothing; the socket has no expiry signal at all
+- 2026-08-12 [[sources/2026-08-12-the-improvement-loop-turns-inward]] — The guard caught its author, and two defects were found protecting each other

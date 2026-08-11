@@ -37,11 +37,26 @@ data class SubmissionRecord(
     val outcome: Outcome,
     /** Meaningful only when [outcome] is [Outcome.JUDGED] (design §3.3). */
     val verdict: Verdict? = null,
-    /** Null for every database grading — the SQL path reports no score (protocol doc §6). */
+    /**
+     * What the judge scored — **including SQL**, whose `result_lesson_challenge` carries
+     * `userScore` and `perfectScore` like the algorithm path's does (protocol doc §6's own
+     * measured example).
+     *
+     * ⚠️ This KDoc used to read "Null for every database grading — the SQL path reports no
+     * score". That was wrong, and nothing caught it because the field was null for *every*
+     * grading until #193: the value was parsed out of the frame and had no field to cross the
+     * protocol boundary in, so the wrong explanation described the right observation. What SQL
+     * genuinely never sends is the per-category `scores` array and the rating (dev rules §2.2).
+     */
     val score: Score? = null,
     val testcases: List<TestcaseResult> = emptyList(),
     val tcSummary: TestcaseSummary,
-    /** Null for every database grading — the SQL path reports no rating (protocol doc §6). */
+    /**
+     * Null for every database grading — the SQL path reports no rating (protocol doc §6).
+     *
+     * The clearest progress signal the judge gives: the one number that says a solve moved
+     * something. Dropped at the same boundary as [score] until #193.
+     */
     val rating: RatingChange? = null,
     /**
      * Where the original frames live inside the record repository, which is what keeps

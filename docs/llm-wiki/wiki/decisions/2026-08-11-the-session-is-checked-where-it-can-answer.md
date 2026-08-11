@@ -5,7 +5,7 @@ tags: [credentials, sensor, protocol, measurement, courtesy]
 author: BrokenFinger98
 created: 2026-08-11
 updated: 2026-08-12
-sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, decisions/2026-08-11-a-watch-answer-is-not-a-promise]
+sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, decisions/2026-08-11-a-watch-answer-is-not-a-promise, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md]
 ---
 
 # The session is checked where it can answer, not where we were looking

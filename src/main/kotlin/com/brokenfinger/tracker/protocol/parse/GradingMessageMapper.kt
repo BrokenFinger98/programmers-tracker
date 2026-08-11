@@ -4,6 +4,8 @@ import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.ProblemKind
+import com.brokenfinger.tracker.domain.RatingChange
+import com.brokenfinger.tracker.domain.Score
 import com.brokenfinger.tracker.domain.TerminalKind
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.protocol.ChallengeableType
@@ -44,7 +46,27 @@ object GradingMessageMapper {
         announcedExamples = announcedExamples(message),
         errorText = errorTextOf(message),
         startsGrading = message is SubmitMessage.Start,
+        score = scoreOf(message),
+        rating = ratingOf(message),
     )
+
+    /**
+     * Only `result_lesson_challenge` reports either, and only for algorithm gradings — the SQL
+     * path sends neither (protocol §6), which is why both stay lenient rather than defaulted.
+     *
+     * `scores`, the per-category array, is deliberately not carried: §14 lists its two-entry
+     * shape for efficiency-test problems as **never triggered**, so mapping it would be guessing
+     * a shape. `userScore`/`perfectScore` is the pair that has been measured.
+     */
+    private fun scoreOf(message: SubmitMessage): Score? = when (message) {
+        is SubmitMessage.ResultLessonChallenge -> Score.ofReceived(message.userScore, message.perfectScore)
+        else -> null
+    }
+
+    private fun ratingOf(message: SubmitMessage): RatingChange? = when (message) {
+        is SubmitMessage.ResultLessonChallenge -> RatingChange.ofReceived(message.oldUserRating, message.newUserRating)
+        else -> null
+    }
 
     fun actionOf(message: SubmitMessage): GradingAction? = GradingAction.ofReceived(rawActionOf(message))
 

@@ -81,6 +81,8 @@ data class SettledCapture(
         captureKey = key,
         outcome = session.outcome,
         verdict = session.verdict,
+        score = session.score,
+        rating = session.rating,
         testcases = session.testcases,
         tcSummary = TestcaseSummary.of(session.testcases, session.testcasesComplete),
         rawPath = rawPath,

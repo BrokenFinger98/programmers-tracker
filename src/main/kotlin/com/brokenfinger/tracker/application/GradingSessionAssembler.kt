@@ -6,6 +6,8 @@ import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.ProblemKind
+import com.brokenfinger.tracker.domain.RatingChange
+import com.brokenfinger.tracker.domain.Score
 import com.brokenfinger.tracker.domain.TerminalKind
 import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
@@ -44,6 +46,8 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
     private var action: GradingAction? = null
     private var terminal: TerminalKind? = null
     private var errorText: String? = null
+    private var score: Score? = null
+    private var rating: RatingChange? = null
 
     /** Records one frame. Frames arriving after termination are absorbed, not rejected. */
     fun accept(facts: GradingFrameFacts) {
@@ -55,6 +59,10 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
         // First announcement wins, like the count: the start frame is the one that carries
         // them, and a re-announcement mid-stream would be a new grading, not this one.
         if (announcedExamples.isEmpty()) announcedExamples = facts.announcedExamples
+        // First reported wins, like the count above: only the terminal frame carries either,
+        // and a second one would belong to a different grading (#193).
+        score = score ?: facts.score
+        rating = rating ?: facts.rating
         facts.testcase?.let { testcases[it.id] = it }
         markTerminal(facts)
     }
@@ -121,6 +129,8 @@ class GradingSessionAssembler private constructor(private val kind: ProblemKind,
         testcasesComplete = isComplete(),
         errorText = errorText,
         examples = announcedExamples,
+        score = score,
+        rating = rating,
         frames = frames.toList(),
     )
 

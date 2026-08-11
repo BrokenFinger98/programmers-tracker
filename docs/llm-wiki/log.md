@@ -85,3 +85,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-11] ingest | announce a stale backup on change, not on state → 1 page updated
 
 ## [2026-08-11] ingest | a check that cannot answer says so → 1 page updated
+
+## [2026-08-12] ingest | two defects protecting each other → 1 page updated

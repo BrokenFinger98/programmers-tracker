@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, testing, fixtures, protocol, failed-attempts]
 created: 2026-08-11
-updated: 2026-08-11
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md]
+updated: 2026-08-12
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md]
 ---
 
 # Tests That Explain the Defect Instead of Catching It
@@ -93,6 +93,40 @@ That is worth more than the pattern itself: **a finding stated inside a fix is n
 The fix closes the issue and the sentence goes with it. Whatever generalises has to be lifted
 out deliberately, into a page that outlives the branch — which is the entire argument for the
 wiki having a concepts layer at all.
+
+## Two defects can protect each other
+
+2026-08-12 produced a variant worth naming separately, because no amount of reading would have
+caught it.
+
+`SubmissionRecord.score` carried this KDoc since it was written:
+
+> Null for every database grading — the SQL path reports no score (protocol doc §6).
+
+It is **wrong**. The measured `sql-pass.jsonl` in this repository carries `userScore` and
+`perfectScore`, and so does §6's own example. What SQL never sends is the per-category `scores`
+array and the rating — which is exactly what dev rules §2.2 says, one document over.
+
+It survived because of a *second* defect: `GradingFrameFacts` had no field for a score, so the
+value never crossed the protocol boundary and **every** record was `score: null` — SQL and
+algorithm alike. The wrong explanation described the right observation. Any test asserting "a SQL
+record has no score" passed, and would have passed forever.
+
+Neither defect is visible from the other's side:
+
+- reading the KDoc against the records confirms it
+- reading the mapper shows a field nothing fills, which looks like an unimplemented feature rather
+  than a contradiction
+- and the fixtures *do* populate a score, so the object mother agrees with the KDoc's implication
+  rather than with production
+
+What broke it was **writing the test from the documentation and letting it fail**. The SQL
+assertion was written from that KDoc, ran against a measured capture, and disagreed. Had it been
+written from the fixture — the more natural thing, since the fixture was open on the next screen —
+it would have passed and taught nothing.
+
+**A test written from the documentation is a test of the documentation.** That is usually a
+weakness. Here it was the only thing in the tree capable of noticing.
 
 ## Why it happens
 
