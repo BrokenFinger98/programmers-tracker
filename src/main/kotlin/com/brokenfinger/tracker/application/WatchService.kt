@@ -40,7 +40,11 @@ class WatchService(
         //
         // Two independent answers, because a healthy socket does not imply a valid session —
         // an unauthenticated subscription is confirmed and pinged and delivers nothing (#179).
-        return WatchStatus(outcome, subscriber.healthOf(channel), sessions.state())
+        val session = sessions.state()
+        // The heartbeat is the only thing that asks, so it is where a check that has gone
+        // quiet gets noticed (#189).
+        sessions.muteChanged()?.let(::reportMute)
+        return WatchStatus(outcome, subscriber.healthOf(channel), session)
     }
 
     private fun outcomeOf(channel: ChannelKey, result: WatchResult): WatchOutcome = when (result) {
@@ -66,7 +70,27 @@ class WatchService(
         )
     }
 
+    /**
+     * Warned rather than surfaced: the badge vocabulary is full
+     * ([[decisions/2026-08-11-a-watch-answer-is-not-a-promise]]), and "we cannot tell whether
+     * you are recording" is a diagnostic for whoever reads logs rather than something to put in
+     * front of someone mid-problem.
+     */
+    private fun reportMute(mute: Boolean) {
+        if (mute) {
+            logger.warn(
+                "The session check has been unable to answer for over {} minutes. Expired-cookie " +
+                    "detection is not working — the endpoint it rests on is one Programmers never " +
+                    "promised us, so this may be a protocol change (protocol doc §15.4).",
+                SessionHealth.MUTE_AFTER.toMinutes(),
+            )
+            return
+        }
+        logger.info("The session check can answer again.")
+    }
+
     private companion object {
+        val logger = org.slf4j.LoggerFactory.getLogger(WatchService::class.java)
         const val SATURATED = "every subscription slot is held by a live grading"
     }
 }

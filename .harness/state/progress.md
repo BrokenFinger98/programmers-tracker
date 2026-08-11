@@ -3117,3 +3117,33 @@ Seven tests on the reporter, all asserting a returned verdict rather than scrapi
 
 ADR: `2026-08-11-a-record-on-one-disk-says-so` amended — its remaining-risk entry is now ⚠️ (old)
 with a pointer to what closed it, rather than deleted.
+
+## [2026-08-11] #189 — a session check that had stopped answering said nothing ✅
+
+#179's own ADR named it: *"Nothing notices a probe that has answered `UNKNOWN` for a week — if
+Programmers removes the endpoint the check degrades silently."*
+
+`UNKNOWN` was a DEBUG line and nothing counted how long it had lasted. If the endpoint moves or
+starts answering 403: every probe reads `UNKNOWN`, the badge stays quiet **by design**, `/watch`
+answers `session: unknown` forever, and the expired-cookie detection built hours earlier is gone
+with nothing saying so.
+
+That is the constitution's stated fear, and the project already had the matching rule one layer
+down — an unrecognised message type is kept as `Unknown(type, raw)` **and warned about**, because
+that is the only way to notice a protocol change. The session check had the `Unknown` half.
+
+`SessionHealth.muteChanged()` reports the transition once in each direction. Three judgements:
+
+- **thirty minutes**, so a laptop losing wifi mid-problem stays silent while a protocol change is
+  noticed the same session
+- **`EXPIRED` ends the run** — it is the check *working*. Treating any non-`ALIVE` as trouble
+  would fire the protocol-change warning at exactly the moment the tool is doing its job
+- **no badge state**: the vocabulary was declared full twice, and "we cannot tell whether you are
+  recording" is a diagnostic for whoever reads logs
+
+Four tests, all on a returned verdict with a fake clock — including the blip that must stay silent
+and the `EXPIRED` that must end the run.
+
+This is the third "announce a persistent state on change" in a day (`BackupReporter`, and the
+staleness tick). Two would not be a pattern; three is close enough to say out loud that if a
+fourth appears it should be one mechanism rather than three.
