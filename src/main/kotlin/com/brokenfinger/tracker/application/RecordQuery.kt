@@ -81,6 +81,17 @@ class RecordQuery(private val store: RecordStore, private val catalog: ProblemCa
      */
     fun reviewQueue(limit: Int?): List<ReviewItem> = ReviewQueue.due(history(), OffsetDateTime.now(clock), limit)
 
+    /**
+     * The newest grading recorded for one lesson, or null when none is.
+     *
+     * Read by `/watch` on every heartbeat so the sensor badge can say whether the grading the
+     * learner just watched succeed actually became a record (#156). That question had no
+     * answer before, and its absence let a passing submit go unrecorded for twenty minutes
+     * while the page announced a correct answer and nothing disagreed.
+     */
+    fun lastRecordOf(lessonId: Long): SubmissionRecord? =
+        history().filter { it.lessonId == lessonId }.maxByOrNull { it.ts }
+
     /** Passes ranked by their slowest testcase (design §6.5). No clock, and no baseline. */
     fun slowPasses(thresholdMs: Double?): SlowPassReport = SlowPasses.of(history(), thresholdMs)
 

@@ -2546,3 +2546,36 @@ both explanations without choosing.
 then `cmd+a`, but focus had left the editor, so the page was selected and the typing never
 reached the code. Two more runs of the same broken code went out (`03:57:39 INCOMPLETE`,
 `03:57:41 COMPILE_ERROR`). Click into the editor before selecting.
+
+## [2026-08-11] #156 — the badge now says whether the grading was recorded ✅
+
+The gap this closes is the one that let #154 hide for twenty minutes: the page announced a
+pass, the server recorded `UNKNOWN`, and nothing on screen disagreed with anything else. The
+badge could say "the sensor is talking to the server" and nothing about whether that produced
+a record.
+
+`POST /watch` already answers on every heartbeat, so it now carries the newest grading
+recorded for that lesson — action, outcome, verdict, testcase counts, when. Absent when there
+is none, which the badge reads as a different thing from "recorded but unclassified".
+
+| badge | meaning |
+|---|---|
+| `●` green | watching; nothing recorded for this problem yet |
+| `✓` green | the last grading **was recorded**, whatever its verdict |
+| `?` purple | recorded, and the server could not classify it |
+
+**A recorded wrong answer is `✓`.** The badge answers "is the tool working", not "did you
+pass". Recording a failure is the whole point of this tool, and a red mark there would teach
+the user to read their own wrong answers as a broken sensor.
+
+`?` is the state that did not exist. It is what a lost grading looks like, and it would have
+shown within thirty seconds on 2026-08-11.
+
+**No spinner, deliberately.** BaekjoonHub polls the results DOM for one because it must decide
+*when to upload*; we record from the broadcast stream and need no such trigger. Thirty seconds
+of heartbeat latency is fine for a verification signal and useless for a progress indicator —
+which is another way of saying the heartbeat is the right channel for this and the wrong one
+for that. Doing better would mean watching the page, which this extension does not do.
+
+The guard caught three of my own comments quoting the Korean UI string in prose. Rewritten in
+English rather than widening the guard.
