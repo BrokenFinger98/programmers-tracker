@@ -3170,3 +3170,34 @@ and the `EXPIRED` that must end the run.
 This is the third "announce a persistent state on change" in a day (`BackupReporter`, and the
 staleness tick). Two would not be a pattern; three is close enough to say out loud that if a
 fourth appears it should be one mechanism rather than three.
+
+## [2026-08-12] #191 — a 200 is not proof of a session, and I claimed it was ✅
+
+Found by reading the project's own §14 (Unverified Items) rather than by a test failing.
+
+`SessionActivityProbe` mapped **200 → ALIVE** on the stated reasoning that "the status is the
+whole signal; the body is deliberately not parsed". That holds only if a 200 means what it says,
+and §14 records that for this API family it does not: throttling comes back as **200 with an HTML
+error page**, not 429. So a rate limit would read as *"your session is fine"*.
+
+Worse, the ADR I wrote hours earlier claimed the chosen endpoint
+
+> returns JSON in both states, so it also **avoids** the 200-with-HTML throttling shape
+
+**I measured 200-with-JSON and 401-with-JSON. I never triggered a throttle on it.** "Avoids" was
+an inference wearing the clothes of a measurement — the exact error
+[[concepts/assumption-vs-measurement]] is about, committed inside the ADR that corrects an earlier
+instance of it. That is the fourth time today an observation was real and the *quantifier* was
+invented.
+
+**Deliberately not measured.** Triggering a rate limit means hammering Programmers to prove a
+property we can simply stop claiming (development-rules §9.3). The body is shape-checked instead —
+correct whether or not this endpoint throttles that way, and it costs one `startsWith("{")`.
+
+No field is read: once the body is well-formed JSON, the status does answer the question.
+
+Four tests, including the two that would have passed a happy-path suite — a 200 carrying an HTML
+error page, and the 401-with-measured-JSON that the shape check must **not** swallow.
+
+Also cleaned: §14's `reject_subscription` entry still trailed "what would serve is unmeasured"
+after §15.4 answered it, and now names what was chosen.

@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [credentials, sensor, protocol, measurement, courtesy]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-08-11
+updated: 2026-08-12
 sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, decisions/2026-08-11-a-watch-answer-is-not-a-promise]
 ---
 
@@ -47,8 +47,9 @@ Three rules make it honest:
 - **`UNKNOWN` is never folded into `EXPIRED`.** A 5xx, a throttle or a dead network says nothing
   about the credential. Telling someone to replace a working cookie is how the one message that
   matters gets ignored.
-- **The status is the whole signal; the body is not parsed.** Reading it would add a second way
-  to be wrong about a question the status already answers.
+- **The body is shape-checked, not parsed.** A 200 would be the whole signal if it meant what it
+  says, and §14 records that this API family throttles as 200-with-HTML. No field is read: once
+  the body is well-formed JSON the status does answer the question (amended by #191).
 - **`UNKNOWN` is not cached.** Every other answer is held for five minutes, because the extension
   posts `/watch` every 30 seconds *per open tab* and probing on each would put a request to
   Programmers every few seconds — well past development-rules §9.3's "the same level as a

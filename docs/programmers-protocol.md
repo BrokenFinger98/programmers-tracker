@@ -483,7 +483,10 @@ Everything needed for local scaffolding is available here.
   returned an HTML `서비스 접속 오류` page for 2 of 7 sequential requests at 2-second
   spacing, and none at ~5 seconds with retry. So there is throttling, its threshold is
   unknown, and **it fails as a 200-with-HTML rather than a 429** — a client that does not
-  validate the body will store an error page as data
+  validate the body will store an error page as data. **Whether the same is true of
+  `/api/v1/main/open-challenge-activities` is unmeasured**: the session probe reads it every few
+  minutes and shape-checks the body rather than trusting the status, because triggering a rate
+  limit to find out would be deliberately hammering Programmers (#191, development-rules §9.3)
 - Oracle submissions
 - Memory-limit-exceeded (`메모리 초과`) message — never triggered
 - ~~`reject_subscription` as the signal for an expired session~~ — **answered 2026-08-11, see

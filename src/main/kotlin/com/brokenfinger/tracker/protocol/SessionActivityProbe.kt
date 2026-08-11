@@ -15,15 +15,22 @@ import org.slf4j.LoggerFactory
  * 401 not**, in JSON both times, so it also avoids the 200-with-HTML throttling shape §14
  * records for the other API.
  *
- * It is deliberately not parsed. The status is the whole signal; reading the body would add a
- * second way to be wrong about a question the status already answers.
+ * The body is **shape-checked, not parsed**. The status would be the whole signal if a 200 meant
+ * what it says, and protocol §14 records that for this API family it does not: throttling comes
+ * back as **200 with an HTML error page** rather than 429, so a throttle would otherwise read as
+ * "your session is fine" (#191). Whether *this* endpoint throttles that way is unmeasured — the
+ * check is cheap and correct either way, and triggering a rate limit to find out would be
+ * deliberately hammering Programmers to prove a property we can simply stop claiming
+ * (development-rules §9.3).
+ *
+ * No field is read. Once the body is well-formed JSON the status does answer the question.
  */
 class SessionActivityProbe(
     private val pages: PageSource,
     private val base: String = DEFAULT_BASE,
     private val year: () -> Int = { java.time.Year.now().value },
 ) : SessionProbe {
-    override suspend fun probe(): SessionState = runCatching { stateOf(pages.get(url()).status) }
+    override suspend fun probe(): SessionState = runCatching { pages.get(url()).let { stateOf(it.status, it.body) } }
         .getOrElse {
             // A probe that could not run says nothing about the cookie. Reporting EXPIRED
             // here would tell the user to replace a credential that is probably fine.
@@ -31,11 +38,18 @@ class SessionActivityProbe(
             SessionState.UNKNOWN
         }
 
-    private fun stateOf(status: Int): SessionState = when (status) {
-        OK -> SessionState.ALIVE
-        UNAUTHORIZED -> expired()
+    private fun stateOf(status: Int, body: String): SessionState = when {
+        // An HTML error page served as 200 is not a session, and it is not an expired one
+        // either — we simply did not get an answer.
+        !looksLikeJson(body) -> SessionState.UNKNOWN
+        status == OK -> SessionState.ALIVE
+        status == UNAUTHORIZED -> expired()
         else -> SessionState.UNKNOWN
     }
+
+    // A shape, not a parse: both measured answers are objects (protocol §15.4), and anything
+    // that does not start like one is the error page rather than the API.
+    private fun looksLikeJson(body: String): Boolean = body.trimStart().startsWith("{")
 
     private fun expired(): SessionState {
         logger.warn(
