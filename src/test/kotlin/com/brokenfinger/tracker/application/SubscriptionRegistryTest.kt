@@ -152,7 +152,7 @@ class SubscriptionRegistryTest {
     // One channel per problem ------------------------------------------------------------------
 
     /**
-     * A language switch **replaces** the channel it switches from (#160).
+     * A language switch **replaces** the channel it switches from (#158).
      *
      * Measured 2026-08-11 on lesson 120805: the problem was opened in Java and then in
      * Python3, both subscriptions stayed live, and one Python run produced **two** records —

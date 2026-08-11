@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-08-05
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md]
+updated: 2026-08-11
+sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -221,6 +221,21 @@ Third time the three-OS matrix has caught something invisible on the developer's
 after git rewriting a fixture's line endings and a guard reading stale results. All three
 were environment differences rather than logic errors, which is exactly the class a single
 machine cannot show you.
+
+## When the assumption reaches the assertion
+
+Everything above is about claims that lose their label while moving between documents and
+conversations. 2026-08-11 found the terminal stage of that journey: three assumptions had
+been **written into the test suite** — a KDoc citing a protocol section that does not contain
+its claim, a fixture README stating our own truncation bug as a fact about Programmers, and
+an assertion spelling out the rule that discarded a submission.
+
+At that point the assumption is not merely unlabelled. It is *passing*, and a green suite is
+the strongest label a claim can wear here. Five of that day's nine capture defects survived
+the suite for exactly this reason, and were found only by driving the real system — a
+compounding of the classpath lesson above, with the tests not merely blind to the defect but
+agreeing with it. Full pattern and its counter-practice:
+[[concepts/tests-that-explain-defects]].
 
 ## The counter-practice
 

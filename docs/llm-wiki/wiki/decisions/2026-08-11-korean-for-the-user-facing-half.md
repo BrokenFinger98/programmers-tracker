@@ -5,7 +5,7 @@ tags: [language, documentation, open-source, guards, drift]
 author: BrokenFinger98
 created: 2026-08-11
 updated: 2026-08-11
-sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-10-guards-must-prove-they-ran, concepts/assumption-vs-measurement]
+sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-10-guards-must-prove-they-ran, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
 # Korean for the user-facing half, and a guard for the reason it was refused

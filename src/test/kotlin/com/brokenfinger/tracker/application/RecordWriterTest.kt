@@ -93,10 +93,10 @@ class RecordWriterTest {
 
     /**
      * Reconciliation re-reading bytes already on disk is the case the index exists for, and it
-     * is the only one that asks it now (#161). A live capture no longer does: the socket does
+     * is the only one that asks it now (#159). A live capture no longer does: the socket does
      * not redeliver — a reconnect loses what was broadcast meanwhile rather than repeating it —
      * and the one path that did deliver one grading twice was two channels on a problem, closed
-     * at the subscription in #160.
+     * at the subscription in #158.
      */
     @Test
     fun `a replay of a grading already written adds no second record`() = runBlocking<Unit> {
@@ -121,7 +121,7 @@ class RecordWriterTest {
 
     /**
      * The index is rebuilt from the log, so a replay after a restart is still recognised —
-     * which is the whole reason the log is the index (#161 keeps this; it only stops the live
+     * which is the whole reason the log is the index (#159 keeps this; it only stops the live
      * path from asking).
      */
     @Test
@@ -241,7 +241,7 @@ class RecordWriterTest {
     // Live is not replay ------------------------------------------------------------------------
 
     /**
-     * Two submissions with byte-identical frames are two gradings when they arrive live (#161).
+     * Two submissions with byte-identical frames are two gradings when they arrive live (#159).
      *
      * SQL is where this bites. Its frames carry no `run_time` and no `memory_size`, so the same
      * query submitted twice produces the same bytes down to the last character — measured

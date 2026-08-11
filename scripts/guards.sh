@@ -285,6 +285,57 @@ else
   pass "every Korean twin matches the English page it names"
 fi
 
+# ---------------------------------------------------------------------------
+# 6. Every wiki `sources:` entry must resolve to a tracked file.
+#    The wiki schema (docs/llm-wiki/CLAUDE.md §1) calls raw/ the source of truth
+#    and wiki/sources/ the traceability anchor, which only holds if the citation
+#    points at something. Two ADRs cited raw sessions that were never written —
+#    `2026-08-07-adversarial-review.md` and `2026-08-10-sensor-verified.md` — and
+#    a citation makes a page look traceable whether or not the file exists, so
+#    nothing inside the wiki could show the drift.
+#
+#    Two entry forms, both in use: a path ending in `.md` is relative to
+#    docs/llm-wiki/, and a bare `decisions/x` is a wiki page without its suffix.
+#
+#    Scope is deliberately just `sources:`. Checking `[[...]]` targets too would
+#    have to special-case the schema document, which uses `[[concepts/foo]]` as
+#    an example — a guard with an exception list is the kind that gets muted.
+# ---------------------------------------------------------------------------
+resolve_source() {
+  case "$1" in
+    *.md) printf 'docs/llm-wiki/%s' "$1" ;;
+    *) printf 'docs/llm-wiki/wiki/%s.md' "$1" ;;
+  esac
+}
+
+# Read from the index, not the worktree: an uncommitted raw session would
+# otherwise satisfy a citation that lands in the same commit without it.
+dangling_sources=""
+cited=0
+for page in $(git ls-files 'docs/llm-wiki/wiki/*.md'); do
+  entries=$(git show ":$page" | sed -n '1,12{s/^sources: *\[\(.*\)\] *$/\1/p;}' | tr ',' '\n')
+  for entry in $entries; do
+    cited=$((cited + 1))
+    target=$(resolve_source "$entry")
+    git ls-files --error-unmatch "$target" >/dev/null 2>&1 && continue
+    dangling_sources="$dangling_sources"$'\n'"  ${page#docs/llm-wiki/}  cites $entry ($target is not tracked)"
+  done
+done
+
+# A `sources:` line that stopped parsing would report a clean wiki forever, which
+# is the failure this guard exists to catch, one level up (#123, ADR
+# 2026-08-10-guards-must-prove-they-ran). So prove the extractor found citations
+# and that resolution actually rejects something before trusting its silence.
+if [ "$cited" -eq 0 ]; then
+  report "the wiki source check parsed no citations at all — it would pass any wiki"
+elif git ls-files --error-unmatch "$(resolve_source 'raw/sessions/never-written.md')" >/dev/null 2>&1; then
+  report "the wiki source check resolves a path that does not exist — it would pass any citation"
+elif [ -n "$dangling_sources" ]; then
+  report "a wiki page cites a source that is not in the repository:$dangling_sources"$'\n'"  Write the raw session, or drop the citation. Do not reconstruct a source from the page citing it."
+else
+  pass "all $cited wiki source citations resolve"
+fi
+
 printf '\n'
 if [ "$fail" -ne 0 ]; then
   echo "guards: FAILED"

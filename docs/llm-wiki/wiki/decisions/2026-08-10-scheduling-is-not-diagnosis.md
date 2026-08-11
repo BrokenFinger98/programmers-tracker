@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [analysis, mcp, review-queue, boundaries, spaced-repetition]
 author: BrokenFinger98
 created: 2026-08-10
-updated: 2026-08-10
-sources: [decisions/2026-08-06-mcp-read-slice, decisions/2026-08-10-sensor-observations, concepts/assumption-vs-measurement]
+updated: 2026-08-11
+sources: [decisions/2026-08-06-mcp-read-slice, decisions/2026-08-10-sensor-observations, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
 # The server may schedule; it may not diagnose

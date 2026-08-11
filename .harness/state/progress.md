@@ -2580,7 +2580,7 @@ for that. Doing better would mean watching the page, which this extension does n
 The guard caught three of my own comments quoting the Korean UI string in prose. Rewritten in
 English rather than widening the guard.
 
-## [2026-08-11] #158 — two gradings could share one raw session file, and one destroyed the other ✅
+## [2026-08-11] #157 — two gradings could share one raw session file, and one destroyed the other ✅
 
 Measured while testing Python on lesson 120805. Two channels for one problem opened a grading
 **in the same millisecond**, and the session name was `<stamp>-<lesson>.jsonl` and nothing
@@ -2603,7 +2603,7 @@ The file is deliberately not created at `start`. Reserving by touching an empty 
 leave a frameless session on the work list whenever a process died between the two, and a
 capture that fails every reconciliation forever is worse than what this fixes.
 
-## [2026-08-11] #160 — one grading became one record per open channel ✅
+## [2026-08-11] #158 — one grading became one record per open channel ✅
 
 Measured on lesson 120805. The problem was opened in Java and then in Python3, both
 subscriptions stayed live, and a **single Python run produced two records** — one labelled
@@ -2624,10 +2624,10 @@ The owner's point stands and is preserved: solving one problem in Kotlin and the
 practise both. What this forbids is one grading becoming two, which is a different thing.
 
 Not established: *why* the broadcast reached both channels. The Java channel's raw session was
-the one #158's collision destroyed, so its identifier was never seen. The fix does not depend
+the one #157's collision destroyed, so its identifier was never seen. The fix does not depend
 on knowing — with one channel there is nothing to duplicate.
 
-## [2026-08-11] #161 — the capture key was answering a question it cannot answer live ✅
+## [2026-08-11] #159 — the capture key was answering a question it cannot answer live ✅
 
 Measured on lesson 151136: the same SQL query submitted twice, and the second was dropped as
 a replay. SQL frames carry no `run_time` and no `memory_size`, so the same query is
@@ -2644,14 +2644,14 @@ and asks the index. Both still populate it.
 Two things make dropping the live check safe, and both were established this week rather than
 assumed. The socket does not redeliver — a reconnect **loses** what was broadcast meanwhile,
 which the log has always said. And the one path that did deliver one grading twice was two
-channels on a problem, closed at the subscription in #160.
+channels on a problem, closed at the subscription in #158.
 
 Four tests had been pinning live dedup. Three were modelling a replay and now say so. The
 fourth asserted that feeding one fixture twice yields one record — the exact reading that
 discarded the second SQL submission — and now asserts two, because that is what two live
 gradings are.
 
-## [2026-08-11] #162 — a Python compile failure was filed as a runtime error ✅
+## [2026-08-11] #160 — a Python compile failure was filed as a runtime error ✅
 
 Measured on lesson 120805, a `def` missing its colon:
 
@@ -2678,3 +2678,35 @@ in the comment is the difference between a gap and an oversight.
 The second test is the one that matters more — a Python traceback with no compile diagnostic
 (`ZeroDivisionError`) must stay RUNTIME_ERROR, so the new pattern cannot swallow the case it
 sits next to.
+
+## [2026-08-11] #161 — the wiki's raw layer had been empty for six days ✅
+
+`raw/sessions/` was last written **2026-08-05**. `log.md` recorded **33 ingests**.
+
+The practice had drifted from running `/wiki-ingest` to writing an ADR inline and appending a
+log line. The log entry is the visible half of the ritual, so it kept being copied; saving the
+raw has no immediate consumer, so it stopped. Six days of the heaviest work in the project left
+nothing in the layer the schema calls the source of truth (§1) — and this session did the same
+thing six more times before being asked whether the skill had run.
+
+Two ADRs went further and cited raw sessions **that were never written**
+(`2026-08-07-adversarial-review.md`, `2026-08-10-sensor-verified.md`). Both citations were
+removed rather than back-filled: a raw session reconstructed from the wiki page that supposedly
+sourced it is not a source, it is the fixture-README failure again.
+
+Ingested: the 2026-08-10~11 session raw, `concepts/tests-that-explain-defects` (the pattern
+found three times that afternoon — tests and fixtures encoding defects as facts), and a source
+stub. Nine pages picked up the raw as a source; `2026-08-11-a-grading-is-its-whole-session`
+records that its first accepted cost came due within hours as #159.
+
+`scripts/guards.sh` §6 now fails the build on a `sources:` entry that does not resolve —
+negative-tested on both entry forms, 77 citations currently resolving. It is scoped to
+`sources:` on purpose: checking `[[...]]` targets would need an exception for the schema
+document's own examples, and a guard with an exception list is the kind that gets muted.
+
+**The same drift in this file.** The last five entries above named numbers that were guessed
+rather than allocated: **no issue was ever opened for #156 through #160**, which the flow
+requires (CLAUDE.md, "no work without an issue"). Each heading has been corrected to the PR
+that actually landed the change — the one number that exists — so `#158` now means PR 157
+rather than an issue nobody created, and `#162`, which pointed at nothing at all, is gone.
+Prediction had been substituting for allocation, which is how `raw/sessions/` emptied too.
