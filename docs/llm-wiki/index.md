@@ -62,8 +62,13 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[syntheses/protocol-reverse-engineering]] — The full protocol-discovery story
 
 ## Sources
+- 2026-08-04 [[sources/2026-08-04-oss-workflow]]
 - 2026-08-04 [[sources/2026-08-04-protocol-reverse-engineering-and-design]]
 - 2026-08-04 [[sources/2026-08-04-record-keeping-design]]
-- 2026-08-04 [[sources/2026-08-04-oss-workflow]]
+- 2026-08-05 [[sources/2026-08-05-capture-pipeline-built-end-to-end]] — The capture half built in one afternoon, and four findings that outlived it
 - 2026-08-05 [[sources/2026-08-05-design-review-and-stack-upgrade]]
+- 2026-08-06 [[sources/2026-08-06-catalog-runners-and-the-record-repository]] — Our labels over their identifiers, and the day Programmers turned out to have two problem shapes
+- 2026-08-07 [[sources/2026-08-07-adversarial-review]] — Seven runners, then four critics: four CRITICAL, and code injection into runners the user executes
+- 2026-08-10 [[sources/2026-08-10-sensor-verified]] — The sensor watched to work, the state moved where the design said, and a guard that had never run
+- 2026-08-11 [[sources/2026-08-11-backfilling-the-raw-layer]] — Where the transcripts had been going, and what a six-day-late ingest can and cannot recover
 - 2026-08-11 [[sources/2026-08-11-capture-defects-found-by-solving]] — Nine capture defects, five of them found only by solving problems in a browser

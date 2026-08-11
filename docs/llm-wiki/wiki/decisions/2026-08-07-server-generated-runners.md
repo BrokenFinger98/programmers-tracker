@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [runner, debugging, codegen, languages, yagni]
 created: 2026-08-07
-updated: 2026-08-07
-sources: [decisions/2026-08-06-shipped-problem-catalog]
+updated: 2026-08-11
+sources: [decisions/2026-08-06-shipped-problem-catalog, raw/sessions/2026-08-06-catalog-runners-and-the-record-repository.md, raw/sessions/2026-08-07-adversarial-review.md]
 ---
 
 # The server generates per-problem runners, and refuses before it guesses

@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [git, backup, scheduling, storage, single-writer, startup]
 created: 2026-08-06
-updated: 2026-08-06
-sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md]
+updated: 2026-08-11
+sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-06-catalog-runners-and-the-record-repository.md]
 ---
 
 # The commit rides with the writer, and the daily backup asks rather than fires

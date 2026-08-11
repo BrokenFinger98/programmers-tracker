@@ -5,7 +5,7 @@ tags: [data-model, records, recovery]
 author: BrokenFinger98
 created: 2026-08-08
 updated: 2026-08-11
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-10-sensor-verified.md]
 ---
 
 # Where a run's original frames live, and what `rawPath` says about it

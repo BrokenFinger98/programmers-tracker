@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
 updated: 2026-08-11
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"

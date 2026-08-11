@@ -5,7 +5,7 @@ tags: [data-model, sensor, records, analysis]
 author: BrokenFinger98
 created: 2026-08-10
 updated: 2026-08-11
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-10-sensor-verified.md]
 ---
 
 # What the sensor records beyond "this problem is open"

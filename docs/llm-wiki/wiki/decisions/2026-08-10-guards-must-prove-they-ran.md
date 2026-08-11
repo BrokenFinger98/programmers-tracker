@@ -5,7 +5,7 @@ tags: [ci, guards, tooling, locale, english-only]
 author: BrokenFinger98
 created: 2026-08-10
 updated: 2026-08-11
-sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-05-ci-guard-scoping, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-05-ci-guard-scoping, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-10-sensor-verified.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md]
 ---
 
 # A guard that cannot run must fail, not pass

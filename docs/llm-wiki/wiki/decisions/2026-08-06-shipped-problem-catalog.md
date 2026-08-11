@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [catalog, tags, third-party-data, distribution, yagni]
 created: 2026-08-06
-updated: 2026-08-06
-sources: [decisions/2026-08-06-mcp-read-slice]
+updated: 2026-08-11
+sources: [decisions/2026-08-06-mcp-read-slice, raw/sessions/2026-08-06-catalog-runners-and-the-record-repository.md]
 ---
 
 # The problem catalog is built once, by us, and ships in the jar
