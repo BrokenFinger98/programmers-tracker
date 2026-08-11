@@ -17,6 +17,8 @@ import org.slf4j.LoggerFactory
 class StartupReconciliation(
     private val sessions: RawSessionReconciler,
     private val raw: RawSessionLog,
+    private val backupLog: BackupLog,
+    private val clock: java.time.Clock,
     private val attachment: CodeAttachment,
     private val git: GitSync,
     private val backup: DailyBackup,
@@ -32,6 +34,51 @@ class StartupReconciliation(
         // leaves exactly this, and "commit whatever is uncommitted" is how it heals.
         git.reconcile()
         backup.runIfDue()
+        // After the attempt, not before: a boot that successfully pushes should not also warn
+        // that it had not pushed.
+        reportBackupAge()
+    }
+
+    /**
+     * Says how long the records have been sitting on one disk, at every boot rather than on the
+     * day a push failed (#183).
+     *
+     * `BackupLog` has always known this and only the "is a backup due" check read it, so a push
+     * failing every day for a week produced one warning on the first day. The tool's whole claim
+     * is that failures stop being lost; a laptop that dies loses the replacement too.
+     */
+    /**
+     * Separated from the logging so a test can assert the verdict rather than scrape a logger.
+     * A check whose only output is a log line is one that gets asserted on by nobody.
+     */
+    internal fun backupAge(): BackupAge = BackupAge.of(backupLog.lastSuccessAt(), git.hasRemote(), clock.instant())
+
+    private fun reportBackupAge() {
+        when (val age = backupAge()) {
+            is BackupAge.Current -> Unit
+            // Stated, not warned. Running without a remote is supported (README) and an alarm
+            // for a deliberate choice is how a real alarm gets ignored.
+            is BackupAge.NoRemote ->
+                logger.info(
+                    "The record repository has no remote, so records stay on this machine. " +
+                        "That is a supported way to run the tool — see docs/bootstrap.md to push them somewhere.",
+                )
+            is BackupAge.Stale -> warnStale(age)
+        }
+    }
+
+    private fun warnStale(age: BackupAge.Stale) {
+        if (!age.everPushed) {
+            logger.warn(
+                "The record repository has a remote but has never been pushed to — every record " +
+                    "this tool has written exists only on this machine. Check the push credentials.",
+            )
+            return
+        }
+        logger.warn(
+            "The records last left this machine {} days ago. Everything since then exists only here.",
+            age.days,
+        )
     }
 
     /**

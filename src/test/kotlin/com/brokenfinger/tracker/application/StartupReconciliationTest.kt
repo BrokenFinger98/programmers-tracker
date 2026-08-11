@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -91,13 +92,62 @@ class StartupReconciliationTest {
         repo.subjects(at = remote).size shouldBe 2
     }
 
+    // How long the records have been on one disk (#183) -------------------------------------
+
+    /**
+     * The wiring, asserted on a verdict rather than by scraping a logger — a check whose only
+     * output is a log line is one nobody asserts on.
+     *
+     * A repository nobody gave a remote is the default state of a fresh checkout, and it is a
+     * supported way to run the tool. It must never read as a fault.
+     */
+    @Test
+    fun `a repository with no remote is not a fault`() {
+        reconciliation().backupAge() shouldBe BackupAge.NoRemote
+    }
+
+    @Test
+    fun `a recent push says nothing`() {
+        repo.withRemote()
+        backupLog().succeededAt(clock().instant())
+
+        reconciliation().backupAge() shouldBe BackupAge.Current
+    }
+
+    @Test
+    fun `records that have not left for days say how many`() {
+        repo.withRemote()
+        backupLog().succeededAt(clock().instant().minus(Duration.ofDays(9)))
+
+        reconciliation().backupAge() shouldBe BackupAge.Stale(days = 9, everPushed = true)
+    }
+
+    /**
+     * A remote that has never been pushed to is the shape of a deploy key that never worked,
+     * and it asks the user for something different from a stale one.
+     */
+    @Test
+    fun `a remote that was never pushed to is reported as never`() {
+        repo.withRemote()
+
+        reconciliation().backupAge() shouldBe BackupAge.Stale(days = 0, everPushed = false)
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     private fun startup() = runBlocking { reconciliation().run() }
 
     private fun reconciliation(): StartupReconciliation {
         val git = CommandLineGitSync(repo.root)
-        return StartupReconciliation(rawSessions(), rawLog(), attachment(), git, DailyBackup(git, backupLog(), clock()))
+        return StartupReconciliation(
+            rawSessions(),
+            rawLog(),
+            backupLog(),
+            clock(),
+            attachment(),
+            git,
+            DailyBackup(git, backupLog(), clock()),
+        )
     }
 
     /**

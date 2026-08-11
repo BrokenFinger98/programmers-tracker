@@ -3034,3 +3034,38 @@ Also filed, not fixed here: #180 — `ProblemPageCodeFetcher` still holds a cook
 hands it out through a dead accessor, flagged as a MINOR on 2026-08-07. Noticed again while writing
 this probe, which deliberately takes no cookie for exactly that reason. Kept out of this PR because
 removing it touches four test call sites and two production ones.
+
+## [2026-08-11] #183 — nothing said how long the records had been on one disk ✅
+
+A push can fail forever and the only surface was one WARN on the day it happened.
+`BackupLog.lastSuccessAt()` knew when the records last left the machine and **nothing read it
+except the "is a backup due" check** — not startup, not `/watch`, not MCP.
+
+So an expired deploy key produces: records committed locally, pushes failing, a warning that
+scrolled past days ago, and every record this tool ever wrote living on one disk. The stated
+motivation is that 406 failures were already lost; a laptop that dies loses the replacement too.
+
+`BackupAge.of(lastSuccessAt, hasRemote, now)` — a pure calculator — and startup reports it at
+**every** boot. The distinction that keeps it from becoming noise: **no remote is not a fault.**
+The README says pushing needs credentials the tool cannot invent and that without them it still
+captures and commits; that is a supported way to run it, stated once at INFO. A remote that
+exists and is not being pushed to is a fault, and one that has *never* been pushed to reads
+differently from one that has gone stale, because they ask the user for different things.
+
+Tolerance is two days, chosen so an ordinary weekend of not opening the machine does not raise it.
+
+`backupAge()` is separated from the logging so the tests assert a verdict rather than scrape a
+logger — a check whose only output is a log line is one nobody asserts on.
+
+**Live findings while verifying**, both worth keeping:
+
+- The record repository is **`ahead 2`** right now: two commits committed locally and not pushed,
+  invisible to the user until I ran `git status` by hand. Exactly the situation this closes.
+- I nearly reported the daily backup as broken. It had not run this boot, and the backup marker
+  was a day old. It is **correct**: the backup is due at 23:00 Asia/Seoul, the container was at
+  22:45 KST, so `mostRecentDue()` was yesterday's 23:00 and the last success was 14 seconds after
+  it. Not due. Checked the arithmetic before writing it up — which is the day's lesson applied.
+- #169's orphan report is live in production: `2 lesson(s) have frames that belong to no grading`.
+
+Remaining risk: the warning fires at boot, so a machine left running for a week does not see it
+change. A periodic check would, and is not built — the daily backup tick is the obvious place.

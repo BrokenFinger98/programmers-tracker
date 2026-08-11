@@ -43,4 +43,14 @@ interface GitSync {
      * (MCP `push()`, design §4.6).
      */
     fun push(): Boolean
+
+    /**
+     * Whether this repository has a remote at all.
+     *
+     * Asked so that "records have never left this machine" can be reported as the two different
+     * things it is (#183): a repository nobody gave a remote is a **supported way to run the
+     * tool** — the README says push needs credentials the tool cannot invent — while a
+     * repository that has one and is not pushing is a fault.
+     */
+    fun hasRemote(): Boolean
 }

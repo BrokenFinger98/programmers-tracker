@@ -16,4 +16,6 @@ private object QuietGitSync : GitSync {
     override fun reconcile(): Boolean = true
 
     override fun push(): Boolean = true
+
+    override fun hasRemote(): Boolean = true
 }
