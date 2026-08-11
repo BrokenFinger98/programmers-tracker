@@ -149,6 +149,48 @@ class SubscriptionRegistryTest {
         return registry
     }
 
+    // One channel per problem ------------------------------------------------------------------
+
+    /**
+     * A language switch **replaces** the channel it switches from (#160).
+     *
+     * Measured 2026-08-11 on lesson 120805: the problem was opened in Java and then in
+     * Python3, both subscriptions stayed live, and one Python run produced **two** records —
+     * one of them labelled `java` and carrying Python's traceback. A record for code that was
+     * never run is the worst thing this tool can produce.
+     *
+     * A person solves in one language at a time. Solving the same problem in Kotlin and then
+     * in Java is two gradings and stays two records; what must never happen is one grading
+     * becoming two.
+     */
+    @Test
+    fun `a second language on one problem supersedes the first`() {
+        val registry = SubscriptionRegistry()
+        val java = anAlgorithmChannel(lessonId = 120805, challengeableId = 14645, language = "java")
+        val python = java.copy(language = "python3")
+
+        registry.watch(java, at(1))
+        val result = registry.watch(python, at(2))
+
+        result shouldBe WatchResult.Started(evicted = java)
+        registry.snapshot().map { it.channel } shouldContainExactly listOf(python)
+    }
+
+    /** Another problem is untouched — the rule is per problem, not global. */
+    @Test
+    fun `a language switch leaves other problems watched`() {
+        val registry = SubscriptionRegistry()
+        val other = channel(1)
+        val java = anAlgorithmChannel(lessonId = 120805, challengeableId = 14645, language = "java")
+
+        registry.watch(other, at(1))
+        registry.watch(java, at(2))
+        registry.watch(java.copy(language = "kotlin"), at(3))
+
+        registry.snapshot().map { it.channel.lessonId.value }.toSet() shouldBe
+            setOf(other.lessonId.value, 120805L)
+    }
+
     private fun channel(n: Int): ChannelKey = anAlgorithmChannel(lessonId = 120800L + n, challengeableId = 14600L + n)
 
     private fun at(second: Long): Instant = Instant.EPOCH.plusSeconds(second)

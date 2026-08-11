@@ -60,10 +60,33 @@ class SubscriptionRegistry(private val capacity: Int = DEFAULT_CAPACITY) {
     fun watch(channel: ChannelKey, now: Instant): WatchResult {
         val existing = watched[channel]
         if (existing != null) return refresh(existing, now)
+        supersededBy(channel)?.let { return admit(channel, now, evicted = it) }
         if (watched.size < capacity) return admit(channel, now, evicted = null)
         val victim = evictionVictim() ?: return WatchResult.Saturated
         watched.remove(victim.channel)
         return admit(channel, now, victim.channel)
+    }
+
+    /**
+     * The channel this one replaces: **one channel per problem**, so a language switch
+     * supersedes rather than adds.
+     *
+     * Measured 2026-08-11 on lesson 120805. The problem was opened in Java and then in
+     * Python3, both subscriptions stayed live, and a single Python run produced **two**
+     * records — one labelled `java`, carrying Python's traceback. A record for code that was
+     * never run is the worst thing this tool can produce, and it took no unusual act to make
+     * one: switching the language tab is ordinary.
+     *
+     * Solving the same problem in Kotlin and then in Java stays two gradings and two records.
+     * What this forbids is one grading becoming two, which is a different thing.
+     *
+     * Reported through the existing `evicted` channel, so the caller unsubscribes it on the
+     * socket exactly as it does for a capacity eviction — the registry owns bookkeeping only.
+     */
+    private fun supersededBy(channel: ChannelKey): ChannelKey? {
+        val previous = watched.keys.firstOrNull { it.lessonId == channel.lessonId } ?: return null
+        watched.remove(previous)
+        return previous
     }
 
     /** Pins the channel against eviction — a grading session is running on it. */
