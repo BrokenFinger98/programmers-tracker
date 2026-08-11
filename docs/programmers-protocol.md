@@ -332,12 +332,18 @@ GET /api/v2/school/challenges/?perPage=100&statuses[]=solved&page=1
 
 ## 10. Broadcast — Passive Observation (measured)
 
-**Every client subscribed to the same `identifier` receives identical messages simultaneously.**
-This is because ActionCable streams are scoped by channel parameters, not by connection.
+**Every client subscribed to the same `identifier` *as the same signed-in user* receives
+identical messages simultaneously.** ActionCable streams are scoped by channel parameters and
+by the connection's authenticated identity — not by the socket.
 
 In other words, **if the server merely keeps a subscription to the channel, grading results the
 user triggers in the browser flow into the server as well.** No proxy, no browser-extension
 traffic interception needed.
+
+> ⚠️ Corrected 2026-08-11 (§15.3). This section previously read "scoped by channel parameters,
+> **not by connection**". Both verifications below used the same valid cookie, so what they
+> measured was *two sockets, one user*, and the missing qualifier mattered: with a different
+> (or invalid) session the identical identifier receives **nothing**.
 
 ### Verification 1 — two sockets on the same page
 
@@ -480,8 +486,51 @@ Everything needed for local scaffolding is available here.
   validate the body will store an error page as data
 - Oracle submissions
 - Memory-limit-exceeded (`메모리 초과`) message — never triggered
+- ~~`reject_subscription` as the signal for an expired session~~ — **answered 2026-08-11, see
+  §15.3: it never arrives.** An unauthenticated subscription is confirmed and pinged normally
+  and simply receives no broadcasts, so **the socket carries no signal for session expiry at
+  all**. Any detection has to come from an authenticated HTTP request, and §3 records that the
+  problem page yields identifiers *without* login — so a 200 there proves nothing. What would
+  serve is unmeasured: the saved-code fetch (weak — cannot tell "logged out" from "never
+  edited"), `다른 사람의 풀이` (401 until solved, measured 2026-08-10, so only for solved
+  problems), or the submission-history page
 
 ## 15. Verification Log
+
+### 15.3 What an expired session does to a subscription — measured 2026-08-11 (issue #175)
+
+**Question.** Design §4.3 detected session expiry from `reject_subscription`, a message that
+appears nowhere in this document. Does it arrive?
+
+**Method.** Two `liveObserve` processes on the **identical** identifier
+(`algorithm 120802 14641 java`), started minutes apart and running simultaneously: one reading
+the real session file, one reading a scratch file containing an obviously invalid string. One
+`run` (not a submit) triggered in the browser. The real `.ps/session` was never modified.
+
+**Result.**
+
+| observer | `confirm_subscription` | pings | broadcasts |
+|---|---|---|---|
+| valid session | 1, at 1.61 s | 110 | **4** — `run/start`, `run/testcase` ×2, `run/result` |
+| invalid session | 1, at 0.49 s | 160 | **0** |
+
+The invalid-session socket was confirmed in half a second and pinged every ~3 s for the whole
+observation. It never received a broadcast and was never rejected.
+
+```
+[0.49s confirmed] {"identifier":"{…\"lesson_id\":120802}","type":"confirm_subscription"}
+[1.74s ping] [4.69s ping] … [28.69s ping]
+```
+
+**Consequences.**
+
+1. `reject_subscription` is not the expiry signal. Nothing is. The judge does not refuse an
+   unauthenticated subscriber — it accepts, keeps the socket warm, and tells it nothing.
+2. **Confirmation is not authentication**, which is the same lesson §3 already records for a
+   wrong `challengeable_id`: a confirm proves the frame was well formed and nothing else.
+3. Every liveness signal available to a passive observer — confirm, ping cadence, socket
+   health — is *identical* between a working session and a dead one. A tool that reports health
+   from the socket alone will report health while recording nothing.
 
 | # | Problem | Type | Action | Result |
 |---|---|---|---|---|

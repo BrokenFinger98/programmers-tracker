@@ -2932,3 +2932,50 @@ Seven tests, four of them for the direction that matters rather than the happy p
 Remaining risk: **never exercised on real two-language data** — this machine's history has none
 yet. And `stats(groupBy=problem)` still counts by problem, so the two surfaces group differently;
 correct in both cases, and a thing a reader has to notice.
+
+## [2026-08-11] #175 — the remaining risk on #168 was the finding ✅
+
+#168 shipped that morning with a stated remaining risk: *"not verified against a live expired
+cookie"*. Verifying it undid the claim.
+
+Two `liveObserve` processes on the **identical** channel identifier, running at the same moment,
+one reading the real session file and one reading a scratch file containing an invalid string.
+One `run` (not a submit) on Lv0 120802, triggered in the browser. The real `.ps/session` was never
+modified or printed.
+
+| observer | confirm | pings | broadcasts |
+|---|---|---|---|
+| valid session | 1, at 1.61 s | 110 | **4** — `run/start`, `run/testcase` ×2, `run/result` |
+| invalid session | 1, at **0.49 s** | 160 | **0** |
+
+The unauthenticated socket was confirmed **faster** than the authenticated one, pinged for the
+whole observation, and was never rejected. It simply received nothing.
+
+**So `SubscriptionHealth.REJECTED` is dead code for session expiry.** A ping is a frame, health
+reaches `LIVE`, the badge is green, and every grading is lost. What #168 still does is real — an
+unreachable socket and an attempt ending without a frame now demote and reach the badge, and both
+were invisible before — but that is not the failure it was written for.
+
+It also corrects a **measured** section. Protocol §10 said streams are scoped by channel
+parameters "not by connection"; both of its verifications used the same valid cookie, so what
+they measured was *two sockets, one user*. Streams are scoped by channel parameters **and by the
+connection's authenticated identity**. §15.3 records the measurement; §14 replaces the
+`reject_subscription` assumption with what was found.
+
+The line worth keeping: the fix made the wrong answer **more confident**. `started` was
+obviously uninformative; `subscription: "live"` is a reason to believe. Building on an unmeasured
+claim did not leave the confidence where it was, it raised it — so
+[[concepts/assumption-vs-measurement]] gains the rule that a failure state must never be wired to
+a frame nobody has observed.
+
+Docs corrected: `extension/README.md` and its Korean twin now say the badge **cannot** see an
+expired cookie and what to do when records stop while it looks healthy. The #168 ADR carries the
+amendment with its old claim preserved as ⚠️ (old).
+
+**Detection is unsolved and is now its own problem.** The socket offers nothing, and §3 records
+that the problem page yields identifiers without login, so a 200 there proves nothing either.
+Candidates are listed in §14 and none is measured.
+
+Separately noticed while reading the server log: `Refused an unauthorized /watch request` —
+the extension's stored watch token no longer matches the server's, so the sensor on this machine
+is currently blind. Not related to the above and not fixed here.
