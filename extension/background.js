@@ -48,6 +48,18 @@ function report(state, detail) {
 // This outranks the record state on purpose. A `✓` from an hour ago is true and irrelevant if
 // nothing is being watched now — the question the badge answers is "will my next submit be
 // recorded", and the honest answer here is no.
+// The one the socket cannot see. An unauthenticated subscription is confirmed in half a second
+// and pinged normally and receives nothing, so `subscription` reads `live` while every grading is
+// lost (#179, measured — protocol §15.3). This outranks even the subscription state: a socket
+// that is perfectly healthy is worth nothing if the server is not you.
+//
+// `unknown` is not shown. A probe that could not run says nothing about the cookie, and alarming
+// on it would teach the user to ignore the one message that means "replace your credential".
+function sessionExpired(session) {
+  if (session !== "expired") return null;
+  return ["blind", "your Programmers session has expired — nothing is being recorded. Paste a fresh _session_production value into .ps/session; it heals within a few minutes without a restart"];
+}
+
 function subscriptionState(subscription) {
   if (subscription === "rejected") {
     return ["blind", "the judge refused the subscription — your session cookie has expired. Replace .ps/session and it heals without a restart"];
@@ -89,7 +101,7 @@ async function watch(body) {
     });
     if (response.ok) {
       const answer = await response.json();
-      const blind = subscriptionState(answer.subscription);
+      const blind = sessionExpired(answer.session) ?? subscriptionState(answer.subscription);
       if (blind) {
         report(blind[0], `lesson ${answer.lessonId} in ${answer.language} — ${blind[1]}`);
         return;

@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.support.fixtures
 import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchStatus
+import com.brokenfinger.tracker.domain.SessionState
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 
 /**
@@ -35,5 +36,8 @@ fun aWatchCommand(lessonId: Long = 120804, language: String = "java") =
  * The healthy answer, so a test that is not about subscription health does not have to name
  * one — and so the tests that *are* about it read as deliberate overrides (#167).
  */
-fun aWatchStatus(outcome: WatchOutcome = WatchOutcome.STARTED, health: SubscriptionHealth = SubscriptionHealth.LIVE) =
-    WatchStatus(outcome, health)
+fun aWatchStatus(
+    outcome: WatchOutcome = WatchOutcome.STARTED,
+    health: SubscriptionHealth = SubscriptionHealth.LIVE,
+    session: SessionState = SessionState.ALIVE,
+) = WatchStatus(outcome, health, session)

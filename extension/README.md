@@ -50,12 +50,19 @@ heartbeat (#167). The server now reports the socket's own verdict, and a channel
 unreachable or refused says so — a `✓` from an hour ago is true and irrelevant if nothing is
 being watched now.
 
-⚠️ **It does not catch an expired session cookie**, and nothing currently does. Measured
-2026-08-11 (#175, protocol §15.3): an unauthenticated subscription is **confirmed in half a
-second and pinged normally**, and simply receives no broadcasts. Every liveness signal a passive
-observer has is identical between a working session and a dead one, so the badge stays green
-while nothing is recorded. If your records stop appearing while the badge looks healthy, replace
-`.ps/session` — that is the failure this badge cannot see.
+**An expired session cookie shows red `!` too, and it is a different failure.** The socket
+cannot see it: an unauthenticated subscription is **confirmed in half a second and pinged
+normally** and simply receives no broadcasts (#175, protocol §15.3), so every signal the
+observation itself has is identical between a working session and a dead one. The server
+therefore asks Programmers directly, on the one endpoint measured to answer **200 signed in, 401
+not** (#179), at most once every few minutes. The tooltip says which value to replace.
+
+`subscription: live` beside `session: expired` is a real combination, not a contradiction — a
+perfectly healthy socket is worth nothing if the server is not you.
+
+A probe that could not run is reported as `unknown` and shows **nothing**. A network blip is not
+a dead credential, and alarming on it would teach you to ignore the one message that means
+"replace your cookie".
 
 Every state has a glyph, the good one included. It used to be green with no text, and a badge
 background is painted behind its text — so nothing was drawn and a working sensor looked

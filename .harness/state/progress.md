@@ -2986,3 +2986,51 @@ lifetime, the token is identical in the checkout and the container, `POST /watch
 The error is the same one this entry is about: §10 turned "two sockets, one user" into "not by
 connection"; I turned one log line into "throughout". The observation was real and the quantifier
 was invented — and the claim was believed because it *fitted the story*, which is not evidence.
+
+## [2026-08-11] #179 — an expired session is detectable after all, on the endpoint that answers ✅
+
+#175 left the biggest open risk in the project: from the moment a cookie dies every grading is
+lost and the badge stays green, because the socket cannot see it.
+
+**Measured before choosing** — which is the correction this whole thread is about. Four endpoints,
+with and without the cookie, three alternating runs (protocol §15.4):
+
+| endpoint | signed in | signed out |
+|---|---|---|
+| lesson page | 200 | **200** — §3 already says it needs no login |
+| `solution_groups` | 200 | 302 → login, but problem-scoped and 401-until-solved |
+| `challenges?statuses[]=solved` | 200, 510 B | **200**, 184 B — emptiness ≠ signed out |
+| **`open-challenge-activities`** | **200** | **401**, JSON `{"code":"authenticate_user",…}` |
+
+`SessionActivityProbe` maps 200 → ALIVE, 401 → EXPIRED, **anything else → UNKNOWN**, and `/watch`
+answers with it beside `subscription`. `UNKNOWN` is never folded into EXPIRED and never cached;
+every other answer is held 5 minutes, because the extension posts every 30 s per open tab and
+probing on each would be a request every few seconds.
+
+`subscription: live` beside `session: expired` is a real combination, not a contradiction.
+
+**Verified live on both branches**, which is what #168 did not do:
+
+```
+real cookie       {"subscription":"pending","session":"alive"}
+invalid cookie    {"subscription":"pending","session":"expired"}  + the server's own WARN
+restored          {"session":"alive"}
+```
+
+The cookie file was copied out, hash-compared before and after, and restored byte-identical. The
+failure branch is the one worth exercising and exercising it must not cost the credential.
+
+ADR: `decisions/2026-08-11-the-session-is-checked-where-it-can-answer`. Protocol §15.4 records the
+comparison; §14's `reject_subscription` line now points at both measurements. `extension/README.md`
+and its Korean twin replaced "nothing can see this" with what now does.
+
+Remaining risk, stated in the ADR: a dead cookie is invisible for up to five minutes; the probe is
+traffic Programmers did not ask for (one GET per five minutes while a tab is open); `UNKNOWN` shows
+nothing, so an outage and a healthy session look alike from the toolbar; and **nothing notices a
+probe that has answered `UNKNOWN` for a week** — which is the shape of failure this project keeps
+finding.
+
+Also filed, not fixed here: #180 — `ProblemPageCodeFetcher` still holds a cookie it never reads and
+hands it out through a dead accessor, flagged as a MINOR on 2026-08-07. Noticed again while writing
+this probe, which deliberately takes no cookie for exactly that reason. Kept out of this PR because
+removing it touches four test call sites and two production ones.

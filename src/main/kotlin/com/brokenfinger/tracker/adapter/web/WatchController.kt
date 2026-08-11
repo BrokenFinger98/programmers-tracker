@@ -30,6 +30,14 @@ data class WatchAccepted(
     val language: String,
     /** Whether the channel is actually being observed: pending · live · rejected · unreachable. */
     val subscription: String,
+    /**
+     * Whether the session cookie still authenticates: alive · expired · unknown.
+     *
+     * Separate from [subscription] because the socket cannot answer it. An unauthenticated
+     * subscription is confirmed and pinged normally and receives nothing, so `subscription`
+     * reads `live` while nothing is recorded (protocol §15.3, #179).
+     */
+    val session: String,
     /** The newest grading recorded for this problem. Absent when there is none (#156). */
     val lastRecord: RecordedGrading? = null,
 ) {
@@ -39,6 +47,7 @@ data class WatchAccepted(
             lessonId = command.lessonId,
             language = command.language,
             subscription = status.health.name.lowercase(),
+            session = status.session.name.lowercase(),
             lastRecord = last?.let(RecordedGrading::from),
         )
     }

@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.application.WatchCommand
 import com.brokenfinger.tracker.application.WatchOutcome
 import com.brokenfinger.tracker.application.WatchRequestHandler
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.SessionState
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
@@ -105,6 +106,29 @@ class WatchControllerTest {
         response.status shouldBe 200
         response.jsonBody().stringField("status") shouldBe "started"
         response.jsonBody().stringField("subscription") shouldBe "rejected"
+    }
+
+    /**
+     * The field the socket cannot supply. An unauthenticated subscription is confirmed and
+     * pinged normally and delivers nothing (protocol §15.3), so `subscription: live` beside
+     * `session: expired` is a real and important combination — not a contradiction (#179).
+     */
+    @Test
+    fun `a live subscription with a dead cookie says both`() {
+        coEvery { handler.watch(any()) } returns
+            aWatchStatus(health = SubscriptionHealth.LIVE, session = SessionState.EXPIRED)
+
+        val body = postWatch(aWatchBody()).jsonBody()
+
+        body.stringField("subscription") shouldBe "live"
+        body.stringField("session") shouldBe "expired"
+    }
+
+    @Test
+    fun `an unknown session is not reported as expired`() {
+        coEvery { handler.watch(any()) } returns aWatchStatus(session = SessionState.UNKNOWN)
+
+        postWatch(aWatchBody()).jsonBody().stringField("session") shouldBe "unknown"
     }
 
     @Test
