@@ -722,6 +722,13 @@ GET /api/v2/ai/skill-reports/status        {lastReport, submissionsCount, report
 Snapshot once a day into `.ps/pg-metrics.jsonl`. The rating/ranking time series becomes a
 control group independent of our records.
 
+> ⚠️ **Amended 2026-08-12 (#227): not built, and it reads here as though it were.** No
+> `pg-metrics.jsonl` exists and nothing polls either endpoint. Found by the same sweep that
+> caught §5.5 — this line sits in the architecture section with no priority marker, unlike
+> §6.10's `concept-graph.json`, which is labelled **(P2)** and is honest about being future
+> work. Wanting it back means two daily requests Programmers did not ask for
+> (development-rules §9.3), so it is a decision and not a chore.
+
 ### 5.5 Obsidian viewing layer
 
 `ps-records` is built to **open directly as an Obsidian vault.** No separate GUI is

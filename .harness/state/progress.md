@@ -3777,3 +3777,11 @@ was decided on 2026-08-04, and what it got wrong is evidence. Also corrected the
 
 Nothing was generated. Building the allowed three is a decision with no owner, and `_weakness.md`
 needs an ADR before it can be one.
+
+**The sweep was widened rather than stopped**: every filename the design names, checked against
+both repositories. Two more surfaced and they are not alike. `.ps/concept-graph.json` is labelled
+**(P2)** and is honest about being future work. `.ps/pg-metrics.jsonl` sits in the architecture
+section with no marker, reading as behaviour, and nothing polls its two endpoints — amended in
+the same style, and named as a decision rather than a chore, because wanting it back means two
+daily requests Programmers did not ask for. `hints.json` needed nothing: the design already
+corrects itself sixty lines later.
