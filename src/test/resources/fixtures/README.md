@@ -26,6 +26,7 @@ verbatim — failure classification depends on them (protocol doc section 7).
 | `javascript-compile-error.jsonl` | lesson 181952, 2026-08-12: node, `SyntaxError: missing ) after argument list` + stack | whole |
 | `python-indentation-error.jsonl` | lesson 181952, 2026-08-12: `IndentationError: unexpected indent` | whole |
 | `python-tab-error.jsonl` | lesson 181952, 2026-08-12: `TabError: inconsistent use of tabs and spaces in indentation` | whole |
+| `algorithm-reset.jsonl` | lesson 181952, 2026-08-12 (#215): the editor-reset broadcast — `action: "reset"`, **no `type` field at all**, and it carries the problem's starter code back | `initialCodes` substituted: the template is their content and its key is an undocumented id |
 | `kotlin-missing-main.jsonl` | lesson 181952, 2026-08-12: `main 메소드가 정의되지 않았습니다` — a top-level `fun main()` with no parameters. **Not a compile failure**, and the same message comes back whether the body is correct or not | whole |
 | `algorithm-cached-then-graded.jsonl` | lesson 120802, 2026-08-11: the same path measured whole — `start · error · test_group · testcase ×18 · result_lesson_challenge · finish`. A cached-result submit **grades anyway** | reassembled from the two halves #154 split apart, both from one grading and verified to carry the same channel identifier; `surveyUrl`, `finishModalLink` and both ratings substituted (§7.3) |
 

@@ -34,6 +34,18 @@ data class GradingFrameFacts(
     /** Whether this frame opens a grading rather than continuing one. */
     val startsGrading: Boolean = false,
     /**
+     * Whether this frame belongs to a **documented action that never grades anything** —
+     * saving, and resetting the editor to its template (protocol doc §8). The channel carries
+     * them alongside gradings and they can never become records (#215).
+     *
+     * It is a separate fact from a null [action] because the two must not be confused: null
+     * means *we did not recognise it*, which is the signal that Programmers changed something
+     * and is worth raising an alarm over. This means *we recognise it and it is not a grading*,
+     * which is worth nothing at all. Counting the second as the first told every MCP client
+     * that the solving history had a hole in it because the learner had pressed reset.
+     */
+    val outsideGrading: Boolean = false,
+    /**
      * What the judge scored, when the frame reported it (#193).
      *
      * Parsed since the beginning and dropped here: there was no field for it, so 76 records in a

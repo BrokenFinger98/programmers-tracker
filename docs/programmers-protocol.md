@@ -323,6 +323,24 @@ save   : result, failed_git, failed_save
 reset  : completed, failed
 ```
 
+**`save` and `reset` are broadcast on the same channel as gradings and are not gradings.**
+Anything counting frames that belong to no grading has to tell them apart from a frame it
+simply does not recognise — the second is worth an alarm and the first is not (#215).
+
+A reset measured on lesson 181952, 2026-08-12, **does not match the shape above**: it carries
+no `type` at all, and it ships the problem's starter code back.
+
+```jsonc
+{"action":"reset",
+ "initialCodes":{"<codes key>":"fun main(args: Array<String>) {\n    val s1 = readLine()!!\n}"},
+ "msg":"코드를 초기화하였습니다."}
+```
+
+Two things follow. The catalogue above is extracted from the bundle and is **not** a
+transcript, so a type list in it is not a promise that a `type` field arrives at all. And
+`initialCodes` is a second source for the editor template, keyed by the codes key of §3 —
+which is the value that must never be confused with `challengeable_id`.
+
 Fields that can appear in `submit` responses:
 `category, challengeableId, exitCode, finishCondition, isNewRating, msg,
 newUserRating, oldUserRating, passed, passingScore, perfectScore, scores,

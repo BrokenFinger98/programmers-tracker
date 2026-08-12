@@ -255,6 +255,24 @@ class ChannelCaptureTest {
         records() shouldContainExactly emptyList()
     }
 
+    /**
+     * The channel is not only for gradings. Resetting the editor to its template broadcasts an
+     * action that carries a `msg` and no `type` at all, so it has facts, takes the same path,
+     * and was counted as a grading that went missing — putting `incompleteHistory` on every
+     * MCP answer because the learner had pressed reset (#215, lesson 181952, 2026-08-12).
+     *
+     * The distinction the count depends on is **recognised-and-not-a-grading** versus
+     * **unrecognised**. Only the second is worth an alarm, and the test above is the first.
+     */
+    @Test
+    fun `resetting the editor is not a grading that went missing`() {
+        consume(capture(), observedFrames("algorithm-reset.jsonl"))
+
+        journal shouldContainExactly emptyList()
+        rawLog.orphanedFrames() shouldContainExactly emptyList()
+        records() shouldContainExactly emptyList()
+    }
+
     /** Protocol noise is not evidence: a frame carrying no grading facts is still just dropped. */
     @Test
     fun `a frame carrying no grading facts is not kept`() {
