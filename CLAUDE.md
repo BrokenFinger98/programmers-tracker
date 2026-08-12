@@ -149,6 +149,9 @@ Additional gates:
 - A branch that made decisions carries a **wiki ADR** in the same branch — the push gate
   (`.githooks/pre-push`) blocks pushes without wiki changes (escape hatch: commit trailer
   `Wiki-Skip: <reason>`)
+- **The same hook runs `scripts/guards.sh` first, and that half fails closed.** The rules above
+  are absolutes and have no trailer. A guard is worth what it is wired to: these ran only when
+  someone remembered to, and a failing one reached the remote through a pipe (#194)
 - Protocol-related changes cite **measured evidence or a protocol-doc section** in the commit body
 
 ---

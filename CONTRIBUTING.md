@@ -43,14 +43,27 @@ every repository path a maintained document names must exist. The semantic half 
 sentence is still true — is on the reviewer. For a path that is deliberately not built yet,
 put `guard:planned` on that line rather than removing the check.
 
-## The wiki push gate (you will meet it)
+## The push gate (you will meet it)
 
-`.githooks/pre-push` blocks any branch push whose range contains no
-`docs/llm-wiki/` change. This repo treats *recording decisions* as part of the
-work: if your branch decided anything, add an ADR under
-`docs/llm-wiki/wiki/decisions/` (see existing ones for the format). For
-genuinely record-free changes (typo fixes), add an auditable trailer:
+`.githooks/pre-push` is two gates, and they behave differently on purpose.
+
+**The constitution guards run first and fail closed.** `scripts/guards.sh` checks the rules
+CLAUDE.md states as absolute — no credentials or records committed, integration tests excluded
+from CI, English-only artifacts, Korean twins in step with their source, wiki citations that
+resolve. There is no escape hatch, because none of those has an acceptable exception. Run
+`./scripts/guards.sh` yourself first; it takes about a second and its output says what to fix.
+
+> Careful with `./scripts/guards.sh | tail` in an `&&` chain — the pipe takes `tail`'s exit
+> status, and a failing guard once slipped past exactly that way (#194).
+
+**Then the wiki gate, which fails open.** It blocks a push whose range contains no
+`docs/llm-wiki/` change, because this repo treats *recording decisions* as part of the work: if
+your branch decided anything, add an ADR under `docs/llm-wiki/wiki/decisions/` (see existing ones
+for the format). For genuinely record-free changes (typo fixes), add an auditable trailer:
 `git commit --amend --no-edit --trailer 'Wiki-Skip: <reason>'`.
+
+The asymmetry is the point. The guards prevent a **violation**; the wiki gate prevents an
+**unconscious omission**, and an omission you can justify is not one.
 
 ## AI-assisted PRs are welcome
 
