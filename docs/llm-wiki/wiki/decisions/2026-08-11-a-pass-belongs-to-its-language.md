@@ -100,3 +100,25 @@ its own reading, and two items for one problem must keep a stable order in both 
 
 `docs/mcp.md` and its Korean twin now say a problem can appear once per language, and why the
 server declines to decide what a second language carries over.
+
+## Amended 2026-08-12 (#214): the reader now has to notice one sentence, not the difference
+
+The accepted cost above ends *"it is a thing a reader has to notice"*, and left it there.
+
+The clean-slate sweep (#218) made it concrete for the first time: lesson 181952 has a pass in
+each of seven languages, so `review_queue` holds seven items for the one bucket
+`stats(groupBy=problem)` reports. Nothing is wrong with either answer, and side by side without
+the explanation they read as a disagreement.
+
+**No fourth `groupBy`.** `groupBy=language` already answers the other axis, and a
+`problem_language` group would be a third way to ask what two calls answer — the speculative
+kind of surface CLAUDE.md forbids. What was missing was disclosure, not a feature.
+
+So the `stats` description says which axis it collapses and names the two tools that do not, and
+a test pins it there. The description is the only place a client can learn it: `tools/list` is
+read once and the results are counts (the same reasoning as
+[[decisions/2026-08-11-a-hole-in-the-record-is-reported-not-filled]]'s move of prose out of the
+answers).
+
+The cost that remains is the honest one: a reader who never reads the tool description still
+meets the difference unexplained. Disclosure is not the same as it not existing.

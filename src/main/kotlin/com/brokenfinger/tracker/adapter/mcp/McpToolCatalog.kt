@@ -164,7 +164,11 @@ object McpToolCatalog {
         title = "Counts by group",
         description = "Counts submissions per bucket. Counts only — it ranks nothing and concludes nothing. " +
             "An entry with no `key` counts the submissions whose grouping value was never recorded, which " +
-            "is not the same as a bucket named unknown.",
+            "is not the same as a bucket named unknown. **`problem` counts across languages**: one problem " +
+            "solved in Java and again in Kotlin is one bucket here and two items in `review_queue` and " +
+            "`slow_passes`, which key on the pair. Neither is wrong — a submission count per problem is the " +
+            "question `problem` answers — but reading the two side by side without knowing it looks like a " +
+            "disagreement. Group by `language` for the other axis.",
     ) {
         putJsonObject("properties") {
             putJsonObject("groupBy") {

@@ -7,6 +7,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -124,6 +125,25 @@ class McpToolCatalogTest {
 
             withClue(tool["name"]!!.jsonPrimitive.content) { occurrences shouldBe 1 }
         }
+    }
+
+    /**
+     * The two surfaces group differently and both are right: `review_queue` and `slow_passes` key
+     * on (problem, language) since #174, and `stats(groupBy=problem)` collapses the languages
+     * because a submission count per problem is the question it answers. A reader who does not
+     * know that sees one problem as seven queue items and one bucket, and reads it as a
+     * disagreement — the clean-slate sweep produced exactly that shape (#214).
+     *
+     * Pinned on `stats` rather than left to prose because the description is the only place a
+     * client learns it: `tools/list` is read once, and the results are counts.
+     */
+    @Test
+    fun `stats says that grouping by problem collapses the languages`() {
+        val description = tool(McpToolCatalog.STATS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "counts across languages"
+        description shouldContain McpToolCatalog.REVIEW_QUEUE
+        description shouldContain McpToolCatalog.SLOW_PASSES
     }
 
     /**
