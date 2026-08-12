@@ -3308,3 +3308,30 @@ next time `HEAVY` grows or the serializer's shape changes, and the failure would
 reasoning without the clearest progress signal the judge gives.
 
 Two tests: present when the grading reported them, both keys **absent** when it did not.
+
+## [2026-08-12] #201 — the guard knew the cookie's shape and not the token's ✅
+
+Found by nearly stepping on it. Registering this server as an MCP tool needs the `/watch` token
+in a client config, and the conventional home is `.mcp.json` at the project root — **which is
+committed**. Guard §2 greps for `_session_production=…` and nothing else, so a 64-hex token
+pasted there would have gone up with every gate green. Neither `.mcp.json` nor
+`.claude/settings.local.json` is gitignored.
+
+Both credentials live in `.ps/`, CLAUDE.md forbids both in the same sentence, and only one had a
+guard.
+
+**Not a `[0-9a-f]{64}` rule.** Nothing tracked matches one today, so it would pass now and fire
+the first time someone adds a `distributionSha256Sum` — and a guard that flags a legitimate hash
+gets muted. Two precise checks instead: the **literal value** when this machine has the file
+(zero false positives, finds it however reformatted), and the **header with a non-placeholder
+value**, always. The documented `"<paste from .ps/watch-token>"` stays passing because of the
+angle brackets, the same trick §2 uses for `fake-value-for-tests`.
+
+The value half cannot run in CI and **says which half ran** rather than claiming a check it did
+not perform.
+
+Negative-tested both ways plus a canary that the documented placeholder still passes — a rule
+that rejects its own documentation is one someone deletes.
+
+The token itself was registered outside the repository, in `~/.claude.json` local scope, and
+`git status` stayed clean throughout.
