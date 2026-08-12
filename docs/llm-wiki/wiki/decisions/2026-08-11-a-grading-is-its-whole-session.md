@@ -120,3 +120,25 @@ design, for replay — which is the only place it was ever load-bearing.
 
 A test had asserted the discarded reading in so many words (`consume` the same fixture twice,
 expect one record). See [[concepts/tests-that-explain-defects]].
+
+### ⚠️ The quantifier in that cost was wrong — measured 2026-08-12 (#212)
+
+The cost above says collisions are "vanishingly unlikely for an algorithm problem" and that
+**SQL is where it is plausible**, on the reasoning that algorithm timings jitter. Two Kotlin
+runs two minutes apart collided on lesson 181952 within an hour of looking.
+
+The reasoning was right about timings and wrong about which gradings have them. **A failure
+that never reaches a testcase reports no timing at all** — a compile error is `start · error ·
+result`, and two identical compile failures are byte-identical whatever the language. So the
+collision domain is not "SQL"; it is *every grading with no per-case timing*, which includes
+all of SQL and every failed compile in all seven languages.
+
+Nothing changes in behaviour, and that is the point: #159 had already moved the index off the
+live path, so both runs were recorded correctly. What is retired is the belief that the
+remaining replay-path exposure is SQL-shaped. A crash with two identical failed runs queued
+folds them into one, in any language.
+
+Recorded rather than quietly edited, because the wrong half is the *estimate*, and an ADR that
+silently improves its own estimates cannot be audited
+([[decisions/2026-08-12-a-language-is-supported-when-its-failures-are-too]],
+[[concepts/assumption-vs-measurement]]).

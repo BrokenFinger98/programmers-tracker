@@ -119,3 +119,27 @@ Two further things follow, and both are worth more than the fix:
   names the one thing that did not happen sends the next reader to the wrong place. It now
   reports what is known — no grading was open — and offers both explanations without choosing.
 
+
+---
+
+## Amended 2026-08-12 (#212): the truncated-fixture cost is paid
+
+The accepted cost said `algorithm-run-error.jsonl` holds `start · error · error` and no
+`result`, so the capture it drives records nothing, and that *"the fixture wants a `result`
+frame the next time a compile failure is captured whole."*
+
+Nine were, on lesson 181952 — one per supported language, each `start · error · result`. The
+capture-terminates property is now driven by real captures in
+`GradingSessionAssemblerTest`, and the cost is retired.
+
+**One claim in this ADR is corrected rather than retired.** It says the run path emits *"one
+error frame per compiler diagnostic"*. It does not: a javac failure with two diagnostics
+arrives as a **single** frame ending `2 errors` (`java-compile-error.jsonl`). The two frames
+in `algorithm-run-error.jsonl` are `index: 0` with a compile error and `index: 1` with a
+runtime stack trace, which cannot both come from one execution of one program — the protocol
+doc cites §15 #12–13, two entries. It is two shapes filed together, not one session, and the
+fixture README now says so.
+
+That matters beyond bookkeeping: the belief that diagnostics arrive one per frame is what made
+a second frame look like an orphan in the first place. The original defect is fixed either
+way, but the reason recorded for it was not the reason.

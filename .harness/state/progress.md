@@ -3486,3 +3486,54 @@ turn back into a first attempt. **Verified live**: a run driven in the browser r
 
 Browser note worth keeping: clicking these buttons **by `ref` shows the tooltip and does not
 click**; only coordinate clicks fire them. Cost two false starts today.
+
+## [2026-08-12] #212 — six of seven languages were classified by patterns written for two others ✅
+
+Found by counting two lists that should have matched: `FileDerivedArtifacts.GENERATORS` has
+seven languages, `VerdictResolver.compilerDiagnostics` had two patterns, and nothing recorded
+which languages that left uncovered. Same source as #191/#193/#205/#207 — the project's own
+record of what it does not know, this time a KDoc that had stated its gap and left it unowned:
+
+> Not here on purpose: `IndentationError` and `TabError` … One line each when they are.
+
+**The measurement contradicted the diagnosis.** The issue predicted four uncovered languages;
+the wire said one. C, C++, Kotlin and JavaScript were already correct **by coincidence** —
+clang and kotlinc add a column (`:8:15: error:`) that the javac pattern matches on its tail,
+and node prints `SyntaxError:`, which the python pattern catches. Six languages were being
+served by two patterns naming two, and tightening either would have broken three with no test
+naming any of them.
+
+The genuine misses, all confirmed live in the record before the fix:
+
+- `csharp` — `/Solution0.cs(10,31): error CS1002:` brackets its position, no colon-digit-colon
+- `python3` `IndentationError` / `TabError` — SyntaxError subclasses printing their own names
+
+**E2E, as the owner asked: all seven languages, one broken run and one correct submit each**
+on lesson 181952. Every wire language string matches its generator key and all eight runner
+files were written — assumed since #37, measured now. A mismatch would produce no runner and
+no message. Protocol §7.2 (shapes), §15.5 (the sweep), nine new whole fixtures.
+
+Three things fell out that were not the point:
+
+- **javac sends every diagnostic in one frame**, ending `2 errors` — so the earlier ADR's "one
+  error frame per compiler diagnostic" is wrong, and `algorithm-run-error.jsonl`'s two frames
+  are of different provenance rather than one session. Said in the fixture README rather than
+  quietly corrected.
+- **A capture-key collision on an algorithm problem.** `a-grading-is-its-whole-session` calls
+  that vanishingly unlikely outside SQL because timings jitter; a failure that never reaches a
+  testcase has no timings either. No behaviour change (the live path stopped consulting the
+  index at #159), but the quantifier was wrong.
+- Programmers rejects Kotlin's no-arg `fun main()` with a message about a missing main method
+  — **identical for correct and broken bodies**, which confounded two readings until the
+  editor template was checked. One extra run caught it; a negative observed through your own
+  setup is not an observation.
+
+**A wrong reading I announced before checking**: "every record is written twice, every `stats`
+count is doubled". It is the append-only code-attachment correction (`codePending: true →
+false`), which `RecordHistory` collapses. Cause: counting capture keys and reading a `tail -2`
+dump whose second record was truncated before the field that would have shown it.
+
+Browser mechanics worth not rediscovering: the editor is CodeMirror 5 (`.CodeMirror.setValue`
+beats typing), `?language=<name>` switches without the dropdown, and **a click in the same
+`browser_batch` as a `navigate` does not register** — one wasted round trip per language until
+that was clear.

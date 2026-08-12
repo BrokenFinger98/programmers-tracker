@@ -36,14 +36,41 @@ object VerdictResolver {
      * compiler is not in this list lands as RUNTIME_ERROR, which is the honest fallback:
      * guessing at a format buys nothing when it is right and misclassifies when it is wrong.
      *
-     * Not here on purpose: `IndentationError` and `TabError`, which are SyntaxError subclasses
-     * that print their own names. Neither has been captured. One line each when they are.
+     * **Every one of the seven supported languages was broken on purpose and captured on
+     * 2026-08-12 (#212), and the result was not what the list looked like.** Four languages
+     * were already classified correctly *by accident*: clang and kotlinc print
+     * `file:line:column: error:`, which the javac entry matches on its `:column: error:`
+     * tail, and node prints `SyntaxError:`, which the python entry matches. An accident that
+     * holds is still an accident — it survives only until a toolchain drops the column or
+     * renames the exception, and nothing would have said which languages were resting on it.
+     * So each is named below with its own capture, and the entries that were doing the work
+     * unknowingly say so.
+     *
+     * The two genuine misses are fixed here: C# brackets its position (`Solution.cs(10,31):
+     * error CS1002:`) so no colon-digit-colon appears, and Python's `IndentationError` and
+     * `TabError` are SyntaxError subclasses that print their own names instead.
      */
     private val compilerDiagnostics = listOf(
-        // javac — "/Solution.java:5: error: ';' expected"
+        // javac — "/Solution.java:7: error: ';' expected", fixture java-compile-error.jsonl.
+        // Also matches, on its ":column: error:" tail rather than by design:
+        //   clang   "/solution0.cpp:8:15: error: expected ';' after expression"  (cpp, c)
+        //   kotlinc "/Solution0.kt:3:15: error: syntax error: Expecting ')'."    (kotlin)
+        // Fixtures cpp-, c- and kotlin-compile-error.jsonl pin all three, so a change here
+        // fails loudly for the languages that were never mentioned.
         Regex(""":\d+: error:"""),
-        // python3 — a traceback ending "SyntaxError: expected ':'", measured on lesson 120805
+        // python3 — "SyntaxError: expected ':'", measured on lesson 120805.
+        // Also matches node's "SyntaxError: missing ) after argument list", pinned by
+        // javascript-compile-error.jsonl. JavaScript has no compile step of its own; the
+        // parse failure is reported before any line runs, which is the same phase.
         Regex("""SyntaxError:"""),
+        // python3 — the two SyntaxError subclasses that print their own name. Same parse
+        // phase, so the same verdict. Fixtures python-indentation-error.jsonl, python-tab-error.jsonl
+        Regex("""IndentationError:"""),
+        Regex("""TabError:"""),
+        // csharp — "/Solution0.cs(10,31): error CS1002: ; expected [/Solution.exe.csproj]".
+        // The position is bracketed, so nothing above matches it and a C# compile failure was
+        // filed as RUNTIME_ERROR. Fixture csharp-compile-error.jsonl
+        Regex("""error CS\d+:"""),
     )
 
     fun resolve(testcases: List<TestcaseResult>, boundErrorText: String?): Verdict? {

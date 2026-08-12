@@ -279,6 +279,40 @@ each differently.
 main(` versus a `solution(` declaration. The problem statement also renders differently
 (§12), but the code is what the runner has to match.
 
+### 7.2 Compiler diagnostics, one shape per language (measured 2026-08-12)
+
+Every language the server generates a runner for was broken on purpose on lesson 181952 and
+its `run/error` frame captured whole (`start · error · result`). Fixtures:
+`src/test/resources/fixtures/<language>-compile-error.jsonl`.
+
+| language | toolchain shape, as sent (HTML-escaped) |
+|---|---|
+| `java` | `/Solution.java:7: error: &#39;;&#39; expected … 2 errors` |
+| `cpp` | `/solution0.cpp:8:15: error: expected &#39;;&#39; after expression … 1 error generated.` |
+| `c` | `/solution0.c:6:21: error: expected &#39;;&#39; after expression … 1 error generated.` |
+| `kotlin` | `/Solution0.kt:3:15: error: syntax error: Expecting &#39;)&#39;.` |
+| `csharp` | `/Solution0.cs(10,31): error CS1002: ; expected [/Solution.exe.csproj] … Build FAILED.` |
+| `javascript` | `/solution.js:12 … SyntaxError: missing ) after argument list` + a node stack |
+| `python3` | `File &quot;/solution.py&quot;, line 4 … IndentationError: unexpected indent` |
+
+Three of these are traps for anything matching on `:<line>: error:`:
+
+- **C# brackets its position.** `(10,31): error CS1002:` contains no colon-digit-colon, so a
+  javac-shaped pattern misses it entirely and the failure reads as a runtime error.
+- **clang and kotlinc add a column**, `:8:15: error:`, which a javac-shaped pattern matches
+  anyway — on the column, not the line. Correct by coincidence rather than by intent.
+- **Python's `IndentationError` and `TabError`** are `SyntaxError` subclasses that print
+  their own names, so matching `SyntaxError:` misses both.
+
+**One `error` frame carries every diagnostic.** javac's two-error capture above arrives as a
+single frame ending `2 errors`, not as one frame per diagnostic.
+
+**Kotlin has a second failure with no compiler text at all.** Programmers invokes
+`main(String[])`; a top-level `fun main()` compiles and is then not found, and the frame says
+`main 메소드가 정의되지 않았습니다`. Nothing failed to compile, so this is a runtime failure —
+and the message is identical whether the body is correct or not, which makes it easy to
+misread as a compile diagnostic (fixture `kotlin-missing-main.jsonl`).
+
 ## 8. Full type Catalog (extracted from the bundle)
 
 ```
@@ -499,6 +533,35 @@ Everything needed for local scaffolding is available here.
   problems), or the submission-history page
 
 ## 15. Verification Log
+
+### 15.5 Every supported language, end to end — measured 2026-08-12 (issue #212)
+
+**Question.** The server generates a test runner for seven languages, but only `java`,
+`python3` and `mysql` had ever produced a record. Does the wire agree — do the language
+strings match, and is a compile failure recognisable in each?
+
+**Method.** Lesson 181952 (`문자열 출력하기`, Lv0, stdin/stdout shape). For each language: one
+`run` with a deliberate syntax error, then one `submit` of a correct solution.
+
+| language | wire `language` | compile failure classified | submit |
+|---|---|---|---|
+| `java` | `java` | ✅ | PASS 3/3 |
+| `python3` | `python3` | ✅ syntax · ❌ indentation · ❌ tab | PASS 3/3 |
+| `cpp` | `cpp` | ✅ (by coincidence, §7.2) | PASS 3/3 |
+| `javascript` | `javascript` | ✅ (by coincidence, §7.2) | PASS 3/3 |
+| `kotlin` | `kotlin` | ✅ (by coincidence, §7.2) | PASS 3/3 |
+| `c` | `c` | ✅ (by coincidence, §7.2) | PASS 3/3 |
+| `csharp` | `csharp` | ❌ filed as RUNTIME_ERROR | PASS 3/3 |
+
+**Results.** Every wire string matches its generator key, and all seven runners were written.
+The three ❌ are the defects #212 fixed; the diagnostic shapes are in §7.2.
+
+**A byte-identical collision on an algorithm problem.** Two Kotlin runs, two minutes apart,
+produced the same capture key. `2026-08-11-a-grading-is-its-whole-session` calls that
+"vanishingly unlikely" outside SQL because algorithm timings jitter — but **a failure that
+never reaches a testcase reports no timing either**, so any two identical compile failures
+collide. The live path does not dedup (#159), so both were recorded correctly; the replay
+path does, so a reconciliation after a crash would keep one of the two.
 
 ### 15.4 Which endpoint answers "is this session still signed in" — measured 2026-08-11 (issue #179)
 
