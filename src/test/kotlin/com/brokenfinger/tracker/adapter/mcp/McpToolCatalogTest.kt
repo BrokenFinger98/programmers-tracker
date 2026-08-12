@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainKey
@@ -104,4 +105,24 @@ class McpToolCatalogTest {
 
     private fun required(name: String): List<String> =
         tool(name)["inputSchema"]!!.jsonObject["required"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
+
+    /**
+     * Found by reading all six descriptions as a client, after a `curl` check that printed the
+     * last 180 characters of one of them missed it (#203).
+     *
+     * The mechanism will recur: #187 appended a shared sentence to every description and left the
+     * bespoke one `stats` already had, so it said the same thing twice. The next tool to earn a
+     * note of its own is the next chance to do it again.
+     */
+    @Test
+    fun `no description says the incomplete-history sentence twice`() {
+        val phrase = "gradings were captured that no record represents"
+
+        tools.forEach { tool ->
+            val description = tool["description"]!!.jsonPrimitive.content
+            val occurrences = description.split(phrase).size - 1
+
+            withClue(tool["name"]!!.jsonPrimitive.content) { occurrences shouldBe 1 }
+        }
+    }
 }
