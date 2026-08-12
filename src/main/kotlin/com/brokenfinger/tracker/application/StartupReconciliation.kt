@@ -29,7 +29,7 @@ class StartupReconciliation(
         // is written `codePending`, and code attached after `git.reconcile` would sit
         // uncommitted until the next capture happened to sweep it up.
         logger.info("Startup code attachment: {}", attachment.attachPending())
-        refreshTagMap()
+        refreshVault()
         // Records an earlier run wrote but never committed — a git failure at capture time
         // leaves exactly this, and "commit whatever is uncommitted" is how it heals.
         git.reconcile()
@@ -40,15 +40,16 @@ class StartupReconciliation(
     }
 
     /**
-     * The vault's tag map, rewritten whole at every boot (#229).
+     * The vault's derived pages — every problem README and the whole tag map — rewritten at
+     * every boot (#229).
      *
      * Derived and regenerable, so a failure here is logged and does not propagate — the records
      * are not ours to lose over a note. It runs after the attachment pass so that whatever
      * reconciliation just recovered is already counted.
      */
-    private fun refreshTagMap() {
-        runCatching { attachment.refreshTagMap() }
-            .onFailure { logger.warn("The tag map could not be written; the records are unaffected", it) }
+    private fun refreshVault() {
+        runCatching { attachment.refreshVault() }
+            .onFailure { logger.warn("The vault pages could not be written; the records are unaffected", it) }
     }
 
     /**

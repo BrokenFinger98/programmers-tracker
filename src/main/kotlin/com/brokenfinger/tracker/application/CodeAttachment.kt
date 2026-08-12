@@ -129,7 +129,21 @@ class CodeAttachment(
      * leave a note disagreeing with the log until some later grading happened to touch that tag.
      * Identical bytes are not a change, so git sees nothing for the untouched ones.
      */
-    fun refreshTagMap() = artifacts.writeTagNotes(tagCoverage())
+    fun refreshVault() {
+        refreshProblemPages()
+        artifacts.writeTagNotes(tagCoverage())
+    }
+
+    /**
+     * Every problem page, because the tag notes alone are half a map.
+     *
+     * Obsidian draws edges from links, and a page written by an earlier build carries none — so
+     * a vault upgraded into the tag map would show every tag isolated and no edge at all, which
+     * is the opposite of what the map is for. Rewriting is free when nothing changed: the page
+     * is a function of its records, so an unchanged problem produces identical bytes.
+     */
+    private fun refreshProblemPages() =
+        RecordHistory.of(store.read()).groupBy { it.lessonId }.values.forEach { artifacts.writeReadme(it) }
 
     private fun tagCoverage(): List<TagCount> {
         val submits = RecordHistory.of(store.read()).filter { it.action == GradingAction.SUBMIT }

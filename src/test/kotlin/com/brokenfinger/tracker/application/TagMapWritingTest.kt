@@ -2,7 +2,9 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
+import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
@@ -10,10 +12,12 @@ import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -63,7 +67,7 @@ class TagMapWritingTest {
     fun `the startup refresh writes every catalogued tag, touched or not`() {
         val written = mutableListOf<TagCount>()
 
-        attachment(RecordingArtifacts(written)).refreshTagMap()
+        attachment(RecordingArtifacts(written)).refreshVault()
 
         written.map { it.tag } shouldContainExactlyInAnyOrder listOf("arithmetic", "dp")
         written.single { it.tag == "dp" } shouldBe TagCount("dp", catalogTotal = 1, attempted = 0, solved = 0)
@@ -81,6 +85,25 @@ class TagMapWritingTest {
     )
 
     private fun store(): RecordStore = JsonlRecordStore.under(root)
+
+    /**
+     * The tag notes are only half the map: Obsidian draws edges from links, and a problem page
+     * written by an earlier build has none. Without this, a vault upgraded into the tag map shows
+     * 83 isolated nodes and no edges at all — the opposite of the point.
+     *
+     * Startup is where it heals, for the same reason the tag map refreshes there: it is the one
+     * moment that can see every problem at once.
+     */
+    @Test
+    fun `the startup refresh rewrites the problem pages too, so the links exist`() {
+        val store = store()
+        store.append(SubmissionRecordJson.encode(aSubmissionRecord(lessonId = 120804, tags = listOf("arithmetic"))))
+
+        attachment(FileDerivedArtifacts(root, store)).refreshVault()
+
+        val page = RecordLayout(root).problemDirectory(120804, "두 수의 곱 구하기").resolve("README.md")
+        Files.readString(page) shouldContain "[[tags/arithmetic]]"
+    }
 
     /**
      * Records what it was asked to write and does the real work for everything else, so the

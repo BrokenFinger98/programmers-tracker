@@ -2,7 +2,7 @@
 
 Written: 2026-08-12
 Issue: #229
-Status: approved in conversation with the owner; not yet implemented
+Status: implemented and verified live on build 133be49 (#230)
 
 ---
 
@@ -96,11 +96,18 @@ disagree with the first.
 
 ### 3.4 When it is written
 
-- **At startup** — write every tag note, not only the missing ones. Startup is also when
-  reconciliation recovers records left by a crash, and those records change counts; refreshing
-  only what is absent would leave a note disagreeing with the log until the next grading happened
-  to touch that tag. Writing identical bytes is not a change, so git sees nothing for the
-  untouched ones.
+- **At startup** — write every problem README *and* every tag note.
+
+  The READMEs matter as much as the notes and the first draft of this spec forgot them: Obsidian
+  draws edges from links, and a page written by an earlier build carries none. A vault upgraded
+  into the tag map would show every tag isolated with no edge at all — the exact opposite of the
+  design's purpose, and it was visible on the live repository the moment the feature shipped.
+  Rewriting is free when nothing changed, since a page is a function of its records.
+
+  **Every tag note, not only the missing ones.** Startup is also when reconciliation recovers
+  records left by a crash, and those records change counts; refreshing only what is absent would
+  leave a note disagreeing with the log until the next grading happened to touch that tag.
+  Writing identical bytes is not a change, so git sees nothing for the untouched ones.
 - **On each record** — rewrite only the tag notes of the problem just recorded, normally one or
   two. Never the whole set.
 
