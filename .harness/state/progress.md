@@ -3335,3 +3335,29 @@ that rejects its own documentation is one someone deletes.
 
 The token itself was registered outside the repository, in `~/.claude.json` local scope, and
 `git status` stayed clean throughout.
+
+## [2026-08-12] #203 — stats said it twice, and only a real client showed it ✅
+
+The MCP server was registered as a tool in this session (`~/.claude.json`, local scope — the
+token stays out of the repository, which #201 now guards). Six tools loaded, three called live:
+`stats`, `slow_passes`, `list_problems`. All three carried `incompleteHistory` — **the consumer
+that field was written for is this session, and it is visible.**
+
+**The first thing reading the descriptions found was a defect.** #187 appended a shared
+`incompleteHistory` sentence to every tool and left the `stats`-specific one #169 had added, so
+`stats` says the same thing twice. The other five say it once.
+
+The `curl` verification an hour earlier missed it: it printed the **last 180 characters** of one
+tool's description, and the duplication is mid-paragraph in a different tool's. `tools/list`
+returns ~1.5 KB of prose per tool and nobody reads that from a terminal — a client puts all six
+in front of a reader at once.
+
+That is the half `curl` could not do, and it found something on the first read.
+
+A test now pins that no description contains the sentence twice. The mechanism will recur: append
+a shared suffix, forget the bespoke one. The next tool to earn a note of its own is the next
+chance to make the same mistake.
+
+Also observed live, unprompted: the session-start hook fired **this repository's** wiki reminder
+(`docs/llm-wiki/raw/inbox … 1개`), which is #166 working — the repo-local inbox exists and points
+here rather than at the central wiki.
