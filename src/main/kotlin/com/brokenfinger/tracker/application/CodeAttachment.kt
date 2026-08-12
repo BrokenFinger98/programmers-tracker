@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.domain.calc.TagCount
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -197,6 +198,15 @@ interface DerivedArtifacts {
 
     /** Rewrites one problem's README from its records, oldest first. */
     fun writeReadme(records: List<SubmissionRecord>)
+
+    /**
+     * Rewrites the vault's tag map for the counts given (#229) — one problem's tags after a
+     * record, every catalogued tag at startup.
+     *
+     * The counts are handed in rather than computed here, because deciding them is a
+     * calculator's job and this port only writes files.
+     */
+    fun writeTagNotes(counts: List<TagCount>)
 }
 
 /**
