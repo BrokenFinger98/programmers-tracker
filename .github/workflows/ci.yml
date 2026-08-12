@@ -35,6 +35,16 @@ jobs:
           distribution: temurin
           java-version: '25'
 
+      # Pinned for the same reason the JDK is. JavascriptRunnerExecutionTest skips politely when
+      # node is absent — right on a contributor's machine — and the skip-guard below turns that
+      # skip into a failure, because a runner image quietly dropping a toolchain must not silently
+      # un-earn a language's supported status. Twice the Windows image arrived without node (#174,
+      # #208), and rerunning until it passes trains us to rerun on a guard failure, which is how a
+      # guard stops meaning anything. The proof now rests on this declaration, not on the image.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - uses: gradle/actions/setup-gradle@v5
 
       - name: ktlint
@@ -113,6 +123,21 @@ jobs:
             echo "attempt $attempt took $(( $(date +%s) - start ))s"
             echo "::endgroup::"
           done
+
+      # This job exists to catch what only fails sometimes, and until now it threw the evidence
+      # away: it uploaded nothing, so its first real catch — a RecordWriterGitTest failure on
+      # 2026-08-12 — arrived as `JUnitException at ArrayList.java:1604, caused by IOException at
+      # ForEachOps.java:186` and nothing else. The job log truncates stack traces; the uploaded
+      # report does not (concepts/assumption-vs-measurement, "Read the failure, do not
+      # pattern-match it"). The gates job has always uploaded; the one job whose failures are
+      # hardest to reproduce did not.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-repeatability
+          path: build/test-results/test/
+          if-no-files-found: ignore
 
   # The image has to boot, and the network posture it ships with has to be the one the
   # ADR describes. Both are asserted rather than described, because a compose comment
