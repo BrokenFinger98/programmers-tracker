@@ -149,7 +149,9 @@ object McpToolCatalog {
         name = GET_PROBLEM,
         title = "One problem and its attempts",
         description = "Everything recorded against one Programmers lesson: catalog metadata as captured, and " +
-            "every submission in full, including per-testcase results and compiler output. A lesson with " +
+            "every grading in full, including per-testcase results and compiler output. The array holds runs " +
+            "as well as submits — a run is where the compiler output comes from — and `submissionCount` and " +
+            "`runCount` split them, because a run is not an attempt at the problem. A lesson with " +
             "nothing recorded answers with an empty history rather than an error — we report what we " +
             "observed, which may be nothing." + ELAPSED_MEANS,
     ) {

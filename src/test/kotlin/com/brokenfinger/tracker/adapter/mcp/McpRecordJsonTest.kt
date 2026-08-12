@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.ProblemHistory
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.support.fixtures.aSqlSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
@@ -84,6 +85,28 @@ class McpRecordJsonTest {
         json["submissions"]!!.jsonArray.size shouldBe 1
     }
 
+    /**
+     * The array carries every record and the two counts split it, in the words the vault's own
+     * page uses. `submissionCount` was the array's length, so `get_problem` answered 15 for a
+     * problem `list_problems` called 8 attempts — the same disagreement #235 fixed in the tally,
+     * one code path over (#237).
+     */
+    @Test
+    fun `the counts split the array into submits and runs`() {
+        val records = listOf(
+            aSubmissionRecord(action = GradingAction.SUBMIT),
+            aSubmissionRecord(action = GradingAction.RUN),
+            aSubmissionRecord(action = GradingAction.RUN),
+        )
+        val history = ProblemHistory(120804, "two numbers", 0, "intro", 91, listOf("구현"), records)
+
+        val json = McpRecordJson.problem(history)
+
+        json["submissionCount"]!!.jsonPrimitive.int shouldBe 1
+        json["runCount"]!!.jsonPrimitive.int shouldBe 2
+        json["submissions"]!!.jsonArray.size shouldBe 3
+    }
+
     /** A problem with no recorded title returns no title. Not "Unknown", not an empty string. */
     @Test
     fun `a problem with nothing recorded carries no metadata keys at all`() {
@@ -94,6 +117,7 @@ class McpRecordJsonTest {
         json.shouldNotContainKey("part")
         json.shouldNotContainKey("acceptanceRate")
         json["submissionCount"]!!.jsonPrimitive.int shouldBe 0
+        json["runCount"]!!.jsonPrimitive.int shouldBe 0
         json["submissions"]!!.jsonArray.size shouldBe 0
     }
 

@@ -70,7 +70,7 @@ the facts that set its date so you can disagree with the schedule — see
 | Tool | Arguments | Answers |
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | Every recorded run and submit, newest first. Per-testcase detail, compiler output and diffs are omitted here. |
-| `get_problem` | `lessonId` | One lesson and every submission against it, in full — testcases and compiler output included. |
+| `get_problem` | `lessonId` | One lesson and every grading against it, in full — testcases and compiler output included. `submissionCount` and `runCount` split them. |
 | `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. **Submits, never runs.** **`problem` counts across languages.** |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
 | `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. **One entry per language.** |
@@ -91,7 +91,10 @@ looks like a disagreement. `groupBy=language` is the other axis.
 **`stats` counts submits and `submissions` returns runs too**, which is why the same problem can
 show 8 in a tally and 15 in the list. A run is not an attempt (design §5.1), and a verdict tally
 that counted them read as a compile-error problem where there was only someone pressing Run
-while writing code — `stats` answered otherwise until #235.
+while writing code — `stats` answered otherwise until #235, and `get_problem`'s
+`submissionCount` until #237. Where a count could mean either, both are given:
+`get_problem` answers `submissionCount` **and** `runCount`, the same two words
+`problems/<id>/README.md` has always used.
 
 `list_problems` is the only one that can answer **"which of these have I never touched"** —
 the records alone cannot tell that from "tried and failed", since both are simply absent
