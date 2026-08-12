@@ -5,7 +5,6 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
 import com.brokenfinger.tracker.domain.calc.CatalogBrowse
-import com.brokenfinger.tracker.domain.calc.CatalogSummary
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.ReviewQueue
@@ -135,15 +134,6 @@ class RecordQuery(
             status = status,
         )
     }
-
-    private fun CatalogEntry.toSummary() = CatalogSummary(
-        lessonId = id,
-        title = title,
-        level = level,
-        part = partTitle,
-        acceptanceRate = acceptanceRate,
-        tags = tags,
-    )
 
     /**
      * One problem and every recorded submission against it. A lesson with nothing recorded

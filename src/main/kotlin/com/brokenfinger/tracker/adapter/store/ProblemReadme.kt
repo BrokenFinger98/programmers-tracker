@@ -70,7 +70,22 @@ class ProblemReadme(private val layout: RecordLayout) {
 
     private fun heading(records: List<SubmissionRecord>): String {
         val title = titleOf(records) ?: "${records.first().lessonId}"
-        return "\n# $title\n\n${obsidianTags(records)}\n"
+        return "\n# $title\n\n${obsidianTags(records)}\n${tagLinks(records)}"
+    }
+
+    /**
+     * Wikilinks **in addition to** the hashtags above, because the two drive different features:
+     * Obsidian's tag pane and search read hashtags, and its graph draws links (#229). Dropping
+     * either would lose something that works today.
+     *
+     * Empty for a problem the catalog does not describe. An invented link would create an edge
+     * to a tag note that no catalogued problem justifies, and the tag map's denominators come
+     * from the catalog alone.
+     */
+    private fun tagLinks(records: List<SubmissionRecord>): String {
+        val tags = tagsOf(records).orEmpty()
+        if (tags.isEmpty()) return ""
+        return "\nTags: " + tags.joinToString(" ") { "[[tags/$it]]" } + "\n"
     }
 
     // Our own labels are English (dev rules §12); the tag words come from the data and stay verbatim.

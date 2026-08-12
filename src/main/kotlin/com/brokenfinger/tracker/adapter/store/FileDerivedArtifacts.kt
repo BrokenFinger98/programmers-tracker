@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.application.DerivedArtifacts
 import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.domain.ProblemExample
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.domain.calc.runner.CRunner
 import com.brokenfinger.tracker.domain.calc.runner.CppRunner
 import com.brokenfinger.tracker.domain.calc.runner.CsharpRunner
@@ -33,6 +34,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
     private val readme = ProblemReadme(layout)
+    private val tagNotes = TagNotes(layout)
 
     /**
      * The attempt copy is what a submit points at: it is the code of *that* grading and never
@@ -87,6 +89,10 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
 
     override fun writeReadme(records: List<SubmissionRecord>) {
         readme.write(records)
+    }
+
+    override fun writeTagNotes(counts: List<TagCount>) {
+        tagNotes.write(counts)
     }
 
     // Forward slashes whatever the host uses — the same shape `rawPath` already has, so a

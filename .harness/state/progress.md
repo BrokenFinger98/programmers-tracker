@@ -3785,3 +3785,49 @@ section with no marker, reading as behaviour, and nothing polls its two endpoint
 the same style, and named as a decision rather than a chore, because wanting it back means two
 daily requests Programmers did not ask for. `hints.json` needed nothing: the design already
 corrects itself sixty lines later.
+
+## [2026-08-12] #229 — a tag map, so the graph can show what was never met ✅
+
+Designed in conversation with the owner, who asked whether the vault could show which problem
+types they had covered. The answer needed a fact first: **a graph of your own records cannot
+show a type you never met** — it is absent, not faint.
+
+So the server writes one note per catalogued tag, including the tags no record touches. That
+note is the isolated node, and the isolation is the finding.
+
+**The denominator is what keeps it honest.** The catalog uses 83 tags across 689 problems, 37 of
+them carrying two problems or fewer while `implementation` carries 379. Without `catalogTotal`,
+an isolated `tsp` (one problem anywhere) and an isolated `dp` (38) look identical and only one is
+a gap.
+
+**It settled a standing conflict.** Design §5.5 listed a server-generated `_weakness.md`;
+CLAUDE.md forbids rule-based analyzers in the server. The line turned out to sit at that
+section's own example `slowFlag` — the server deciding what counts as slow — not at the
+aggregation. The server counts and never names: no ratio, no ranking, no threshold, no "start
+here". `_weakness.md` is closed rather than deferred
+([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
+
+Verified live on build `133be49`: 83 notes written, `dp: 0/38` and `arithmetic: 2/48` both
+correct against the day's records, the server committed them itself, and a restart produced no
+churn — identical bytes, as designed.
+
+### What the plan got wrong, and one thing I did
+
+Three corrections, all of them the plan's own text rather than the design:
+
+- ktlint requires a parameter list on one line where it fits, so the signature shrank — and the
+  renamed parameters then broke the test's named arguments. The plan had specified two different
+  names for the same function.
+- The guard test extracts `tags/<tag>.md` from the template block, not `tags/`. The pattern is
+  what the server writes, so the set was corrected rather than the template.
+- **I wrote Task 5's implementation before its test.** Noticed because the test was green on the
+  first run, which proves nothing. Verified properly by removing the wiring and watching two of
+  the three go red, then restoring.
+
+### Orca, honestly
+
+The owner asked for orchestration. Two workers were dispatched and **neither started.** The
+first had its prompt mangled — a multi-line spec split by the TUI composer and never submitted,
+which was my error. The second received the TASK block intact and still produced nothing; I do
+not know why and did not guess. Both tasks were closed as failed, both workers stopped, and the
+work was done inline at the owner's instruction.

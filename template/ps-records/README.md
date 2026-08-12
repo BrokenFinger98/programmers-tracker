@@ -16,6 +16,7 @@ problems/<lessonId>-<title>/
 ├── examples.json      The judge's own example inputs and expected outputs
 ├── runner_test.<ext>  A runner built from those examples — see below
 └── attempts/          Per-submission code (NNN.<ext>) and raw frames (NNN.raw.jsonl)
+tags/<tag>.md          One note per problem type, with how many of it you have met
 log/submissions.jsonl  Full submission log (the source the MCP tools read)
 ```
 
@@ -26,12 +27,21 @@ run, so edits to it are lost. C# also gets a `runner_test.csproj` beside it.
 
 ## Viewing this as an Obsidian vault
 
-You can open this folder as a vault today and browse the per-problem pages; their
-frontmatter carries the tags, level and verdicts, so Obsidian's own search and graph work.
+Open this folder as a vault and the graph shows your problem types. Each problem links to its
+tags, so a type you have submitted against sits in a cluster — and **a type you have never
+submitted against sits there alone.** That isolated node is the point: a view built only from
+your own records cannot show you a type you never met.
 
-The design also calls for generated dashboard notes — `_dashboard`, `_weakness`, `_review`,
-`_warmup`, `_exam` — built on Dataview. **Those are not written yet**, so do not expect to
-find them. This file will list them when they exist.
+Each `tags/<tag>.md` says how many problems the catalog has for it, which is what keeps the
+picture honest. A lone `tsp` node (one problem in the whole catalog) and a lone `dp` node (38)
+look identical in a graph and are not the same finding.
+
+**What counts as a gap is yours to decide.** The server writes the numbers and never names a
+weakness — no ranking, no threshold, no "start here". That is the AI's job, or yours.
+
+The frontmatter on each problem page carries tags, level and verdicts, so Obsidian's own
+search, properties and Bases work over it without any plugin. Dataview is not required and is
+not used.
 
 ⚠️ `.ps/` is the tracker's working state — frames still being captured, per-problem timers,
 when the last push succeeded. It sits here so it is beside the records it describes, and

@@ -1,7 +1,11 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.TagCount
+import com.brokenfinger.tracker.domain.calc.TagCoverage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -50,6 +54,7 @@ class CodeAttachment(
     private val fetcher: CodeFetcher,
     private val store: RecordStore,
     private val artifacts: DerivedArtifacts,
+    private val catalog: ProblemCatalog,
     private val writerDispatcher: CoroutineDispatcher,
 ) : RecordAttachment {
     /** Attaches one record's code. Never throws for a failed fetch — the record is not ours to lose. */
@@ -100,6 +105,53 @@ class CodeAttachment(
         )
         store.append(SubmissionRecordJson.encode(corrected))
         artifacts.writeReadme(lessonHistory(corrected.lessonId))
+        artifacts.writeTagNotes(coverageOf(corrected.tags))
+    }
+
+    /**
+     * The tag map for the tags this record carries, and no others — the rest are unchanged and
+     * rewriting them would be noise in the record repository's history.
+     *
+     * **Recomputed from the log rather than incremented.** A held counter is a second authority
+     * that a reconciliation or a restart can put out of step, which is the defect family this
+     * repository spent 2026-08-12 removing.
+     */
+    private fun coverageOf(tags: List<String>): List<TagCount> {
+        if (tags.isEmpty()) return emptyList()
+        return tagCoverage().filter { it.tag in tags }
+    }
+
+    /**
+     * The whole map, for the caller that has no single problem in hand — startup.
+     *
+     * Every note, not only the missing ones. Startup is also where reconciliation recovers
+     * records a crash left behind, and those change counts; refreshing only what is absent would
+     * leave a note disagreeing with the log until some later grading happened to touch that tag.
+     * Identical bytes are not a change, so git sees nothing for the untouched ones.
+     */
+    fun refreshVault() {
+        refreshProblemPages()
+        artifacts.writeTagNotes(tagCoverage())
+    }
+
+    /**
+     * Every problem page, because the tag notes alone are half a map.
+     *
+     * Obsidian draws edges from links, and a page written by an earlier build carries none — so
+     * a vault upgraded into the tag map would show every tag isolated and no edge at all, which
+     * is the opposite of what the map is for. Rewriting is free when nothing changed: the page
+     * is a function of its records, so an unchanged problem produces identical bytes.
+     */
+    private fun refreshProblemPages() =
+        RecordHistory.of(store.read()).groupBy { it.lessonId }.values.forEach { artifacts.writeReadme(it) }
+
+    private fun tagCoverage(): List<TagCount> {
+        val submits = RecordHistory.of(store.read()).filter { it.action == GradingAction.SUBMIT }
+        return TagCoverage.of(
+            catalogued = catalog.all().map { it.toSummary() },
+            passed = submits.filter { it.verdict == Verdict.PASS }.map { it.lessonId }.toSet(),
+            submitted = submits.map { it.lessonId }.toSet(),
+        )
     }
 
     // Read back after the correction landed, so the page states what the log now resolves to.
@@ -197,6 +249,15 @@ interface DerivedArtifacts {
 
     /** Rewrites one problem's README from its records, oldest first. */
     fun writeReadme(records: List<SubmissionRecord>)
+
+    /**
+     * Rewrites the vault's tag map for the counts given (#229) — one problem's tags after a
+     * record, every catalogued tag at startup.
+     *
+     * The counts are handed in rather than computed here, because deciding them is a
+     * calculator's job and this port only writes files.
+     */
+    fun writeTagNotes(counts: List<TagCount>)
 }
 
 /**

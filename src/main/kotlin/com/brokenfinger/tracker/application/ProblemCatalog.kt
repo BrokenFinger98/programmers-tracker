@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.LessonId
+import com.brokenfinger.tracker.domain.calc.CatalogSummary
 
 /**
  * One problem as the shipped catalog describes it — reference data, no behaviour.
@@ -44,3 +45,18 @@ interface ProblemCatalog {
     /** The problem's title, or null — never a placeholder that reads like a real one. */
     fun titleOf(lessonId: LessonId): String?
 }
+
+/**
+ * The calculators' view of a catalogued problem. `domain` imports nothing (dev rules §1), so a
+ * `CatalogEntry` cannot cross into a pure calculator on its own; this is the one crossing, and
+ * it lives here so every caller shares it. Two copies of a mapping are two things to keep in
+ * step, which is what a second one would become.
+ */
+fun CatalogEntry.toSummary() = CatalogSummary(
+    lessonId = id,
+    title = title,
+    level = level,
+    part = partTitle,
+    acceptanceRate = acceptanceRate,
+    tags = tags,
+)

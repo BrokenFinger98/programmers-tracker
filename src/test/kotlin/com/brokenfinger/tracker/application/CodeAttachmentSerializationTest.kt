@@ -5,9 +5,11 @@ import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -112,6 +114,7 @@ class CodeAttachmentSerializationTest {
         fetcher = { _, _ -> CodeFetch.Fetched(CODE).also { onFetch() } },
         store = ProbedStore(store(), probe),
         artifacts = ProbedArtifacts(FileDerivedArtifacts(root, ProbedStore(store(), probe)), probe),
+        catalog = anEmptyCatalog(),
         writerDispatcher = writerDispatcher,
     )
 
@@ -177,4 +180,6 @@ private class ProbedArtifacts(private val delegate: DerivedArtifacts, private va
     }
 
     override fun writeReadme(records: List<SubmissionRecord>) = probe.around { delegate.writeReadme(records) }
+
+    override fun writeTagNotes(counts: List<TagCount>) = probe.around { delegate.writeTagNotes(counts) }
 }

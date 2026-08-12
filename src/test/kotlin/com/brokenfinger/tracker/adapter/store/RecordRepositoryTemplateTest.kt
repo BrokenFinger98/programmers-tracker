@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainAll
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -35,6 +36,16 @@ class RecordRepositoryTemplateTest {
     }
 
     /**
+     * The tag map is the one artifact whose whole purpose is to be *looked at*, and a user who
+     * does not know it exists will not open the graph. Named separately from the set above
+     * because that set is about finding your own code; this is about finding the map (#229).
+     */
+    @Test
+    fun `the template names the tag map, because being seen is the point of it`() {
+        namesInStructureBlock() shouldContain "tags/<tag>.md"
+    }
+
+    /**
      * What the server writes, spelled out rather than imported. A set shared with the
      * production constants would agree with whatever production says and prove nothing —
      * the same reason `FileDerivedArtifactsTest` spells out the stale-runner names. Adding
@@ -48,6 +59,8 @@ class RecordRepositoryTemplateTest {
         "examples.json",
         "log/submissions.jsonl",
         "attempts/",
+        // The vault's tag map (#229): one note per catalogued tag, including the untouched ones.
+        "tags/<tag>.md",
         // Per language, so the template names the pattern rather than seven extensions.
         "Solution.<ext>",
         "runner_test.<ext>",

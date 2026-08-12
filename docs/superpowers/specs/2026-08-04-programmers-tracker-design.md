@@ -845,11 +845,15 @@ Notes to generate:
 > out of the user-facing copy on purpose.
 >
 > The five are not one backlog item. **`_dashboard.md`, `_review.md` and `_warmup.md` are
-> aggregation** — allowed, unbuilt, and with no owner. **`_weakness.md` is interpretation**, and
-> `CLAUDE.md` forbids rule-based analyzers inside the server; that prohibition postdates this
-> section and has never been reconciled with it in writing, the way `review_queue`'s boundary
-> was settled by [[decisions/2026-08-10-scheduling-is-not-diagnosis]]. Building it would need
-> that decision first.
+> aggregation** — allowed, unbuilt, and with no owner. **`_weakness.md` was interpretation**, and
+> `CLAUDE.md` forbids rule-based analyzers inside the server.
+>
+> **That conflict is now settled and `_weakness.md` will not be built**, under that name or that
+> shape — see [[decisions/2026-08-12-the-server-counts-and-names-nothing]] and the spec
+> `2026-08-12-tag-map-vault-design.md`. A `tags/` map answers the same question with structure:
+> the server writes the denominators, and which of them is a weakness is the reader's to say. The
+> line turned out to sit at the `slowFlag` in this section's own example query, not at the
+> aggregation.
 >
 > `.obsidian/` is **not** server-generated either. The template ships a `.gitkeep`, and Obsidian
 > writes its own settings when the vault is first opened. What makes the vault useful today is
