@@ -3665,3 +3665,24 @@ Also corrected in passing: I wrote *"the one deliberate sleep in this file"* in 
 KDoc, and the heartbeat test already had one. Exactly the confident-but-false comment
 [[concepts/tests-that-explain-defects]] is about, written while adding a test for a defect of
 the same family.
+
+## [2026-08-12] #214 — stats collapses the languages and did not say so ✅
+
+The last accepted cost left standing from #174: `review_queue` and `slow_passes` key on
+(problem, language), `stats(groupBy=problem)` counts per problem. The ADR ended *"it is a thing
+a reader has to notice"* and stopped there.
+
+The clean-slate sweep made it concrete for the first time — lesson 181952 now has a pass in all
+seven languages, so `review_queue` holds seven items for the one bucket `stats` reports. Both
+answers are right; read side by side without the explanation they look like a disagreement.
+
+**No fourth `groupBy`.** `groupBy=language` already answers the other axis, and a
+`problem_language` group would be a third way to ask what two calls answer. What was missing was
+disclosure, not a feature — so the `stats` description says which axis it collapses and names
+the two tools that do not, `docs/mcp.md` and its Korean twin say it in prose, and a test pins it.
+
+Where it goes matters: the description is the only place a client learns it, because `tools/list`
+is read once and the results are counts. Same reasoning as #187's move of prose out of answers.
+
+Remaining cost, stated rather than solved: a reader who never reads the description still meets
+the difference unexplained.

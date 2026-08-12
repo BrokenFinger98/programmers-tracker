@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@3bb6f1c347dea2a0bb69bc6c90a639a9711ef6d9 -->
+<!-- translated-from: mcp.md@c36208ea3766a4f14ecf5ce9e14122ec9e63b58a -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -74,13 +74,21 @@ cat .ps/watch-token
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | 기록된 모든 run·submit, 최신순. 테스트케이스별 상세·컴파일러 출력·diff는 여기서 제외됩니다. |
 | `get_problem` | `lessonId` | 문제 하나와 그에 대한 모든 제출을 전부 — 테스트케이스와 컴파일러 출력 포함. |
-| `stats` | `groupBy` — `verdict` · `language` · `problem` | 버킷별 개수. 개수만. |
+| `stats` | `groupBy` — `verdict` · `language` · `problem` | 버킷별 개수. 개수만. **`problem` 은 언어를 합쳐서 셉니다.** |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | 내장 카탈로그를 기록과 조인: 문제별 `status`(`untouched` · `attempted` · `passed`)와 제출 횟수. |
 | `review_queue` | `limit?` | 다시 풀 때가 된 문제, 가장 많이 밀린 것부터. 각 항목에 그 날짜를 정한 시도 횟수·도움 신호·통과일이 붙습니다. **언어당 한 항목입니다.** |
 | `slow_passes` | `thresholdMs?` | 통과한 모든 문제를 가장 느린 테스트케이스(밀리초) 기준으로 정렬. 비교에 필요한 레벨·태그·언어가 함께 옵니다. |
 
 `since` 는 날짜(`2026-08-01`)를 받으면 기록 자신이 지닌 오프셋으로 읽고, 오프셋이 붙은
 날짜시각(`2026-08-01T09:00:00+09:00`)을 받으면 시점으로 읽습니다.
+
+**두 표면은 의도적으로 다르게 묶입니다.** `review_queue` 와 `slow_passes` 는 (문제, 언어)를
+키로 씁니다 — 통과는 그 언어를 증명한 것이므로, 자바로 풀었다고 코틀린 쪽 일정이 사라지지
+않습니다([`decisions/2026-08-11-a-pass-belongs-to-its-language`](llm-wiki/wiki/decisions/2026-08-11-a-pass-belongs-to-its-language.md)).
+`stats(groupBy=problem)` 은 문제별 제출 수를 세므로 언어를 합칩니다. "이 문제를 몇 번 제출했나"
+가 그 그룹이 답하는 질문이기 때문입니다. 이걸 모르고 나란히 읽으면, 한 문제가 `review_queue`
+에서 7개 항목이고 `stats` 에서 1개 버킷인 것이 모순처럼 보입니다. 다른 축은 `groupBy=language`
+입니다.
 
 **"이 중에 한 번도 손대지 않은 게 뭐지"** 에 답할 수 있는 유일한 툴이 `list_problems` 입니다 —
 기록만으로는 "시도했다가 틀림" 과 구분할 수 없습니다. 판정 집계에서는 둘 다 그냥 없으니까요.

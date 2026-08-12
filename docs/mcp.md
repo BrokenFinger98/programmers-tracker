@@ -71,13 +71,22 @@ the facts that set its date so you can disagree with the schedule — see
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | Every recorded run and submit, newest first. Per-testcase detail, compiler output and diffs are omitted here. |
 | `get_problem` | `lessonId` | One lesson and every submission against it, in full — testcases and compiler output included. |
-| `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. |
+| `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. **`problem` counts across languages.** |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
 | `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. **One entry per language.** |
 | `slow_passes` | `thresholdMs?` | Every passed problem ranked by its slowest testcase in milliseconds, with the level, tags and language a comparison needs. |
 
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
 offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
+
+**The two surfaces group differently, on purpose.** `review_queue` and `slow_passes` key on
+(problem, language) — a pass demonstrates a language, so solving something in Java does not
+schedule away the Kotlin version
+([`decisions/2026-08-11-a-pass-belongs-to-its-language`](llm-wiki/wiki/decisions/2026-08-11-a-pass-belongs-to-its-language.md)).
+`stats(groupBy=problem)` counts submissions per problem and collapses the languages, because
+"how many times did I submit this problem" is the question it answers. Read side by side
+without knowing that, one problem showing seven `review_queue` items and one `stats` bucket
+looks like a disagreement. `groupBy=language` is the other axis.
 
 `list_problems` is the only one that can answer **"which of these have I never touched"** —
 the records alone cannot tell that from "tried and failed", since both are simply absent
