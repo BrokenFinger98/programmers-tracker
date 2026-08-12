@@ -229,6 +229,26 @@ class GradingSessionAssemblerTest {
     }
 
     /**
+     * **The run path has its own time limit, and it is ten seconds** — against the ~87 seconds
+     * measured for a submit. It arrives as an `error` frame in a sentence that shares no words
+     * with the submit path's, so it matched nothing and was recorded as a RUNTIME_ERROR: the
+     * code was slow, and the record said it had crashed (#222, measured 2026-08-12 on lesson
+     * 120802).
+     *
+     * The distinction is the whole point of keeping five verdicts. "Too slow" and "it threw"
+     * ask the learner for opposite next moves.
+     */
+    @Test
+    fun `a run that exceeds the run time limit is a timeout, not a crash`() {
+        val session = anAssembledSession("algorithm-run-timeout.jsonl")
+
+        session.action shouldBe GradingAction.RUN
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.TIMEOUT
+        checkNotNull(session.errorText) shouldContain "10.0초를 초과"
+    }
+
+    /**
      * Kotlin's other way to fail, and the reason it is *not* in the table above. Programmers
      * invokes `main(String[])`; a top-level `fun main()` with no parameters compiles fine and
      * is then never found. What comes back is a Programmers message saying no main method was

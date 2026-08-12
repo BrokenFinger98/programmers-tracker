@@ -21,6 +21,23 @@ object VerdictResolver {
     private val timeoutMessage = Regex("시간 초과")
     private val runtimeFailureMessage = Regex("런타임 에러")
 
+    /**
+     * **The run path has its own time limit and its own sentence for it** — 10 seconds, against
+     * the ~87 seconds measured for a submit (protocol doc §7.3, measured 2026-08-12 on lesson
+     * 120802). It arrives as a `run` `error` frame, not as a testcase message, and it shares no
+     * words with the submit path's sentence — the phrase [timeoutMessage] matches does not
+     * appear in it at all.
+     *
+     * So it matched nothing, fell through to [errorVerdictOf] and was recorded as a
+     * RUNTIME_ERROR — the learner's code was slow, and the record said it had crashed (#222).
+     * Those two ask for opposite next moves.
+     *
+     * Kept as a second pattern rather than folded into [timeoutMessage] with an alternation.
+     * They are two measurements of two different limits on two different paths, and a single
+     * loosened regex would stop saying which of them was seen.
+     */
+    private val runTimeLimitMessage = Regex("""실행 시간이 [\d.]+초를 초과""")
+
     // A wrong answer is the only failure that still reports timing, as in "(0.01ms, 75.3MB)".
     private val measuredMessage = Regex("""\d+(\.\d+)?ms""")
 
@@ -94,6 +111,10 @@ object VerdictResolver {
     private fun nothingRanVerdict(errorText: String?): Verdict? {
         if (errorText == null) return null
         if (UnknownReason.matching(errorText) != null) return null
+        // Before the compiler shapes, because the run limit is not a failure to build or to run
+        // — it is a solution that works and is too slow, and it reaches here with no testcase
+        // of its own to carry the message (#222).
+        if (runTimeLimitMessage.containsMatchIn(errorText)) return Verdict.TIMEOUT
         return errorVerdictOf(errorText)
     }
 

@@ -18,6 +18,7 @@ verbatim — failure classification depends on them (protocol doc section 7).
 | `algorithm-run-error.jsonl` | §7 run path, §15 #12–13 — HTML-escaped compiler output / stack trace | **truncated: `start · error · error`, no `result`** — see below |
 | `algorithm-run-pass.jsonl` | **Our own live capture**, lesson 120804, 2026-08-04 and reproduced 2026-08-05 (issues #6, #10) | the only fixture not transcribed from the protocol doc — see below |
 | `algorithm-cached-result.jsonl` | lesson 181952, 2026-08-07: `start` then `error` `같은 코드로 채점한 결과가 있습니다.` — **a truncated capture, not the whole protocol.** It was read as "no verdict frames at all"; in fact this code closed the stream at the error and lost the rest (#154) | kept as the capture it is, and as what a grading interrupted mid-flight looks like |
+| `algorithm-run-timeout.jsonl` | lesson 120802, 2026-08-12 (#222): the **run path's own** 10-second limit — `실행 시간이 10.0초를 초과하여…`, on an `error` frame, sharing no words with the submit path's `실패 (시간 초과)` | whole — `start · error ×2 · result` |
 | `java-compile-error.jsonl` | lesson 181952, 2026-08-12 (#212): javac, **two diagnostics in one `error` frame**, ending `2 errors` | whole — `start · error · result` |
 | `cpp-compile-error.jsonl` | lesson 181952, 2026-08-12: clang, `/solution0.cpp:8:15: error:` | whole |
 | `c-compile-error.jsonl` | lesson 181952, 2026-08-12: clang, `/solution0.c:6:21: error:` | whole |

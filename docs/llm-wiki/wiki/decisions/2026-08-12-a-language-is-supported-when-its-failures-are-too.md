@@ -136,3 +136,23 @@ Also measured and not a defect of ours: Programmers invokes Kotlin's `main(Strin
 top-level `fun main()` is compiled and then never found. The message names a missing main
 method and is **identical for correct and broken bodies**, which confounded two readings
 before the editor template was checked.
+
+
+## Amended 2026-08-12 (#222): the same error one path over
+
+This ADR is about a measurement taken on one language and generalised to six. The identical
+mistake was sitting one axis away, and it took going after the missing verdict to find it.
+
+`timeoutMessage` was measured on the **submit** path. The **run** path has its own limit — ten
+seconds, against the submit's ~87 — and announces it in a sentence sharing no words with the
+one that was measured. So a run that merely ran long matched nothing, fell through to the
+compiler-shape branch, and was recorded as a RUNTIME_ERROR: slow code, filed as crashed.
+
+The counter-practice generalises past languages, then. **A pattern measured on one path is
+evidence about that path.** The `action` axis (run vs submit) and the `kind` axis (algorithm vs
+database) are as capable of carrying a different sentence as a different compiler is — protocol
+§6 already says database never sends `finish`, which is the same lesson in a shape this project
+accepted years-equivalent ago and did not carry across.
+
+Kept as a second pattern rather than a loosened first one, for the reason the language entries
+are kept separate: a regex wide enough to catch both would stop recording which was seen.
