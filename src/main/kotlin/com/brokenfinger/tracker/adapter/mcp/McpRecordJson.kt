@@ -55,6 +55,18 @@ object McpRecordJson {
 
     fun summaries(records: List<SubmissionRecord>): JsonArray = JsonArray(records.map(::summary))
 
+    /**
+     * One problem in full — every record it has, and **two counts that split them.**
+     *
+     * `submissionCount` used to be the array's length, so `get_problem` answered 15 where
+     * `list_problems` called the same problem 8 attempts (#237): the array holds runs too, and a
+     * run is not an attempt (design §5.1). The words are the vault's — `problems/<id>/README.md`
+     * has carried `attempts` and `runCount` side by side since it was written, and two views of
+     * one problem should not need two vocabularies.
+     *
+     * The array keeps every record, because `get_problem` is where the compiler output lives and
+     * that only comes from the run path.
+     */
     fun problem(history: ProblemHistory): JsonObject = buildJsonObject {
         put("lessonId", history.lessonId)
         history.title?.let { put("title", it) }
@@ -62,7 +74,8 @@ object McpRecordJson {
         history.part?.let { put("part", it) }
         history.acceptanceRate?.let { put("acceptanceRate", it) }
         put("tags", format.encodeToJsonElement(history.tags))
-        put("submissionCount", history.submissions.size)
+        put("submissionCount", history.submissions.count { it.isSubmission() })
+        put("runCount", history.submissions.count { !it.isSubmission() })
         put("submissions", JsonArray(history.submissions.map(::full)))
     }
 

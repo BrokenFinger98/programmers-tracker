@@ -1,6 +1,5 @@
 package com.brokenfinger.tracker.domain.calc
 
-import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 
 /**
@@ -60,8 +59,9 @@ data class TallyBucket(val key: String?, val label: String?, val count: Int)
  * interpretation on the AI reading the numbers, and a calculator that ranked or judged
  * here would be the rule-based analyzer the server is forbidden to contain.
  *
- * **Submissions, so runs are dropped here** rather than by the caller (#235). Every other
- * calculator already tested the action — `ReviewQueue`, `SlowPasses`, the tag map — and this
+ * **Submissions, so runs are dropped here** rather than by the caller (#235), through
+ * [SubmissionRecord.isSubmission] so the rule is written once. Every other calculator already
+ * tested the action — `ReviewQueue`, `SlowPasses`, the tag map — and this
  * one counted whatever `RecordQuery.history()` handed it, which is runs and submits both. On
  * the owner's own repository that made `stats(groupBy=problem)` answer 15 where
  * `list_problems` called the same problem 8 attempts, and put 7 compile errors into a verdict
@@ -79,8 +79,6 @@ object SubmissionTally {
             .map { (key, grouped) -> TallyBucket(key, group.labelOf(grouped.first()), grouped.size) }
         return ordered(buckets)
     }
-
-    private fun SubmissionRecord.isSubmission(): Boolean = action == GradingAction.SUBMIT
 
     // Deterministic so a client can cache the answer and diff two of them: biggest bucket
     // first, ties broken by key.

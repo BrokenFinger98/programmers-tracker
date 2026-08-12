@@ -111,6 +111,16 @@ data class SubmissionRecord(
     fun isJudged(): Boolean = outcome == Outcome.JUDGED
 
     fun isCodeAttached(): Boolean = !codePending && codePath != null
+
+    /**
+     * Whether this grading was an attempt at the problem rather than a run of the editor.
+     *
+     * A method rather than a comparison spelled out at each call site, because that comparison
+     * has now been missing twice: `stats` counted runs as submissions (#235) and `get_problem`
+     * counted them in `submissionCount` (#237). *A run is not an attempt* is design §5.1, and a
+     * rule written by hand wherever it is needed is a rule that will be forgotten somewhere.
+     */
+    fun isSubmission(): Boolean = action == GradingAction.SUBMIT
 }
 
 /**

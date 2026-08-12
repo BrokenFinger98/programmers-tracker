@@ -3965,3 +3965,54 @@ Also checked and **not** a defect: the startup warning about lesson 120802's 3 o
 repeats on every boot, but nothing is re-processed or rewritten — `unprocessed()` walks only the
 direct children of `.ps/raw/`, and `orphans/` is a standing evidence directory whose file has not
 been touched since 2026-08-12 15:41. It reports a condition that is still true.
+
+## [2026-08-13] #237 — `get_problem` counted runs too, one code path over ✅
+
+Found by continuing the same comparison that found #235. Same server, same log, same problem:
+
+```
+list_problems(status=passed)  →  181952 … "attempts": 8
+get_problem(181952)           →  181952 … "submissionCount": 15
+problems/181952-…/README.md   →  attempts: 8 · runCount: 7
+```
+
+`McpRecordJson` published the array's length, and the array holds runs — which is right, because
+a run is where the compiler output comes from and `get_problem` is the tool that returns it. Only
+the count was wrong.
+
+**Answers both now**, in the words `ProblemReadme` has used since it was written: `submissionCount`
+and `runCount`. Two views of one problem should not need two vocabularies.
+
+**And the rule is written once.** `SubmissionRecord.isSubmission()` — a behaviour method beside
+`isJudged()` and `isCodeAttached()` — now carries it, and `SubmissionTally` asks it too. The
+comparison had been missing twice in two days, which is what a rule spelled out at each call site
+does eventually.
+
+`ReviewQueue.passed()` and `SlowPasses.passed()` were left alone: they combine the action with a
+verdict, they are correct, and rewriting correct code was not this issue.
+
+### The sweep that found it
+
+Every read surface asked the same question and checked against the records:
+
+| view | agrees with the records |
+|---|---|
+| `list_problems` | ✅ |
+| `slow_passes` | ✅ 9 timed + 1 untimed = the 10 (problem, language) passes on record |
+| `review_queue` | ✅ 0 due — nothing has aged past the 3-day band yet |
+| `tags/*.md` | ✅ 0 of 83 disagree |
+| `problems/*/README.md` | ✅ attempts 8, runCount 7 |
+| `stats` | ❌ #235 |
+| `get_problem` | ❌ #237 |
+
+Two wrong out of seven, both the same mistake, neither visible from inside its own tests.
+
+### Checked and judged not worth changing
+
+The container healthcheck is `curl -s -o /dev/null http://127.0.0.1:8080/`, and `/` answers
+**404**. Without `-f`, curl exits 0 on any HTTP response, so the check proves the port is
+listening and nothing more. For a Spring Boot app that is nearly the same statement — a context
+that fails to start does not serve at all — and the alternative is a new unauthenticated
+endpoint. Left as is; say so if you disagree.
+
+The MCP token gate was re-verified after the rebuild: no token → 401, wrong token → 401.

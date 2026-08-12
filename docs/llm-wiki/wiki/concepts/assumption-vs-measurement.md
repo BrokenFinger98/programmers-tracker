@@ -286,6 +286,18 @@ measured, but **an invariant four call sites kept by hand and nobody stated once
 by convention in four places is enforced in none, and its fifth site is invisible until two
 consumers of the same data are compared.
 
+**Continuing the same comparison found a sixth site the same night.** `get_problem` published
+`"submissionCount": 15` for the problem `list_problems` called 8 attempts, because the field was
+the length of an array that holds runs too (#237). The array is right — a run is where the
+compiler output comes from — and only the count was wrong, so it now answers `submissionCount`
+and `runCount` both, in the two words `problems/<id>/README.md` had used all along.
+
+Twice in two days is what settled the shape of the fix: the rule became
+`SubmissionRecord.isSubmission()`, one method the counting sites ask, rather than a comparison
+spelled out wherever it happens to be needed. **Two views of one thing should not need two
+vocabularies**, and the surest way to keep them from drifting is to give them one sentence to
+share rather than one convention to remember.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
