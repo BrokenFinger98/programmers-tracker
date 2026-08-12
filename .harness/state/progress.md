@@ -3865,3 +3865,29 @@ the centering force was scaled by viewport size (`min(W,H) * 0.00042` ≈ 0.34),
 off-centre moved 100px per frame and diverged, and there was no alpha decay to settle it. A
 constant and a cooling schedule fixed it. Worth remembering that a preview has its own bugs and
 they are not the design's.
+
+## [2026-08-13] #233 — 43 of 83 tag links resolved to nothing, and a test had pinned it ✅
+
+Found while waiting on #232's CI, by asking a question the tests never did: **does an emitted
+link name a file that exists?**
+
+`RecordLayout.slugOf` turns `binary_search` into `binary-search.md`, and both writers built the
+link from the *tag*. **43 of the catalog's 83 tags carry an underscore**, so more than half the
+map's links resolved to nothing — Obsidian draws a ghost node instead of an edge, in a feature
+whose entire purpose is the edges. Shipped in #229 and about to be doubled by #232.
+
+**The test that should have caught it asserted the defect instead:**
+
+> `a tag the filesystem would not take keeps its spelling in the field`
+
+That is correct about the frontmatter — the `tag:` field is the datum and must stay verbatim —
+and it stopped there. It never asked what a *link* needs. The spec made the same distinction and
+stopped at the same place, so code, test and spec all agreed with each other and none of them
+with the filesystem.
+
+Exactly `concepts/tests-that-explain-defects`, which I had cited twice today before writing it.
+
+**The fix is the missing check, not a better rule.** `RecordLayout.tagNoteLink` owns the answer,
+both writers ask it, and the new test resolves every emitted link against the files actually
+written — asserted against the directory rather than against the naming rule, because a test
+that restates the rule agrees with whatever the rule currently is.

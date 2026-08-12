@@ -45,6 +45,16 @@ class RecordLayout(private val root: Path) {
      */
     fun tagNote(tag: String): Path = root.resolve(TAGS).resolve("${slugOf(tag)}.md")
 
+    /**
+     * What a wikilink to that note must say — the **file name**, not the tag.
+     *
+     * They differ for 43 of the shipped catalog's 83 tags, because `binary_search` slugs to
+     * `binary-search`, and writing the tag instead shipped a map whose links resolved to
+     * nothing (#233). Both writers ask here rather than building the string themselves: one
+     * place owns the name, for the same reason there is only one sanitiser.
+     */
+    fun tagNoteLink(tag: String): String = "$TAGS/${slugOf(tag)}"
+
     private fun attemptsOf(lessonId: Long, title: String?, attempt: Int): Path {
         require(attempt >= 1) { "attempt must be at least 1, a run writes no attempt file: $attempt" }
         return problemDirectory(lessonId, title).resolve(ATTEMPTS)

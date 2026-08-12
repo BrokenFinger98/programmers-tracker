@@ -55,6 +55,6 @@ class TagNotes(private val layout: RecordLayout) {
      */
     private fun relatedLine(count: TagCount): String {
         if (count.related.isEmpty()) return ""
-        return "\nShares problems with: " + count.related.joinToString(" ") { "[[tags/$it]]" } + "\n"
+        return "\nShares problems with: " + count.related.joinToString(" ") { "[[${layout.tagNoteLink(it)}]]" } + "\n"
     }
 }

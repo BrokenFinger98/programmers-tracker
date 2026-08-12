@@ -83,6 +83,13 @@ numbers is exactly what #214 had to disclose its way out of. One definition, bot
 Tags: [[tags/arithmetic]]
 ```
 
+**A link is a path, so it uses the note's file name, not the tag.** They differ for 43 of the
+catalog's 83 tags — `binary_search` slugs to `binary-search` — and the first version wrote the
+tag, so more than half the map's links resolved to nothing and Obsidian drew ghost nodes instead
+of edges (#233). `RecordLayout` answers what to link to, for the same reason it owns the only
+sanitiser. The `tag:` frontmatter field still keeps the tag's own spelling: the field is the
+datum, the link is a path, and saying only that they differ is what let the defect through.
+
 **The inline hashtags stay.** The two mechanisms serve different features — hashtags drive the
 tag pane and search, wikilinks drive the graph and backlinks — and removing the hashtags would
 break something that works today. If the graph's tag option is enabled a name may appear as two

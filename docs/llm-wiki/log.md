@@ -101,3 +101,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-12] ingest | the run path has its own time limit → 1 page updated
 
 ## [2026-08-12] ingest | the server counts the map and names nothing on it → 1 page updated, 1 created
+
+## [2026-08-13] ingest | a true sentence can pin a defect just as well as a false one → 1 page updated

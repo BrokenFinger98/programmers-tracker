@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, testing, fixtures, protocol, failed-attempts]
 created: 2026-08-11
-updated: 2026-08-12
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md]
+updated: 2026-08-13
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md, raw/sessions/2026-08-12-clean-slate-verification.md, raw/sessions/2026-08-13-the-map-that-linked-to-nothing.md]
 ---
 
 # Tests That Explain the Defect Instead of Catching It
@@ -180,3 +180,42 @@ That last point generalises past this project. A suite is a fixed point of whate
 understanding wrote it — it can only fail on the parts of the protocol you already modelled
 correctly. The unmodelled parts are green by construction, and the only thing that disagrees
 with them is the system itself.
+
+## A true sentence can pin a defect just as well as a false one
+
+2026-08-13, and this instance is worth keeping because nothing in it was wrong.
+
+The tag map writes `tags/<tag>.md`, slugging the name so `binary_search` becomes
+`binary-search.md`. A test pinned that:
+
+> `a tag the filesystem would not take keeps its spelling in the field`
+
+**Every word of it is correct.** The `tag:` frontmatter field is the datum and must stay
+verbatim; the file name is a path and is slugged; they differ on purpose. The spec said the same
+thing in the same words.
+
+And 43 of the catalog's 83 tags shipped with every link to them resolving to nothing, because
+both writers built the wikilink from the tag. A link is a path. The test asserted that the two
+spellings differ and **never asked which one a link needs** — so code, test and spec all agreed
+with each other, and none of them with the filesystem.
+
+The earlier instances on this page are wrong explanations of right observations. This one is a
+**right explanation of an incomplete observation**, which is harder to see: there is no false
+sentence to catch, and a reviewer checking the claim finds it true.
+
+What separates them is the question asked. *"Do the two names differ?"* is a restatement of the
+rule, and a test that restates a rule agrees with whatever the rule currently is. *"Does this
+link name a file that exists?"* is a question about the world, and it is the one that failed:
+
+```kotlin
+val written = Files.list(root.resolve("tags")).use { ... }
+links.shouldNotBeEmpty()
+written shouldContainAll links
+```
+
+So the counter-practice gains a line. **Assert against the artifact, not against the rule that
+produced it.** A rule and its restatement cannot disagree; a rule and the filesystem can.
+
+Recorded also because of who wrote it: this page was cited twice on the day the defect was
+written, by the author of the defect. Knowing the pattern is not protection from it — only
+asking the outside question is.
