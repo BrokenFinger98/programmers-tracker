@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.domain.calc
 
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 
 /**
@@ -58,13 +59,28 @@ data class TallyBucket(val key: String?, val label: String?, val count: Int)
  * It draws no conclusion — no "weakest tag", no "needs review". The constitution puts
  * interpretation on the AI reading the numbers, and a calculator that ranked or judged
  * here would be the rule-based analyzer the server is forbidden to contain.
+ *
+ * **Submissions, so runs are dropped here** rather than by the caller (#235). Every other
+ * calculator already tested the action — `ReviewQueue`, `SlowPasses`, the tag map — and this
+ * one counted whatever `RecordQuery.history()` handed it, which is runs and submits both. On
+ * the owner's own repository that made `stats(groupBy=problem)` answer 15 where
+ * `list_problems` called the same problem 8 attempts, and put 7 compile errors into a verdict
+ * tally where every one of them came from pressing Run while writing code. *A run is not an
+ * attempt* is design §5.1's rule and `ProblemReadme` has always obeyed it; the numbers a
+ * reader draws conclusions from must obey it too.
+ *
+ * Runs stay readable through `submissions`, which says it returns every recorded run and
+ * submit and does.
  */
 object SubmissionTally {
     fun of(records: List<SubmissionRecord>, group: TallyGroup): List<TallyBucket> {
-        val buckets = records.groupBy(group::keyOf)
+        val buckets = records.filter { it.isSubmission() }
+            .groupBy(group::keyOf)
             .map { (key, grouped) -> TallyBucket(key, group.labelOf(grouped.first()), grouped.size) }
         return ordered(buckets)
     }
+
+    private fun SubmissionRecord.isSubmission(): Boolean = action == GradingAction.SUBMIT
 
     // Deterministic so a client can cache the answer and diff two of them: biggest bucket
     // first, ties broken by key.

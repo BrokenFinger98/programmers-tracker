@@ -166,6 +166,8 @@ object McpToolCatalog {
         name = STATS,
         title = "Counts by group",
         description = "Counts submissions per bucket. Counts only — it ranks nothing and concludes nothing. " +
+            "**Submits, never runs**: pressing Run is how code gets written, not an attempt at the problem, " +
+            "so its verdict is not counted here. `submissions` returns both and marks each with its `action`. " +
             "An entry with no `key` counts the submissions whose grouping value was never recorded, which " +
             "is not the same as a bucket named unknown. **`problem` counts across languages**: one problem " +
             "solved in Java and again in Kotlin is one bucket here and two items in `review_queue` and " +

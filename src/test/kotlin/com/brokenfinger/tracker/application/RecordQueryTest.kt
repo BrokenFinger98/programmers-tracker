@@ -1,9 +1,11 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.CaptureKey
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.Since
+import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import com.brokenfinger.tracker.support.fixtures.aPartialRecordLine
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
@@ -170,6 +172,24 @@ class RecordQueryTest {
 
         buckets.sumOf { it.count } shouldBe 2
         buckets.last().key.shouldBeNull()
+    }
+
+    /**
+     * The composition is where the defect lived: the calculator was handed [RecordQuery.history],
+     * which is every record, and counted the runs in it (#235). The rule is now inside
+     * `SubmissionTally`, so this pins the wiring rather than the rule — `submissions` keeps
+     * returning both, which is what it says it does, and only the tally drops the run.
+     */
+    @Test
+    fun `the tally counts submissions where the history it reads holds runs too`() {
+        val query = aRecordRepository(root).containing(
+            aSubmissionRecord(action = GradingAction.SUBMIT, verdict = Verdict.PASS),
+            aSubmissionRecord(action = GradingAction.RUN, verdict = Verdict.COMPILE_ERROR),
+        ).query()
+
+        query.history() shouldHaveSize 2
+        query.submissions(since = null, verdict = null) shouldHaveSize 2
+        query.tally(TallyGroup.VERDICT).shouldContainExactly(TallyBucket("PASS", null, 1))
     }
 
     // Corrections ------------------------------------------------------------------------

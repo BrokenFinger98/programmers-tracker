@@ -85,3 +85,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-12 [[sources/2026-08-12-every-language-end-to-end]] — Every supported language broken and passed on purpose; the prediction said four defects and the wire said one, plus three coincidences nothing had named
 - 2026-08-12 [[sources/2026-08-12-clean-slate-verification]] — Fifteen records from one build against an empty repository, and the browser mechanic that had cost three sessions of guessing
 - 2026-08-13 [[sources/2026-08-13-the-map-that-linked-to-nothing]] — Three defects in one feature and none found by a test; a true sentence pinned the worst of them
+- 2026-08-13 [[sources/2026-08-13-the-tally-that-counted-runs]] — The vault verified against the running server, and two MCP tools that answered 8 and 15 for the same problem
