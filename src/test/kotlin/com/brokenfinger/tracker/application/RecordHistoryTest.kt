@@ -52,7 +52,8 @@ class RecordHistoryTest {
     @Test
     fun `a line that is no record at all is left out rather than thrown on`() {
         val readable = aSubmissionRecord()
-        val torn = RecordedSubmission(lessonId = 120804, action = null, attempt = 1, language = "java", line = "{")
+        val torn =
+            RecordedSubmission(lessonId = 120804, action = null, attempt = 1, language = "java", ts = null, line = "{")
 
         val history = RecordHistory.of(listOf(torn) + stored(readable))
 

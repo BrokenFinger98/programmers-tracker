@@ -41,7 +41,20 @@ data class SubmissionRecord(
      * [SensorObservation.focusedSec] is the one that answers "how long did you actually spend".
      */
     val elapsedSec: Long,
-    /** Null for the first submission of a problem — there is no previous one to measure from. */
+    /**
+     * Seconds since the **previous recorded grading of this problem** — any action, any language.
+     *
+     * The gap between attempts is the difference between five submits in ninety seconds and five
+     * across three evenings: guessing versus thinking. Reported, never scored — the server states
+     * facts and the reader decides ([[decisions/2026-08-10-scheduling-is-not-diagnosis]]).
+     *
+     * Null when there genuinely is no previous grading, or when a clock ran backwards: an
+     * impossible duration is no reading, never a zero (dev rules §4).
+     *
+     * ⚠️ This used to read "Null for the first submission of a problem". True of the first, and
+     * it was null for the fifth as well — nothing ever set the field, so the KDoc explained a null
+     * whose real cause was a missing wire (#207). The same shape as [score] before #193.
+     */
     val sincePrevSec: Long? = null,
     val captureKey: CaptureKey,
     val outcome: Outcome,

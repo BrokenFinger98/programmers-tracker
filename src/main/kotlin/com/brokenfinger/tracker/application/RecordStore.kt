@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.GradingAction
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.time.OffsetDateTime
 
 /**
  * Stage 3 of the capture pipeline — the submission log
@@ -46,6 +47,11 @@ data class RecordedSubmission(
     val action: GradingAction?,
     val attempt: Int,
     val language: String?,
+    /**
+     * When it was graded. Lenient: a line whose timestamp will not parse keeps every other field
+     * and simply reports none, because a restored attempt counter matters more than a gap (#207).
+     */
+    val ts: OffsetDateTime?,
     val line: String,
 ) {
     companion object {
@@ -68,7 +74,8 @@ data class RecordedSubmission(
             val wire = runCatching { json.decodeFromString<Wire>(line) }.getOrNull() ?: return skipped("unreadable")
             val lessonId = wire.lessonId ?: return skipped("no lesson id")
             val action = GradingAction.ofReceived(wire.action)
-            return RecordedSubmission(lessonId, action, wire.attempt ?: NO_ATTEMPT, wire.language, line)
+            val ts = wire.ts?.let { runCatching { OffsetDateTime.parse(it) }.getOrNull() }
+            return RecordedSubmission(lessonId, action, wire.attempt ?: NO_ATTEMPT, wire.language, ts, line)
         }
 
         // Never logs the line itself — a record carries a learner's solving history.
@@ -84,5 +91,6 @@ data class RecordedSubmission(
         val action: String? = null,
         val attempt: Int? = null,
         val language: String? = null,
+        val ts: String? = null,
     )
 }
