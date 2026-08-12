@@ -3635,3 +3635,33 @@ because it forces a fresh frame. The reliable shape is:
 Every batch ends with a screenshot so the next one has coordinates. I twice concluded "capture
 is broken" from a missing record without checking the screen — the same negative-through-my-own-
 setup error the wiki already names.
+
+## [2026-08-12] #217 — unsubscribing was reported as a dropped connection ✅
+
+Found by reading logs during the clean-slate sweep, which was about something else. Seven
+language switches produced seven identical warnings; **the repetition is what made them
+visible.** One-off noise stays invisible.
+
+`runCatching` in `collectOnce` caught the `CancellationException` that our own `unsubscribe`
+raises. Three consequences from one line, and the loud one is not the dangerous one:
+
+- a WARN per switch about broadcasts that were never at risk, in the same log as the reconnect
+  warnings that mean something — the #215 shape again, one day later
+- an `UNREACHABLE` written back into the health map after `unsubscribe` removed it
+- **one more pass of the retry loop**, calling `connectionLost()` and settling any grading still
+  in flight as INCOMPLETE, logged as *dropped mid-grading*
+
+**The textbook fix was wrong and the suite caught it.** `if (it is CancellationException) throw
+it` turned `silence beyond the deadline ends the attempt and reconnects` red immediately:
+`Flow.timeout()` reports the deadline by throwing `TimeoutCancellationException`, which is a
+`CancellationException`, so rethrowing on type disables the reconnect this class exists for
+(protocol §11 — a socket measured closing silently after ~30 minutes).
+
+The discriminator is `!currentCoroutineContext().isActive` — a timeout leaves the job active,
+`unsubscribe` does not. That test predates this work by weeks and is the reason the near-miss
+cost one test run instead of a month of silent gaps.
+
+Also corrected in passing: I wrote *"the one deliberate sleep in this file"* in the new test's
+KDoc, and the heartbeat test already had one. Exactly the confident-but-false comment
+[[concepts/tests-that-explain-defects]] is about, written while adding a test for a defect of
+the same family.

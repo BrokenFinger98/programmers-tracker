@@ -95,3 +95,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-12] ingest | every supported language, driven end to end → 2 pages updated, 3 created
 
 ## [2026-08-12] ingest | verifying the pipeline against an empty repository → 1 page updated, 2 created
+
+## [2026-08-12] ingest | a cancellation we caused is not a failure → 1 page updated, 1 created

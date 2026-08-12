@@ -87,6 +87,49 @@ class CableChannelSubscriberTest {
     }
 
     /**
+     * Unsubscribing is not a dropped connection, and `runCatching` could not tell the
+     * difference: it caught the `CancellationException` our own [CableChannelSubscriber.unsubscribe]
+     * raises and ran the failure path. Measured across seven language switches on 2026-08-12 —
+     * a WARN each about broadcasts that were never at risk, and one more pass of the retry loop
+     * (#217).
+     *
+     * The retry pass is what this asserts, because it is the half with teeth: it calls
+     * `connectionLost()`, which settles a grading still in flight as INCOMPLETE.
+     *
+     * **A deliberate sleep, and the file's rule says not to.** It is the same exception the
+     * heartbeat test takes, for the same reason: both assert that something *never* happens,
+     * and a non-event has no signal to await. The flow's own unwinding is the sync point, so
+     * the settle only has to cover the statements between it and the retry — with the defect
+     * present, they run back to back.
+     */
+    @Test
+    fun `unsubscribing is a stop, not a dropped connection`() = runBlocking<Unit> {
+        val started = AtomicInteger()
+        val unwound = AtomicInteger()
+        val attempts = AtomicInteger()
+        val capture = mockk<ChannelCapture>(relaxed = true)
+        val subscriber = subscriberOver(capture = capture, attempts = attempts) {
+            flow {
+                started.incrementAndGet()
+                try {
+                    delay(FOREVER_MS)
+                } finally {
+                    unwound.incrementAndGet()
+                }
+            }
+        }
+
+        subscriber.subscribe(channel)
+        awaitAtLeast(started, 1)
+        subscriber.unsubscribe(channel)
+        awaitAtLeast(unwound, 1)
+        delay(SETTLE_MS)
+
+        coVerify(exactly = 0) { capture.connectionLost() }
+        attempts.get() shouldBe 0
+    }
+
+    /**
      * A socket was measured closing silently after ~30 minutes — no exception, no close frame.
      * A flow that simply completes is that case, and accepting it would leave the channel
      * unobserved while everything looked healthy.
@@ -352,6 +395,7 @@ class CableChannelSubscriberTest {
         const val FOREVER_MS = 60_000L
         const val POLL_MS = 5L
         const val PATIENCE_MS = 10_000L
+        const val SETTLE_MS = 300L
         const val FAILING = 120001L
         const val HEALTHY = 120002L
     }
