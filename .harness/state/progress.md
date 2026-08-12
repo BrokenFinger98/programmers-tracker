@@ -3866,15 +3866,20 @@ off-centre moved 100px per frame and diverged, and there was no alpha decay to s
 constant and a cooling schedule fixed it. Worth remembering that a preview has its own bugs and
 they are not the design's.
 
-## [2026-08-13] #233 — 43 of 83 tag links resolved to nothing, and a test had pinned it ✅
+## [2026-08-13] #233 — 43 of 83 tags were unlinkable, and a test had pinned it ✅
 
 Found while waiting on #232's CI, by asking a question the tests never did: **does an emitted
 link name a file that exists?**
 
 `RecordLayout.slugOf` turns `binary_search` into `binary-search.md`, and both writers built the
-link from the *tag*. **43 of the catalog's 83 tags carry an underscore**, so more than half the
-map's links resolved to nothing — Obsidian draws a ghost node instead of an edge, in a feature
-whose entire purpose is the edges. Shipped in #229 and about to be doubled by #232.
+link from the *tag*. **43 of the catalog's 83 tags carry an underscore**, so a link to any of
+them named a file that does not exist and Obsidian would draw a ghost node instead of an edge —
+in a feature whose entire purpose is the edges.
+
+**Measured, so the blast radius is stated rather than implied.** The live vault holds 4 links
+today, to `arithmetic` and `implementation`; neither is slugged, so **nothing on disk was broken
+yet**. #232 emits 510 tag→tag links over 255 pairs, of which **178 (35%) would have dangled** —
+so the defect shipped latent in #229 and would have become visible the moment the edges did.
 
 **The test that should have caught it asserted the defect instead:**
 

@@ -194,10 +194,16 @@ The tag map writes `tags/<tag>.md`, slugging the name so `binary_search` becomes
 verbatim; the file name is a path and is slugged; they differ on purpose. The spec said the same
 thing in the same words.
 
-And 43 of the catalog's 83 tags shipped with every link to them resolving to nothing, because
-both writers built the wikilink from the tag. A link is a path. The test asserted that the two
-spellings differ and **never asked which one a link needs** — so code, test and spec all agreed
-with each other, and none of them with the filesystem.
+And 43 of the catalog's 83 tags shipped unlinkable, because both writers built the wikilink from
+the tag. A link is a path. The test asserted that the two spellings differ and **never asked
+which one a link needs** — so code, test and spec all agreed with each other, and none of them
+with the filesystem.
+
+The defect was latent, and saying so is part of the record: the live vault held 4 links, none to
+a slugged tag, so nothing on disk was broken. The next change would have emitted 510 tag→tag
+links, 178 of them dangling. A test that agrees with the rule fails silently until the rule is
+exercised at scale, which is exactly when a wrong map is hardest to distinguish from a sparse
+one.
 
 The earlier instances on this page are wrong explanations of right observations. This one is a
 **right explanation of an incomplete observation**, which is harder to see: there is no false

@@ -21,8 +21,10 @@ sources: [raw/sessions/2026-08-13-the-map-that-linked-to-nothing.md]
    against a picture rather than a description — the first time in this project.
 4. The preview oscillated because a constant had become a coefficient (`min(W,H) * 0.00042`).
    **A preview's bugs are not the design's**, but they still cost a confusing first look.
-5. **43 of 83 tag links resolved to nothing.** Both writers built the wikilink from the tag while
-   the file name is slugged, so every underscored tag pointed at a file that does not exist.
+5. **43 of 83 tags could not be linked to.** Both writers built the wikilink from the tag while
+   the file name is slugged, so a link to any underscored tag named a file that does not exist.
+   Latent rather than live: the vault held 4 links, none to a slugged tag, and the edges #232
+   adds would have dangled 178 times out of 510.
 6. **The test that should have caught it was entirely true.** It pinned that the field keeps the
    tag's spelling and the file name does not — correct, and silent on what a *link* needs. A new
    variant for [[concepts/tests-that-explain-defects]]: a right explanation of an incomplete
