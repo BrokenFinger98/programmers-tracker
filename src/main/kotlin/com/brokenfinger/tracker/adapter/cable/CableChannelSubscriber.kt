@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.protocol.ChannelIdentifier
 import com.brokenfinger.tracker.protocol.SessionProvider
 import com.brokenfinger.tracker.protocol.SubscriptionRejectedException
 import com.brokenfinger.tracker.protocol.parse.ObservedFrames
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -56,6 +57,25 @@ class CableChannelSubscriber(
         }
     }
 
+    /**
+     * Stops watching, which is an **ordinary** thing to do: it fires on every language switch
+     * and on every closed tab.
+     *
+     * That mattered because the cancellation used to be caught as a failure, and one swallowed
+     * exception cost three separate things (#217, measured across seven language switches on
+     * 2026-08-12):
+     *
+     * 1. a WARN per switch saying *anything broadcast meanwhile is lost*, about a stop we asked
+     *    for — and it shares a log with the reconnect warnings that do mean something
+     * 2. an `UNREACHABLE` written back into [health] **after** the line below removed it,
+     *    leaving an entry for a channel nobody watches
+     * 3. one more pass of the retry loop, which called `connectionLost()` and settled any
+     *    grading still in flight as INCOMPLETE, logging it as *dropped mid-grading*
+     *
+     * All three came from `runCatching` in [collectOnce] treating cancellation as an error, so
+     * all three are fixed by rethrowing it there. Cancellation is not a failure; it is this
+     * method working.
+     */
     override fun unsubscribe(channel: ChannelKey) {
         jobs.remove(channel)?.cancel()
         health.remove(channel)
@@ -107,6 +127,17 @@ class CableChannelSubscriber(
                 .filter { it !is CableEvent.Heartbeat }
                 .collect { capture.onFrame(ObservedFrames.of(it)) }
         }.onFailure {
+            // `runCatching` catches CancellationException like anything else, and for OUR OWN
+            // cancellation that is never right — see [unsubscribe] for the three things it was
+            // costing (#217).
+            //
+            // **The test is `isActive`, not the exception type.** `Flow.timeout()` reports the
+            // silence deadline by throwing `TimeoutCancellationException`, which is also a
+            // `CancellationException` — rethrowing on type alone passes the deadline straight
+            // through the retry loop and disables the reconnect this class exists for. The
+            // existing deadline test caught exactly that. What separates them is whether the
+            // job itself was cancelled: a timeout leaves it active, `unsubscribe` does not.
+            if (it is CancellationException && !currentCoroutineContext().isActive) throw it
             health[channel] = healthAfter(it)
             report(channel, it)
         }
