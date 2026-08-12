@@ -56,9 +56,12 @@ object McpToolCatalog {
             "the design asks for a comparison against same-tag, same-level problems and there are not enough " +
             "recorded passes to have peers, so the whole distribution comes back in one call and where the " +
             "line falls is yours to decide. Each item carries the level, tags and language a fair comparison " +
-            "needs. `untimed` counts passes with no reading at all: SQL sends no per-case timing, and a " +
-            "runtime error or timeout drops it case by case — those are excluded from the ranking rather " +
-            "than ranked as instant.",
+            "needs. **Compare within one language.** Across languages the ordering is mostly runtime " +
+            "startup, not solution quality: one measured problem whose answer is a single statement in " +
+            "every language ranks java at 83.33 ms and cpp at 1.12 ms, a 74× spread with nothing in it " +
+            "about the code. `untimed` counts passes with no reading at all: SQL sends no per-case timing, " +
+            "and a runtime error or timeout drops it case by case — those are excluded from the ranking " +
+            "rather than ranked as instant.",
     ) {
         putJsonObject("properties") {
             putJsonObject("thresholdMs") {

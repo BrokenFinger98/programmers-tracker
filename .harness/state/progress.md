@@ -3721,3 +3721,28 @@ the signature and emitted `new Solution().solution(2, 3)` against the judge's ow
 the path that matters most and had never been exercised on this build. RUNTIME_ERROR came from
 the same problem (`ArrayIndexOutOfBoundsException`), so four of five verdicts are now measured
 against `b3d68cc`, and the fifth is this fix.
+
+## [2026-08-12] #225 — slow_passes ranks runtime startup, and said so about the wrong thing ✅
+
+Found by calling the two MCP tools the clean sweep had never called. `slow_passes` over lesson
+181952 — one statement of code in every language:
+
+```
+java 83.33ms · kotlin 65.19 · javascript 36.28 · csharp 22.42 · python3 10.74 · c 1.17 · cpp 1.12
+```
+
+**74×, and none of it is the code.** The two problems whose solutions actually compute sit at
+the bottom at 0.02–0.04 ms. So the top of a list titled "your slowest passes" is "which runtime
+starts slowest".
+
+The caveat existed and explained something else — that no baseline is applied *because there are
+not enough peers*. True, and not the trap a reader meets first. Same shape as #205's
+`elapsedSec`: a number whose name promises one thing and whose value measures another,
+disclosed in a sentence that does not prepare you for the size of it.
+
+**Quantified rather than featured.** The measurement goes into the tool description and
+`docs/mcp.md`, `language` was already on every item, and no filter or grouping was added.
+
+Noted while checking, not a defect: `submissions(verdict=TIMEOUT)` returns nothing though a run
+did time out today — it was recorded before #223 landed and the log is append-only. Records are
+not rewritten when a classifier improves.

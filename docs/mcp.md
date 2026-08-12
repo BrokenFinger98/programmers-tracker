@@ -128,6 +128,17 @@ solution you wrote, not the problem you solved. Grouping by problem alone kept o
 pass, so a slow Java pass written the day after a fast Kotlin one disappeared — the exact reading
 this tool exists to surface, hidden by the tool.
 
+**Compare within one language, and the reason is measured.** Lesson 181952 was passed in all
+seven supported languages on 2026-08-12, and its answer is a single statement in each of them:
+
+| java | kotlin | javascript | csharp | python3 | c | cpp |
+|---|---|---|---|---|---|---|
+| 83.33 ms | 65.19 ms | 36.28 ms | 22.42 ms | 10.74 ms | 1.17 ms | 1.12 ms |
+
+**74×, and none of it is the code.** It is interpreter and VM startup. Read across languages and
+the top of this list is "which runtime starts slowest"; read within one and it is what the tool
+is for. The `language` field on every item is there to be used, not merely disclosed.
+
 `untimed` is part of the answer, not a footnote. SQL sends no per-case timing at all, and a
 runtime error or timeout drops it case by case. Those passes are excluded from the ranking
 rather than ranked as instant, because a missing reading sorted as zero would put the problems
