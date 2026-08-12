@@ -279,6 +279,24 @@ each differently.
 main(` versus a `solution(` declaration. The problem statement also renders differently
 (§12), but the code is what the runner has to match.
 
+### 7.3 The run path has its own time limit — 10 seconds (measured 2026-08-12)
+
+Two limits, two messages, and only one of them was written down.
+
+| path | limit | message |
+|---|---|---|
+| `submit` | ~87 s measured, ≥120 s assumed (§15 #11) | `실패 (시간 초과)` on the failing **testcase** |
+| `run` | **10 s** | `실행 시간이 10.0초를 초과하여 실행이 중단되었습니다.` on an **`error` frame** |
+
+Measured on lesson 120802 (java, `while (true)`), fixture `algorithm-run-timeout.jsonl`. The
+run emits `start`, one `error` per example, then `result` — no testcase frame at all, so the
+message arrives where a compiler diagnostic would.
+
+**The two sentences share no words.** `시간 초과` does not appear in the run-path message, so a
+pattern written from the submit path matches nothing and the run lands as a runtime error
+(#222). A solution that merely runs long is not one that crashed, and the difference is what
+the learner needs.
+
 ### 7.2 Compiler diagnostics, one shape per language (measured 2026-08-12)
 
 Every language the server generates a runner for was broken on purpose on lesson 181952 and

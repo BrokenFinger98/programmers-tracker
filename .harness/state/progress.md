@@ -3686,3 +3686,38 @@ is read once and the results are counts. Same reasoning as #187's move of prose 
 
 Remaining cost, stated rather than solved: a reader who never reads the description still meets
 the difference unexplained.
+
+## [2026-08-12] #222 — a run that ran too long was recorded as a crash ✅
+
+Found by going after the one verdict the clean baseline was missing. It was missing because
+nothing had ever driven it, and driving it broke immediately.
+
+**The run path has its own time limit and its own sentence for it**, and only the submit's was
+ever written down:
+
+| path | limit | message |
+|---|---|---|
+| submit | ~87 s measured | `실패 (시간 초과)` on the failing testcase |
+| run | **10 s** | a sentence about exceeding the run time, on an `error` frame |
+
+They share no words. The submit pattern matched nothing, so the run fell through to the
+compiler-shape branch, found none, and landed as **RUNTIME_ERROR** — the learner's code was
+slow, and the record said it had crashed. Those ask for opposite next moves, which is the whole
+reason for keeping five verdicts apart.
+
+Same family as #212's C#: a measurement taken on one path, generalised to a path nobody had
+measured. Kept as a **second** pattern rather than a loosened first one — two limits on two
+paths, and one regex covering both would stop saying which was seen.
+
+**What did not reproduce, and was therefore not fixed.** The first timeout run left three
+orphaned frames: its `start` never reached us and only `error · error · result` arrived. The
+second run, driven identically with the log tailing, recorded normally. The frames were kept,
+which is the designed behaviour, and a fix without a reproduction is the thing the constitution
+forbids by name.
+
+Also verified on the way, and the reason this problem was chosen: **the `solution(...)` problem
+shape**, untouched by the clean sweep, which is all `main`+stdin. The runner generator parsed
+the signature and emitted `new Solution().solution(2, 3)` against the judge's own examples —
+the path that matters most and had never been exercised on this build. RUNTIME_ERROR came from
+the same problem (`ArrayIndexOutOfBoundsException`), so four of five verdicts are now measured
+against `b3d68cc`, and the fifth is this fix.
