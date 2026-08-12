@@ -189,8 +189,9 @@ class CaptureConfiguration {
         fetcher: CodeFetcher,
         store: RecordStore,
         artifacts: DerivedArtifacts,
+        catalog: ProblemCatalog,
         writerDispatcher: CoroutineDispatcher,
-    ) = CodeAttachment(fetcher, store, artifacts, writerDispatcher)
+    ) = CodeAttachment(fetcher, store, artifacts, catalog, writerDispatcher)
 
     private suspend fun fetched(
         sessions: SessionProvider,

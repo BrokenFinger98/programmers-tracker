@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -113,6 +114,7 @@ class CodeAttachmentSerializationTest {
         fetcher = { _, _ -> CodeFetch.Fetched(CODE).also { onFetch() } },
         store = ProbedStore(store(), probe),
         artifacts = ProbedArtifacts(FileDerivedArtifacts(root, ProbedStore(store(), probe)), probe),
+        catalog = anEmptyCatalog(),
         writerDispatcher = writerDispatcher,
     )
 

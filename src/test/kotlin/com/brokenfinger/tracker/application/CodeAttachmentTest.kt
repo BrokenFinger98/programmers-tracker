@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -253,7 +254,7 @@ class CodeAttachmentTest {
     private fun keysInLog(): List<CaptureKey> = store().read().map { SubmissionRecordJson.decode(it.line).captureKey }
 
     private fun attachment(fetcher: CodeFetcher) =
-        CodeAttachment(fetcher, store(), FileDerivedArtifacts(root, store()), Dispatchers.Unconfined)
+        CodeAttachment(fetcher, store(), FileDerivedArtifacts(root, store()), anEmptyCatalog(), Dispatchers.Unconfined)
 
     private fun fetches(code: String) = CodeFetcher { _, _ -> CodeFetch.Fetched(code) }
 

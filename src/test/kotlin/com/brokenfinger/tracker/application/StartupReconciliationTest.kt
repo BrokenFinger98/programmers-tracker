@@ -161,6 +161,7 @@ class StartupReconciliationTest {
             fetcher = { _, _ -> CodeFetch.Unavailable("no page source in this test") },
             store = store,
             artifacts = FileDerivedArtifacts(repo.root, store),
+            catalog = anEmptyCatalog(),
             writerDispatcher = Dispatchers.Unconfined,
         )
     }
