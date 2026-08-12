@@ -722,6 +722,13 @@ GET /api/v2/ai/skill-reports/status        {lastReport, submissionsCount, report
 Snapshot once a day into `.ps/pg-metrics.jsonl`. The rating/ranking time series becomes a
 control group independent of our records.
 
+> ⚠️ **Amended 2026-08-12 (#227): not built, and it reads here as though it were.** No
+> `pg-metrics.jsonl` exists and nothing polls either endpoint. Found by the same sweep that
+> caught §5.5 — this line sits in the architecture section with no priority marker, unlike
+> §6.10's `concept-graph.json`, which is labelled **(P2)** and is honest about being future
+> work. Wanting it back means two daily requests Programmers did not ask for
+> (development-rules §9.3), so it is a decision and not a chore.
+
 ### 5.5 Obsidian viewing layer
 
 `ps-records` is built to **open directly as an Obsidian vault.** No separate GUI is
@@ -742,9 +749,13 @@ problems/120804-두-수의-곱-구하기/
 ├── README.md         ← server-generated. Overwritten every time; human edits vanish on the next record
 ├── notes.md          ← retrospective notes. AI/humans append; the server never touches it
 ├── Solution.java
-├── SolutionTest.java
-├── meta.json
+├── RunnerTest.java   ← amended 2026-08-12 (#227): named SolutionTest.java here; the server
+│                       writes RunnerTest.java, one per language (#37)
+├── examples.json     ← the judge's own example cases, which the runner is generated from
 └── attempts/
+
+`meta.json` appeared in this tree and **has never existed** — the frontmatter of `README.md`
+carries what it would have held (#96, #227).
 ```
 
 **Server-written files and human-written files are never mixed in one file.** Splitting a
@@ -824,6 +835,26 @@ Notes to generate:
 | `_review.md` | review queue (sorted by `nextReview`) |
 | `_warmup.md` | reactivation diagnosis results — alive / fuzzy / dead |
 | `_exam.md` | past-exam set progress |
+
+> ⚠️ **Amended 2026-08-12 (#227): none of the five notes exists, and one of them may never.**
+> #96 removed them from `template/ps-records/README.md` — the copy a user actually reads — after
+> *"a reader followed those into an empty vault"*, and `RecordRepositoryTemplateTest` now pins
+> the template to files the server really writes. This document was not amended with it, and on
+> 2026-08-12 it misled a reader again: asked whether the server could generate an Obsidian index,
+> they read this section and answered that it is specified and unbuilt, when it had been taken
+> out of the user-facing copy on purpose.
+>
+> The five are not one backlog item. **`_dashboard.md`, `_review.md` and `_warmup.md` are
+> aggregation** — allowed, unbuilt, and with no owner. **`_weakness.md` is interpretation**, and
+> `CLAUDE.md` forbids rule-based analyzers inside the server; that prohibition postdates this
+> section and has never been reconciled with it in writing, the way `review_queue`'s boundary
+> was settled by [[decisions/2026-08-10-scheduling-is-not-diagnosis]]. Building it would need
+> that decision first.
+>
+> `.obsidian/` is **not** server-generated either. The template ships a `.gitkeep`, and Obsidian
+> writes its own settings when the vault is first opened. What makes the vault useful today is
+> the frontmatter on each problem's `README.md`, which Dataview and Obsidian Properties read
+> without any generated index at all.
 
 #### Which repository holds what
 
