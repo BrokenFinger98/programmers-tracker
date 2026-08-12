@@ -3423,3 +3423,28 @@ Also noted for myself: the owner had to point out that I created #208 and report
 watching CI to completion. The same thing happened on 2026-08-05 (*"너 ci 모니터링 재대로 못하는거
 같은데??"*). The loop is issue → branch → PR → **watch → fix or merge**, and stopping at PR
 creation leaves the branch in someone else's lap.
+
+
+## [2026-08-12] #211 — the repeatability job threw away the evidence it exists to collect ✅
+
+`repeatability (no cache)` runs the suite three times from clean, to catch what fails only
+sometimes. It caught something on #210's own run:
+
+```
+RecordWriterGitTest > a pass pushes, and the push carries another problem's pending commits with it()
+    org.junit.platform.commons.JUnitException at ArrayList.java:1604
+        Caused by: java.io.IOException at ForEachOps.java:186
+```
+
+That is all of it. **The job uploaded nothing**, so there is no report and the stack is whatever
+the log chose to print. `gates` has always uploaded; the one job whose failures are hardest to
+reproduce did not — and [[concepts/assumption-vs-measurement]] already records why that matters:
+*"The job log truncates stack traces; the uploaded report does not."*
+
+**The flake is deliberately not fixed.** `ForEachOps` inside a `JUnitException` is the shape of a
+directory walk racing something — plausibly `@TempDir` cleanup against a `git` subprocess the
+test's real remote left behind. That is a hypothesis, and a fix without a reproduction is
+guess-based debugging, which the constitution forbids by name. Local three-times-from-clean
+passed, and `gates (ubuntu-latest)` passed in the same run, so it is not deterministic.
+
+The next occurrence arrives with a full stack instead of a line number.
