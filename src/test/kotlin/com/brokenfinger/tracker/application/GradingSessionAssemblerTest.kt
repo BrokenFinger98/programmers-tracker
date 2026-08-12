@@ -10,6 +10,7 @@ import com.brokenfinger.tracker.support.fixtures.aRunErrorText
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.fixtures.anAssembler
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -186,5 +187,63 @@ class GradingSessionAssemblerTest {
         session.outcome shouldBe Outcome.INCOMPLETE
         session.verdict.shouldBeNull()
         checkNotNull(session.errorText) shouldContain "/Solution.java:3: error:"
+    }
+
+    /**
+     * **Every supported language's compile failure, each from its own capture** — the whole
+     * `GENERATORS` list of `FileDerivedArtifacts`, broken on purpose on lesson 181952 and
+     * measured on 2026-08-12 (#212).
+     *
+     * The reason this is a table and not four more one-off tests is that the interesting
+     * property is *coverage*: the previous two entries in `compilerDiagnostics` classified
+     * six of the seven, and only two of those six on purpose. A language added to the
+     * generator list without a row here is a language whose compile failures are recorded as
+     * something the learner never did, and this table is where that becomes visible.
+     *
+     * Each capture is whole — `start · error · result` — so it also pins that the run path
+     * ends at `result` for a failure that never reached a testcase.
+     */
+    @Test
+    fun `a compile failure is a compile error in every language the server supports`() {
+        val measured = mapOf(
+            "java-compile-error.jsonl" to "/Solution.java:7: error:",
+            "cpp-compile-error.jsonl" to "/solution0.cpp:8:15: error:",
+            "c-compile-error.jsonl" to "/solution0.c:6:21: error:",
+            "kotlin-compile-error.jsonl" to "/Solution0.kt:3:15: error:",
+            "csharp-compile-error.jsonl" to "error CS1002:",
+            "javascript-compile-error.jsonl" to "SyntaxError: missing )",
+            "python-indentation-error.jsonl" to "IndentationError: unexpected indent",
+            "python-tab-error.jsonl" to "TabError: inconsistent use of tabs and spaces",
+        )
+
+        measured.forEach { (fixture, diagnostic) ->
+            withClue(fixture) {
+                val session = anAssembledSession(fixture)
+
+                session.action shouldBe GradingAction.RUN
+                session.outcome shouldBe Outcome.JUDGED
+                session.verdict shouldBe Verdict.COMPILE_ERROR
+                checkNotNull(session.errorText) shouldContain diagnostic
+            }
+        }
+    }
+
+    /**
+     * Kotlin's other way to fail, and the reason it is *not* in the table above. Programmers
+     * invokes `main(String[])`; a top-level `fun main()` with no parameters compiles fine and
+     * is then never found. What comes back is a Programmers message saying no main method was
+     * defined — not a compiler one — so RUNTIME_ERROR is the right answer: nothing failed to
+     * compile.
+     *
+     * It cost two confounded readings before the editor template was checked, because the
+     * broken body and the correct body returned the identical message (protocol doc §7.2).
+     */
+    @Test
+    fun `a kotlin main with the wrong signature is a runtime error, not a compile error`() {
+        val session = anAssembledSession("kotlin-missing-main.jsonl")
+
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.RUNTIME_ERROR
+        checkNotNull(session.errorText) shouldContain "main 메소드가 정의되지 않았습니다"
     }
 }

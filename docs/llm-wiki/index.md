@@ -46,6 +46,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-11 [[decisions/2026-08-11-a-pass-belongs-to-its-language]] — `review_queue` and `slow_passes` key on (problem, language); the layout I kept calling the blocker was never one
 - 2026-08-11 [[decisions/2026-08-11-the-session-is-checked-where-it-can-answer]] — The socket cannot see an expired cookie, so the server asks the one endpoint measured to answer 200/401
 - 2026-08-11 [[decisions/2026-08-11-a-record-on-one-disk-says-so]] — Startup says how long the records have not left the machine, and why a repository with no remote is not a fault
+- 2026-08-12 [[decisions/2026-08-12-a-language-is-supported-when-its-failures-are-too]] — Six of seven languages were classified by two patterns written for two others, four of them right only by coincidence; a language now owes a compile-failure fixture
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
@@ -79,3 +80,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-11 [[sources/2026-08-11-capture-defects-found-by-solving]] — Nine capture defects, five of them found only by solving problems in a browser
 - 2026-08-11 [[sources/2026-08-11-expiry-has-no-socket-signal]] — An invalid session is confirmed and pinged normally and receives nothing; the socket has no expiry signal at all
 - 2026-08-12 [[sources/2026-08-12-the-improvement-loop-turns-inward]] — The guard caught its author, and two defects were found protecting each other
+- 2026-08-12 [[sources/2026-08-12-every-language-end-to-end]] — Every supported language broken and passed on purpose; the prediction said four defects and the wire said one, plus three coincidences nothing had named

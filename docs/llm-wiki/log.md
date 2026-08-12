@@ -91,3 +91,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-12] ingest | a gate nothing was gated on → 1 page updated
 
 ## [2026-08-12] ingest | the guard knew one credential of two → 1 page updated
+
+## [2026-08-12] ingest | every supported language, driven end to end → 2 pages updated, 3 created

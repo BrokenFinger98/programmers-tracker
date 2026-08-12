@@ -236,7 +236,18 @@ src/test/resources/fixtures/
   sql-pass.jsonl              131528 · snake_case · no finish
   sql-run.jsonl               131528 · returned_rows double-encoded
   algorithm-run-error.jsonl   120810/120820 · run-path HTML-escaped error output
+  <language>-compile-error.jsonl
+                              181952 · one per supported language — java · cpp · c ·
+                              kotlin · csharp · javascript, plus python indentation/tab
+  kotlin-missing-main.jsonl   181952 · fun main() with no parameters — not a compile failure
 ```
+
+**A language in `FileDerivedArtifacts.GENERATORS` owes a compile-failure fixture.** Its
+diagnostic shape is what tells a compile error from a runtime one, and the shapes do not
+resemble each other: C# brackets its position where javac and clang use colons (protocol
+§7.2). Six of the seven languages were classified by two patterns written for two other
+languages, four of them correctly only by coincidence, and nothing recorded which
+(#212). The table in `GradingSessionAssemblerTest` is where a missing language shows up.
 
 Each fixture is a real capture from the [protocol doc](programmers-protocol.md) ch. 15 verification log.
 
