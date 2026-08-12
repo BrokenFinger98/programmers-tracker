@@ -81,3 +81,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-11 [[sources/2026-08-11-expiry-has-no-socket-signal]] — An invalid session is confirmed and pinged normally and receives nothing; the socket has no expiry signal at all
 - 2026-08-12 [[sources/2026-08-12-the-improvement-loop-turns-inward]] — The guard caught its author, and two defects were found protecting each other
 - 2026-08-12 [[sources/2026-08-12-every-language-end-to-end]] — Every supported language broken and passed on purpose; the prediction said four defects and the wire said one, plus three coincidences nothing had named
+- 2026-08-12 [[sources/2026-08-12-clean-slate-verification]] — Fifteen records from one build against an empty repository, and the browser mechanic that had cost three sessions of guessing
