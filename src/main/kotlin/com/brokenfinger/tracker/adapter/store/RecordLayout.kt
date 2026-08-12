@@ -35,6 +35,16 @@ class RecordLayout(private val root: Path) {
     /** The single authority for attempt numbers ([[decisions/2026-08-05-write-serialization.md]]). */
     fun submissionLog(): Path = root.resolve(SUBMISSION_LOG)
 
+    /**
+     * One note per catalogued tag — the vault's map of what has and has not been met (#229).
+     *
+     * The name is slugged by the same rule problem directories use, so a tag the filesystem
+     * would not take verbatim still lands in one predictable file. The note's own `tag:` field
+     * keeps the original spelling: the path is a path, and only the field may be compared
+     * against a record's tags.
+     */
+    fun tagNote(tag: String): Path = root.resolve(TAGS).resolve("${slugOf(tag)}.md")
+
     private fun attemptsOf(lessonId: Long, title: String?, attempt: Int): Path {
         require(attempt >= 1) { "attempt must be at least 1, a run writes no attempt file: $attempt" }
         return problemDirectory(lessonId, title).resolve(ATTEMPTS)
@@ -58,6 +68,7 @@ class RecordLayout(private val root: Path) {
         const val MAX_SLUG = 60
 
         private const val PROBLEMS = "problems"
+        private const val TAGS = "tags"
         private const val ATTEMPTS = "attempts"
         private const val SUBMISSION_LOG = "log/submissions.jsonl"
         private const val FALLBACK_EXTENSION = "txt"
