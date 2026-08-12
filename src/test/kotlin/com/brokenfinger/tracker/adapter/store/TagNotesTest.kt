@@ -1,14 +1,19 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.calc.TagCount
+import io.kotest.matchers.collections.shouldContainAll
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 
 class TagNotesTest {
+    private val link = Regex("""\[\[tags/([^]]+)]]""")
+
     @TempDir
     lateinit var root: Path
 
@@ -49,16 +54,45 @@ class TagNotesTest {
     }
 
     /**
-     * The file name is a path and the `tag:` field is the datum. They differ on purpose for a
-     * tag the filesystem would not take verbatim, and only the field may be compared against a
-     * record's tags.
+     * The `tag:` field is the datum and keeps its spelling; the file name is a path and is
+     * slugged. That much this test always asserted — and it stopped there, which is how 43 of
+     * the catalog's 83 tags shipped with every link to them broken (#233).
+     *
+     * A link is a **path**, so it has to use the slug. Asserting the two spellings differ says
+     * nothing about which one a link needs; the test below asks that question by resolving the
+     * link against the files actually on disk.
      */
     @Test
-    fun `a tag the filesystem would not take keeps its spelling in the field`() {
-        notes().write(listOf(TagCount("prime factorization", catalogTotal = 2, attempted = 0, solved = 0)))
+    fun `the field keeps the tag spelling and the link uses the file name`() {
+        notes().write(listOf(TagCount("prime factorization", 2, 0, 0, related = listOf("number_theory"))))
 
         val text = Files.readString(root.resolve("tags/prime-factorization.md"))
         text shouldContain "tag: prime factorization"
+        text shouldContain "[[tags/number-theory]]"
+        text shouldNotContain "[[tags/number_theory]]"
+    }
+
+    /**
+     * The check that was missing. Every link any writer emits must name a file that exists —
+     * asserted against the directory rather than against the naming rule, because a test that
+     * restates the rule agrees with whatever the rule currently is.
+     */
+    @Test
+    fun `every link a note emits resolves to a note that was written`() {
+        val counts = listOf(
+            TagCount("dp_digit", 1, 0, 0, related = listOf("dp", "math")),
+            TagCount("dp", 38, 0, 0, related = listOf("dp_digit")),
+            TagCount("math", 78, 0, 0, related = listOf("dp_digit")),
+        )
+
+        notes().write(counts)
+
+        val written = Files.list(root.resolve("tags")).use { it.map { f -> f.fileName.toString() }.toList() }
+        val links = Files.list(root.resolve("tags")).use { paths ->
+            paths.toList().flatMap { link.findAll(Files.readString(it)).map { m -> m.groupValues[1] + ".md" } }
+        }
+        links.shouldNotBeEmpty()
+        written shouldContainAll links
     }
 
     /** Nothing to write is not an error; a catalog we do not own may describe no tags at all. */
@@ -67,5 +101,27 @@ class TagNotesTest {
         notes().write(emptyList())
 
         Files.exists(root.resolve("tags")) shouldBe false
+    }
+
+    /**
+     * The edges between tags are what give the map shape before anything is solved. Without
+     * them a live vault showed 81 of 83 tags isolated, and isolation says nothing when nearly
+     * everything is isolated (#231).
+     */
+    @Test
+    fun `the note links to the tags it shares problems with`() {
+        notes().write(listOf(TagCount("dp", 38, 0, 0, related = listOf("implementation", "math"))))
+
+        val text = Files.readString(root.resolve("tags/dp.md"))
+        text shouldContain "[[tags/implementation]]"
+        text shouldContain "[[tags/math]]"
+    }
+
+    /** A tag that shares a problem with nothing says nothing rather than showing an empty label. */
+    @Test
+    fun `a tag with no related tags renders no link line`() {
+        notes().write(listOf(TagCount("tsp", 1, 0, 0, related = emptyList())))
+
+        Files.readString(root.resolve("tags/tsp.md")) shouldNotContain "[[tags/"
     }
 }

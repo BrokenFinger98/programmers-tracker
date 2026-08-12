@@ -85,7 +85,7 @@ class ProblemReadme(private val layout: RecordLayout) {
     private fun tagLinks(records: List<SubmissionRecord>): String {
         val tags = tagsOf(records).orEmpty()
         if (tags.isEmpty()) return ""
-        return "\nTags: " + tags.joinToString(" ") { "[[tags/$it]]" } + "\n"
+        return "\nTags: " + tags.joinToString(" ") { "[[${layout.tagNoteLink(it)}]]" } + "\n"
     }
 
     // Our own labels are English (dev rules §12); the tag words come from the data and stay verbatim.

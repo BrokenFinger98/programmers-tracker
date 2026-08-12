@@ -25,17 +25,47 @@ object TagCoverage {
      * @param passed lessons with at least one passing submit
      * @param submitted lessons with at least one submit
      */
-    fun of(catalogued: List<CatalogSummary>, passed: Set<Long>, submitted: Set<Long>): List<TagCount> = catalogued
-        .flatMap { problem -> problem.tags.map { it to problem.lessonId } }
-        .groupBy({ it.first }, { it.second })
-        .map { (tag, lessons) -> countOf(tag, lessons, passed, submitted) }
-        .sortedBy { it.tag }
+    fun of(catalogued: List<CatalogSummary>, passed: Set<Long>, submitted: Set<Long>): List<TagCount> {
+        val related = relatedBy(catalogued)
+        return catalogued
+            .flatMap { problem -> problem.tags.map { it to problem.lessonId } }
+            .groupBy({ it.first }, { it.second })
+            .map { (tag, lessons) -> countOf(tag, lessons, passed, submitted, related[tag].orEmpty()) }
+            .sortedBy { it.tag }
+    }
 
-    private fun countOf(tag: String, lessons: List<Long>, passed: Set<Long>, submitted: Set<Long>) = TagCount(
+    /**
+     * Which tags share a problem with which — a count of what solved.ac already tagged, so it
+     * decides nothing. **No threshold**: the shipped catalog yields 255 pairs over 83 tags, a
+     * highest degree of 27 and an average near 6, so the feared hairball does not appear and a
+     * cutoff would only be a judgement nothing asked for (#231).
+     *
+     * Alphabetical rather than by how many problems a pair shares. An ordering is a claim of its
+     * own, and this calculator does not make claims.
+     */
+    private fun relatedBy(catalogued: List<CatalogSummary>): Map<String, List<String>> {
+        val neighbours = mutableMapOf<String, MutableSet<String>>()
+        catalogued.forEach { problem ->
+            val tags = problem.tags.distinct()
+            tags.forEach { tag ->
+                neighbours.getOrPut(tag) { mutableSetOf() }.addAll(tags.filterNot { it == tag })
+            }
+        }
+        return neighbours.mapValues { (_, set) -> set.sorted() }
+    }
+
+    private fun countOf(
+        tag: String,
+        lessons: List<Long>,
+        passed: Set<Long>,
+        submitted: Set<Long>,
+        related: List<String>,
+    ) = TagCount(
         tag = tag,
         catalogTotal = lessons.size,
         attempted = lessons.count { it in submitted },
         solved = lessons.count { it in passed },
+        related = related,
     )
 }
 
@@ -44,4 +74,11 @@ object TagCoverage {
  * stored ratio invites a stored threshold, and a threshold is a verdict rather than a
  * measurement — the line design §5.5's own example `slowFlag` crossed.
  */
-data class TagCount(val tag: String, val catalogTotal: Int, val attempted: Int, val solved: Int)
+data class TagCount(
+    val tag: String,
+    val catalogTotal: Int,
+    val attempted: Int,
+    val solved: Int,
+    /** Tags a catalogued problem carries alongside this one, alphabetically. */
+    val related: List<String> = emptyList(),
+)

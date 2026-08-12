@@ -256,4 +256,17 @@ class ProblemReadmeTest {
 
         text shouldNotContain "[[tags/"
     }
+
+    /**
+     * The link is a path, so it uses the note's file name. Writing the tag instead is how 43 of
+     * the catalog's 83 tags shipped with links that resolved to nothing (#233) — every tag with
+     * an underscore in it.
+     */
+    @Test
+    fun `a tag the filesystem renames is linked by its file name`() {
+        val text = render(listOf(aSubmissionRecord(tags = listOf("binary_search"))))
+
+        text shouldContain "[[tags/binary-search]]"
+        text shouldNotContain "[[tags/binary_search]]"
+    }
 }

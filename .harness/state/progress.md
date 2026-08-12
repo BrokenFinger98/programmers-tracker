@@ -3831,3 +3831,68 @@ first had its prompt mangled — a multi-line spec split by the TUI composer and
 which was my error. The second received the TASK block intact and still produced nothing; I do
 not know why and did not guess. Both tasks were closed as failed, both workers stopped, and the
 work was done inline at the owner's instruction.
+
+## [2026-08-13] #231 — the map needed edges between tags, not only into them ✅
+
+#229 shipped and the owner opened the vault: **81 of 83 tags isolated.** A dust cloud.
+
+The decision's own argument was that an isolated node is the finding — and it holds only **when
+isolation is rare.** With four problems recorded, near everything was isolated and isolation
+carried nothing. Nothing in the reasoning was false; it assumed a vault with history and never
+said so.
+
+**Measured before writing code**, which is what made the fix small and threshold-free:
+
+| | |
+|---|---|
+| co-occurring pairs | 255 over 83 tags |
+| tags co-occurring with nothing | **0** |
+| highest degree | `implementation` 27, not 82 |
+| average degree | ~6 |
+
+So every tag has a neighbour, the map has shape before anything is solved, and the hairball this
+might have produced does not exist. **No threshold** — the numbers say none is needed, and a
+cutoff would be a judgement nothing asked for. Links are alphabetical, because ordering them by
+strength is a claim of its own.
+
+Prerequisite ordering stays unbuilt: design §6.10's concept graph orders *learning*, which is
+judgement, and inventing our own taxonomy is forbidden outright. Co-occurrence is different in
+kind — it counts what solved.ac already tagged.
+
+**Shown before it was built.** A self-contained preview drawn from the real catalog let the owner
+compare both states and say yes before any code existed. Its first version oscillated violently:
+the centering force was scaled by viewport size (`min(W,H) * 0.00042` ≈ 0.34), so a node 300px
+off-centre moved 100px per frame and diverged, and there was no alpha decay to settle it. A
+constant and a cooling schedule fixed it. Worth remembering that a preview has its own bugs and
+they are not the design's.
+
+## [2026-08-13] #233 — 43 of 83 tags were unlinkable, and a test had pinned it ✅
+
+Found while waiting on #232's CI, by asking a question the tests never did: **does an emitted
+link name a file that exists?**
+
+`RecordLayout.slugOf` turns `binary_search` into `binary-search.md`, and both writers built the
+link from the *tag*. **43 of the catalog's 83 tags carry an underscore**, so a link to any of
+them named a file that does not exist and Obsidian would draw a ghost node instead of an edge —
+in a feature whose entire purpose is the edges.
+
+**Measured, so the blast radius is stated rather than implied.** The live vault holds 4 links
+today, to `arithmetic` and `implementation`; neither is slugged, so **nothing on disk was broken
+yet**. #232 emits 510 tag→tag links over 255 pairs, of which **178 (35%) would have dangled** —
+so the defect shipped latent in #229 and would have become visible the moment the edges did.
+
+**The test that should have caught it asserted the defect instead:**
+
+> `a tag the filesystem would not take keeps its spelling in the field`
+
+That is correct about the frontmatter — the `tag:` field is the datum and must stay verbatim —
+and it stopped there. It never asked what a *link* needs. The spec made the same distinction and
+stopped at the same place, so code, test and spec all agreed with each other and none of them
+with the filesystem.
+
+Exactly `concepts/tests-that-explain-defects`, which I had cited twice today before writing it.
+
+**The fix is the missing check, not a better rule.** `RecordLayout.tagNoteLink` owns the answer,
+both writers ask it, and the new test resolves every emitted link against the files actually
+written — asserted against the directory rather than against the naming rule, because a test
+that restates the rule agrees with whatever the rule currently is.
