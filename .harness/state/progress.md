@@ -4016,3 +4016,38 @@ that fails to start does not serve at all — and the alternative is a new unaut
 endpoint. Left as is; say so if you disagree.
 
 The MCP token gate was re-verified after the rebuild: no token → 401, wrong token → 401.
+
+## [2026-08-13] #239 — a runner needs a run, and the page did not say so ✅
+
+`template/ps-records/README.md` gave language as the only reason a runner can be absent. The
+record repository disagrees:
+
+```
+problems/120802-두-수의-합-구하기/   examples.json  RunnerTest.java  runner_test.py  …
+problems/120804-두-수의-곱-구하기/   Solution.java   ← neither
+```
+
+Both Lv0, both java, both passed. 120802 had 3 runs; **120804 had none** — one submit, first try.
+Examples are announced by the grading stream (protocol §7) and only a run announces them, which
+`RecordWriter` states where it calls the store: *the store is a no-op for a grading that
+announced none, so a submit cannot blank what its preceding run wrote.*
+
+Nothing was broken — the refusal is designed and logged. The page was incomplete, and the gap is
+invisible until someone passes first try and wonders where their runner went. One sentence, in
+both twins.
+
+Not fixed in code: building examples from the problem page would add a protocol dependency for a
+file that regenerates the moment the user presses Run once.
+
+## [2026-08-13] Correspondence checks that came back clean
+
+Two directions of the same question — does what a record names exist, and does what exists have
+a record?
+
+| check | result |
+|---|---|
+| `rawPath` · `codePath` named by records | **33 paths, 0 missing** |
+| attempt files on disk no record names | **0** |
+| `sensor.focusedSec` | non-zero on 4 records (32 s, 37 s), 0 on the 18 from the automated E2E run — the field is alive, and 0 there is the correct reading of a tab that never had focus |
+
+The record repository and the filesystem agree exactly, in both directions.
