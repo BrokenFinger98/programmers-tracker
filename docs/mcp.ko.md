@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@a7a71818cfea396b9eefb3600ef910cfb28c9793 -->
+<!-- translated-from: mcp.md@3386b3ce7fba9e51820422ec014941c6c74870b6 -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -74,7 +74,7 @@ cat .ps/watch-token
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | 기록된 모든 run·submit, 최신순. 테스트케이스별 상세·컴파일러 출력·diff는 여기서 제외됩니다. |
 | `get_problem` | `lessonId` | 문제 하나와 그에 대한 모든 제출을 전부 — 테스트케이스와 컴파일러 출력 포함. |
-| `stats` | `groupBy` — `verdict` · `language` · `problem` | 버킷별 개수. 개수만. **`problem` 은 언어를 합쳐서 셉니다.** |
+| `stats` | `groupBy` — `verdict` · `language` · `problem` | 버킷별 개수. 개수만. **제출만 세고 실행은 세지 않습니다.** **`problem` 은 언어를 합쳐서 셉니다.** |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | 내장 카탈로그를 기록과 조인: 문제별 `status`(`untouched` · `attempted` · `passed`)와 제출 횟수. |
 | `review_queue` | `limit?` | 다시 풀 때가 된 문제, 가장 많이 밀린 것부터. 각 항목에 그 날짜를 정한 시도 횟수·도움 신호·통과일이 붙습니다. **언어당 한 항목입니다.** |
 | `slow_passes` | `thresholdMs?` | 통과한 모든 문제를 가장 느린 테스트케이스(밀리초) 기준으로 정렬. 비교에 필요한 레벨·태그·언어가 함께 옵니다. |
@@ -89,6 +89,11 @@ cat .ps/watch-token
 가 그 그룹이 답하는 질문이기 때문입니다. 이걸 모르고 나란히 읽으면, 한 문제가 `review_queue`
 에서 7개 항목이고 `stats` 에서 1개 버킷인 것이 모순처럼 보입니다. 다른 축은 `groupBy=language`
 입니다.
+
+**`stats` 는 제출만 세고 `submissions` 는 실행까지 돌려줍니다.** 같은 문제가 집계에서는 8,
+목록에서는 15로 나오는 이유입니다. 실행은 시도가 아니며(설계 §5.1), 실행까지 센 판정 집계는
+브라우저에서 코드를 쓰며 실행 버튼을 누른 것뿐인데도 컴파일 에러투성이로 읽혔습니다 — #235
+전까지 `stats` 가 그렇게 답했습니다.
 
 **"이 중에 한 번도 손대지 않은 게 뭐지"** 에 답할 수 있는 유일한 툴이 `list_problems` 입니다 —
 기록만으로는 "시도했다가 틀림" 과 구분할 수 없습니다. 판정 집계에서는 둘 다 그냥 없으니까요.

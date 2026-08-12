@@ -3896,3 +3896,72 @@ Exactly `concepts/tests-that-explain-defects`, which I had cited twice today bef
 both writers ask it, and the new test resolves every emitted link against the files actually
 written — asserted against the directory rather than against the naming rule, because a test
 that restates the rule agrees with whatever the rule currently is.
+
+## [2026-08-13] #232 merged, and the map verified against the running server ✅
+
+`b40bb71`. Rebuilt (`docker compose up -d --build`), restarted, then asked the vault the
+questions a test cannot:
+
+| | |
+|---|---|
+| tag notes on disk | **83** |
+| wikilinks | **514** — 510 tag→tag over 255 pairs, 4 problem→tag |
+| dangling links | **0** |
+| notes disagreeing with the records | **0 of 83** |
+
+The last row is the strongest: the counts were recomputed straight from `log/submissions.jsonl`
+and `catalog.json` in Python — an independent implementation of `TagCoverage` — and diffed
+against what Kotlin wrote. None disagreed. The 514 also matched the count predicted before the
+deploy, so the arithmetic was done first and the world agreed after.
+
+`tags/binary-search.md` keeps `tag: binary_search` in the field and is linked as
+`[[tags/binary-search]]` from elsewhere, which is #233 fixed where it can be seen.
+
+**Still open: #16 — the owner opens the vault.** Every check above is mine; the graph rendering
+is not something this side can see.
+
+## [2026-08-13] #235 — `stats` counted runs as submissions ✅
+
+Found by asking two of the server's own tools the same question:
+
+```
+list_problems(status=passed)  →  181952 … "attempts": 8
+stats(groupBy=problem)        →  181952 … "count":   15
+```
+
+`stats(groupBy=verdict)` reported 7 COMPILE_ERROR and 2 RUNTIME_ERROR. Split by action, **every
+one of them is a run**: 11 submissions, 10 passes, 1 wrong. An AI reading that tally would have
+described a learner who cannot get code to compile, and the MCP layer exists precisely so the AI
+interprets and the server does not.
+
+**The rule existed in four places and was missing from the fifth.** `ReviewQueue`, `SlowPasses`,
+the tag map and `CatalogBrowse` all test `action == SUBMIT`; `SubmissionTally` counted whatever
+`RecordQuery.history()` handed it. Its own KDoc said "counts submissions", `docs/mcp.md` said the
+same, and design §5.1's *a run is not an attempt* had been obeyed by `ProblemReadme` since it was
+written.
+
+**No test pinned it either way** — every tally test used the fixture's default action, so the
+calculator was never handed a run. The whole suite stayed green after the fix, which says the
+same thing from the other side. A rule kept by convention at four call sites is enforced at none.
+
+## [2026-08-13] #234 filed, deliberately not fixed
+
+`reconcile()` is `git add --all`, so it commits whatever is in the vault. Four commits in the
+record repository carry Obsidian's editor state and one — the 23:00 backup — contains **nothing
+else**, under a message that says it reconciled records.
+
+Left for the owner because the options differ in risk, not in taste: scoping the staging to what
+the server writes trades a visible annoyance for a record going uncommitted, which is the
+direction the constitution cares most about. Recommendation in the issue is to ignore
+`.obsidian/` instead, and that has costs of its own.
+
+## [2026-08-13] Verified in passing — the daily backup fires on its own
+
+`14:00:29Z` = **23:00 KST**, exactly `TRACKER_BACKUP_AT`, first time observed unattended:
+reconciled, committed, pushed, and logged that it had. A scheduled job is another thing no unit
+test can prove.
+
+Also checked and **not** a defect: the startup warning about lesson 120802's 3 orphaned frames
+repeats on every boot, but nothing is re-processed or rewritten — `unprocessed()` walks only the
+direct children of `.ps/raw/`, and `orphans/` is a standing evidence directory whose file has not
+been touched since 2026-08-12 15:41. It reports a condition that is still true.

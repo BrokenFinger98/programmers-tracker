@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-08-11
-sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
+updated: 2026-08-13
+sources: [raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -256,6 +256,36 @@ did not leave the confidence where it was; it raised it.
 Nothing in a code review can catch a check wired to a frame nobody has seen — only running it
 against a broken credential can.
 
+## Two views of one log disagreed, and only one had ever been asked
+
+2026-08-13. Same server, same records, same moment
+(raw/sessions/2026-08-13-the-tally-that-counted-runs.md):
+
+```
+list_problems(status=passed)  →  181952 … "attempts": 8
+stats(groupBy=problem)        →  181952 … "count":   15
+```
+
+`stats` was counting runs as submissions. `stats(groupBy=verdict)` therefore reported 7 compile
+errors and 2 runtime errors — **every one of them from pressing Run while writing code.** The
+owner had made 11 submissions and passed 10. The MCP layer exists so the AI interprets and the
+server does not; a reader of those numbers would have described a learner who cannot compile.
+
+The rule was not missing. `ReviewQueue`, `SlowPasses`, the tag map and `CatalogBrowse` all test
+`action == SUBMIT`; `SubmissionTally` counted whatever `RecordQuery.history()` handed it, which
+is both. Its own KDoc said "counts submissions"; design §5.1 says a run is not an attempt, and
+`ProblemReadme` had obeyed that since it was written.
+
+**No test pinned it either way.** Every tally test used the fixture's default action, so the
+calculator was never handed a run, and counting them was not a decision — it was what reading
+`history()` happened to do. The suite stayed green after the fix, which says the same thing from
+the other side.
+
+This is the assumption-losing-its-label failure moved one level out: not a protocol claim nobody
+measured, but **an invariant four call sites kept by hand and nobody stated once.** A rule kept
+by convention in four places is enforced in none, and its fifth site is invisible until two
+consumers of the same data are compared.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -280,3 +310,7 @@ against a broken credential can.
 - Confirmation is not validation: a wrong `challengeable_id` still returns
   `confirm_subscription` and still runs testcases (protocol §3). Success signals can lie
   about the thing you actually wanted to know — see [[concepts/verdict-classification]].
+- **Ask two consumers of the same data the same question.** Where a rule is applied by hand at
+  several call sites, the site that forgot it cannot be seen from inside — every test there
+  agrees with the code, because the same author wrote both. Comparing two answers is what made
+  `stats` and `list_problems` disagree out loud.

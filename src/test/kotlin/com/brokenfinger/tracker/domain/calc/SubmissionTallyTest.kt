@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.domain.calc
 
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
@@ -43,6 +44,46 @@ class SubmissionTallyTest {
 
         buckets.shouldContainExactly(TallyBucket("PASS", null, 1), TallyBucket(null, null, 2))
         buckets.last().key.shouldBeNull()
+    }
+
+    /**
+     * A run is not a submission (design §5.1), and this is the only calculator that had to be
+     * told. `ReviewQueue`, `SlowPasses` and the tag map all test the action; this one counted
+     * whatever `RecordQuery.history()` handed it, so on the owner's own repository
+     * `stats(groupBy=problem)` answered 15 for a problem `list_problems` called 8 attempts (#235).
+     */
+    @Test
+    fun `a run is not counted, because a run is not a submission`() {
+        val records = listOf(
+            aSubmissionRecord(action = GradingAction.SUBMIT, verdict = Verdict.PASS),
+            aSubmissionRecord(action = GradingAction.RUN, verdict = Verdict.COMPILE_ERROR),
+            aSubmissionRecord(action = GradingAction.RUN, verdict = Verdict.PASS),
+        )
+
+        SubmissionTally.of(records, TallyGroup.VERDICT).shouldContainExactly(TallyBucket("PASS", null, 1))
+    }
+
+    /**
+     * The shape the defect actually took: every compile error in the live tally came from
+     * pressing Run while writing code, and an AI reading it saw a learner who cannot compile.
+     */
+    @Test
+    fun `a verdict only runs ever produced makes no bucket at all`() {
+        val records = listOf(
+            aSubmissionRecord(action = GradingAction.SUBMIT, verdict = Verdict.PASS),
+            aSubmissionRecord(action = GradingAction.RUN, verdict = Verdict.COMPILE_ERROR),
+            aSubmissionRecord(action = GradingAction.RUN, verdict = Verdict.RUNTIME_ERROR),
+        )
+
+        SubmissionTally.of(records, TallyGroup.VERDICT).map { it.key }.shouldContainExactly("PASS")
+    }
+
+    /** A history of runs alone is not an empty history wrongly reported — it has no submissions. */
+    @Test
+    fun `runs alone tally to nothing`() {
+        val records = listOf(aSubmissionRecord(action = GradingAction.RUN))
+
+        TallyGroup.entries.forEach { group -> SubmissionTally.of(records, group).shouldBeEmpty() }
     }
 
     @Test
