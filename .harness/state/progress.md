@@ -3746,3 +3746,34 @@ disclosed in a sentence that does not prepare you for the size of it.
 Noted while checking, not a defect: `submissions(verdict=TIMEOUT)` returns nothing though a run
 did time out today — it was recorded before #223 landed and the log is append-only. Records are
 not rewritten when a classifier improves.
+
+## [2026-08-12] #227 — the design still promised the dashboards #96 had removed ✅
+
+Found by auditing the design's deliverables against the tree, after the owner asked whether the
+server could generate an Obsidian index. The audit's result was mostly *"already handled"* —
+and the one hole is the one they had noticed.
+
+`RecordRepositoryTemplateTest` records the earlier half:
+
+> It drifted exactly as an unchecked document does (#96): it promised five Dataview dashboard
+> notes nothing generates … **A reader followed those into an empty vault.**
+
+The template was fixed and pinned by a test. **The design section those sentences came from was
+not**, and `CLAUDE.md` points at it for design decisions. So it misled the next reader, who was
+me: I read §5.5 an hour ago and answered that the five notes are specified and unbuilt, when
+they had been taken out of the user-facing copy deliberately.
+
+**The five are not one backlog item**, which is the part worth writing down rather than
+deleting:
+
+- `_dashboard.md`, `_review.md`, `_warmup.md` — aggregation, allowed, unbuilt, no owner
+- `_weakness.md` — **interpretation, and CLAUDE.md forbids rule-based analyzers in the server.**
+  The prohibition postdates the design and has never been reconciled with it in writing, the way
+  `review_queue`'s boundary was settled by `2026-08-10-scheduling-is-not-diagnosis`
+
+Amended rather than deleted, in the doc's own `⚠️` convention: the design is a record of what
+was decided on 2026-08-04, and what it got wrong is evidence. Also corrected there:
+`SolutionTest.java` (the server writes `RunnerTest.java`) and `meta.json` (never existed).
+
+Nothing was generated. Building the allowed three is a decision with no owner, and `_weakness.md`
+needs an ADR before it can be one.
