@@ -169,3 +169,38 @@ Negative-tested by pushing a branch that deliberately breaks §7: the guard's ow
 The pattern across all four amendments is now hard to miss. A check is worth what it is **wired
 to**: §3 was a search that never ran, §5–§7 were checks with nothing calling them until CI, and
 this one was a gate whose caller could discard its verdict.
+
+
+---
+
+## Applied again 2026-08-12 (#201): the guard knew one credential of two
+
+Registering the server as an MCP client's tool needs the `/watch` token in a config. The
+conventional home is `.mcp.json` at the project root, **which is committed** — and §2 looks for
+`_session_production=…` and nothing else, so a 64-hex token pasted there would have gone up with
+every gate green. Neither `.mcp.json` nor `.claude/settings.local.json` is gitignored.
+
+Both credentials live in `.ps/` and CLAUDE.md forbids both in the same sentence. Only one had a
+guard.
+
+**The rule deliberately is not `[0-9a-f]{64}`.** Nothing tracked matches one today, so a bare
+shape rule would pass now and fire the first time someone adds a `distributionSha256Sum` or pins
+a digest — and a guard that flags a legitimate hash is a guard that gets muted. This is the same
+judgement §6 made in declining to check `[[…]]` links because the schema document's own examples
+would need an exception list.
+
+Two precise checks instead:
+
+- **the literal value**, when `.ps/watch-token` is on this machine. Zero false positives by
+  construction, and it finds the token however it was reformatted or wherever it was pasted
+- **the header with a non-placeholder value**, always. `docs/mcp.md` documents
+  `"X-Tracker-Token": "<paste from .ps/watch-token>"`, and the angle brackets keep it out of the
+  match — the same trick §2 uses for `fake-value-for-tests`
+
+The first half cannot run in CI, where the file does not exist, and says which half ran rather
+than claiming a check it did not perform. That is the honest split: a contributor's token leaking
+is caught on the machine that has it.
+
+Negative-tested both ways — the live value planted in a `.mcp.json`, and a token-shaped header in
+a file the token file could not explain — plus a canary asserting the documented placeholder
+still passes, because a rule that rejects its own documentation is one someone will delete.

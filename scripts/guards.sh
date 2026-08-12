@@ -386,6 +386,57 @@ else
   pass "every log.md ingest date has a raw session ($(printf '%s\n' "$ingest_dates" | wc -l | tr -d ' ') dates)"
 fi
 
+# ---------------------------------------------------------------------------
+# 8. The /watch token must not be committed either.
+#    §2 above knows the session cookie's shape and nothing else, so a 64-hex
+#    watch token pasted into .mcp.json, a settings file, a README example or a
+#    compose file went up with every gate green (#201). Both credentials live
+#    in .ps/ and CLAUDE.md forbids both in the same sentence.
+#
+#    NOT a bare `[0-9a-f]{64}` rule. Nothing tracked matches one today, so it
+#    would pass now and fire the first time someone adds a distributionSha256Sum
+#    or pins a digest — and a guard that flags a legitimate hash gets muted.
+#
+#    Two precise checks instead: the literal value when this machine has it, and
+#    the header carrying anything that is not a placeholder.
+# ---------------------------------------------------------------------------
+token_file="${TRACKER_WATCH_TOKEN_FILE:-.ps/watch-token}"
+token_leak=""
+
+# The value itself. Zero false positives by construction, and it catches the token
+# however it was reformatted or wherever it was pasted.
+if [ -r "$token_file" ]; then
+  token_value=$(tr -d '\r\n' < "$token_file")
+  if [ ${#token_value} -ge 16 ]; then
+    hit=$(git grep -lIF "$token_value" -- . || true)
+    [ -n "$hit" ] && token_leak="$token_leak"$'\n'"  the live watch token appears in: $hit"
+  fi
+fi
+
+# The header with a real-looking value. `docs/mcp.md` documents
+# "X-Tracker-Token": "<paste from .ps/watch-token>" — the angle brackets keep the
+# placeholder out, the same way §2 excludes `fake-value-for-tests`.
+header_hit=$(git grep -nIE 'X-Tracker-Token["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9]{16,}' -- . || true)
+[ -n "$header_hit" ] && token_leak="$token_leak"$'\n'"$header_hit"
+
+# Prove the search runs before trusting its silence (#123). A planted value must be
+# found by the same grep the check uses.
+canary="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+if printf 'X-Tracker-Token: %s\n' "$canary" | grep -qE 'X-Tracker-Token["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9]{16,}'; then
+  if printf '"X-Tracker-Token": "<paste from .ps/watch-token>"\n' \
+    | grep -qE 'X-Tracker-Token["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9]{16,}'; then
+    report "the watch-token check matches the documented placeholder — it would fail every tree"
+  elif [ -n "$token_leak" ]; then
+    report "a /watch token looks committed:$token_leak"$'\n'"  Move it out of the tree. It belongs in .ps/watch-token, which is ignored, or in a client config outside the repository."
+  elif [ -r "$token_file" ]; then
+    pass "no /watch token committed (checked the live value and the header shape)"
+  else
+    pass "no /watch token committed (header shape only — $token_file is not here)"
+  fi
+else
+  report "the watch-token check cannot match a token at all — it would pass any tree"
+fi
+
 printf '\n'
 if [ "$fail" -ne 0 ]; then
   echo "guards: FAILED"
