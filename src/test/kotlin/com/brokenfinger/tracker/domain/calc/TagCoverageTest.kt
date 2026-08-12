@@ -30,8 +30,8 @@ class TagCoverageTest {
         )
 
         counts shouldContainExactly listOf(
-            TagCount(tag = "dp", catalogTotal = 1, attempted = 1, solved = 1),
-            TagCount(tag = "math", catalogTotal = 1, attempted = 1, solved = 1),
+            TagCount(tag = "dp", catalogTotal = 1, attempted = 1, solved = 1, related = listOf("math")),
+            TagCount(tag = "math", catalogTotal = 1, attempted = 1, solved = 1, related = listOf("dp")),
         )
     }
 
@@ -100,5 +100,48 @@ class TagCoverageTest {
         val counts = TagCoverage.of(catalogued, passed = emptySet(), submitted = emptySet())
 
         counts.map { it.tag } shouldContainExactly listOf("arithmetic", "dp", "math")
+    }
+
+    /**
+     * The map needed edges *between* tags, not only into them. With links only from problems, a
+     * live vault showed 81 of 83 tags isolated — and "an isolated node is a gap" carries
+     * information only when isolation is rare (#231).
+     *
+     * Co-occurrence is a count of what solved.ac already tagged, so it decides nothing: two
+     * techniques are related when a problem carries both.
+     */
+    @Test
+    fun `tags carried by the same problem are related to each other`() {
+        val counts = TagCoverage.of(
+            catalogued = listOf(problem(1, "dp", "math"), problem(2, "math", "sorting")),
+            passed = emptySet(),
+            submitted = emptySet(),
+        )
+
+        counts.single { it.tag == "dp" }.related shouldContainExactly listOf("math")
+        counts.single { it.tag == "math" }.related shouldContainExactly listOf("dp", "sorting")
+    }
+
+    /** Alphabetical, not by how many problems they share — an ordering is a claim of its own. */
+    @Test
+    fun `the related tags come back alphabetically`() {
+        val counts = TagCoverage.of(
+            catalogued = listOf(problem(1, "zebra", "dp", "math")),
+            passed = emptySet(),
+            submitted = emptySet(),
+        )
+
+        counts.single { it.tag == "dp" }.related shouldContainExactly listOf("math", "zebra")
+    }
+
+    @Test
+    fun `a tag that never shares a problem is related to nothing, and is never related to itself`() {
+        val counts = TagCoverage.of(
+            catalogued = listOf(problem(1, "dp"), problem(2, "dp")),
+            passed = emptySet(),
+            submitted = emptySet(),
+        )
+
+        counts.single().related shouldContainExactly emptyList()
     }
 }

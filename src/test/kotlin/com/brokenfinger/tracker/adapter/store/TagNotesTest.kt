@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.domain.calc.TagCount
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -67,5 +68,27 @@ class TagNotesTest {
         notes().write(emptyList())
 
         Files.exists(root.resolve("tags")) shouldBe false
+    }
+
+    /**
+     * The edges between tags are what give the map shape before anything is solved. Without
+     * them a live vault showed 81 of 83 tags isolated, and isolation says nothing when nearly
+     * everything is isolated (#231).
+     */
+    @Test
+    fun `the note links to the tags it shares problems with`() {
+        notes().write(listOf(TagCount("dp", 38, 0, 0, related = listOf("implementation", "math"))))
+
+        val text = Files.readString(root.resolve("tags/dp.md"))
+        text shouldContain "[[tags/implementation]]"
+        text shouldContain "[[tags/math]]"
+    }
+
+    /** A tag that shares a problem with nothing says nothing rather than showing an empty label. */
+    @Test
+    fun `a tag with no related tags renders no link line`() {
+        notes().write(listOf(TagCount("tsp", 1, 0, 0, related = emptyList())))
+
+        Files.readString(root.resolve("tags/tsp.md")) shouldNotContain "[[tags/"
     }
 }

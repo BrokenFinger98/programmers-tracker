@@ -88,13 +88,41 @@ tag pane and search, wikilinks drive the graph and backlinks — and removing th
 break something that works today. If the graph's tag option is enabled a name may appear as two
 nodes; that is a viewer setting the owner controls, not the server's call.
 
-### 3.3 The tag note does not list its problems
+### 3.3 Tags link to the tags they share problems with
+
+Added 2026-08-13 (#231) after the first version shipped and the live vault showed **81 of 83
+tags isolated.** The reasoning had been sound and its premise was wrong: *an isolated node is a
+gap* only carries information **when isolation is rare.** With four problems recorded, near
+everything was isolated and isolation said nothing.
+
+Two tags are joined when a catalogued problem carries both. Measured on the shipped catalog:
+
+| | |
+|---|---|
+| co-occurring pairs | **255** |
+| tags co-occurring with nothing | **0** |
+| highest degree | `implementation` 27, `greedy` 22, `math` 21 |
+| average degree | ~6 |
+
+**No threshold, and the numbers are why none is needed.** The feared hairball does not appear —
+`implementation` reaches 27 tags, not 82 — and every tag has a neighbour, so the map has shape
+before a single problem is solved. A cutoff would be a judgement that nothing asked for.
+
+The links are **alphabetical, not by how many problems a pair shares.** An ordering is a claim of
+its own, and this note makes none.
+
+What is deliberately *not* built here is prerequisite ordering — design §6.10's
+`concept-graph.json` (완전탐색 → 재귀 → DP) orders learning, which is judgement, and inventing
+our own taxonomy is forbidden outright. Co-occurrence is different in kind: it counts what
+solved.ac already tagged.
+
+### 3.4 The tag note does not list its problems
 
 Obsidian's backlink pane already answers *"which problems link here"*. Generating that list would
 create a second copy of something the records already say, and a second copy is a thing that can
 disagree with the first.
 
-### 3.4 When it is written
+### 3.5 When it is written
 
 - **At startup** — write every problem README *and* every tag note.
 

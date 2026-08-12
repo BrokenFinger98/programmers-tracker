@@ -41,6 +41,20 @@ class TagNotes(private val layout: RecordLayout) {
         |# ${count.tag}
         |
         |Met ${count.attempted} of ${count.catalogTotal}, passed ${count.solved}.
-        |
+        |${relatedLine(count)}
         """.trimMargin()
+
+    /**
+     * The edges between tags, and the reason the map has any shape at all before problems are
+     * solved: with links only from problems, a live vault showed 81 of 83 tags isolated, and
+     * isolation carries information only when it is rare (#231).
+     *
+     * Two techniques are joined when a catalogued problem carries both — a count of what
+     * solved.ac already tagged, so no threshold and no ordering by strength. A tag that shares
+     * nothing renders no line rather than an empty label.
+     */
+    private fun relatedLine(count: TagCount): String {
+        if (count.related.isEmpty()) return ""
+        return "\nShares problems with: " + count.related.joinToString(" ") { "[[tags/$it]]" } + "\n"
+    }
 }

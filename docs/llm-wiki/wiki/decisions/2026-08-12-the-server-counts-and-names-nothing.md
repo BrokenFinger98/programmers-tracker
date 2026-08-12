@@ -97,3 +97,26 @@ time of writing.
 
 `_weakness.md` is closed rather than deferred: it will not be built under that name or that
 shape, and design §5.5's amendment now points here instead of leaving the conflict open.
+
+## Amended 2026-08-13 (#231): the map needed edges between tags, not only into them
+
+The first version shipped and the live vault showed **81 of 83 tags isolated.** The decision's
+own argument had been that an isolated node is the finding — and it holds only **when isolation
+is rare.** With four problems recorded, near everything was isolated and isolation carried
+nothing at all. The premise was about a mature record set and was never stated as one.
+
+Tags now link to the tags they share a catalogued problem with. Measured before writing any
+code: **255 pairs over 83 tags, zero tags co-occurring with nothing, highest degree 27, average
+near 6.** So the map has shape before a single problem is solved, and the hairball this might
+have produced does not exist.
+
+**The boundary is unchanged, and the measurement is what keeps it that way.** Co-occurrence is a
+count of what solved.ac already tagged — no threshold (the numbers say none is needed, and a
+cutoff would be a judgement), no ordering by strength (an ordering is a claim), no prerequisite
+graph (design §6.10 orders *learning*, which is judgement, and inventing a taxonomy is forbidden
+outright).
+
+Worth recording as its own lesson: **the decision was right and its unstated assumption was
+wrong.** Nothing in the reasoning was false; it simply assumed a vault with history. The check
+that caught it was opening the thing and looking at it, which is the same check that has caught
+most of this repository's defects.

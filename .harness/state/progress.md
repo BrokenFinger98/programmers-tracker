@@ -3831,3 +3831,37 @@ first had its prompt mangled — a multi-line spec split by the TUI composer and
 which was my error. The second received the TASK block intact and still produced nothing; I do
 not know why and did not guess. Both tasks were closed as failed, both workers stopped, and the
 work was done inline at the owner's instruction.
+
+## [2026-08-13] #231 — the map needed edges between tags, not only into them ✅
+
+#229 shipped and the owner opened the vault: **81 of 83 tags isolated.** A dust cloud.
+
+The decision's own argument was that an isolated node is the finding — and it holds only **when
+isolation is rare.** With four problems recorded, near everything was isolated and isolation
+carried nothing. Nothing in the reasoning was false; it assumed a vault with history and never
+said so.
+
+**Measured before writing code**, which is what made the fix small and threshold-free:
+
+| | |
+|---|---|
+| co-occurring pairs | 255 over 83 tags |
+| tags co-occurring with nothing | **0** |
+| highest degree | `implementation` 27, not 82 |
+| average degree | ~6 |
+
+So every tag has a neighbour, the map has shape before anything is solved, and the hairball this
+might have produced does not exist. **No threshold** — the numbers say none is needed, and a
+cutoff would be a judgement nothing asked for. Links are alphabetical, because ordering them by
+strength is a claim of its own.
+
+Prerequisite ordering stays unbuilt: design §6.10's concept graph orders *learning*, which is
+judgement, and inventing our own taxonomy is forbidden outright. Co-occurrence is different in
+kind — it counts what solved.ac already tagged.
+
+**Shown before it was built.** A self-contained preview drawn from the real catalog let the owner
+compare both states and say yes before any code existed. Its first version oscillated violently:
+the centering force was scaled by viewport size (`min(W,H) * 0.00042` ≈ 0.34), so a node 300px
+off-centre moved 100px per frame and diverged, and there was no alpha decay to settle it. A
+constant and a cooling schedule fixed it. Worth remembering that a preview has its own bugs and
+they are not the design's.
