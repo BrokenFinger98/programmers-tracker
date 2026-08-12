@@ -3579,3 +3579,59 @@ codes key. Protocol §8 updated.
 **TDD note against myself.** My first red/green check stashed *everything* — including the new
 test — so both runs were silent and proved nothing. Redone by reverting only the four
 production files: 1 failed, then BUILD SUCCESSFUL.
+
+## [2026-08-12] #218 — the whole pipeline verified against an empty record repository ✅
+
+Owner's call, and the right one: *"앞선 수많은 테스트를 통해 record repo에 잘못된 데이터들이 너무
+많을거같은데 한번 싹 삭제하고 아예 처음부터 다 다시 e2e 현재 상태 기준으로 build 다시해서."*
+
+The 57 records had been written by **at least five code vintages** — 49 null `score` (#193
+fills it), 40 null `sincePrevSec` (#207), three verdicts #212 classifies differently, two
+orphaned gradings. As evidence that the *current* pipeline works, that is nearly worthless: a
+defect fixed a week ago is indistinguishable from one still present.
+
+**Archived, not deleted.** Committed and tagged `archive/2026-08-12-pre-clean-slate`, pushed,
+before anything was removed. Credentials were never at risk: the session cookie and `/watch`
+token live in the project's own `.ps/`, not the record repository.
+
+### Result — 15 records, one build (`b3d68cc`)
+
+| | |
+|---|---|
+| compile failures classified | **7 / 7**, including csharp and python indentation |
+| passes with `score` and `rating` | 7 / 7 |
+| verdicts unresolved | 0 |
+| `sincePrevSec` | 14 / 15 (the first grading has no predecessor) |
+| attempt sequence | 0 → 8, monotonic across seven languages |
+| runner files | 8 |
+| orphaned frames | **0** — `incompleteHistory` absent from every MCP answer |
+| WRONG verdict | exercised for the first time end to end (`score: 0.0/100.0`) |
+
+`review_queue` correctly returns nothing: every pass is minutes old and the first interval is
+60 days. An empty answer from a tool that only reports what is *due*.
+
+### What the clean slate exposed
+
+- **`attempt 0`** on the first record. Not a defect — `AttemptAuthority.NONE = 0` means "a run
+  before the first submit belongs to no attempt file", which only becomes visible on an empty
+  log. Checked before reporting.
+- **#217 — every language switch warns that broadcasts may have been lost.** Seven switches,
+  seven `WARN … JobCancellationException … anything broadcast meanwhile is lost`. The
+  cancellation is *ours*, issued to move to the next language's channel — the ordinary path
+  #174 exists for. Same shape as #215: a warning that fires on an ordinary action is a warning
+  that gets trained away, and it shares a log with reconnect warnings that mean something.
+
+### Browser mechanics, finally pinned
+
+Three sessions of flaky clicks had one cause, and neither of my two earlier theories was it.
+**Click coordinates resolve against the last screenshot.** A batch that navigates and then
+clicks is aiming at the previous page's frame, so the click misses; adding a `hover` helps only
+because it forces a fresh frame. The reliable shape is:
+
+```
+[navigate, wait, screenshot] → [setValue, hover, click, wait, screenshot]
+```
+
+Every batch ends with a screenshot so the next one has coordinates. I twice concluded "capture
+is broken" from a missing record without checking the screen — the same negative-through-my-own-
+setup error the wiki already names.
