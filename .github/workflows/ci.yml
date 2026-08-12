@@ -35,6 +35,16 @@ jobs:
           distribution: temurin
           java-version: '25'
 
+      # Pinned for the same reason the JDK is. JavascriptRunnerExecutionTest skips politely when
+      # node is absent — right on a contributor's machine — and the skip-guard below turns that
+      # skip into a failure, because a runner image quietly dropping a toolchain must not silently
+      # un-earn a language's supported status. Twice the Windows image arrived without node (#174,
+      # #208), and rerunning until it passes trains us to rerun on a guard failure, which is how a
+      # guard stops meaning anything. The proof now rests on this declaration, not on the image.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - uses: gradle/actions/setup-gradle@v5
 
       - name: ktlint
