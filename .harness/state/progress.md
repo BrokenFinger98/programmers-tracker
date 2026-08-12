@@ -3361,3 +3361,41 @@ chance to make the same mistake.
 Also observed live, unprompted: the session-start hook fired **this repository's** wiki reminder
 (`docs/llm-wiki/raw/inbox … 1개`), which is #166 working — the repo-local inbox exists and points
 here rather than at the central wiki.
+
+## [2026-08-12] E2E — the whole loop, driven end to end, and what it proved ✅
+
+The MCP server was registered as a tool in this session, so browser → server → MCP is now one
+loop I can run alone. Solved 120802 in **python3** (already passed in java, so no account impact)
+and read it back over MCP.
+
+| claim | had been | now |
+|---|---|---|
+| **#193** score and rating reach a record | tests only; 78 real records all null | `score 100.0/100.0`, `rating 1378→1378 changed=false` — **first real data** |
+| **#174** a pass belongs to its language | tests only | `slow_passes` lists 120802 **twice**, java and python3. The old code kept the latest only, so the java reading would have vanished |
+| per-language files | argued from the layout | `attempts/005.py` beside `004.java` |
+| attempt numbering | argued in #174's correction | java 1–4, python3 **5**. Monotonic across languages, no collision — exactly as the correction said |
+| sensor | landing | `focusedSec: 37`, counted while the browser was driven |
+| MCP round trip | curl only | `get_problem` and `slow_passes` answered, both carrying `incompleteHistory` |
+
+## [2026-08-12] #205 — elapsedSec reads as effort and is wall clock ✅
+
+The E2E record is the evidence: `elapsedSec: 77251` (21.5 hours) beside `focusedSec: 37`, for a
+problem that took half a minute on a tab left open overnight.
+
+**Nothing anywhere said which one it is.** `elapsedSec` was the only non-null field in
+`SubmissionRecord` with no KDoc, and it appears in zero tool descriptions and zero lines of
+`docs/mcp.md`. An AI reading a five-digit *elapsed seconds* concludes the learner struggled — a
+confident wrong conclusion from a correctly recorded value, which is the failure this project is
+organised against.
+
+And where it *was* described, `ProblemTimer`'s KDoc oversold it: *"the question a record answers
+is 'how long did this problem take'"*. 77251 beside 37 does not support that. Same shape as
+#193's SQL score KDoc — a wrong explanation of a right observation, surviving because nothing
+contradicted it.
+
+Not renamed: the value is correct and a rename is a schema change for existing records. Said
+instead, in the three places a reader meets it — the field, the two tool descriptions that return
+whole records, and `docs/mcp.md` with the measured pair as the example.
+
+A test pins that **only** `submissions` and `get_problem` carry the explanation: the tools that
+return counts or a schedule never show the field, and repeating it there is weight for nothing.

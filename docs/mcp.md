@@ -124,6 +124,27 @@ runtime error or timeout drops it case by case. Those passes are excluded from t
 rather than ranked as instant, because a missing reading sorted as zero would put the problems
 you know least about at the fast end of a list about speed.
 
+### `elapsedSec` is not how long you spent
+
+It is **wall clock since the problem was first opened** — sleep, other work and the days between
+sessions included. The timer starts the first time a problem is seen and never restarts, so it is
+calendar time from first encounter to that grading.
+
+One measured record:
+
+```json
+"elapsedSec": 77251,          // 21.5 hours
+"sensor": { "focusedSec": 37 }
+```
+
+Half a minute of work on a tab left open overnight. Both numbers are right; they answer different
+questions, and only `focusedSec` answers "how long did this take". They can differ by orders of
+magnitude, so a conclusion about effort drawn from `elapsedSec` will be wrong in a way nothing in
+the answer marks as wrong — which is why the tools that return records say this in their
+descriptions too.
+
+`focusedSec` is absent whenever no extension was watching, and that absence is not zero.
+
 ### Missing data looks missing
 
 **A field that was never recorded is absent from the answer** — not blank, not zero, not
