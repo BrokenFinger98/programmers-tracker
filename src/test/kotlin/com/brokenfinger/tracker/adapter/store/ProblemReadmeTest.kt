@@ -234,4 +234,26 @@ class ProblemReadmeTest {
 
     private fun withoutCatalog() =
         aSubmissionRecord(title = "", level = null, part = null, acceptanceRate = null, tags = emptyList())
+
+    /**
+     * Obsidian's graph draws links, not hashtags. The inline `#dp` drives the tag pane and
+     * search and cannot carry a denominator; the wikilink is what puts an edge between a problem
+     * and its tag note (#229). Both stay, because they serve different features.
+     */
+    @Test
+    fun `the page links to each of its tag notes and keeps the hashtags`() {
+        val text = render(listOf(aSubmissionRecord(tags = listOf("dp", "math"))))
+
+        text shouldContain "[[tags/dp]]"
+        text shouldContain "[[tags/math]]"
+        text shouldContain "#dp"
+    }
+
+    /** A problem outside the shipped catalog carries no tags, and no link is invented for it. */
+    @Test
+    fun `a page for a problem with no tags links to none`() {
+        val text = render(listOf(aSubmissionRecord(tags = emptyList())))
+
+        text shouldNotContain "[[tags/"
+    }
 }
