@@ -3293,3 +3293,18 @@ CONTRIBUTING also warns about the pipe that let a failing guard through (#194), 
 is titled "you will meet it" and this is the way people will meet it wrong.
 
 No behaviour change. The documentation catching up to yesterday.
+
+## [2026-08-12] #199 — correcting what #195 claimed, and pinning what it actually did ✅
+
+#195's PR body said the score and the rating were "not exposed over MCP here". **Wrong.**
+`McpRecordJson.full()` encodes the whole `SubmissionRecord`, so #193 made them visible to a client
+the moment it landed — verified rather than assumed: a summary carries `score.user` and
+`rating.new`/`rating.changed`, and both vanish when null because the format sets
+`explicitNulls = false`.
+
+Worth a test rather than a shrug: they arrived **by inheritance, not by decision** — nothing in
+the MCP layer names either field. A field that arrives that way leaves the same way, silently, the
+next time `HEAVY` grows or the serializer's shape changes, and the failure would be an AI quietly
+reasoning without the clearest progress signal the judge gives.
+
+Two tests: present when the grading reported them, both keys **absent** when it did not.
