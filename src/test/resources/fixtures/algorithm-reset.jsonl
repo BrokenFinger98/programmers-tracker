@@ -1,0 +1,1 @@
+{"identifier":"{\"channel\":\"Challenge::AlgorithmChannel\",\"challengeable_type\":\"algorithm\",\"challengeable_id\":17582,\"language\":\"kotlin\",\"lesson_id\":181952}","message":{"action":"reset","initialCodes":{"0":"fun main(args: Array<String>) {\n    val s1 = readLine()!!\n}"},"msg":"코드를 초기화하였습니다."}}

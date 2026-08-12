@@ -47,6 +47,24 @@ class GradingMessageMapperTest {
         GradingMessageMapper.actionOf(anUnmeasuredFrame("paused")).shouldBeNull()
     }
 
+    /**
+     * The channel carries the editor's own actions. A reset declares `action` and **no
+     * `type`**, so it parses as Unknown and its action is only reachable through the raw
+     * object — and without it, a frame that can never be a grading was counted as one that
+     * went missing (#215).
+     *
+     * The pair below is the whole distinction: recognised-and-not-a-grading reports it, and a
+     * type we have simply never seen does not — that one must keep raising the alarm.
+     */
+    @Test
+    fun `a reset is recognised as not a grading, and an unmeasured frame is not`() {
+        val reset = FixtureLoader.messages("algorithm-reset.jsonl").single()
+
+        GradingMessageMapper.factsOf(reset).outsideGrading shouldBe true
+        GradingMessageMapper.factsOf(anUnmeasuredFrame("paused")).outsideGrading shouldBe false
+        GradingMessageMapper.factsOf(algorithmSubmit[0]).outsideGrading shouldBe false
+    }
+
     @Test
     fun `maps each measured terminal frame to its kind`() {
         GradingMessageMapper.terminalKindOf(algorithmSubmit[5]) shouldBe TerminalKind.FINISH

@@ -186,6 +186,7 @@ class ChannelCapture(
     private fun outsideGrading(frame: ObservedFrame) {
         val facts =
             frame.facts ?: return logger.debug("Dropped a frame belonging to no grading on lesson {}", lessonId())
+        if (facts.outsideGrading) return notAGrading()
         orphans += 1
         runCatching { rawLog.orphaned(channel.lessonId.value, frame.rawText) }
             .onFailure { logger.warn("Lesson {}: an orphaned frame could not be kept", lessonId(), it) }
@@ -198,6 +199,21 @@ class ChannelCapture(
             orphans,
         )
     }
+
+    /**
+     * The channel carries the editor's own actions too — saving, and resetting to the template
+     * (protocol doc §8). They never become records and never will, so counting them as
+     * orphaned gradings put a hole in a history that had none: `incompleteHistory` reached
+     * every MCP answer because the learner had pressed reset (#215).
+     *
+     * DEBUG rather than silence, and not kept under the raw directory: that directory means
+     * "frames of a grading no record represents", and filing something else there dilutes the
+     * one place a reader goes to find lost work. **If Programmers renames either action it
+     * stops matching and falls back to the loud path above**, which is the direction this
+     * should fail in.
+     */
+    private fun notAGrading() =
+        logger.debug("Lesson {}: a non-grading action was broadcast and not counted", lessonId())
 
     // The registry is bookkeeping and a grading is not: a channel it has already forgotten
     // must not cost us the verdict currently arriving on it.

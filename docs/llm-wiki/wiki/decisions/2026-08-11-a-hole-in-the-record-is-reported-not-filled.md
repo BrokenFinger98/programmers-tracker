@@ -125,3 +125,40 @@ Two smaller decisions came with it:
 - **Still absent when the history is whole**, on every tool. Presence remains the signal, and
   a test pins the absence on three tools rather than one — a field that is always there is a
   field nobody notices.
+
+## Amended 2026-08-12 (#215): a warning that fires on nothing spends its credibility
+
+The whole design rests on presence being the signal — *"a field that is always there is a
+field nobody notices"*. Which makes a false positive the one failure it cannot afford, and
+there was one from the beginning:
+
+```json
+{"action":"reset","initialCodes":{…},"msg":"코드를 초기화하였습니다."}
+```
+
+Pressing 초기화 broadcasts that on the grading channel. It carries a `msg`, so it has facts,
+so it took the orphan path — and lesson 181952 joined `incompleteHistory` on **every MCP
+answer** because the editor had been reset. Nothing was lost. Found while doing something
+else (#212), which is the only way it was ever going to be found: the count is aggregate, and
+one extra frame in it looks exactly like the real thing.
+
+The correction is a distinction the code did not have: **recognised-and-not-a-grading** versus
+**unrecognised**. Both come out of the mapper as `action = null` today, and only the second is
+worth an alarm — it is the signal that Programmers changed something. Protocol §8 catalogues
+`save` and `reset` as non-grading actions; those are dropped from the count, and anything else
+still counts and still warns loudly.
+
+**Not filed under the raw orphan directory either.** That directory means "frames of a grading
+no record represents", and it is where a person goes to look for lost work. Putting editor
+actions in it dilutes the one place that answer lives. DEBUG is the right volume for a thing
+that is working as intended.
+
+The failure direction is deliberate: if Programmers renames either action, it stops matching
+and falls back to the loud path. A guard that stops recognising something must get louder, not
+quieter.
+
+**`save` is included without a capture, and says so in the code.** §8's catalogue comes from
+their bundle, not from our wire. The asymmetry justifies it — an entry that never arrives costs
+nothing, while omitting one that does reopens this exact defect — but it is an inference sitting
+next to a measurement, and unlabelled that is the [[concepts/assumption-vs-measurement]]
+failure this project keeps rediscovering.

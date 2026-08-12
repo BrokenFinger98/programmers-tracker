@@ -3537,3 +3537,45 @@ Browser mechanics worth not rediscovering: the editor is CodeMirror 5 (`.CodeMir
 beats typing), `?language=<name>` switches without the dropdown, and **a click in the same
 `browser_batch` as a `navigate` does not register** — one wasted round trip per language until
 that was clear.
+
+## [2026-08-12] #215 — a code reset was counted as a hole in the grading record ✅
+
+Found while verifying the #212 sweep through MCP, not by looking for it: `stats` came back
+with `incompleteHistory.lessons: [120802, 181946, 181952]`, and 181952 was new. The orphaned
+frame was mine, from pressing 초기화 to read the Kotlin template:
+
+```json
+{"action":"reset","initialCodes":{…},"msg":"코드를 초기화하였습니다."}
+```
+
+It carries a `msg`, so `frame.facts` is non-null, so it took the orphan path. Nothing was lost.
+The log even said *"a grading frame (action=null)"* — it is not a grading frame, and the wire
+said `reset`, not null.
+
+**Why it is worth a PR.** `incompleteHistory` is a trust signal:
+[[decisions/2026-08-11-a-hole-in-the-record-is-reported-not-filled]] puts it on every tool
+answer so a reader distrusts a diagnosis drawn over a history with holes, and its own argument
+is that *presence is the signal*. A warning that fires on an ordinary editor action spends
+that credibility on nothing — and it fires for any user, not just this one.
+
+The distinction the code lacked: **recognised-and-not-a-grading** vs **unrecognised**. Both
+arrive as `action = null`, and only the second deserves an alarm. `GradingFrameFacts` gained
+`outsideGrading`; §8's `save` and `reset` set it; everything else counts and warns as before.
+A rename on their side stops matching and falls back to the loud path, which is the direction
+this must fail in.
+
+Two smaller calls, both stated in the code:
+
+- **Not filed under the raw orphan directory.** That directory means "frames of a grading no
+  record represents" and is where a person looks for lost work. DEBUG instead.
+- **`save` is included without a capture.** §8's catalogue is bundle-extracted, not our wire.
+  The failure is asymmetric — an entry that never arrives costs nothing — but it is an
+  inference beside a measurement and the comment labels it as one.
+
+Also learned: a reset frame **has no `type` field at all**, which the §8 catalogue's type list
+does not lead you to expect, and it ships the starter code back in `initialCodes` keyed by the
+codes key. Protocol §8 updated.
+
+**TDD note against myself.** My first red/green check stashed *everything* — including the new
+test — so both runs were silent and proved nothing. Redone by reverting only the four
+production files: 1 failed, then BUILD SUCCESSFUL.

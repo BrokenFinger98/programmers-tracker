@@ -46,6 +46,7 @@ object GradingMessageMapper {
         announcedExamples = announcedExamples(message),
         errorText = errorTextOf(message),
         startsGrading = message is SubmitMessage.Start,
+        outsideGrading = outsideGrading(message),
         score = scoreOf(message),
         rating = ratingOf(message),
     )
@@ -145,6 +146,39 @@ object GradingMessageMapper {
         is SubmitMessage.Error -> message.action
         is SubmitMessage.Unknown -> null
     }
+
+    /**
+     * The actions protocol §8 catalogues that are not gradings. **Both spellings of the check
+     * are needed**, and for different reasons:
+     *
+     * - a `reset` frame carries no `type` at all, so it parses as [SubmitMessage.Unknown] and
+     *   its action is only reachable through the raw object (measured on lesson 181952,
+     *   2026-08-12)
+     * - a `save` frame's types include `result`, which parses as a perfectly ordinary run
+     *   result — the action string is the only thing distinguishing it from one
+     *
+     * [rawActionOf] is deliberately left alone rather than taught to read `Unknown`: it feeds
+     * [actionOf], and letting an unrecognised frame start reporting RUN or SUBMIT would change
+     * assembly on a path nothing here has measured.
+     */
+    private fun outsideGrading(message: SubmitMessage): Boolean = rawOf(message)?.lowercase() in NON_GRADING_ACTIONS
+
+    private fun rawOf(message: SubmitMessage): String? = when (message) {
+        is SubmitMessage.Unknown -> message.action()
+        else -> rawActionOf(message)
+    }
+
+    /**
+     * Protocol §8's non-grading actions, lower-cased for comparison.
+     *
+     * **They are not equally well evidenced, and the difference is worth keeping visible.**
+     * `reset` is measured — a captured broadcast, fixture `algorithm-reset.jsonl`. `save` is
+     * from §8's catalogue, which was extracted from Programmers' own bundle rather than seen
+     * on the wire here. It is included because the failure is asymmetric: an unmeasured entry
+     * that never arrives costs nothing, while omitting one that does arrive reopens exactly
+     * the defect this closes. If a `save` broadcast is ever captured, it gets a fixture.
+     */
+    private val NON_GRADING_ACTIONS = setOf("save", "reset")
 
     // A submit frame carries `testcaseId`; a run frame carries a 0-based `index` instead
     // (protocol doc §7, fixtures/algorithm-run-pass.jsonl). Both identify a case within one

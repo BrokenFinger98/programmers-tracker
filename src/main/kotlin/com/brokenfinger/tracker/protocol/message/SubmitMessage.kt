@@ -97,7 +97,16 @@ sealed interface SubmitMessage {
     /** run-path error with HTML-escaped compiler output or stack trace (protocol doc §7). */
     data class Error(val action: String?, val index: Int?, val msg: String?) : SubmitMessage
 
-    data class Unknown(val type: String?, val raw: JsonObject) : SubmitMessage
+    data class Unknown(val type: String?, val raw: JsonObject) : SubmitMessage {
+        /**
+         * The `action` the frame declared, if any. Every other message reads it into a field;
+         * this one cannot, because it is the case for frames whose shape we do not know — and
+         * a frame can declare an action while carrying no `type` at all. A `reset` broadcast
+         * does exactly that (measured 2026-08-12, protocol §8), and telling it apart from a
+         * grading needs the string.
+         */
+        fun action(): String? = raw.stringField("action")
+    }
 
     companion object {
         private val logger = LoggerFactory.getLogger(SubmitMessage::class.java)
