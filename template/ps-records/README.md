@@ -20,6 +20,10 @@ tags/<tag>.md          One note per problem type, with how many of it you have m
 log/submissions.jsonl  Full submission log (the source the MCP tools read)
 ```
 
+**Both `examples.json` and the runner need the judge's own examples, and only a *run* announces
+them** — so a problem you passed on the first submit, without pressing Run once, has neither.
+Running it once fills them in.
+
 The runner is generated for java, python3, cpp, javascript, kotlin, c and csharp; other
 languages get none, and the server logs why. Its own header carries the command to run it —
 `java RunnerTest.java`, `python3 runner_test.py`, and so on — and it is replaced after every

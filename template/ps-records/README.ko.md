@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@96d3bed83ae78fc78fd6715bb6053f0b01c7062a -->
+<!-- translated-from: README.md@264397521700d75ac4a711d86a2fa92c37ec98a5 -->
 
 # ps-records
 
@@ -21,6 +21,10 @@ problems/<lessonId>-<title>/
 tags/<tag>.md          문제 유형별 노트 하나. 그 유형을 얼마나 만났는지가 적힙니다
 log/submissions.jsonl  전체 제출 로그 (MCP 툴이 읽는 원본)
 ```
+
+**`examples.json` 과 실행기는 둘 다 채점기가 준 예제가 있어야 만들어지는데, 그 예제는 *run*
+에서만 옵니다** — 실행을 한 번도 누르지 않고 첫 제출에 통과한 문제에는 둘 다 없습니다. 한 번
+실행하면 채워집니다.
 
 실행기는 java, python3, cpp, javascript, kotlin, c, csharp에 대해 생성됩니다. 다른 언어는
 생성되지 않고 서버가 그 이유를 로그에 남깁니다. 실행 명령은 파일 자체의 헤더에 적혀 있고
