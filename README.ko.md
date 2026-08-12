@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@4dbad970827788a4e9ca66ec7cabbd24919cb7a0 -->
+<!-- translated-from: README.md@789696d9b2c890d082af4198ae46479139d4d40d -->
 
 # programmers-tracker
 
@@ -156,7 +156,7 @@ JDK 25 위에서 네이티브로도 돌아갑니다 (`./gradlew bootRun`). 안�
 ├── compose.yaml                기록과 쿠키를 마운트; 루프백에만 공개
 ├── .env.example                .env 로 복사 — 기본값이 있을 수 없는 설정들
 ├── .claude/skills/             프로젝트 범위 스킬 (issue · commit · pull-request · wiki)
-├── .githooks/                  푸시 게이트 — 위키 기록 없는 푸시를 막음
+├── .githooks/                  푸시 게이트 — 헌법 가드, 그다음 위키 기록 확인
 ├── .harness/state/             세션 밖 기억 (goal · progress)
 ├── docs/
 │   ├── bootstrap.md              설치 안내 — 실행하려면 여기부터
@@ -173,6 +173,7 @@ JDK 25 위에서 네이티브로도 돌아갑니다 (`./gradlew bootRun`). 안�
 서버는 그 안에 쓰기만 합니다. §5.5의 파생 페이지가 생기면 Obsidian 볼트로 열 수 있습니다.
 
 > 클론 후 한 번: `git config core.hooksPath .githooks` — 푸시 게이트를 켭니다.
+> 헌법 가드를 먼저 돌리고, 그다음 위키 기록을 요구합니다.
 > Claude Code는 세션 시작 훅으로 자동 설정합니다.
 
 ---

@@ -155,7 +155,7 @@ which have been built.
 ├── compose.yaml                mounts your records and your cookie; publishes to loopback only
 ├── .env.example                copy to .env — the settings that have no default
 ├── .claude/skills/             project-scoped skills (issue · commit · pull-request · wiki)
-├── .githooks/                  push gate — blocks pushes without wiki records
+├── .githooks/                  push gate — constitution guards, then a wiki-record check
 ├── .harness/state/             out-of-session memory (goal · progress)
 ├── docs/
 │   ├── bootstrap.md              setup walkthrough — start here to run it
@@ -172,7 +172,8 @@ Your records live in a **separate repository that you create** (`cp -R template/
 in *Get started* above) and the server only writes into it. Open it as an Obsidian vault once
 the derived pages of §5.5 exist.
 
-> Once after cloning: `git config core.hooksPath .githooks` — activates the push gate.
+> Once after cloning: `git config core.hooksPath .githooks` — activates the push gate,
+> which runs the constitution guards and then asks for a wiki record.
 > Claude Code sets this up automatically via a session-start hook.
 
 ---

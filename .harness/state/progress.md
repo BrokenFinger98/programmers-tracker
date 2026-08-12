@@ -3271,3 +3271,25 @@ pushed`, and `git ls-remote` confirmed it never reached the remote.
 The pattern across four amendments to `guards-must-prove-they-ran` is now plain: **a check is
 worth what it is wired to.** §3 was a search that never ran; §5–§7 were checks nothing called
 until CI; this was a gate whose caller could discard its verdict.
+
+## [2026-08-12] #197 — five descriptions of a hook that had changed the day before ✅
+
+#196 made `.githooks/pre-push` run the constitution guards and fail closed. Every description of
+the hook still said it only checked the wiki — including **CLAUDE.md**, which is the file whose
+absolutes the new half enforces. A constitution describing its own enforcement wrongly is worse
+than most drift.
+
+Five places: `CLAUDE.md`, `CONTRIBUTING.md` (whose section was titled after only one half),
+`README.md` ×2, its Korean twin, and `.claude/hooks/inject-state.sh`.
+
+What the descriptions now carry is the **asymmetry**, because flattening it into "the push gate
+checks things" would be accurate and useless:
+
+- the guards **fail closed** — absolutes, no escape hatch
+- the wiki gate **fails open** — it prevents an unconscious omission, and `Wiki-Skip:` leaves an
+  auditable reason
+
+CONTRIBUTING also warns about the pipe that let a failing guard through (#194), since that section
+is titled "you will meet it" and this is the way people will meet it wrong.
+
+No behaviour change. The documentation catching up to yesterday.

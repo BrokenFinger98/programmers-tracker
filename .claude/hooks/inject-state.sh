@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart hook (project) — re-injects out-of-session memory on session start /
-# compact recovery, and idempotently installs the wiki push gate (.githooks).
+# compact recovery, and idempotently installs the push gate (.githooks) — constitution
+# guards, then the wiki-record check.
 # fail-open: no failure may block session start (always exit 0).
 # Rationale: docs/superpowers/specs/2026-08-04-record-keeping-design.md §3.4
 cat >/dev/null 2>&1  # consume stdin (SessionStart input unused)
