@@ -30,6 +30,16 @@ data class SubmissionRecord(
     val language: String,
     val action: GradingAction,
     val attempt: Int,
+    /**
+     * **Wall clock since the problem was first seen** — sleep, other work and days between
+     * sessions included. Not time on task: a measured record carries `elapsedSec: 77251` beside
+     * `sensor.focusedSec: 37`, for a problem that took half a minute on a tab left open
+     * overnight (#205).
+     *
+     * The timer never restarts, so this is calendar time from first encounter to this grading.
+     * That is a real measure and a useful one; it is simply not the one the name suggests, and
+     * [SensorObservation.focusedSec] is the one that answers "how long did you actually spend".
+     */
     val elapsedSec: Long,
     /** Null for the first submission of a problem — there is no previous one to measure from. */
     val sincePrevSec: Long? = null,

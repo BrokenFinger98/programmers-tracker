@@ -125,4 +125,18 @@ class McpToolCatalogTest {
             withClue(tool["name"]!!.jsonPrimitive.content) { occurrences shouldBe 1 }
         }
     }
+
+    /**
+     * The tools that hand back whole records must explain `elapsedSec`, because the name reads as
+     * time on task and the value is wall clock — a measured record carries 77251 beside a
+     * `focusedSec` of 37 (#205). The ones that return counts or a schedule never show the field,
+     * and repeating it there would be weight for nothing.
+     */
+    @Test
+    fun `only the tools that return records explain elapsedSec`() {
+        val explains = tools.filter { it["description"]!!.jsonPrimitive.content.contains("elapsedSec") }
+            .map { it["name"]!!.jsonPrimitive.content }
+
+        explains shouldContainExactly listOf(McpToolCatalog.SUBMISSIONS, McpToolCatalog.GET_PROBLEM)
+    }
 }

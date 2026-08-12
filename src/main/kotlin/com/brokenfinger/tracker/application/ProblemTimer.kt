@@ -10,10 +10,14 @@ import com.brokenfinger.tracker.domain.SensorObservation
  * settle time would be filed next to a measured verdict as if it had been measured too.
  *
  * The timer starts when a problem is **first** seen and never restarts (design §5.1): reopening
- * the same problem two days later continues the same measurement, because the question a record
- * answers is "how long did this problem take", not "how long was this tab open". Only
- * [startIfAbsent] creates a timer, so a reading never doubles as a start and "never seen" stays
- * distinguishable from "just started".
+ * the same problem two days later continues the same measurement. Only [startIfAbsent] creates a
+ * timer, so a reading never doubles as a start and "never seen" stays distinguishable from "just
+ * started".
+ *
+ * ⚠️ This used to say the question a record answers is *"how long did this problem take"*. It is
+ * **wall clock**, and a measured record shows `elapsedSec: 77251` beside `focusedSec: 37` — a
+ * half-minute problem on a tab left open overnight (#205). Calendar time from first encounter is
+ * a real measure; it is not time on task, and the sensor's `focusedSec` is what answers that.
  */
 interface ProblemTimer {
     /** Seconds since this problem was first seen, or 0 when nothing was recorded for it. */

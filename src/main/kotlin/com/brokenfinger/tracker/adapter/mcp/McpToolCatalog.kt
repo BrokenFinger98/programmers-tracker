@@ -126,7 +126,8 @@ object McpToolCatalog {
         title = "Submission history",
         description = "Every recorded run and submit, newest first, optionally narrowed by date or verdict. " +
             "Returns the stored records themselves; per-testcase detail, compiler output and diffs are " +
-            "omitted here and available from get_problem. A field that was never recorded is absent.",
+            "omitted here and available from get_problem. A field that was never recorded is absent." +
+            ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
             putJsonObject("since") {
@@ -147,7 +148,7 @@ object McpToolCatalog {
         description = "Everything recorded against one Programmers lesson: catalog metadata as captured, and " +
             "every submission in full, including per-testcase results and compiler output. A lesson with " +
             "nothing recorded answers with an empty history rather than an error — we report what we " +
-            "observed, which may be nothing.",
+            "observed, which may be nothing." + ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
             putJsonObject("lessonId") {
@@ -182,6 +183,18 @@ object McpToolCatalog {
      * Appended to every description rather than repeated in every answer (#187). A client
      * receives this once from `tools/list`; the results carry counts.
      */
+    /**
+     * Appended to the descriptions of the tools that return records. `elapsedSec` reads as time
+     * on task and is wall clock; a measured record carries 77251 beside a `focusedSec` of 37
+     * (#205), and an answer with no explanation invites exactly the wrong conclusion.
+     */
+    const val ELAPSED_MEANS: String =
+        " `elapsedSec` is **wall clock since the problem was first opened** — sleep, other work " +
+            "and days between sessions included — not time on task. One measured record carries " +
+            "`elapsedSec: 77251` beside `sensor.focusedSec: 37`: half a minute of work on a tab " +
+            "left open overnight. Use `focusedSec` for effort and treat `elapsedSec` as calendar " +
+            "time from first encounter; they differ by orders of magnitude and neither is wrong."
+
     const val INCOMPLETE_HISTORY: String =
         " If `incompleteHistory` is present in an answer, gradings were captured that no record " +
             "represents — every tool here reads that same history, so the answer is drawn over a " +
