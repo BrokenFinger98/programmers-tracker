@@ -3448,3 +3448,41 @@ guess-based debugging, which the constitution forbids by name. Local three-times
 passed, and `gates (ubuntu-latest)` passed in the same run, so it is not deterministic.
 
 The next occurrence arrives with a full stack instead of a line number.
+
+## [2026-08-12] #207 — sincePrevSec was declared, fixtured, documented, and never once set ✅
+
+Third of this shape in two days. 80 of 80 records null, **including a fifth attempt**, while:
+
+- design §5.2 shows `"sincePrevSec": 312,  // since the previous submission`
+- the KDoc explained the null as *"Null for the first submission of a problem"*
+- `aSubmissionRecord()` populated `312`
+- `src/main` contained the declaration and nothing else — no writer, no reader
+
+So the KDoc gave a cause that cannot be true for a fifth attempt, and every test saw a number
+production had never produced. Same as #193's `score` KDoc: a wrong explanation of a right
+observation, surviving because nothing could contradict it.
+
+**Wired rather than deleted.** The gap between attempts separates five submits in ninety seconds
+from five across three evenings — guessing from thinking — and `review_queue` reasons about
+confidence from the attempt count and the questions tab without it. **Reported, never scored**:
+this adds a fact to an item, not a term to a formula
+([[decisions/2026-08-10-scheduling-is-not-diagnosis]]).
+
+`SubmissionGaps` mirrors `AttemptAuthority` exactly — restored from the submission log at startup,
+advanced in memory, consulted inside the confined writer section. The log stays the one authority
+for both numbers.
+
+The definition is a choice and is stated as one: **any action, any language.** The log holds runs,
+and "five runs in two minutes" is the same signal; and unlike #174's scheduling rule — which asks
+whether a *pass* demonstrates a language — this asks how long since the learner last touched the
+problem, where switching language is still touching it.
+
+`RecordedSubmission` gained `ts`, leniently: a line whose timestamp will not parse keeps every
+other field and restores no gap, because the attempt counter matters more than a gap.
+
+Nine calculator tests plus three through the real writer, including one that a restart must not
+turn back into a first attempt. **Verified live**: a run driven in the browser recorded
+`sincePrev 2034` — 34 minutes since the previous grading, correct to the second.
+
+Browser note worth keeping: clicking these buttons **by `ref` shows the tooltip and does not
+click**; only coordinate clicks fire them. Cost two false starts today.

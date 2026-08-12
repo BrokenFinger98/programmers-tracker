@@ -21,10 +21,12 @@ fun aRecord(
     action: GradingAction? = GradingAction.SUBMIT,
     attempt: Int = 1,
     language: String? = "java",
+    ts: java.time.OffsetDateTime? = java.time.OffsetDateTime.parse("2026-08-04T14:23:01+09:00"),
 ): RecordedSubmission = RecordedSubmission(
     lessonId = lessonId,
     action = action,
     attempt = attempt,
     language = language,
+    ts = ts,
     line = aRecordLine(lessonId, action?.name?.lowercase() ?: "unknown", attempt, language ?: "java"),
 )

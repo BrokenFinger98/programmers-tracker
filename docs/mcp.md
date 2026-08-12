@@ -145,6 +145,11 @@ descriptions too.
 
 `focusedSec` is absent whenever no extension was watching, and that absence is not zero.
 
+`sincePrevSec` is the third of the trio: **seconds since the previous recorded grading of the same
+problem**, any action and any language. It separates five submits in ninety seconds from five
+across three evenings — guessing from thinking — and it is reported, never scored. Null when there
+is genuinely no previous grading.
+
 ### Missing data looks missing
 
 **A field that was never recorded is absent from the answer** — not blank, not zero, not

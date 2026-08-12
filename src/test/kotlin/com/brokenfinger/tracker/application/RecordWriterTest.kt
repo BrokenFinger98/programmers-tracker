@@ -26,7 +26,9 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
@@ -223,7 +225,10 @@ class RecordWriterTest {
         writer.write(aSettledCapture()) shouldNotBe null
     }
 
-    private fun writer(store: RecordStore = JsonlRecordStore.under(root)): RecordWriter {
+    private fun writer(
+        store: RecordStore = JsonlRecordStore.under(root),
+        clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC),
+    ): RecordWriter {
         val layout = RecordLayout(root)
         return RecordWriter.of(
             store = store,
@@ -232,9 +237,59 @@ class RecordWriterTest {
             recordRoot = root,
             git = aQuietGitSync(),
             submissionLog = layout.submissionLog(),
-            clock = Clock.fixed(NOW, ZoneOffset.UTC),
+            clock = clock,
             writerDispatcher = Dispatchers.Unconfined,
         )
+    }
+
+    // The gap between attempts (#207) ------------------------------------------------------
+
+    /**
+     * Declared in the design, in the schema and in every fixture, and null in all 80 real
+     * records because nothing set it. These drive it through the real writer rather than the
+     * calculator, because the calculator was never the missing part.
+     */
+    @Test
+    fun `the first grading of a problem carries no gap`() = runBlocking<Unit> {
+        writer().write(aSettledCapture())!!.sincePrevSec.shouldBeNull()
+    }
+
+    @Test
+    fun `the next grading carries the seconds since the last one`() = runBlocking<Unit> {
+        val moving = MovingClock()
+        val writer = writer(clock = moving)
+
+        writer.write(aSubmit(1))
+        moving.advance(Duration.ofSeconds(312))
+
+        writer.write(aSubmit(2))!!.sincePrevSec shouldBe 312
+    }
+
+    /**
+     * Restored from the log, not held only in memory: a restart between two attempts must not
+     * turn the second one back into a first.
+     */
+    @Test
+    fun `a gap survives a restart`() = runBlocking<Unit> {
+        val moving = MovingClock()
+        writer(clock = moving).write(aSubmit(1))
+        moving.advance(Duration.ofSeconds(90))
+
+        writer(clock = moving).write(aSubmit(2))!!.sincePrevSec shouldBe 90
+    }
+
+    private class MovingClock : Clock() {
+        private var now = NOW
+
+        fun advance(by: Duration) {
+            now = now.plus(by)
+        }
+
+        override fun instant(): java.time.Instant = now
+
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId?): Clock = this
     }
 
     // Each grading of one problem ends on its own terminal frame, so each has its own key.

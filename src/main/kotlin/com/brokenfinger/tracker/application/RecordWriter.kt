@@ -49,6 +49,7 @@ class RecordWriter private constructor(
     private val submissionLog: Path,
     private val examples: ExampleStore,
     private val attempts: AttemptAuthority,
+    private val gaps: SubmissionGaps,
     private val captured: MutableSet<CaptureKey>,
     private val clock: Clock,
     private val writerDispatcher: CoroutineDispatcher,
@@ -105,7 +106,10 @@ class RecordWriter private constructor(
     private fun record(capture: SettledCapture, key: CaptureKey): SubmissionRecord {
         val attempt = attempts.allocate(capture.lessonId, capture.action())
         val copied = copiedRawPath(capture, attempt)
-        val record = capture.toRecord(OffsetDateTime.now(clock), attempt, key, copied)
+        val at = OffsetDateTime.now(clock)
+        // Inside the confined section like the attempt number, and for the same reason: the log
+        // is the one authority for both, and a second reader would race the write (#207).
+        val record = capture.toRecord(at, attempt, key, copied, gaps.sincePrevious(capture.lessonId, at))
         store.append(SubmissionRecordJson.encode(record))
         retireRaw(capture, copied != null)
         // After the append, inside the same confined section: the examples are a derived
@@ -220,6 +224,7 @@ class RecordWriter private constructor(
                 examples = examples,
                 submissionLog = submissionLog,
                 attempts = AttemptAuthority.from(history),
+                gaps = SubmissionGaps.from(history),
                 captured = keysOf(history),
                 clock = clock,
                 writerDispatcher = writerDispatcher,

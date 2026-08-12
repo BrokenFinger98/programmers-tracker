@@ -65,32 +65,34 @@ data class SettledCapture(
      */
     fun movesRaw(attempt: Int): Boolean = action() == GradingAction.SUBMIT && attempt > AttemptAuthority.NONE
 
-    fun toRecord(ts: OffsetDateTime, attempt: Int, key: CaptureKey, rawPath: String?) = SubmissionRecord(
-        ts = ts,
-        lessonId = lessonId,
-        title = problem?.title.orEmpty(),
-        level = problem?.level,
-        part = problem?.partTitle,
-        acceptanceRate = problem?.acceptanceRate,
-        tags = problem?.tags.orEmpty(),
-        language = language,
-        action = action(),
-        attempt = attempt,
-        elapsedSec = elapsedSec,
-        sensor = observation,
-        captureKey = key,
-        outcome = session.outcome,
-        verdict = session.verdict,
-        score = session.score,
-        rating = session.rating,
-        testcases = session.testcases,
-        tcSummary = TestcaseSummary.of(session.testcases, session.testcasesComplete),
-        rawPath = rawPath,
-        // The verdict is durable the moment this line is written; the code is fetched
-        // afterwards and its failure is never this record's failure (design §5.2).
-        codePending = true,
-        errorText = session.errorText,
-    )
+    fun toRecord(ts: OffsetDateTime, attempt: Int, key: CaptureKey, rawPath: String?, sincePrevSec: Long? = null) =
+        SubmissionRecord(
+            ts = ts,
+            lessonId = lessonId,
+            title = problem?.title.orEmpty(),
+            level = problem?.level,
+            part = problem?.partTitle,
+            acceptanceRate = problem?.acceptanceRate,
+            tags = problem?.tags.orEmpty(),
+            language = language,
+            action = action(),
+            attempt = attempt,
+            elapsedSec = elapsedSec,
+            sincePrevSec = sincePrevSec,
+            sensor = observation,
+            captureKey = key,
+            outcome = session.outcome,
+            verdict = session.verdict,
+            score = session.score,
+            rating = session.rating,
+            testcases = session.testcases,
+            tcSummary = TestcaseSummary.of(session.testcases, session.testcasesComplete),
+            rawPath = rawPath,
+            // The verdict is durable the moment this line is written; the code is fetched
+            // afterwards and its failure is never this record's failure (design §5.2).
+            codePending = true,
+            errorText = session.errorText,
+        )
 
     // A grading abandoned before any frame was accepted has nothing to digest, and the
     // session id is unique per capture — the right fallback for something that will never
