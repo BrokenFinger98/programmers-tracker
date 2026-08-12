@@ -51,7 +51,7 @@ replaced, and a hardcoded 83 would survive the replacement and be wrong.
 ---
 tag: dp
 catalogTotal: 38      # from the shipped catalog snapshot; never changes
-attempted: 5          # problems carrying this tag with any record
+attempted: 5          # problems carrying this tag with at least one submit
 solved: 3             # of those, the ones with a PASS
 ---
 
@@ -62,6 +62,11 @@ Met 5 of 38, passed 3.
 
 `attempted` and `solved` are separate because *never tried* and *tried and failed* are different
 facts — the same distinction `list_problems` exists to make.
+
+**`attempted` counts submits, not runs**, which is the same rule `list_problems` applies for its
+`attempted` status. A looser rule here — "any record, including runs" — is arguably closer to
+*met the type*, and it was rejected: two surfaces answering the same question with different
+numbers is exactly what #214 had to disclose its way out of. One definition, both places.
 
 **Notes are created for tags with no records at all.** That is the point of the whole design: a
 `dp: 0 / 38` note is an isolated node in the graph, and the isolation is the finding.
