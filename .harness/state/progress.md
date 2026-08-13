@@ -4403,7 +4403,7 @@ One PR carries all four places the number lived: the twin itself, CLAUDE.md's li
 seventh remains a change to the list"), the ADR amendment, and bootstrap.md + its twin which
 also said "five".
 
-## [2026-08-13] #263 — off 8080, onto a port nobody else wants ⏳
+## [2026-08-13] #263 — off 8080, onto a port nobody else wants ✅ `e09a0c5`
 
 8080 collides with half of what a developer already runs. **1619** spells "PS" — P is the 16th
 letter, S the 19th — is above 1024, and is none of the crowded ones (3000 · 5000 · 5173 · 8000 ·
@@ -4427,4 +4427,33 @@ is right, because those sentences were true when they were written.
 
 Third time today a filter or a memo stood in for the world and something outside it disagreed —
 grep over the tree, CI over the platforms, and now the owner over the rendered page.
+
+
+## [2026-08-13] #266 — the options page sent you to the one directory the token must not be in ⏳
+
+`extension/options.html` told the reader the watch token is "`.ps/watch-token` in your record
+repository." It is not there and must never be: #126 kept `session` and `watch-token` out of the
+record repository precisely because they are credentials and that repository is pushed.
+
+Measured on the live install while running the e2e sweep:
+
+```
+~/Desktop/ps-records/.ps/  →  raw/  backup.json  git-credentials  timers.json   (no token)
+<checkout>/.ps/            →  session  watch-token                              (the token)
+```
+
+So the page is worse than a dead end. The reader looks in the named directory, finds a
+*different* credential sitting there, and learns that credentials belong inside the repository
+they push.
+
+**The same sentence was fixed in `extension/README.md` on 2026-08-11** — the pass that also
+corrected "reads five identifiers / sends two fields". The document *about* the extension was
+corrected; the extension's own UI, the page you are looking at while pasting the token, was not.
+
+That is the second time in one day that `extension/options.html` was invisible to a sweep, after
+the 8080 → 1619 port pass missed it for a filter that omitted `.html` (#263). Re-swept the whole
+tree with no filter at all: every remaining "record repository" near "token" is a correct
+statement — `README.md` saying *not* the record repository, the ADR's own title, and this file's
+history. No guard added. A guard for one sentence over-fits, and the defect was never a missing
+check; it was a file list standing in for the tree.
 
