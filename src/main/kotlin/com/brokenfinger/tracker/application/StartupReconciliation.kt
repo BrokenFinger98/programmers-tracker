@@ -19,6 +19,7 @@ class StartupReconciliation(
     private val raw: RawSessionLog,
     private val backupReporter: BackupReporter,
     private val attachment: CodeAttachment,
+    private val statements: StatementBackfill,
     private val git: GitSync,
     private val backup: DailyBackup,
 ) {
@@ -29,6 +30,9 @@ class StartupReconciliation(
         // is written `codePending`, and code attached after `git.reconcile` would sit
         // uncommitted until the next capture happened to sweep it up.
         logger.info("Startup code attachment: {}", attachment.attachPending())
+        // Before the vault refresh, which is what puts the embed on the problem page: a README
+        // regenerated before the statement lands would link nothing until the next boot.
+        backfillStatements()
         refreshVault()
         // Records an earlier run wrote but never committed — a git failure at capture time
         // leaves exactly this, and "commit whatever is uncommitted" is how it heals.
@@ -47,6 +51,15 @@ class StartupReconciliation(
      * are not ours to lose over a note. It runs after the attachment pass so that whatever
      * reconciliation just recovered is already counted.
      */
+    /**
+     * Problems recorded before the server kept statements (#280). Repair, so a failure is logged
+     * and the boot continues — the records are complete without it.
+     */
+    private suspend fun backfillStatements() {
+        runCatching { statements.run() }
+            .onFailure { logger.warn("The statement backfill did not run; nothing else is affected", it) }
+    }
+
     private fun refreshVault() {
         runCatching { attachment.refreshVault() }
             .onFailure { logger.warn("The vault pages could not be written; the records are unaffected", it) }

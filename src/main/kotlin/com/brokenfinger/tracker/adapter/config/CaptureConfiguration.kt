@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.cable.CableChannelSubscriber
 import com.brokenfinger.tracker.adapter.catalog.ClasspathProblemCatalog
 import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileExampleStore
+import com.brokenfinger.tracker.adapter.store.FileProblemStatements
 import com.brokenfinger.tracker.adapter.store.FileProblemTimer
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
@@ -19,18 +20,21 @@ import com.brokenfinger.tracker.application.DerivedArtifacts
 import com.brokenfinger.tracker.application.FrameReader
 import com.brokenfinger.tracker.application.GitSync
 import com.brokenfinger.tracker.application.ProblemCatalog
+import com.brokenfinger.tracker.application.ProblemStatementSource
 import com.brokenfinger.tracker.application.ProblemTimer
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RawSessionReconciler
 import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.application.RecordWriter
 import com.brokenfinger.tracker.application.StartupReconciliation
+import com.brokenfinger.tracker.application.StatementBackfill
 import com.brokenfinger.tracker.application.SubscriptionRegistry
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEndpoint
 import com.brokenfinger.tracker.protocol.KtorPageSource
 import com.brokenfinger.tracker.protocol.ManualFileSessionProvider
+import com.brokenfinger.tracker.protocol.PageProblemStatementSource
 import com.brokenfinger.tracker.protocol.PageSource
 import com.brokenfinger.tracker.protocol.ProblemPageCodeFetcher
 import com.brokenfinger.tracker.protocol.SessionProvider
@@ -42,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationRunner
@@ -50,6 +55,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.DependsOn
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration
 
 /**
  * Assembles the capture path: a watched channel gets a live subscription whose frames run
@@ -151,10 +157,35 @@ class CaptureConfiguration {
         sessions: RawSessionReconciler,
         raw: RawSessionLog,
         attachment: CodeAttachment,
+        statements: StatementBackfill,
         git: GitSync,
         backup: DailyBackup,
         backupReporter: BackupReporter,
-    ) = StartupReconciliation(sessions, raw, backupReporter, attachment, git, backup)
+    ) = StartupReconciliation(sessions, raw, backupReporter, attachment, statements, git, backup)
+
+    /**
+     * Problems recorded before the server kept statements (#280).
+     *
+     * The pause between fetches is the courtesy §9.3 asks for, and it is injected so a test can
+     * assert the whole pass without waiting for it — the shape `CommandLineGitSync` uses for its
+     * backoff and `CableChannelSubscriber` for its reconnect.
+     */
+    @Bean
+    fun statementBackfill(
+        store: RecordStore,
+        artifacts: DerivedArtifacts,
+        source: ProblemStatementSource,
+        @Value("\${tracker.record-repo}") recordRepo: String,
+    ) = StatementBackfill(
+        store = store,
+        statements = FileProblemStatements(RecordLayout(recordRoot(recordRepo))),
+        source = source,
+        artifacts = artifacts,
+        pause = { delay(STATEMENT_PAUSE) },
+    )
+
+    @Bean
+    fun problemStatementSource(pages: PageSource): ProblemStatementSource = PageProblemStatementSource(pages = pages)
 
     /**
      * Picks up whatever an earlier run left behind — orphaned raw sessions, records still
@@ -248,6 +279,11 @@ class CaptureConfiguration {
     )
 
     private fun recordRoot(recordRepo: String): Path = ConfiguredPath.of(recordRepo)
+
+    private companion object {
+        /** Slower than a browser clicking through problems, which is the bar §9.3 sets. */
+        val STATEMENT_PAUSE = Duration.ofSeconds(2).toMillis()
+    }
 }
 
 /** Wraps the observation scope so Spring can cancel it on shutdown rather than leaking jobs. */

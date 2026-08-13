@@ -92,6 +92,25 @@ unambiguous.
 
 ## Outcome
 
-Implemented in #277 (issue #275). The converter is verified against the five captured pages as
-well as the scrubbed fixture; the write path is unit-tested, and the end-to-end proof is the
-owner's next grading, which is the only thing that exercises fetch → parse → write together.
+Implemented in #277 (issue #275) and served over MCP in #279 (#278) — storing it helped the vault
+and left the sentence this decision opens with exactly as true, since `get_problem` did not return
+it until then.
+
+**Writing it on the code attachment covered every future grading and nothing before it**, which
+the section above did not notice and should have. Measured within the hour: 0 `statement.md`
+files, 5 problems with records, and 0 records `codePending` — so `attachPending` had nothing to
+revisit and those five would have received a statement only by being solved again. The same
+oversight left a retry hole: a first attachment that hit a rate limit never tried again, ever.
+
+Closed by a boot-time backfill in #281 (#280), whose shape follows from this decision rather than
+changing it. Two things in it are worth keeping in view:
+
+- **It fetches for itself.** The free ride above is right at capture time, and wrong for repair:
+  `ProblemPageCodeFetcher` gives up on a page with no saved-code input *before* it looks at a
+  statement, which is correct when code is the point and useless when the code is already there.
+- **Courtesy is enforced by budget, not intention** — 20 problems per boot, a pause between, and
+  a stop at the first blocking answer, because an expired session is shared by every remaining
+  problem. A backlog drains over boots, and nobody is waiting on it.
+
+The end-to-end proof arrives with that backfill rather than with a new grading: the owner's five
+problems fill on the next restart, which is the first time fetch → parse → write runs together.
