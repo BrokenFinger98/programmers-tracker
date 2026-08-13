@@ -4704,3 +4704,18 @@ real, with exactly the `assumeTrue` posture I was about to suggest inventing (#8
 8 skipped locally for the broken dotnet and none anywhere else. The premise was wrong and the
 recommendation with it.
 
+**And the number, once visible, disproved the reason I wanted to see it.** I expected CI to read
+higher than the local 66% because the 8 C# execution tests skip here. Downloaded the CI test
+results rather than reasoning about them: **49 execution tests, 0 skipped**, C# included — and
+`domain/calc/runner` reads **575/862 on both**, to the branch.
+
+So those 8 tests add *no* branch coverage to the package. `CsharpRunnerTest` already exercises the
+generation branches; the execution test compiles and runs what was generated, which proves it is
+correct without visiting a new path. The 287 uncovered branches are uncovered by every test there
+is, unit and execution alike, and #272's exemption rests on the number it said it did.
+
+The claim I put in #283's PR body — *"the real figure is higher than the one recorded"* — was a
+hypothesis stated as a finding, and it was wrong. Corrected there and here. The reporting fix
+still earned itself in the same hour: a number nobody could see is a number nobody can be wrong
+about out loud.
+
