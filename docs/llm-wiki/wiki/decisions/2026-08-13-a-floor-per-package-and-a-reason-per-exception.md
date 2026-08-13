@@ -98,9 +98,17 @@ not running on most of what it named.
 - **65% is a real number that a reader will want to argue with**, and it should be argued with —
   it is written down for that, along with the move that would raise it.
 - **`domain/calc/runner`'s 287 uncovered branches are still uncovered.** The exemption records
-  that this is a decision, not an oversight. Closing it properly means compiling and running the
-  generated files for real; the toolchains for all seven languages already exist on the
-  GitHub `ubuntu-latest` image, so it needs no Testcontainers, only the work.
+  that this is a decision, not an oversight.
+
+  ⚠️ *(Corrected 2026-08-14, #284.)* This bullet first said closing it meant "compiling and
+  running the generated files for real". **That already exists** — seven `*RunnerExecutionTest`
+  classes do exactly that (#84, #86), and CI's own results say 49 tests, none skipped. They move
+  the number by nothing: `domain/calc/runner` reads 575/862 on CI and 575/862 on a machine where
+  8 of them skip. The generation branches are already covered by the `*RunnerTest` siblings, and
+  an execution test compiles and runs what was generated — proving it *correct* without visiting
+  a new path. So the 287 are generation paths no generation test names: return kinds, argument
+  shapes and language quirks nobody has written a case for. Closing this means **more
+  `*RunnerTest` cases**, not more execution.
 - **Excluding generated members hides a real class of bug**, in principle: a hand-written
   `equals` would go unmeasured. This project has none, and the trade is worth it against a number
   driven by field counts.
@@ -111,3 +119,14 @@ not running on most of what it named.
 
 Implemented in #276 (issue #272). The gate is green at 80/95/65 with one exemption, and its two
 failure modes are demonstrated above rather than assumed.
+
+**The gate then hid the one number this decision promised to keep watching** — exempt packages
+were filtered out before the report, so the package whose exemption said "raising it is tracked
+separately" was the only one nobody could track. Fixed in #283 (#282): every package is reported,
+only the ones with a floor are enforced, and an exempt row says so.
+
+The first thing the visible number did was **refute the hypothesis that asked for it**. I expected
+CI to read higher than the local 66% because 8 C# execution tests skip on that machine; CI's
+uploaded results said 49 execution tests ran with none skipped, and the figure was identical to
+the branch. Which is the argument for reporting an exemption rather than the argument I made for
+it — a number nobody can see is a number nobody can be wrong about out loud.
