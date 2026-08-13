@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.application.BackupLog
 import com.brokenfinger.tracker.application.BackupReporter
 import com.brokenfinger.tracker.application.DailyBackup
 import com.brokenfinger.tracker.application.GitSync
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -25,7 +26,8 @@ import java.time.ZoneId
  *
  * Everything here is construction. The hour, the zone and the tick are properties rather than
  * literals because this is distributed publicly and a developer's timezone must not become
- * everyone's (dev rules §9.1).
+ * everyone's (dev rules §9.1) — a rule this file stated and its own `Asia/Seoul` default broke
+ * until #243. The zone now falls back to the process's own clock, which is `TZ`.
  */
 @Configuration
 @EnableScheduling
@@ -58,7 +60,19 @@ class GitConfiguration {
         clock: Clock,
         @Value("\${tracker.backup.at}") at: String,
         @Value("\${tracker.backup.zone}") zone: String,
-    ) = DailyBackup(git, backupLog, clock, LocalTime.parse(at), ZoneId.of(zone))
+    ) = DailyBackup(git, backupLog, clock, LocalTime.parse(at), zoneOf(zone))
+
+    /**
+     * The backup's clock is the process's clock unless something says otherwise, and the process
+     * takes its clock from `TZ`. One knob, so the hour a record is stamped with and the hour the
+     * backup fires at cannot disagree about what day it is (#243).
+     *
+     * Announced rather than assumed: a container with no `TZ` runs in UTC, and an attempt history
+     * rendering nine hours off looks like a capture bug rather than a setting.
+     */
+    private fun zoneOf(zone: String): ZoneId = ConfiguredZone.of(zone).also {
+        logger.info("Records are stamped in {}, and the daily backup keeps that clock", it)
+    }
 
     @Bean
     fun backupSchedule(backup: DailyBackup, reporter: BackupReporter) = BackupSchedule(backup, reporter)
@@ -71,6 +85,10 @@ class GitConfiguration {
     fun backupReporter(backupLog: BackupLog, git: GitSync, clock: Clock) = BackupReporter(backupLog, git, clock)
 
     private fun recordRoot(recordRepo: String): Path = ConfiguredPath.of(recordRepo)
+
+    private companion object {
+        val logger = LoggerFactory.getLogger(GitConfiguration::class.java)
+    }
 }
 
 /**
@@ -119,6 +137,6 @@ class BackupSchedule(private val backup: DailyBackup, private val reporter: Back
     }
 
     private companion object {
-        val logger = org.slf4j.LoggerFactory.getLogger(BackupSchedule::class.java)
+        val logger = LoggerFactory.getLogger(BackupSchedule::class.java)
     }
 }

@@ -48,9 +48,16 @@ services:
       GIT_COMMITTER_NAME: ${GIT_AUTHOR_NAME}
       GIT_COMMITTER_EMAIL: ${GIT_AUTHOR_EMAIL}
 
+      # The clock your records are stamped with. A container has no idea where you are, so
+      # unset this is UTC and an attempt history reads nine hours off in Seoul — correct
+      # instants, wrong wall clock (#243). The server says which zone it is using at startup.
+      TZ: ${TZ:-UTC}
+
       # Optional. Defaults live in application.yml; override only if you mean to.
+      # TRACKER_BACKUP_ZONE is deliberately unset: the backup keeps TZ unless you say otherwise,
+      # so the hour a record is stamped with and the hour it is pushed cannot disagree.
       TRACKER_BACKUP_AT: ${TRACKER_BACKUP_AT:-23:00}
-      TRACKER_BACKUP_ZONE: ${TRACKER_BACKUP_ZONE:-Asia/Seoul}
+      TRACKER_BACKUP_ZONE: ${TRACKER_BACKUP_ZONE:-}
 
     volumes:
       # Your records. Read-write and never a named volume: a named volume would put your
