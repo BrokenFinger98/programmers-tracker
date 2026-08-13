@@ -4646,3 +4646,33 @@ belongs. Absent when none was captured — never `""`, which reads as a problem 
 rather than one we never fetched. An unreadable file answers absent too: a statement is the one
 thing here a reader can do without, and it must not take the rest of the answer down with it.
 
+## [2026-08-13] #280 — a problem solved before the statement existed never got one ⏳
+
+Caught by the owner asking "본문 긁어오는거는 다 한거야?" — and the honest answer was no. Measured
+right after #279 merged: **0 `statement.md` files**, 5 problems with records, and **0 records
+`codePending`** (48 log lines, 24 after resolving corrections). `attachPending` only revisits
+pending records, so those five would have got a statement only by being solved again. Someone
+adopting the tool after a year of solving keeps a year without one, and the gap grows with the
+history rather than shrinking.
+
+It also left a retry hole: a first attachment that hit a rate limit never fetched the statement
+again for that problem, ever.
+
+**Nothing in the pass needs a request to decide what to do.** The record log already carries
+`lessonId`, `title` and `language` per problem, and `ProblemStatements` says which have a file.
+Requests go out only for the ones that do not — and one per *problem*, not per record, so a
+problem solved in four languages is one page.
+
+**Its own fetch path, deliberately.** At capture time the statement rides on the code fetch for
+free; here the code is already attached and `ProblemPageCodeFetcher` gives up with `Unavailable`
+on a page with no saved-code input *before* it looks at a statement. Two readers of one page is
+not duplication when one is a free ride and the other is a one-time repair.
+
+**Courtesy is the shape, not a footnote** (§9.3): 20 per boot, a 2-second pause between, and a
+stop at the first blocking answer — an expired session is shared by every remaining problem, so
+learning it 299 more times is only rude. A backlog drains over boots; nobody is waiting on it.
+
+Placed after `attachPending` and **before** `refreshVault()`, because the vault refresh is what
+puts `![[statement]]` on the problem page — a README regenerated first would link nothing until
+the next boot.
+

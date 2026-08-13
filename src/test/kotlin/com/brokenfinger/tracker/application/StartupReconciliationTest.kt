@@ -145,6 +145,9 @@ class StartupReconciliationTest {
             rawLog(),
             BackupReporter(backupLog(), git, clock()),
             attachment(),
+            // The pass is exercised in StatementBackfillTest; here it must merely not derail the
+            // boot, so its source answers "unreachable" the way the code fetcher above does.
+            statementBackfill(),
             git,
             DailyBackup(git, backupLog(), clock(), zone = ZoneId.of("Asia/Seoul")),
         )
@@ -156,6 +159,17 @@ class StartupReconciliationTest {
      * take the commit and the backup down with it, and that is precisely what this class exists
      * to order correctly.
      */
+    private fun statementBackfill(): StatementBackfill {
+        val store = JsonlRecordStore.under(repo.root)
+        return StatementBackfill(
+            store = store,
+            statements = { _, _ -> null },
+            source = { _, _ -> StatementFetch.Unavailable("no page source in this test") },
+            artifacts = FileDerivedArtifacts(repo.root, store),
+            pause = {},
+        )
+    }
+
     private fun attachment(): CodeAttachment {
         val store = JsonlRecordStore.under(repo.root)
         return CodeAttachment(
