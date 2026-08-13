@@ -4457,3 +4457,43 @@ statement — `README.md` saying *not* the record repository, the ADR's own titl
 history. No guard added. A guard for one sentence over-fits, and the defect was never a missing
 check; it was a file list standing in for the tree.
 
+## [2026-08-13] #267 — the pointer was written into the repository the host shares ⏳
+
+Found by the e2e sweep, on the first host-side push after the token landed:
+
+```
+$ git -C ~/Desktop/ps-records push --dry-run origin main
+fatal: unable to get credential storage lock in 1000 ms: No such file or directory
+To https://github.com/BrokenFinger98/ps-records.git
+   6e0b3ff..5e58a35  main -> main
+```
+
+The push **succeeded**. `osxkeychain` from `/opt/homebrew/etc/gitconfig` answers first, so
+authentication was never the problem; the `store` helper #258 wrote into the record repository's
+own `.git/config` then tried to lock `/records/.ps/git-credentials` — a **container** path, in a
+file the host shares. On a machine with no second helper there is no credential at all.
+
+The pointer is passed per invocation now (`git -c credential.helper=…`) and persisted nowhere:
+the host case, the container case and the native case stop being three different things to get
+right. Writing it into the container's global config was the near miss — it keeps a bare
+`git push` working inside the container, and on a `./gradlew bootRun` it writes the *developer's*
+`~/.gitconfig`, which is the same trespass one directory over.
+
+Two things the fix is not a one-line deletion for. The stale entry is **removed on boot with or
+without a token**, because nothing else ever will — and by reading, filtering and rewriting the
+values rather than by a regex, since `store --file=~/.git-credentials` is git's documented
+default and a looser filter deletes the user's own setting. And the pointer is gated on the
+credential **file**, never on `GITHUB_TOKEN`, or `compose.yaml`'s "you may delete this line after
+the first boot" fails the first time the container is recreated.
+
+**Verified live, not only against the fake.** After rebuild: the boot log said `Removed our
+credential pointer from the record repository's config`, `--get-all credential.helper` was empty,
+the host `push --dry-run` reported `main -> main` with no `fatal:`, and the server's own command
+form authenticated from inside the container. One cost measured and accepted: a bare
+`docker compose exec tracker git push` now says `could not read Username` — the same `-c` makes
+it work, no maintained page relies on it, and it is written down rather than discovered later.
+
+Second time today the outside reference was the tool actually running rather than anything that
+reads code: the fake GitHub agreed with every request we make and had no opinion about the file
+we leave in someone else's repository.
+

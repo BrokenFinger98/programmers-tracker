@@ -52,6 +52,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-13 [[decisions/2026-08-13-node-size-is-what-you-solved]] — Obsidian sizes a node by its links, so 510 catalog edges made the biggest node the catalog's rather than the reader's; the tag map is sized by your own problems and "never met" moves to colour
 - 2026-08-13 [[decisions/2026-08-13-the-vault-is-not-only-records]] — The daily backup committed a graph setting and nothing else under a message about records; ignoring the editor's directory beats narrowing the net that catches lost ones
 - 2026-08-13 [[decisions/2026-08-13-the-server-prepares-the-repository]] — init, seeds and a GitHub token replace bootstrap §2 and the SSH path; private is hardcoded and re-verified, the token is removable after one boot, and the template retires
+- 2026-08-13 [[decisions/2026-08-13-the-pointer-is-passed-not-persisted]] — The credential pointer was written into the repository the host shares, so a host push printed `fatal:` over a push that had succeeded; it is passed per command now and persisted nowhere
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)

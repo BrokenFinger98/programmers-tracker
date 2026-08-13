@@ -96,3 +96,11 @@ behind the same private check — so a crash between creation and wiring heals o
 Implemented in #258. Verified against a fake GitHub (JDK HttpServer) for every claim about our
 requests, and the public-repository refusal is the test named for the nightmare. Live
 verification against the real API is the owner's first boot with a token.
+
+**That first boot found what the fake could not** (2026-08-13, same day). The token authenticated
+and pushed correctly, and the one thing no fake was watching was what we left behind: the
+`credential.helper` this ADR describes was written into the record repository's own `.git/config`
+with a container path, and the host — which shares that file — then printed `fatal:` over pushes
+that had succeeded. The credential file and everything else above stand; only where the *pointer*
+lives has changed, and the reasoning is in
+[[decisions/2026-08-13-the-pointer-is-passed-not-persisted]].

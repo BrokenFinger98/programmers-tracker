@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.git
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.sun.net.httpserver.HttpServer
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -199,8 +200,58 @@ class GithubRemoteTest {
             perms.none { it.name.startsWith("GROUP") || it.name.startsWith("OTHERS") }.shouldBeTrue()
         }
         git("remote", "get-url", "origin") shouldNotContain "ghp_test_token"
-        git("config", "credential.helper") shouldContain ".ps/git-credentials"
     }
+
+    /**
+     * The repository's config is the **user's**, and the path we would write into it is ours:
+     * inside a container it is `/records/…`, on their host it does not exist. Writing it there
+     * made every host-side push print `fatal: unable to get credential storage lock` over a push
+     * that had already succeeded (#267). The pointer is passed per command now — see
+     * [PushCredential] — and this asserts the config we leave behind is empty.
+     */
+    @Test
+    fun `writes no credential pointer into the repository's own config`() {
+        remote().ensure()
+
+        localHelpers().shouldBeEmpty()
+    }
+
+    /** An install from before #267 carries the entry, and nothing else will ever remove it. */
+    @Test
+    fun `removes the pointer an earlier version wrote`() {
+        git("config", "--local", "credential.helper", "store --file=/records/.ps/git-credentials")
+
+        remote().ensure()
+
+        localHelpers().shouldBeEmpty()
+    }
+
+    /** Including when there is no token at all: the fatal does not wait for one. */
+    @Test
+    fun `removes it even with no token, because the message it causes does not need one`() {
+        git("config", "--local", "credential.helper", "store --file=/records/.ps/git-credentials")
+
+        remote(token = null).ensure()
+
+        localHelpers().shouldBeEmpty()
+    }
+
+    /**
+     * `store --file=~/.git-credentials` is git's own documented default, so a filter looser than
+     * our exact file name would delete a setting that was never ours.
+     */
+    @Test
+    fun `leaves a credential helper the user set themselves`() {
+        git("config", "--local", "--add", "credential.helper", "store --file=/home/someone/.git-credentials")
+        git("config", "--local", "--add", "credential.helper", "store --file=/records/.ps/git-credentials")
+
+        remote().ensure()
+
+        localHelpers() shouldBe listOf("store --file=/home/someone/.git-credentials")
+    }
+
+    private fun localHelpers(): List<String> =
+        git("config", "--local", "--get-all", "credential.helper").lines().filter { it.isNotBlank() }
 
     /** Boot twice, converge once. */
     @Test
