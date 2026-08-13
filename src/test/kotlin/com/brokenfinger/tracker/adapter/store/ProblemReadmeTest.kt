@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.Verdict
@@ -293,6 +294,24 @@ class ProblemReadmeTest {
         text shouldContain "[[tags/dp]]"
         text shouldContain "[[tags/math]]"
         text shouldContain "#dp"
+    }
+
+    /**
+     * Algorithm or SQL, said rather than inferred (#256). Until now the only way to tell was to
+     * read `language` or `part` and guess, and both break the day Programmers renames a part or
+     * adds a database language — an inference standing in for a fact the server already had, since
+     * it picks the channel by exactly this.
+     */
+    @Test
+    fun `the page says which kind of problem it was`() {
+        render(listOf(aSubmissionRecord(kind = ProblemKind.DATABASE))) shouldContain "kind: database"
+        render(listOf(aSubmissionRecord(kind = ProblemKind.ALGORITHM))) shouldContain "kind: algorithm"
+    }
+
+    /** A record written before #256 has none, and an invented one would name a channel we never used. */
+    @Test
+    fun `a record that predates the field carries no kind`() {
+        render(listOf(aSubmissionRecord(kind = null))) shouldNotContain "kind:"
     }
 
     /** A problem outside the shipped catalog carries no tags, and no link is invented for it. */

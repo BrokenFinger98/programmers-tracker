@@ -23,7 +23,8 @@ log/submissions.jsonl  Full submission log (the source the MCP tools read)
 
 **`dashboard.base` is written once, on the first start that finds it missing, and never again.**
 It is an [Obsidian Base](https://help.obsidian.md/bases) — a *query*, not a copy of your records,
-so it cannot go stale. Six tables — *Recent*, **Not passed yet**, *By attempts*, *By part*, *By language*, *Tags*. Add a column or change a
+so it cannot go stale. Seven tables — *Recent*, **Not passed yet**, *By attempts*, *By part*, *By kind* (algorithm
+against SQL), *By language*, *Tags*. Add a column or change a
 sort and the file is yours; the server will not touch it again.
 
 Everything else above is rewritten from the records every time.

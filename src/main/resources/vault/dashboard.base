@@ -27,6 +27,8 @@ properties:
     displayName: Last submit
   note.firstSeen:
     displayName: First seen
+  note.kind:
+    displayName: Kind
   note.status:
     displayName: Status
   note.catalogTotal:
@@ -119,6 +121,29 @@ views:
     sort:
       - property: level
         direction: ASC
+
+  # Algorithm and SQL are different practices — their protocols differ, their runtimes are not
+  # comparable, and a review plan usually treats them separately. `kind` is written by the server
+  # from the channel it subscribed on (#256); records from before that field simply have none.
+  - type: table
+    name: By kind
+    filters:
+      and:
+        - note.lessonId != null
+    groupBy:
+      property: kind
+      direction: ASC
+    order:
+      - title
+      - level
+      - language
+      - verdict
+      - attempts
+      - lastSubmit
+      - file.name
+    sort:
+      - property: lastSubmit
+        direction: DESC
 
   - type: table
     name: By language

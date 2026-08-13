@@ -28,6 +28,18 @@ data class SubmissionRecord(
     /** Empty, never null, for an untagged problem — aggregation counts those separately (design §5.3). */
     val tags: List<String> = emptyList(),
     val language: String,
+    /**
+     * Algorithm or SQL — **said, not inferred** (#256).
+     *
+     * The server already chose the channel by it (`Challenge::AlgorithmChannel` against
+     * `Challenge::DatabaseChannel`, protocol §2), so this is a fact it held before a single frame
+     * arrived and simply never wrote down. Reading it back out of `language` or `part` worked
+     * only until Programmers renamed a part or added a database language.
+     *
+     * Null on records written before the field existed. Defaulting one would name a channel we
+     * never subscribed to.
+     */
+    val kind: ProblemKind? = null,
     val action: GradingAction,
     val attempt: Int,
     /**
