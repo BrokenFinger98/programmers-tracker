@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
@@ -18,6 +19,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -56,6 +58,19 @@ class RecordWriterTest {
         val record = writer().write(aSettledCapture())
 
         record!!.ts.toInstant() shouldBe NOW
+    }
+
+    /**
+     * Algorithm or SQL reaches the stored record from the channel the capture subscribed on —
+     * the fact the server picked the channel by, never written down until #256. Inferred from
+     * `language` or `part` it broke the day either was renamed.
+     */
+    @Test
+    fun `the record says which kind of channel it came from`() = runBlocking<Unit> {
+        val record = writer().write(aSettledCapture(kind = ProblemKind.DATABASE))
+
+        record!!.kind shouldBe ProblemKind.DATABASE
+        SubmissionRecordJson.encode(record) shouldContain """"kind":"database""""
     }
 
     @Test

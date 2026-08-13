@@ -96,6 +96,7 @@ class RawSessionReconciler(
         lessonId = session.lessonId,
         problem = catalog.find(channel.lessonId),
         language = channel.language,
+        kind = channel.kind,
         elapsedSec = elapsedOf(session),
         observation = timer.observationOf(session.lessonId),
         frames = replay.accepted.toList(),

@@ -48,6 +48,9 @@ class ProblemReadme(private val layout: RecordLayout) {
         "lessonId: ${records.first().lessonId}",
         field("title", quoted(titleOf(records))),
         field("language", quoted(languageOf(records))),
+        // Not catalog metadata and not per-submit either: a lesson is one kind forever, so the
+        // newest record that knew it wins, exactly as the title does (#256).
+        field("kind", latest(records) { it.kind }?.name?.lowercase()),
     )
 
     /**

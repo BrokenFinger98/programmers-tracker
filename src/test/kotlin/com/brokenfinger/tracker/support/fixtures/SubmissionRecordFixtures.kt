@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.support.fixtures
 import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.RatingChange
 import com.brokenfinger.tracker.domain.Score
 import com.brokenfinger.tracker.domain.SensorObservation
@@ -26,6 +27,7 @@ fun aSubmissionRecord(
     acceptanceRate: Int? = 91,
     tags: List<String> = listOf("구현"),
     language: String = "java",
+    kind: ProblemKind? = ProblemKind.ALGORITHM,
     action: GradingAction = GradingAction.SUBMIT,
     attempt: Int = 2,
     elapsedSec: Long = 847,
@@ -52,6 +54,7 @@ fun aSubmissionRecord(
     acceptanceRate = acceptanceRate,
     tags = tags,
     language = language,
+    kind = kind,
     action = action,
     attempt = attempt,
     elapsedSec = elapsedSec,

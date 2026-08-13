@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
@@ -30,6 +31,12 @@ data class SettledCapture(
      */
     val problem: CatalogEntry?,
     val language: String,
+    /**
+     * Algorithm or SQL, taken from the channel we subscribed on rather than read back out of a
+     * frame: the server chose that channel by exactly this, so it is known before the first
+     * frame and is not a value we were handed (#256).
+     */
+    val kind: ProblemKind,
     /** Time on this problem, measured by whoever owns the timer, never by the writer. */
     val elapsedSec: Long,
     /**
@@ -75,6 +82,7 @@ data class SettledCapture(
             acceptanceRate = problem?.acceptanceRate,
             tags = problem?.tags.orEmpty(),
             language = language,
+            kind = kind,
             action = action(),
             attempt = attempt,
             elapsedSec = elapsedSec,

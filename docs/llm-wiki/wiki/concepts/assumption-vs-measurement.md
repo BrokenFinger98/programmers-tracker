@@ -322,6 +322,11 @@ share rather than one convention to remember.
 - Confirmation is not validation: a wrong `challengeable_id` still returns
   `confirm_subscription` and still runs testcases (protocol §3). Success signals can lie
   about the thing you actually wanted to know — see [[concepts/verdict-classification]].
+- **When a fact is being inferred, ask who already knows it.** Records inferred algorithm-vs-SQL
+  from `language` and `part` for the tool's whole life, while `ChannelKey.kind` — the value the
+  server picks the channel by — sat one parameter away (#256). The wire value is `database`, not
+  `sql`, so guessing the vocabulary instead of measuring it would have shipped a word the
+  protocol never uses.
 - **Ask two consumers of the same data the same question.** Where a rule is applied by hand at
   several call sites, the site that forgot it cannot be seen from inside — every test there
   agrees with the code, because the same author wrote both. Comparing two answers is what made

@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@f01700440a3b09e18a2ffc1c2295e04c10ae4598 -->
+<!-- translated-from: README.md@22db3c0a826f24a27ac987b138b69c254320bbd2 -->
 
 # ps-records
 
@@ -25,8 +25,8 @@ log/submissions.jsonl  전체 제출 로그 (MCP 툴이 읽는 원본)
 
 **`dashboard.base` 는 없을 때 딱 한 번 쓰이고, 그 뒤로는 건드리지 않습니다.**
 [Obsidian Base](https://help.obsidian.md/bases) — 기록의 사본이 아니라 *질의문*이라 낡을 수가
-없습니다. 표 여섯 개 — *Recent*, **Not passed yet**(아직 통과 못 한 것), *By attempts*, *By part*,
-*By language*, *Tags*. 컬럼을 더하든 정렬을 바꾸든 그때부터는 여러분 파일이고, 서버는 다시 손대지
+없습니다. 표 일곱 개 — *Recent*, **Not passed yet**(아직 통과 못 한 것), *By attempts*, *By part*,
+*By kind*(알고리즘/SQL), *By language*, *Tags*. 컬럼을 더하든 정렬을 바꾸든 그때부터는 여러분 파일이고, 서버는 다시 손대지
 않습니다.
 
 위의 나머지는 전부 매번 기록으로부터 다시 쓰입니다.

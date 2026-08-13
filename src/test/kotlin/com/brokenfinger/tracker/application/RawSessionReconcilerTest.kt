@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
@@ -95,6 +96,9 @@ class RawSessionReconcilerTest {
         reconcile()
 
         records().single().verdict shouldBe Verdict.PASS
+        // The crash-recovery path is the second of two places that build a SettledCapture, and
+        // a rule kept by hand at N sites is enforced at none (#256, and #235/#237/#248 before it).
+        records().single().kind shouldBe ProblemKind.DATABASE
     }
 
     /** Time on a problem is measured to the grading, never to whenever the process restarted. */

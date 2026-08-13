@@ -133,6 +133,7 @@ class ChannelCapture(
         lessonId = lessonId(),
         problem = catalog.find(channel.lessonId),
         language = channel.language,
+        kind = channel.kind,
         elapsedSec = timer.elapsedSecOf(lessonId()),
         observation = timer.observationOf(lessonId()),
         frames = frames,

@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.SettledCapture
 import com.brokenfinger.tracker.domain.GradingFrameFacts
 import com.brokenfinger.tracker.domain.LessonId
+import com.brokenfinger.tracker.domain.ProblemKind
 
 // Object mothers (dev rules §6.4). The default capture is the measured passing algorithm
 // submit of fixtures/algorithm-pass.jsonl, already settled and ready to be recorded.
@@ -18,6 +19,7 @@ fun aSettledCapture(
     lessonId: Long = 120804,
     problem: CatalogEntry? = aCatalogEntry(id = lessonId),
     language: String = "java",
+    kind: ProblemKind = ProblemKind.ALGORITHM,
     elapsedSec: Long = 847,
     frames: List<String> = acceptedFrames("algorithm-pass.jsonl"),
 ) = SettledCapture(
@@ -26,6 +28,7 @@ fun aSettledCapture(
     lessonId = lessonId,
     problem = problem,
     language = language,
+    kind = kind,
     elapsedSec = elapsedSec,
     frames = frames,
 )

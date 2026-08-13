@@ -4331,3 +4331,27 @@ Verified live, both directions: removed the hand-placed copy → the server wrot
 
 Default order is recent-first. Shipping it sorted worst-first would be the server naming a
 weakness, which [[decisions/2026-08-12-the-server-counts-and-names-nothing]] forbids.
+
+## [2026-08-13] #256 — the record says algorithm or SQL, which the server knew all along ✅
+
+Surfaced by the dashboard work: the owner asked whether SQL and algorithm were separated, and the
+honest answer was "only by inference" — `language=mysql` or a part name, both of which break the
+day Programmers renames either.
+
+**We were not missing the data; we were dropping it.** `ProblemKind.ALGORITHM|DATABASE` has been
+part of `ChannelKey` from the start — the server picks `Challenge::AlgorithmChannel` against
+`Challenge::DatabaseChannel` by it before the first frame arrives (protocol §2). Both
+`SettledCapture` construction sites already held the channel. One field, threaded through.
+
+Measured first, and the measurement mattered twice:
+
+- the wire value is **`database`, not `sql`** — a guess would have shipped a word the protocol
+  never uses. `@SerialName` pins both spellings.
+- every frame type was checked for which carries `challengeable_type`: `start` carries it for
+  both kinds, so a record that exists always had a kind available. It still comes from the
+  channel, not the frame — the channel is a value we chose, strict by dev rules §4, and known
+  before anything arrives.
+
+Null on records from before the field, like every schema addition — a defaulted kind would name a
+channel we never subscribed to. MCP emits it for free (the projection is derived from the stored
+record), and the dashboard gains **By kind**, the axis the owner actually asked about.
