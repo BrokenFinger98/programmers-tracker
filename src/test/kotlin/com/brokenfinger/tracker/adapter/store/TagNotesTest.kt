@@ -1,7 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.calc.TagCount
-import io.kotest.matchers.collections.shouldContainAll
+import com.brokenfinger.tracker.domain.calc.TouchedProblem
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -12,7 +12,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class TagNotesTest {
-    private val link = Regex("""\[\[tags/([^]]+)]]""")
+    /** Any wikilink, alias stripped — the target is what has to resolve. */
+    private val link = Regex("""\[\[([^\]|]+)(?:\|[^\]]*)?]]""")
 
     @TempDir
     lateinit var root: Path
@@ -64,12 +65,11 @@ class TagNotesTest {
      */
     @Test
     fun `the field keeps the tag spelling and the link uses the file name`() {
-        notes().write(listOf(TagCount("prime factorization", 2, 0, 0, related = listOf("number_theory"))))
+        notes().write(listOf(TagCount("prime factorization", 2, 1, 1, touched = listOf(aTouch(1, "두 수의 합")))))
 
         val text = Files.readString(root.resolve("tags/prime-factorization.md"))
         text shouldContain "tag: prime factorization"
-        text shouldContain "[[tags/number-theory]]"
-        text shouldNotContain "[[tags/number_theory]]"
+        text shouldContain "[[problems/1-두-수의-합/README|두 수의 합]]"
     }
 
     /**
@@ -78,22 +78,32 @@ class TagNotesTest {
      * restates the rule agrees with whatever the rule currently is.
      */
     @Test
-    fun `every link a note emits resolves to a note that was written`() {
+    fun `every link a note emits resolves to a file that exists`() {
+        writeProblemPage(1, "두 수의 합")
+        writeProblemPage(2, "binary search 연습")
         val counts = listOf(
-            TagCount("dp_digit", 1, 0, 0, related = listOf("dp", "math")),
-            TagCount("dp", 38, 0, 0, related = listOf("dp_digit")),
-            TagCount("math", 78, 0, 0, related = listOf("dp_digit")),
+            TagCount("dp_digit", 1, 1, 1, touched = listOf(aTouch(1, "두 수의 합"))),
+            TagCount("binary_search", 38, 1, 0, touched = listOf(aTouch(2, "binary search 연습", passed = false))),
         )
 
         notes().write(counts)
 
-        val written = Files.list(root.resolve("tags")).use { it.map { f -> f.fileName.toString() }.toList() }
         val links = Files.list(root.resolve("tags")).use { paths ->
-            paths.toList().flatMap { link.findAll(Files.readString(it)).map { m -> m.groupValues[1] + ".md" } }
+            paths.toList().flatMap { link.findAll(Files.readString(it)).map { m -> m.groupValues[1] } }
         }
         links.shouldNotBeEmpty()
-        written shouldContainAll links
+        links.forEach { target -> Files.exists(root.resolve("$target.md")) shouldBe true }
     }
+
+    /** The page a link points at, written the way [ProblemReadme] would name it. */
+    private fun writeProblemPage(lessonId: Long, title: String) {
+        val file = RecordLayout(root).problemDirectory(lessonId, title).resolve("README.md")
+        Files.createDirectories(file.parent)
+        Files.writeString(file, "# $title\n")
+    }
+
+    private fun aTouch(lessonId: Long, title: String, passed: Boolean = true) =
+        TouchedProblem(lessonId = lessonId, title = title, passed = passed)
 
     /** Nothing to write is not an error; a catalog we do not own may describe no tags at all. */
     @Test
@@ -106,22 +116,36 @@ class TagNotesTest {
     /**
      * The edges between tags are what give the map shape before anything is solved. Without
      * them a live vault showed 81 of 83 tags isolated, and isolation says nothing when nearly
-     * everything is isolated (#231).
+     * everything is isolated (#231) — which is why they are named here and not merely counted.
      */
     @Test
-    fun `the note links to the tags it shares problems with`() {
-        notes().write(listOf(TagCount("dp", 38, 0, 0, related = listOf("implementation", "math"))))
+    fun `the note splits its problems into passed and not`() {
+        val touched = listOf(aTouch(1, "solved one"), aTouch(2, "open one", passed = false))
+
+        notes().write(listOf(TagCount("dp", 38, 2, 1, touched = touched)))
 
         val text = Files.readString(root.resolve("tags/dp.md"))
-        text shouldContain "[[tags/implementation]]"
-        text shouldContain "[[tags/math]]"
+        text shouldContain "Passed: [[problems/1-solved-one/README|solved one]]"
+        text shouldContain "Attempted without a pass: [[problems/2-open-one/README|open one]]"
     }
 
-    /** A tag that shares a problem with nothing says nothing rather than showing an empty label. */
+    /**
+     * The reversal (#241). Obsidian sizes a node by its link count, so 27 catalog neighbours
+     * against 2 solved problems made `implementation` the largest node on the map of someone who
+     * had solved two problems. Nothing here may link a tag to a tag.
+     */
     @Test
-    fun `a tag with no related tags renders no link line`() {
-        notes().write(listOf(TagCount("tsp", 1, 0, 0, related = emptyList())))
+    fun `no note links to another tag`() {
+        notes().write(listOf(TagCount("dp", 38, 1, 1, touched = listOf(aTouch(1, "p")))))
 
-        Files.readString(root.resolve("tags/tsp.md")) shouldNotContain "[[tags/"
+        Files.readString(root.resolve("tags/dp.md")) shouldNotContain "[[tags/"
+    }
+
+    /** A tag nothing has been submitted to shows no link line rather than an empty label. */
+    @Test
+    fun `an untouched tag renders no link line`() {
+        notes().write(listOf(TagCount("tsp", 1, 0, 0)))
+
+        Files.readString(root.resolve("tags/tsp.md")) shouldNotContain "[["
     }
 }

@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.calc.TagCount
+import com.brokenfinger.tracker.domain.calc.TouchedProblem
 import java.nio.file.Files
 
 /**
@@ -41,20 +42,37 @@ class TagNotes(private val layout: RecordLayout) {
         |# ${count.tag}
         |
         |Met ${count.attempted} of ${count.catalogTotal}, passed ${count.solved}.
-        |${relatedLine(count)}
+        |${problemLines(count)}
         """.trimMargin()
 
     /**
-     * The edges between tags, and the reason the map has any shape at all before problems are
-     * solved: with links only from problems, a live vault showed 81 of 83 tags isolated, and
-     * isolation carries information only when it is rare (#231).
+     * The problems the counts came from, named and linked (#241).
      *
-     * Two techniques are joined when a catalogued problem carries both — a count of what
-     * solved.ac already tagged, so no threshold and no ordering by strength. A tag that shares
-     * nothing renders no line rather than an empty label.
+     * Split into passed and not, because those are the two things the numbers above already
+     * distinguish and a single list would throw the distinction away. Neither line is a
+     * judgement — both are lists of records that exist. A tag with nothing submitted renders
+     * neither, rather than an empty label.
+     *
+     * **Tags no longer link to tags.** Obsidian sizes a node by how many notes link to it, so
+     * the 27 catalog neighbours `implementation` carries made it the biggest node on the map of
+     * someone who had solved two problems (#241, reversing #231). With only these links, size is
+     * the number of problems you have worked on under that tag — which is what the map is for.
      */
-    private fun relatedLine(count: TagCount): String {
-        if (count.related.isEmpty()) return ""
-        return "\nShares problems with: " + count.related.joinToString(" ") { "[[${layout.tagNoteLink(it)}]]" } + "\n"
+    private fun problemLines(count: TagCount): String {
+        val passed = linkLine("Passed", count.touched.filter { it.passed })
+        val open = linkLine("Attempted without a pass", count.touched.filterNot { it.passed })
+        if (passed.isEmpty() && open.isEmpty()) return ""
+        return "\n" + passed + open
     }
+
+    private fun linkLine(label: String, problems: List<TouchedProblem>): String {
+        if (problems.isEmpty()) return ""
+        return "$label: " + problems.joinToString(" ") { linkTo(it) } + "\n"
+    }
+
+    // The alias is the title as recorded; `[`, `]` and `|` would end the link early, so they go.
+    private fun linkTo(problem: TouchedProblem): String =
+        "[[${layout.problemNoteLink(problem.lessonId, problem.title)}|${aliasOf(problem.title)}]]"
+
+    private fun aliasOf(title: String): String = title.filterNot { it in "[]|" }.trim().ifEmpty { "untitled" }
 }

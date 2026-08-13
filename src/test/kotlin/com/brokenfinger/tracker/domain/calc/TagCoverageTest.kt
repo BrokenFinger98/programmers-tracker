@@ -30,8 +30,8 @@ class TagCoverageTest {
         )
 
         counts shouldContainExactly listOf(
-            TagCount(tag = "dp", catalogTotal = 1, attempted = 1, solved = 1, related = listOf("math")),
-            TagCount(tag = "math", catalogTotal = 1, attempted = 1, solved = 1, related = listOf("dp")),
+            TagCount(tag = "dp", catalogTotal = 1, attempted = 1, solved = 1, touched = listOf(aTouch(1))),
+            TagCount(tag = "math", catalogTotal = 1, attempted = 1, solved = 1, touched = listOf(aTouch(1))),
         )
     }
 
@@ -43,7 +43,13 @@ class TagCoverageTest {
             submitted = setOf(1L),
         )
 
-        counts.single() shouldBe TagCount(tag = "dp", catalogTotal = 2, attempted = 1, solved = 0)
+        counts.single() shouldBe TagCount(
+            tag = "dp",
+            catalogTotal = 2,
+            attempted = 1,
+            solved = 0,
+            touched = listOf(TouchedProblem(lessonId = 1, title = "p1", passed = false)),
+        )
     }
 
     /** The graph's hole. Without this row an untouched type is absent rather than isolated. */
@@ -69,7 +75,13 @@ class TagCoverageTest {
             submitted = setOf(1L, 2L),
         )
 
-        counts.single() shouldBe TagCount(tag = "dp", catalogTotal = 1, attempted = 1, solved = 1)
+        counts.single() shouldBe TagCount(
+            tag = "dp",
+            catalogTotal = 1,
+            attempted = 1,
+            solved = 1,
+            touched = listOf(TouchedProblem(lessonId = 2, title = "p2", passed = true)),
+        )
     }
 
     /**
@@ -103,45 +115,55 @@ class TagCoverageTest {
     }
 
     /**
-     * The map needed edges *between* tags, not only into them. With links only from problems, a
-     * live vault showed 81 of 83 tags isolated — and "an isolated node is a gap" carries
-     * information only when isolation is rare (#231).
+     * The problems behind the counts, named (#241). Without them a tag note states two numbers
+     * and cannot say which two problems they came from — the links exist only in Obsidian's
+     * backlinks pane, which is not where someone clicking a tag node is looking.
      *
-     * Co-occurrence is a count of what solved.ac already tagged, so it decides nothing: two
-     * techniques are related when a problem carries both.
+     * Naming a record is aggregation, not interpretation: these are the problems whose records
+     * exist, in the order the catalog lists them, with no ranking of any kind.
      */
     @Test
-    fun `tags carried by the same problem are related to each other`() {
+    fun `a tag names the problems whose records raised its counts`() {
         val counts = TagCoverage.of(
-            catalogued = listOf(problem(1, "dp", "math"), problem(2, "math", "sorting")),
-            passed = emptySet(),
-            submitted = emptySet(),
+            catalogued = listOf(problem(1, "dp"), problem(2, "dp"), problem(3, "dp")),
+            passed = setOf(1L),
+            submitted = setOf(1L, 2L),
         )
 
-        counts.single { it.tag == "dp" }.related shouldContainExactly listOf("math")
-        counts.single { it.tag == "math" }.related shouldContainExactly listOf("dp", "sorting")
+        counts.single().touched shouldContainExactly listOf(
+            TouchedProblem(lessonId = 1, title = "p1", passed = true),
+            TouchedProblem(lessonId = 2, title = "p2", passed = false),
+        )
     }
 
-    /** Alphabetical, not by how many problems they share — an ordering is a claim of its own. */
+    /** A tag nothing has been submitted to names nothing — that row is a count and an invitation. */
     @Test
-    fun `the related tags come back alphabetically`() {
+    fun `an untouched tag names no problems`() {
         val counts = TagCoverage.of(
-            catalogued = listOf(problem(1, "zebra", "dp", "math")),
+            catalogued = listOf(problem(1, "tsp")),
             passed = emptySet(),
             submitted = emptySet(),
         )
 
-        counts.single { it.tag == "dp" }.related shouldContainExactly listOf("math", "zebra")
+        counts.single().touched shouldContainExactly emptyList()
     }
 
+    /**
+     * Node size in Obsidian is the number of links a note has, so a tag must not link to another
+     * tag: 27 catalog neighbours against 2 solved problems made `implementation` the biggest node
+     * on a map of someone who had solved two problems (#241). Only the problems count now.
+     */
     @Test
-    fun `a tag that never shares a problem is related to nothing, and is never related to itself`() {
+    fun `tags sharing a problem are not joined to each other`() {
         val counts = TagCoverage.of(
-            catalogued = listOf(problem(1, "dp"), problem(2, "dp")),
+            catalogued = listOf(problem(1, "dp", "math")),
             passed = emptySet(),
             submitted = emptySet(),
         )
 
-        counts.single().related shouldContainExactly emptyList()
+        counts.map { it.tag } shouldContainExactly listOf("dp", "math")
+        counts.forEach { it.touched shouldContainExactly emptyList() }
     }
+
+    private fun aTouch(id: Long) = TouchedProblem(lessonId = id, title = "p$id", passed = true)
 }

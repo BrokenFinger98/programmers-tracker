@@ -38,7 +38,26 @@ your own records cannot show you a type you never met.
 
 Each `tags/<tag>.md` says how many problems the catalog has for it, which is what keeps the
 picture honest. A lone `tsp` node (one problem in the whole catalog) and a lone `dp` node (38)
-look identical in a graph and are not the same finding.
+look identical in a graph and are not the same finding. The note also **links the problems its
+counts came from**, split into passed and not, so clicking a type takes you to the work.
+
+**Node size is how many of that type you have worked on.** Obsidian sizes a node by its links,
+and a tag's only links are your problems — so the big nodes are yours. Tags are deliberately not
+linked to each other: joining them by what the catalog tags alike made the catalog's hub types
+the biggest nodes on everyone's map, whoever they were.
+
+### Colouring the types you have never met
+
+A new vault is a field of lone dots, because you have not met anything yet. Rather than reading
+that as noise, colour it — in the graph view's settings (⚙), under **Groups**:
+
+| query | what it marks |
+|---|---|
+| `["solved":0]` | every type you have not passed once |
+| `path:problems` | the problems themselves, so your own work stands out |
+
+Both read the frontmatter this repository already writes. No plugin, and nothing here decides
+which of those grey dots matters.
 
 **What counts as a gap is yours to decide.** The server writes the numbers and never names a
 weakness — no ranking, no threshold, no "start here". That is the AI's job, or yours.

@@ -105,3 +105,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-13] ingest | a true sentence can pin a defect just as well as a false one → 1 page updated
 
 ## [2026-08-13] ingest | the tally that counted runs → 1 page updated, 1 created
+
+## [2026-08-13] ingest | node size is what you solved → 1 page updated, 1 created
