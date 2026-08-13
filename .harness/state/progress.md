@@ -4630,3 +4630,19 @@ worked example in `<p>` inside `<li>`, which the keep-what-you-do-not-know fallb
 HTML. Fixed and pinned. The fixture in this repository is structurally verbatim with **every word
 invented** — #275 forbids a real statement here outright.
 
+## [2026-08-13] #278 — the statement was stored and not served ⏳
+
+#275 was justified by one sentence — *an AI reading `get_problem` knows testcase 3 failed and has
+no idea what was wanted* — and storing the statement left that sentence exactly as true as it
+was. The vault gained a page; the MCP surface gained nothing.
+
+`get_problem` now carries `statement`, read through a new outbound port. Read-only like the rest
+of the slice: `RecordQuery` still has no `RecordWriter` and no `GitSync` in reach, so the sentence
+[[decisions/2026-08-06-mcp-read-slice]] rests on stays true word for word.
+
+Only `get_problem`. `submissions` and `list_problems` answer across many problems and would turn
+into pages of prose; the tool that is already "everything about one lesson" is where a statement
+belongs. Absent when none was captured — never `""`, which reads as a problem with no description
+rather than one we never fetched. An unreadable file answers absent too: a statement is the one
+thing here a reader can do without, and it must not take the rest of the answer down with it.
+

@@ -35,6 +35,8 @@ data class ProblemHistory(
     val acceptanceRate: Int?,
     val tags: List<String>,
     val submissions: List<SubmissionRecord>,
+    /** Programmers' own wording, captured once and stored locally (#275). Absent when none was. */
+    val statement: String? = null,
 )
 
 /**
@@ -52,6 +54,7 @@ class RecordQuery(
     private val catalog: ProblemCatalog,
     private val clock: Clock,
     private val raw: RawSessionLog,
+    private val statements: ProblemStatements = ProblemStatements { _, _ -> null },
 ) {
     /**
      * The whole log, newest first, **each capture key at its latest state**.
@@ -150,6 +153,7 @@ class RecordQuery(
             acceptanceRate = newest(submissions) { it.acceptanceRate },
             tags = newest(submissions) { it.tags.takeIf(List<String>::isNotEmpty) }.orEmpty(),
             submissions = submissions,
+            statement = statements.of(lessonId, newest(submissions) { it.title.takeIf(String::isNotBlank) }),
         )
     }
 
