@@ -94,3 +94,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-13 [[sources/2026-08-13-the-map-that-linked-to-nothing]] — Three defects in one feature and none found by a test; a true sentence pinned the worst of them
 - 2026-08-13 [[sources/2026-08-13-the-tally-that-counted-runs]] — The vault verified against the running server, and two MCP tools that answered 8 and 15 for the same problem
 - 2026-08-13 [[sources/2026-08-13-the-map-becomes-a-workspace]] — The owner starts using the vault: the tag-edge reversal, four run-is-not-attempt sites, the UTC clock, the seeded dashboard, and the record finally saying algorithm or database
+- 2026-08-14 [[sources/2026-08-14-the-night-the-records-learned-the-question]] — Eleven PRs, seven defects, none found by reading code — and three findings that refuted something I had asserted within the hour
