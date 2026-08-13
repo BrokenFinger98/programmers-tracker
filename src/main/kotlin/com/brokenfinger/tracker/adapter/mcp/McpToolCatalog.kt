@@ -153,7 +153,10 @@ object McpToolCatalog {
             "as well as submits — a run is where the compiler output comes from — and `submissionCount` and " +
             "`runCount` split them, because a run is not an attempt at the problem. A lesson with " +
             "nothing recorded answers with an empty history rather than an error — we report what we " +
-            "observed, which may be nothing." + ELAPSED_MEANS,
+            "observed, which may be nothing. `statement` is the problem's own description as Programmers " +
+            "worded it, captured once when the problem was first graded and stored locally — it is theirs, " +
+            "not ours, and it is absent for a problem captured before the server began keeping it." +
+            ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
             putJsonObject("lessonId") {

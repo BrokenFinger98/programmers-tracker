@@ -107,6 +107,35 @@ class McpRecordJsonTest {
         json["submissions"]!!.jsonArray.size shouldBe 3
     }
 
+    /**
+     * The question every other field on this surface was an answer *about* (#278). Storing the
+     * statement helped the vault; until it reached here, an AI still knew that testcase 3 failed
+     * and nothing about what was wanted.
+     */
+    @Test
+    fun `a problem carries the statement that was captured for it`() {
+        val history = aProblemHistory(statement = "정수 두 개를 더해 return 하세요.")
+
+        McpRecordJson.problem(history)["statement"]!!.jsonPrimitive.content shouldBe "정수 두 개를 더해 return 하세요."
+    }
+
+    /** Absent, never `""` — an empty string reads as a problem with no description. */
+    @Test
+    fun `a problem with no captured statement carries no statement key`() {
+        McpRecordJson.problem(aProblemHistory()).shouldNotContainKey("statement")
+    }
+
+    private fun aProblemHistory(statement: String? = null) = ProblemHistory(
+        lessonId = 120804,
+        title = "two numbers",
+        level = 0,
+        part = "intro",
+        acceptanceRate = 91,
+        tags = listOf("구현"),
+        submissions = listOf(aSubmissionRecord()),
+        statement = statement,
+    )
+
     /** A problem with no recorded title returns no title. Not "Unknown", not an empty string. */
     @Test
     fun `a problem with nothing recorded carries no metadata keys at all`() {

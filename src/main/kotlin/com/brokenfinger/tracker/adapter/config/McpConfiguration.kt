@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.mcp.McpDispatcher
 import com.brokenfinger.tracker.adapter.mcp.McpToolInvoker
+import com.brokenfinger.tracker.adapter.store.FileProblemStatements
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.application.ProblemCatalog
@@ -24,7 +25,7 @@ class McpConfiguration {
     // immutable snapshot read from the classpath, so a second copy would only cost memory.
     @Bean
     fun recordQuery(layout: RecordLayout, catalog: ProblemCatalog, clock: Clock, raw: RawSessionLog): RecordQuery =
-        RecordQuery(JsonlRecordStore(layout.submissionLog()), catalog, clock, raw)
+        RecordQuery(JsonlRecordStore(layout.submissionLog()), catalog, clock, raw, FileProblemStatements(layout))
 
     @Bean
     fun mcpToolInvoker(query: RecordQuery): McpToolInvoker = McpToolInvoker(query)

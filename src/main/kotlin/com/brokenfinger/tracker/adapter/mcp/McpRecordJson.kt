@@ -74,6 +74,10 @@ object McpRecordJson {
         history.part?.let { put("part", it) }
         history.acceptanceRate?.let { put("acceptanceRate", it) }
         put("tags", format.encodeToJsonElement(history.tags))
+        // What the problem asked, which nothing on this surface could answer before (#278).
+        // Absent when none was captured — never an empty string, which would read as a problem
+        // that has no description rather than one we never fetched.
+        history.statement?.let { put("statement", it) }
         put("submissionCount", history.submissions.count { it.isSubmission() })
         put("runCount", history.submissions.count { !it.isSubmission() })
         put("submissions", JsonArray(history.submissions.map(::full)))
