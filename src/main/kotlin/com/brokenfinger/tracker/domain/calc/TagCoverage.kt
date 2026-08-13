@@ -71,7 +71,25 @@ data class TagCount(
      * someone clicking a tag is looking.
      */
     val touched: List<TouchedProblem> = emptyList(),
-)
+) {
+    /**
+     * Where you stand with this tag, in the three words [ProblemStatus] already gives a problem.
+     *
+     * Derived, never stored: it is [attempted] and [solved] restated, and a second field could
+     * disagree with the two it summarises. **It names a state, not a weakness** — nothing here
+     * says `attempted` is bad, which is the boundary
+     * [[decisions/2026-08-12-the-server-counts-and-names-nothing]] draws.
+     *
+     * It exists because an Obsidian graph colour group takes a *search query*, not an expression:
+     * "tried and not passed" was `-["attempted":0] ["solved":0]`, correct and nobody's idea of a
+     * setting. With a word it is `["status":"attempted"]` (#250).
+     */
+    fun status(): ProblemStatus = when {
+        solved > 0 -> ProblemStatus.PASSED
+        attempted > 0 -> ProblemStatus.ATTEMPTED
+        else -> ProblemStatus.UNTOUCHED
+    }
+}
 
 /** One problem a tag's counts came from. A record that exists, and nothing said about it. */
 data class TouchedProblem(val lessonId: Long, val title: String, val passed: Boolean)

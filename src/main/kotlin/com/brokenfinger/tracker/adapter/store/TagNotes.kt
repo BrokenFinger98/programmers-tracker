@@ -37,6 +37,7 @@ class TagNotes(private val layout: RecordLayout) {
         |catalogTotal: ${count.catalogTotal}
         |attempted: ${count.attempted}
         |solved: ${count.solved}
+        |status: ${count.status().wireName()}
         |---
         |
         |# ${count.tag}

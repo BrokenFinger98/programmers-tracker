@@ -4268,3 +4268,23 @@ two branches editing the *same existing line* would silently keep both copies. T
 file edited in place and right for one that only grows a section at the end — which is what this
 file and `log.md` are. A duplicated paragraph is visible in review; a conflict that resolves to
 "keep both" every single time is not.
+## [2026-08-13] #250 — a tag says where you stand, so the graph can colour it ✅
+
+Owner asked for attempted-but-not-passed types in red. The counts supported it and the *query* did
+not: an Obsidian colour group takes a search query, not an expression, so "tried and not passed"
+was `-["attempted":0] ["solved":0]` — correct, and nobody's idea of a setting. The owner's first
+attempt at the simpler `solved:0` had already matched all 83 tags for want of brackets.
+
+The note now carries `status: untouched | attempted | passed`, so each group is one exact match.
+
+**Reused `ProblemStatus` rather than inventing a vocabulary.** `list_problems` has answered in
+those three words since #100 and derives them the same way; a second set for tags would be the
+`submissionCount`/`attempts` split all over again (#237). Derived on read, never stored — a
+stored copy can disagree with the two counts it summarises.
+
+**It names a state, not a weakness.** Nothing says `attempted` is bad. That boundary is
+[[decisions/2026-08-12-the-server-counts-and-names-nothing]] and it has not moved: the server
+writes where you stand, the reader decides what to do about it — including which colour it
+deserves.
+
+Recipe in both template twins, replacing the `["solved":0]` line #241 added.

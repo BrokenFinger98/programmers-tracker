@@ -165,5 +165,36 @@ class TagCoverageTest {
         counts.forEach { it.touched shouldContainExactly emptyList() }
     }
 
+    /**
+     * The same three words `list_problems` uses for a problem, derived the same way (#250). It is
+     * `attempted` and `solved` restated, not a judgement about either: an Obsidian colour group
+     * takes a search query rather than an expression, so "tried and not passed" needed a
+     * two-clause negation until the state had a name.
+     */
+    @Test
+    fun `a tag says where you stand, in the words a problem already uses`() {
+        val counts = TagCoverage.of(
+            catalogued = listOf(problem(1, "passed"), problem(2, "tried"), problem(3, "never")),
+            passed = setOf(1L),
+            submitted = setOf(1L, 2L),
+        )
+
+        counts.single { it.tag == "passed" }.status() shouldBe ProblemStatus.PASSED
+        counts.single { it.tag == "tried" }.status() shouldBe ProblemStatus.ATTEMPTED
+        counts.single { it.tag == "never" }.status() shouldBe ProblemStatus.UNTOUCHED
+    }
+
+    /** One pass among many attempts is still a pass — the tag has been cleared at least once. */
+    @Test
+    fun `a tag with a pass and an unpassed attempt is passed`() {
+        val counts = TagCoverage.of(
+            catalogued = listOf(problem(1, "dp"), problem(2, "dp")),
+            passed = setOf(1L),
+            submitted = setOf(1L, 2L),
+        )
+
+        counts.single().status() shouldBe ProblemStatus.PASSED
+    }
+
     private fun aTouch(id: Long) = TouchedProblem(lessonId = id, title = "p$id", passed = true)
 }
