@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [language, documentation, open-source, guards, drift]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-08-11
+updated: 2026-08-13
 sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-10-guards-must-prove-they-ran, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
@@ -111,3 +111,18 @@ contributor half. It was never an argument about the README.
 Shipped with `README.ko.md` in the same change, so the mechanism was proved on a real pair
 before four more were promised — the guard was watched failing on a deliberately bumped source
 and passing after the marker was corrected. The remaining four twins follow.
+
+## Amended 2026-08-13 (#261): a sixth twin, and why it does not reverse this page
+
+The owner asked for `CONTRIBUTING.ko.md` — the exact document Option 2 above named when
+rejecting contributor-document translation. The conflict was raised and the owner reaffirmed.
+
+What reconciles it: the rejection's rationale was about what contributors **produce** — commits,
+comments, wiki pages reviewed by strangers — and `CONTRIBUTING.md` is the document that *tells a
+Korean speaker how to produce those in English*. Translating the instructions strengthens the
+rule they teach. The contributor **artifacts** stay English; nothing in the original rationale
+is weakened, which is why this is an amendment and not a supersession.
+
+The constitution's list moves 5 → 6, the drift guard covers the new twin like the others, and a
+seventh remains a change to the list.
+

@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@73337a95efe8864acb2a70edd33bda51a9263567 -->
+<!-- translated-from: bootstrap.md@00bde70d05da88a41a6231ab1eb95c52dfac1186 -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -379,5 +379,5 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
   실측 근거 (영어)
 - [`docs/llm-wiki/index.md`](llm-wiki/index.md) — 모든 결정과 그 이유 (영어)
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — 이슈 우선, 스쿼시 전용, 그리고 기여자가 쓰는 모든
-  것은 영어로 (사용자용 다섯 페이지만 한국어 쌍을 가집니다 —
+  것은 영어로 (여섯 페이지가 한국어 쌍을 가집니다 —
   [결정 문서](llm-wiki/wiki/decisions/2026-08-11-korean-for-the-user-facing-half.md))

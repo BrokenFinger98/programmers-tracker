@@ -391,5 +391,5 @@ Stated plainly, because finding these out by trial is worse.
   evidence behind every claim above
 - [`docs/llm-wiki/index.md`](llm-wiki/index.md) — every decision and why it was made
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — issue-first, squash-only, and English for
-  everything a contributor writes (the five user-facing pages also carry a Korean twin —
+  everything a contributor writes (six pages also carry a Korean twin —
   [the decision](llm-wiki/wiki/decisions/2026-08-11-korean-for-the-user-facing-half.md))
