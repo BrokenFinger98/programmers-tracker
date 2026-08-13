@@ -4128,3 +4128,19 @@ re-reading the diff:
   would have applied silently to any future caller. Now `ZoneId.systemDefault()`.
 
 The change set looked complete from inside itself. The grep is what disagreed.
+
+**And then CI caught what neither of those greps could.** Replacing the hardcoded default with
+`ZoneId.systemDefault()` turned `DailyBackupTest` red on all four Linux/macOS jobs and green on
+this machine, because every instant in that test is written in Seoul terms and it had been taking
+the zone from the constructor default. It was asserting the default, not the behaviour.
+
+`DailyBackup.zone` now has **no default at all**. `systemDefault()` would have been worse than the
+hardcoded zone: a caller that omits it behaves differently on two machines. An hour means nothing
+without a zone, so every caller says which one — the composition root from `TZ`, the tests from
+`SEOUL`.
+
+Verified the way the failure asked for: `TZ=UTC ./gradlew test --rerun-tasks` — the whole suite,
+under the clock CI actually runs on. Also spot-checked `America/New_York`.
+
+Worth keeping: local runs are Asia/Seoul and CI runners are UTC, so between them a test that
+depends on *either* zone gets caught. That only holds while both keep running.
