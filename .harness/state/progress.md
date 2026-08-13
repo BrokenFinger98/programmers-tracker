@@ -4288,3 +4288,46 @@ writes where you stand, the reader decides what to do about it — including whi
 deserves.
 
 Recipe in both template twins, replacing the `["solved":0]` line #241 added.
+
+## [2026-08-13] #254 — the vault gets a dashboard, and the server seeds it ✅
+
+The owner wanted the table view their other vault has. It turned out to be reachable without
+building anything the design had rejected.
+
+**`_dashboard.md` was never forbidden — it had no owner.** §5.5's amendment (#227) sorted the five
+phantom notes: `_dashboard`, `_review`, `_warmup` are *aggregation — allowed, unbuilt*; only
+`_weakness` was interpretation. What aged badly was the **shape**, not the feature.
+
+An Obsidian Base is a query, not data:
+
+| | `_dashboard.md` as specified | `dashboard.base` |
+|---|---|---|
+| what | server-generated Markdown, derived data | a view definition |
+| freshness | rewritten per record, stale in between | evaluated live, cannot go stale |
+| server cost | every submit | once, if absent |
+
+§5.5 had already argued for it — *"tables, filters, sorting and aggregation all come for free"*.
+
+**Seeded by the server, not shipped in the template**, on the owner's suggestion and it is the
+better call: a template is copied once at creation, so every repository that already exists would
+never receive it — the staleness that hit the vault README twice today. The image ships `src` and
+not `template/`, so the copy lives in `src/main/resources/vault/` and there is only one.
+
+**Written only when absent, never regenerated.** The tag notes and problem pages are derived data
+and are rewritten whole; a `.base` becomes the reader's the moment they add a column. Same posture
+as `RecordRepositoryIgnores`.
+
+Verified live, both directions: removed the hand-placed copy → the server wrote it on boot
+(`Wrote /records/dashboard.base`); appended a line by hand → restarted → **md5 unchanged**.
+
+### Two things the data forced, and one the constitution did
+
+- `file.name` is `README` for every problem, so it is useless as a label. `title` leads and
+  `file.name` trails as the clickable `Open` column.
+- Tag notes are keyed by slug (`binary-search`) while `tag` holds the real name (`binary_search`).
+- **The labels were Korean and the guard caught it.** `ProblemReadme` had already drawn the line —
+  *our own labels are English; the tag words come from the data and stay verbatim* — and I had
+  written six Korean view names straight past it.
+
+Default order is recent-first. Shipping it sorted worst-first would be the server naming a
+weakness, which [[decisions/2026-08-12-the-server-counts-and-names-nothing]] forbids.

@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.config
 import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
 import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
+import com.brokenfinger.tracker.adapter.store.VaultDashboard
 import com.brokenfinger.tracker.application.BackupAge
 import com.brokenfinger.tracker.application.BackupLog
 import com.brokenfinger.tracker.application.BackupReporter
@@ -52,6 +53,18 @@ class GitConfiguration {
     @Bean
     fun recordRepositoryIgnores(@Value("\${tracker.record-repo}") recordRepo: String): RecordRepositoryIgnores =
         RecordRepositoryIgnores(recordRoot(recordRepo)).also { it.ensure() }
+
+    /**
+     * Also at construction, and for the same reason: it must land before reconciliation's first
+     * `git add --all`, so the dashboard arrives in the same commit as the records rather than
+     * trailing a boot behind.
+     *
+     * Written only when absent — a `.base` is a query the reader owns once they touch it, not
+     * derived data to regenerate (#254).
+     */
+    @Bean
+    fun vaultDashboard(@Value("\${tracker.record-repo}") recordRepo: String): VaultDashboard =
+        VaultDashboard(recordRoot(recordRepo)).also { it.ensure() }
 
     @Bean
     fun dailyBackup(
