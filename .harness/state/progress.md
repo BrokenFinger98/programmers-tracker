@@ -4747,3 +4747,32 @@ weakness requires the word. The assertion now bans **shapes** (`you are `, `the 
 `docs/mcp.md` and its twin also caught up with today: `statement` (#275/#278) and `kind` (#256)
 were undocumented there.
 
+## [2026-08-14] #288 — a public repository holding a login and a token had no security policy ⏳
+
+Every piece of it already existed and none of it was in the file GitHub shows: `docs/mcp.md` has
+the MCP posture, `docs/bootstrap.md` says where each credential lives, `CLAUDE.md` forbids any of
+them reaching a log, and three ADRs cover the network posture, the read-only slice and the token
+that retired SSH. Five files, and the one a reporter opens was not among them.
+
+`SECURITY.md` is an entry point rather than a copy — it links to where each claim is implemented,
+because a security document that restates the code is one that will disagree with it.
+
+Two sections earn their place. **"What this holds, and where"** — the three secrets, and the fact
+that two deliberately do not live with the records, because the record repository is pushed and a
+credential inside it would be pushed too (#126). **"What is not a vulnerability here"** — the
+`/watch` token is a loopback gate rather than an authentication system, anything with local
+filesystem access has already won, and the records repository is private by construction rather
+than by permission checks. Saying so costs a paragraph and saves somebody a weekend.
+
+And one boundary worth drawing in public: **using a private protocol is not a security
+vulnerability.** README already takes a position on it; filing it as a CVE-shaped thing makes both
+conversations harder, and the document says which conversation to have.
+
+Measured while writing it: `private-vulnerability-reporting` is **disabled** on this repository
+while secret scanning and push protection are enabled. So the document says to use the private
+report *if offered* and otherwise to ask for a channel without publishing details — accurate today
+and simpler the moment that setting is flipped, which is the owner's to flip.
+
+Every path and anchor it names was checked to resolve, including the two deep links into
+`docs/mcp.md` and `README.md`.
+

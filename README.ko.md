@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@b8ffd451779e3ec42a3d03057c056ca615eaba7e -->
+<!-- translated-from: README.md@5ceffa061411c8d095bda782e2d8b20ce37df527 -->
 
 # programmers-tracker
 
@@ -193,6 +193,13 @@ JDK 25 위에서 네이티브로도 돌아갑니다 (`./gradlew bootRun`). 안�
 이 도구는 비공개 프로토콜을 사용하므로, 사용에 대한 판단과 책임은 사용자에게 있습니다.
 
 ---
+
+## 보안
+
+이 도구는 프로그래머스 로그인, 생성된 `/watch` 토큰, 그리고 선택적으로 첫 부팅 한 번을 위한
+GitHub 토큰을 다룹니다. [`SECURITY.md`](SECURITY.md) 에 각각이 어디에 있는지, 그중 둘이 왜 일부러
+기록 저장소 밖에 사는지, 무언가를 비공개로 제보하는 방법, 그리고 설계 중 어디까지가 구멍이 아니라
+결정인지를 적어두었습니다. (영문 문서입니다.)
 
 ## 기여
 
