@@ -570,6 +570,8 @@ payload carried in the `run` message's `start`. No need to parse the problem-sta
   "level": 0, "part": "코딩테스트 입문", "acceptanceRate": 91,
   "tags": ["구현"],                      // copied from meta.json · [] if untagged
   "language": "java",
+  "kind": "algorithm",                   // algorithm | database — from the channel (#256);
+                                         // absent on records older than the field
   "action": "submit",                    // submit | run
   "attempt": 2,
   "elapsedSec": 847,                     // since the problem was first observed
