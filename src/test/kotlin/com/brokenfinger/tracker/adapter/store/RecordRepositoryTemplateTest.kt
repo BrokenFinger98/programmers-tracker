@@ -59,6 +59,9 @@ class RecordRepositoryTemplateTest {
         "examples.json",
         "log/submissions.jsonl",
         "attempts/",
+        // Seeded once if absent, then the reader's (#254). Named here for the same reason the
+        // five phantom notes were taken out: the structure block is what a reader follows.
+        "dashboard.base",
         // The vault's tag map (#229): one note per catalogued tag, including the untouched ones.
         "tags/<tag>.md",
         // Per language, so the template names the pattern rather than seven extensions.

@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@6e4015ee148605cb11d19ef049f759287566bf05 -->
+<!-- translated-from: README.md@f01700440a3b09e18a2ffc1c2295e04c10ae4598 -->
 
 # ps-records
 
@@ -19,8 +19,17 @@ problems/<lessonId>-<title>/
 ├── runner_test.<ext>  그 예제로 만든 실행기 — 아래 참고
 └── attempts/          제출별 코드(NNN.<ext>)와 원본 프레임(NNN.raw.jsonl)
 tags/<tag>.md          문제 유형별 노트 하나. 그 유형을 얼마나 만났는지가 적힙니다
+dashboard.base         위의 전부를 훑는 Obsidian 표 — 아래 참고
 log/submissions.jsonl  전체 제출 로그 (MCP 툴이 읽는 원본)
 ```
+
+**`dashboard.base` 는 없을 때 딱 한 번 쓰이고, 그 뒤로는 건드리지 않습니다.**
+[Obsidian Base](https://help.obsidian.md/bases) — 기록의 사본이 아니라 *질의문*이라 낡을 수가
+없습니다. 표 여섯 개 — *Recent*, **Not passed yet**(아직 통과 못 한 것), *By attempts*, *By part*,
+*By language*, *Tags*. 컬럼을 더하든 정렬을 바꾸든 그때부터는 여러분 파일이고, 서버는 다시 손대지
+않습니다.
+
+위의 나머지는 전부 매번 기록으로부터 다시 쓰입니다.
 
 **`examples.json` 과 실행기는 둘 다 채점기가 준 예제가 있어야 만들어지는데, 그 예제는 *run*
 에서만 옵니다** — 실행을 한 번도 누르지 않고 첫 제출에 통과한 문제에는 둘 다 없습니다. 한 번

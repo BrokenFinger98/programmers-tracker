@@ -1,0 +1,160 @@
+formulas:
+  # Every problem page is named README.md, so the file name is useless as a label and the
+  # folder is what identifies it: `120802-<slug>`. The title property is the
+  # readable one and comes first; this is here for when two problems share a title.
+  directory: |
+    file.folder
+properties:
+  note.title:
+    displayName: Problem
+  note.tag:
+    displayName: Tag
+  note.level:
+    displayName: Level
+  note.part:
+    displayName: Part
+  note.language:
+    displayName: Language
+  note.verdict:
+    displayName: Verdict
+  note.attempts:
+    displayName: Submits
+  note.runCount:
+    displayName: Runs
+  note.acceptanceRate:
+    displayName: Accepted %
+  note.lastSubmit:
+    displayName: Last submit
+  note.firstSeen:
+    displayName: First seen
+  note.status:
+    displayName: Status
+  note.catalogTotal:
+    displayName: In catalog
+  note.attempted:
+    displayName: Met
+  note.solved:
+    displayName: Passed
+  formula.directory:
+    displayName: Folder
+  file.name:
+    displayName: Open
+views:
+  # Recent first, because that is a fact rather than a claim. Every other ordering below is a
+  # view you choose, not a verdict this vault reached — the server writes the numbers and which
+  # of them is a weakness is yours to say (decisions/2026-08-12-the-server-counts-and-names-nothing).
+  - type: table
+    name: Recent
+    filters:
+      and:
+        - note.lessonId != null
+    order:
+      - title
+      - level
+      - language
+      - verdict
+      - attempts
+      - runCount
+      - lastSubmit
+      - file.name
+    sort:
+      - property: lastSubmit
+        direction: DESC
+
+  # The point of the whole tool: what did not pass. A problem you failed and never came back to
+  # is invisible on Programmers' own scoreboard, which only remembers that you eventually solved it.
+  - type: table
+    name: Not passed yet
+    filters:
+      and:
+        - note.lessonId != null
+        - note.verdict != "PASS"
+    order:
+      - title
+      - level
+      - language
+      - verdict
+      - attempts
+      - acceptanceRate
+      - lastSubmit
+      - file.name
+    sort:
+      - property: lastSubmit
+        direction: DESC
+
+  # Attempts and runs side by side. A problem taken in one submit after twenty runs and one taken
+  # in twenty submits are different stories, and neither number tells it alone.
+  - type: table
+    name: By attempts
+    filters:
+      and:
+        - note.lessonId != null
+    order:
+      - title
+      - level
+      - attempts
+      - runCount
+      - verdict
+      - acceptanceRate
+      - file.name
+    sort:
+      - property: attempts
+        direction: DESC
+
+  - type: table
+    name: By part
+    filters:
+      and:
+        - note.lessonId != null
+    groupBy:
+      property: part
+      direction: ASC
+    order:
+      - title
+      - level
+      - language
+      - verdict
+      - attempts
+      - file.name
+    sort:
+      - property: level
+        direction: ASC
+
+  - type: table
+    name: By language
+    filters:
+      and:
+        - note.lessonId != null
+    groupBy:
+      property: language
+      direction: ASC
+    order:
+      - title
+      - level
+      - verdict
+      - attempts
+      - lastSubmit
+      - file.name
+    sort:
+      - property: lastSubmit
+        direction: DESC
+
+  # The tag map as a table. `catalogTotal` is the denominator that keeps it honest: an untouched
+  # tag with one problem in the whole catalog and an untouched tag with 38 are not the same gap.
+  - type: table
+    name: Tags
+    filters:
+      and:
+        - note.tag != null
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - tag
+      - catalogTotal
+      - attempted
+      - solved
+      - file.name
+    sort:
+      - property: catalogTotal
+        direction: DESC

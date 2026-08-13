@@ -17,8 +17,16 @@ problems/<lessonId>-<title>/
 ├── runner_test.<ext>  A runner built from those examples — see below
 └── attempts/          Per-submission code (NNN.<ext>) and raw frames (NNN.raw.jsonl)
 tags/<tag>.md          One note per problem type, with how many of it you have met
+dashboard.base         Obsidian tables over all of the above — see below
 log/submissions.jsonl  Full submission log (the source the MCP tools read)
 ```
+
+**`dashboard.base` is written once, on the first start that finds it missing, and never again.**
+It is an [Obsidian Base](https://help.obsidian.md/bases) — a *query*, not a copy of your records,
+so it cannot go stale. Six tables — *Recent*, **Not passed yet**, *By attempts*, *By part*, *By language*, *Tags*. Add a column or change a
+sort and the file is yours; the server will not touch it again.
+
+Everything else above is rewritten from the records every time.
 
 **Both `examples.json` and the runner need the judge's own examples, and only a *run* announces
 them** — so a problem you passed on the first submit, without pressing Run once, has neither.
