@@ -127,3 +127,25 @@ Worth recording as its own lesson: **the decision was right and its unstated ass
 wrong.** Nothing in the reasoning was false; it simply assumed a vault with history. The check
 that caught it was opening the thing and looking at it, which is the same check that has caught
 most of this repository's defects.
+
+## Tested again 2026-08-13 (#250): naming a state is not naming a weakness
+
+The owner asked for attempted-but-not-passed tags in red. Obsidian's graph colours on a *search
+query*, not an expression, so the counts alone forced `-["attempted":0] ["solved":0]` — right, and
+not a thing anyone should have to derive.
+
+The note now carries `status: untouched | attempted | passed`, and the line this page draws is
+what decided the shape:
+
+- **Allowed**, and this is it: a word that restates `attempted` and `solved`. It says where you
+  stand, adds nothing, ranks nothing, and is derived on read so it cannot disagree with the two
+  numbers it summarises.
+- **Still refused**: any suggestion that `attempted` is worse than `untouched`, an order over the
+  tags, a threshold, a colour chosen for you. The reader picks which state deserves red — the
+  server does not know that a half-finished type matters more than one never met, and for
+  someone deliberately deferring a topic it does not.
+
+`ProblemStatus` was reused rather than a second vocabulary invented; `list_problems` has answered
+in those three words since #100. Two views of one thing needing two vocabularies is the
+`submissionCount`/`attempts` confusion #237 had to unpick.
+
