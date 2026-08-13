@@ -8,6 +8,12 @@
 # made.
 .ps/
 
+# Obsidian's own state. Which panes you had open and how the graph is zoomed are not records,
+# and the server's reconciliation is `git add --all`, which cannot tell the difference — one
+# daily backup commit contained nothing but a changed graph setting, under a message about
+# records (#234). Delete this line if you would rather version your vault's settings.
+.obsidian/
+
 # The tracker's exclusive lock on this repository. It normally lives inside .git/, where git
 # cannot see it; this covers the one case where it cannot — a run from before `git init`.
 .programmers-tracker.lock

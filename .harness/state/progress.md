@@ -4145,7 +4145,7 @@ under the clock CI actually runs on. Also spot-checked `America/New_York`.
 Worth keeping: local runs are Asia/Seoul and CI runners are UTC, so between them a test that
 depends on *either* zone gets caught. That only holds while both keep running.
 
-## [2026-08-13] #245 — CI ran the suite on one fork, and recompiled it three times ⏳
+## [2026-08-13] #245 — CI ran the suite on one fork, and recompiled it three times ✅
 
 Wall clock is the slowest job, and that is `repeatability (no cache)` at **5m52s** — the suite
 three times, 115s + 99s + 99s.
@@ -4176,6 +4176,49 @@ next person to reach for more parallelism knows what they are stepping on.
 
 Verified: three repeats under `TZ=UTC` with forks on, all green, plus the four gates. Local
 `scripts/test.sh` went 30s → 17s.
+
+**The runner numbers, which were the point** (#246 against #244, same workflow):
+
+| job | before | after | |
+|---|---|---|---|
+| gates (macos) | 4m15s | **1m37s** | −62% |
+| gates (ubuntu) | 4m14s | **2m55s** | −31% |
+| coverage report | 1m59s | 1m33s | −22% |
+| **repeatability** | **6m2s** | **5m8s** | **−15%** ← the wall |
+| gates (windows) | 4m30s | 3m53s | −14% |
+
+Wall clock **6m2s → 5m8s**. `--rerun` landed exactly where predicted: attempt 1 went 115s → 136s
+because it now carries the compile the others used to repeat, and attempts 2 and 3 went 99s → 76s
+and 75s.
+
+**What would move the wall further, and was not done:** the three attempts as a matrix of three
+jobs rather than a loop in one, which would make that job cost one attempt (~1m45s) and take the
+run to about 4m, bounded by Windows instead. Three fresh runners are arguably stronger evidence of
+non-determinism — but they are not the *same* evidence, since the current shape also runs against
+a workspace the previous attempt dirtied. Changing the shape of the check that catches flakes is
+its own issue, not a footnote in a speed PR.
+
+## [2026-08-13] #234 — the vault is not only records ✅
+
+`reconcile()` is `git add --all`, and once the vault was worth opening, Obsidian's own state
+started arriving in commits. The 23:00 backup on 2026-08-12 committed **one line of graph zoom and
+nothing else**, under `chore: reconcile uncommitted records`.
+
+**Option B, and not A.** Scoping the staging to what the server writes is honest by construction
+and trades a visible annoyance for an invisible one: if the server ever writes outside the list,
+reconciliation stops catching it and a record goes uncommitted. That net exists because the tidy
+path already missed something once. `.obsidian/` is ignored instead —
+[[decisions/2026-08-13-the-vault-is-not-only-records]].
+
+**A whole directory, never a list of files inside it** (#122's lesson). Obsidian adds files on its
+own schedule.
+
+Two things this does **not** do, both stated in the PR rather than done quietly:
+
+- it does not untrack what is already tracked — `git rm --cached -r .obsidian` is the owner's to
+  run, on their own published history
+- it does not fix the shape. `reconcile` still commits an unfinished note or a dropped screenshot.
+  Option A remains the only fix for that, and its risk is unchanged.
 
 **Not done yet: the runner numbers.** A laptop with fourteen cores is not evidence about a runner
 with four. If CI does not show the saving, this comes back out.
