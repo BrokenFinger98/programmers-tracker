@@ -62,10 +62,14 @@ class ClasspathProblemCatalog private constructor(
         fun vocabulary(): Set<String> =
             json.decodeFromString<VocabularyDocument>(resource(VOCABULARY)).tags.map { it.key }.toSet()
 
-        private fun resource(name: String): String = ClasspathProblemCatalog::class.java.getResourceAsStream(name)
-            ?.bufferedReader()
-            ?.use { it.readText() }
-            ?: error("$name is missing from the jar — the build did not include it")
+        // Early return rather than a `?.` chain: `bufferedReader()` and `use` cannot return null,
+        // so chaining safe calls onto them emitted two branches no test could ever reach — and an
+        // unreachable branch in a coverage floor is a number nobody can move honestly (#272).
+        private fun resource(name: String): String {
+            val stream = ClasspathProblemCatalog::class.java.getResourceAsStream(name)
+                ?: error("$name is missing from the jar — the build did not include it")
+            return stream.bufferedReader().use { it.readText() }
+        }
     }
 }
 

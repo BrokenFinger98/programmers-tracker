@@ -4553,3 +4553,45 @@ and with the `database` value specifically, which no algorithm problem could hav
 Fourth outside reference today, and the second time it was the owner looking at rendered output
 rather than anything that reads code (#263 was the 8080 in the options page).
 
+## [2026-08-13] #272 — the coverage gate named a directory and read 13% of it ⏳
+
+The owner asked why the `coverage report` job enforces nothing. A threshold did exist —
+`verifyCalculatorCoverage`, 95% branch on `domain/calc`, in the `gates` job, passing at 96%. It
+was reading an eighth of what it named: Kover emits `domain/calc/runner` as a **separate**
+`<package>`, and the lookup was an exact-name regex, so 862 branches in the same directory were
+never measured. 287 of them uncovered — the largest such pool in the repository, inside the one
+place we told ourselves was held to 95%. The function's own comment argued for the shape that
+caused it: *"Reads the package's own counter rather than summing classes, so a class added later
+is included without touching this."* True of classes, false of sub-packages.
+
+**A global threshold was measured and refused.** Branch read 75% overall, and the biggest
+contributor was not missing tests: Kotlin compiles each default parameter value into a bitmask
+test, so `SubmissionRecord`'s 15 defaulted fields emit 69 branches inside `<init>` that no call
+site takes both ways. `domain` read 100% line / 57% branch almost entirely from that. **I first
+blamed generated `equals`/`hashCode` — inferred, not measured, and wrong; the method-level
+counters said `<init>`.** Corrected in the issue before the plan was built on it.
+
+Excluding runners and generated members the tree measures **85% over 1,733 branches**, which is
+what made a per-package floor workable at all.
+
+`verifyBranchCoverage` replaces it and **reads every package in the report rather than names it
+remembers** — iterating what is there instead of looking up what we thought was there is what
+makes the original defect impossible rather than noticeable. Floors: 80 general, 95 `domain/calc`,
+65 `adapter/config`, `domain/calc/runner` exempt. Every deviation carries its argument, and a rule
+naming a package that no longer exists fails the build.
+
+**Where the floor was reachable, tests were written rather than the floor lowered** —
+`adapter/catalog` 23→80, `adapter/cable` 77→86, `adapter/git` 78→81, `adapter/config` 36→65. Every
+one turned out to be an absence path this project claims to care about: a lesson the catalog does
+not have, a channel nobody subscribed to, a throwable with no message, a GitHub answer that is
+neither created nor already-exists.
+
+One production change: `ClasspathProblemCatalog.resource` chained safe calls onto `bufferedReader()`
+and `use`, neither of which can return null, so it carried two branches no test could reach. Early
+return instead — an unreachable branch inside a coverage floor is a number nobody can move
+honestly.
+
+**And the gate was made to fail before being trusted.** Floor at 90 named four packages; the exempt
+package renamed produced *"a rule that matches nothing rules nothing and hides that it does."*
+Both reverted. That is the check the old gate would have failed.
+

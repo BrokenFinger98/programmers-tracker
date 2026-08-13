@@ -47,6 +47,26 @@ class ClasspathProblemCatalogTest {
         catalog.tagsOf(LessonId(999999999)).shouldBeEmpty()
     }
 
+    /**
+     * The other side of the absence tests above, and the side that had never been asserted: both
+     * shorthand lookups were only ever exercised with an id the catalog does not have, so nothing
+     * held them to returning the *right* answer when it does (#272).
+     */
+    @Test
+    fun `tags of a known lesson are the ones the catalog carries`() {
+        catalog.tagsOf(LessonId(181951)) shouldBe catalog.find(LessonId(181951))!!.tags
+    }
+
+    @Test
+    fun `the title of a known lesson is the catalogued one`() {
+        catalog.titleOf(LessonId(181951)) shouldBe "a와 b 출력하기"
+    }
+
+    @Test
+    fun `the title of an unknown lesson is absent rather than invented`() {
+        catalog.titleOf(LessonId(999999999)).shouldBeNull()
+    }
+
     @Test
     fun `every entry carries a title, because a catalog nobody can read cannot be reviewed`() {
         catalog.all().forEach { it.title.shouldNotBeBlank() }

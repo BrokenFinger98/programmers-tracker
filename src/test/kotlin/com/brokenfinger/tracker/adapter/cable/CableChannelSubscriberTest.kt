@@ -325,6 +325,36 @@ class CableChannelSubscriberTest {
         awaitHealth(subscriber, SubscriptionHealth.LIVE)
     }
 
+    /**
+     * `/watch` is idempotent and the extension heartbeats every thirty seconds, so a stop for a
+     * channel this instance never held is an ordinary arrival — after a restart, every one of
+     * them is. Nothing to cancel is not an error (#272).
+     */
+    @Test
+    fun `unsubscribing a channel nobody subscribed to is not an error`() {
+        val subscriber = subscriberOver { neverEnding() }
+
+        subscriber.unsubscribe(channel)
+
+        subscriber.healthOf(channel) shouldBe SubscriptionHealth.UNREACHABLE
+    }
+
+    /**
+     * The reconnect warning interpolates `cause.message`, and a throwable is allowed to have
+     * none — `CancellationException()` and most JDK constructors leave it null. A log line that
+     * read `null` there would be the one message a user sees when observation drops.
+     */
+    @Test
+    fun `a failure carrying no message still reports, rather than logging null`() = runBlocking<Unit> {
+        val attempts = AtomicInteger()
+        val subscriber = subscriberOver(attempts = attempts) { flow<CableEvent> { throw IllegalStateException() } }
+
+        subscriber.subscribe(channel)
+
+        awaitAtLeast(attempts, 1)
+        subscriber.healthOf(channel) shouldBe SubscriptionHealth.UNREACHABLE
+    }
+
     @Test
     fun `unsubscribing forgets the channel rather than leaving a stale health`() = runBlocking<Unit> {
         val started = AtomicInteger()
