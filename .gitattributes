@@ -1,6 +1,13 @@
 docs/llm-wiki/log.md merge=union
 docs/llm-wiki/index.md merge=union
 
+# Append-only for the same reason log.md is, and left out of this list until five merge
+# conflicts in one day said so (#252). Every branch is required to update it, so two open
+# branches always collide at the tail, and the resolution was "keep both" every single time.
+# `union` keeps both with no marker — which is wrong for a file that gets edited in place and
+# right for one that only ever grows a dated section at the end.
+.harness/state/progress.md merge=union
+
 # Measured protocol captures are byte-exact evidence, not source text. Git's line-ending
 # translation would let the checkout platform decide what our evidence says — on Windows
 # (core.autocrlf=true by default, including CI runners) the raw newlines inside a captured

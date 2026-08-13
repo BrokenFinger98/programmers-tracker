@@ -4249,3 +4249,22 @@ this page reaches it through `submits()`, which predates it.
 
 Catalog metadata — title, level, part, acceptanceRate, tags — still reads every record. Those are
 identical whichever grading carried them.
+
+## [2026-08-13] #252 — progress.md takes the union, as log.md always has ✅
+
+Five merge conflicts in one day — #247, #249, #251 and two more — every one of them this file, and
+every one resolved by keeping both sides. The gate requires each branch to update it, so two open
+branches always collide at the tail and the resolution is never a judgement.
+
+`.gitattributes` already carried the answer for `log.md` and `index.md`, and the wiki schema says
+why: *append entries start with the date, so conflicts resolve deterministically via chronological
+union.* This file is append-only in the same way, dated in the same way, and was simply left out.
+
+**Verified rather than assumed.** Two temporary branches, each appending a dated section, merged:
+0 conflict markers, both appends present. The same merge conflicted every time earlier today.
+
+The one real cost, stated because `union` is not free: it keeps both sides **with no marker**, so
+two branches editing the *same existing line* would silently keep both copies. That is wrong for a
+file edited in place and right for one that only grows a section at the end — which is what this
+file and `log.md` are. A duplicated paragraph is visible in review; a conflict that resolves to
+"keep both" every single time is not.
