@@ -4372,3 +4372,15 @@ says exactly that in its own words ("written once… the server will not touch i
 
 `kind` lands in records from the next grading; the four existing records stay kind-less by
 design. Live verification of `"kind":"database"` needs one SQL run, which is the owner's browser.
+
+## [2026-08-13] #261 — CONTRIBUTING gets the sixth Korean twin, by owner decision ✅
+
+The constitution pinned the twins at five and the ADR had rejected contributor-document
+translation, naming CONTRIBUTING.md. The conflict was raised; the owner reaffirmed; the ADR is
+amended rather than superseded, because the reconciliation is real: **the rejection was about
+what contributors produce, and this document tells a Korean speaker how to produce it in
+English.** Translating the instructions strengthens the rule they teach.
+
+One PR carries all four places the number lived: the twin itself, CLAUDE.md's list (5→6, "a
+seventh remains a change to the list"), the ADR amendment, and bootstrap.md + its twin which
+also said "five".
