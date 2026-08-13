@@ -1,5 +1,8 @@
 server:
-  port: ${TRACKER_PORT:8080}
+  # 1619 spells "PS" — P is the 16th letter, S the 19th. Chosen over 8080 because every
+  # developer already runs something there; the crowded ports are 3000/5000/5173/8000/808x/
+  # 8888/9090 and this is none of them (#263). One env var away for anyone who disagrees.
+  port: ${TRACKER_PORT:1619}
   # Loopback only, deliberately. This process holds a live session cookie in memory and can
   # push to the record repository; a bind on 0.0.0.0 (the Spring default, and what a
   # container gives you for free) would offer /watch to everything on the LAN. Design §4.1.

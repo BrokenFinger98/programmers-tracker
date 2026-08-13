@@ -20,8 +20,8 @@ services:
     # ---------------------------------------------------------------------
     # THE LOOPBACK PREFIX ON THE LEFT IS THE SECURITY CONTROL. DO NOT REMOVE IT.
     #
-    # `127.0.0.1:8080:8080` tells Docker to listen on the HOST's loopback only, so
-    # nothing on the LAN can reach /watch. Shortening it to `8080:8080` binds the
+    # `127.0.0.1:1619:1619` tells Docker to listen on the HOST's loopback only, so
+    # nothing on the LAN can reach /watch. Shortening it to `1619:1619` binds the
     # published port to every host interface and hands a process that holds a live
     # Programmers session cookie — and can push to your GitHub — to the whole network.
     #
@@ -33,10 +33,10 @@ services:
     # Reasoning: docs/llm-wiki/wiki/decisions/2026-08-06-container-network-posture.md
     # ---------------------------------------------------------------------
     ports:
-      - "127.0.0.1:${TRACKER_PORT:-8080}:${TRACKER_PORT:-8080}"
+      - "127.0.0.1:${TRACKER_PORT:-1619}:${TRACKER_PORT:-1619}"
 
     environment:
-      TRACKER_PORT: ${TRACKER_PORT:-8080}
+      TRACKER_PORT: ${TRACKER_PORT:-1619}
       TRACKER_BIND_ADDRESS: "0.0.0.0"
       TRACKER_SESSION_FILE: /run/secrets/programmers_session
 

@@ -183,7 +183,7 @@ jobs:
       - name: A default-bind container is NOT reachable through a published port
         run: |
           set -e
-          docker run -d --name tracker-default -p 127.0.0.1:18080:8080 \
+          docker run -d --name tracker-default -p 127.0.0.1:11619:1619 \
             --user "$(id -u):$(id -g)" \
             -v "$RUNNER_TEMP/records-default":/records -v "$RUNNER_TEMP/state-default":/app/.ps \
             programmers-tracker:ci
@@ -193,7 +193,7 @@ jobs:
           done
           docker logs tracker-default 2>&1 | grep -q "Started TrackerApplication" \
             || { echo "the container never finished starting"; docker logs tracker-default; exit 1; }
-          if curl -sS -m 5 -o /dev/null http://127.0.0.1:18080/; then
+          if curl -sS -m 5 -o /dev/null http://127.0.0.1:11619/; then
             echo "REGRESSION: the published port served a request at the default bind."
             echo "The in-container bind is no longer loopback — see the ADR"
             echo "2026-08-06-container-network-posture before changing this."
@@ -206,7 +206,7 @@ jobs:
         run: |
           set -e
           docker run -d --name tracker-exposed -e TRACKER_BIND_ADDRESS=0.0.0.0 \
-            -p 127.0.0.1:18081:8080 --user "$(id -u):$(id -g)" \
+            -p 127.0.0.1:18081:1619 --user "$(id -u):$(id -g)" \
             -v "$RUNNER_TEMP/records-exposed":/records -v "$RUNNER_TEMP/state-exposed":/app/.ps \
             programmers-tracker:ci
           for _ in $(seq 1 60); do
@@ -319,7 +319,7 @@ jobs:
           docker compose config --quiet
           # The loopback prefix on the publish address is the whole control (ADR
           # 2026-08-06-container-network-posture). Assert it survived.
-          docker compose config | grep -q 'published: "8080"'
+          docker compose config | grep -q 'published: "1619"'
           docker compose config | grep -q 'host_ip: 127.0.0.1'
 
       - name: Container logs

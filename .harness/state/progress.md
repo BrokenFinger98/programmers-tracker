@@ -4402,3 +4402,18 @@ English.** Translating the instructions strengthens the rule they teach.
 One PR carries all four places the number lived: the twin itself, CLAUDE.md's list (5→6, "a
 seventh remains a change to the list"), the ADR amendment, and bootstrap.md + its twin which
 also said "five".
+
+## [2026-08-13] #263 — off 8080, onto a port nobody else wants ⏳
+
+8080 collides with half of what a developer already runs. **1619** spells "PS" — P is the 16th
+letter, S the 19th — is above 1024, and is none of the crowded ones (3000 · 5000 · 5173 · 8000 ·
+808x · 8888 · 9090). One `TRACKER_PORT` away for anyone who disagrees.
+
+Thirteen files, every occurrence: `application.yml`, the Dockerfile healthcheck, compose's port
+mapping, the CI job's probes, **the extension's default in two places** (`background.js`
+`DEFAULTS` and `options.js`), and every document that wrote `127.0.0.1:8080` including all four
+Korean twins.
+
+Migration for an existing install: nothing, if `TRACKER_PORT` is pinned in `.env`. Otherwise the
+MCP client config and the extension's saved port both move — the extension only changes for a
+user who never opened its options page, since a saved value wins over the default.

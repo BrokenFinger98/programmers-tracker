@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@8e5bfc3a5b8f30c41c8bd116f3ffb07eff6df93a -->
+<!-- translated-from: bootstrap.md@fc39fe90f81b4d3c39b3dc27de141169f4bd7917 -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -191,19 +191,19 @@ export TRACKER_RECORD_REPO=~/ps-records
 
 ### 포트에 대해, 그리고 알아둘 만한 것 하나
 
-서버는 **내 기계의 루프백 인터페이스 8080 포트에서만** 듣습니다. 네트워크의 어떤 것도 닿을 수
+서버는 **내 기계의 루프백 인터페이스 1619 포트에서만** 듣습니다. 네트워크의 어떤 것도 닿을 수
 없습니다. 이것은 평소보다 더 중요합니다: 이 프로세스는 살아 있는 세션 쿠키를 메모리에 들고 있고
 내 GitHub에 푸시할 수 있습니다.
 
-8080이 이미 쓰이고 있다면 `TRACKER_PORT` 로 바꾸십시오 — Docker는 `.env` 에서, 네이티브 실행은
+1619이 이미 쓰이고 있다면 `TRACKER_PORT` 로 바꾸십시오 — Docker는 `.env` 에서, 네이티브 실행은
 환경 변수로.
 
 > **컨테이너 네임스페이스 안의 바인드 주소는 호스트의 바인드 주소와 같은 통제가 아닙니다.**
 > 컨테이너는 자기 네트워크 스택을 가지며, `docker -p` 는 컨테이너의 이더넷 주소로 포워딩할 뿐
 > 루프백으로는 절대 포워딩하지 않습니다 — 그래서 컨테이너 안에서 `127.0.0.1` 에 바인드한 서버는
 > 보호되는 게 아니라 아예 브라우저에서 닿지 않습니다. 그래서 `compose.yaml` 은 컨테이너 *안에서는*
-> `0.0.0.0` 에 바인드하고 포트를 `127.0.0.1:8080:8080` 으로 공개합니다. `/watch` 를 LAN에서
-> 떼어놓는 것은 그 **공개(publish)** 주소입니다. 이것을 `8080:8080` 으로 줄이면 전부 노출한
+> `0.0.0.0` 에 바인드하고 포트를 `127.0.0.1:1619:1619` 으로 공개합니다. `/watch` 를 LAN에서
+> 떼어놓는 것은 그 **공개(publish)** 주소입니다. 이것을 `1619:1619` 으로 줄이면 전부 노출한
 > 것입니다.
 >
 > 남는 위험을 그대로 적자면: 이 컨테이너와 같은 Docker 네트워크를 공유하는 다른 컨테이너는 공개
@@ -260,7 +260,7 @@ DevTools는 필요 없습니다 — 서버가 스스로 알아낼 수 없는 두
 열어둔 언어 탭뿐입니다. 나머지는 문제 페이지에서 직접 읽습니다.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/watch \
+curl -X POST http://127.0.0.1:1619/watch \
   -H "X-Tracker-Token: $(cat .ps/watch-token)" \
   -H 'Content-Type: application/json' \
   -d '{"lessonId":120803,"language":"java"}'
@@ -287,7 +287,7 @@ curl -X POST http://127.0.0.1:8080/watch \
 **시작할 때**, 로그가 이 순서로 끝납니다:
 
 ```
-Tomcat started on port 8080 (http) with context path '/'
+Tomcat started on port 1619 (http) with context path '/'
 Started TrackerApplicationKt in 1.046 seconds
 Startup reconciliation: ReconcileReport(recorded=0, duplicates=0, failed=0, skippedLines=0)
 ```

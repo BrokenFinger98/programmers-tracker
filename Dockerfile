@@ -87,6 +87,6 @@ ENV TRACKER_RECORD_REPO=/records
 # `/` is a pass: it proves the server is listening and speaking HTTP. Deliberately not
 # POST /watch, which would log a refused-unauthorized warning every thirty seconds forever.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -s -o /dev/null "http://127.0.0.1:${TRACKER_PORT:-8080}/" || exit 1
+    CMD curl -s -o /dev/null "http://127.0.0.1:${TRACKER_PORT:-1619}/" || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/tracker.jar"]

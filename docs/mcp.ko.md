@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@6183ab091fabd3b15091623ccb65e797a1862832 -->
+<!-- translated-from: mcp.md@b534fdd9e80ac1931fb60e73a8e462dc2f091b2f -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -15,7 +15,7 @@
 ## 엔드포인트
 
 ```
-POST http://127.0.0.1:8080/mcp
+POST http://127.0.0.1:1619/mcp
 X-Tracker-Token: <내 토큰>
 ```
 
@@ -46,7 +46,7 @@ cat .ps/watch-token
 {
   "mcpServers": {
     "programmers-tracker": {
-      "url": "http://127.0.0.1:8080/mcp",
+      "url": "http://127.0.0.1:1619/mcp",
       "headers": { "X-Tracker-Token": "<.ps/watch-token 에서 붙여넣기>" }
     }
   }
