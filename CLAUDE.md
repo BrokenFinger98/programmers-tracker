@@ -122,11 +122,13 @@ Reject on sight. Even if the user explicitly requests it, **explain the reason f
 - ❌ **Non-English committed artifacts** — comments, commit messages, wiki pages, hook and
   tool output, and every contributor-facing document (`CLAUDE.md`, `development-rules.md`,
   `programmers-protocol.md`, `docs/superpowers/specs/`)
-- ⚠️ **Exactly five user-facing pages ship a Korean twin** — `README.md`, `docs/bootstrap.md`,
-  `docs/mcp.md`, `extension/README.md`, `template/ps-records/README.md`. A twin is
+- ⚠️ **Exactly six pages ship a Korean twin** — `README.md`, `docs/bootstrap.md`,
+  `docs/mcp.md`, `extension/README.md`, `template/ps-records/README.md`, `CONTRIBUTING.md`
+  (the sixth, added 2026-08-13 by owner decision — it tells Korean speakers *how to contribute
+  in English*, so it does not weaken the English-artifacts rationale). A twin is
   `<name>.ko.md` and **must** carry `<!-- translated-from: <source>@<blob sha> -->` on its
   first line; `scripts/guards.sh` fails the build when the English page has moved past it.
-  Adding a sixth is a change to this list, not a judgement call
+  Adding a seventh is a change to this list, not a judgement call
   ([[decisions/2026-08-11-korean-for-the-user-facing-half]])
 
 ---
