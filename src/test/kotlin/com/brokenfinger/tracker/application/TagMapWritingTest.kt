@@ -117,6 +117,8 @@ class TagMapWritingTest {
 
         override fun writeRunner(record: SubmissionRecord, code: String) = delegate.writeRunner(record, code)
 
+        override fun writeStatement(record: SubmissionRecord, markdown: String) = Unit
+
         override fun writeReadme(records: List<SubmissionRecord>) = delegate.writeReadme(records)
 
         override fun writeTagNotes(counts: List<TagCount>) {

@@ -136,6 +136,42 @@ class FileDerivedArtifactsTest {
         JsonlRecordStore.under(root).append(SubmissionRecordJson.encode(record))
     }
 
+    /**
+     * The statement is written **once** (#275). Every other artifact here is regenerated from
+     * the newest grading; this one is not, because the README that links it is — and a statement
+     * living in a regenerated file would have to be re-fetched on every submit to survive.
+     */
+    @Test
+    fun `the statement is written once and left alone afterwards`() {
+        val record = aSubmissionRecord()
+
+        artifacts().writeStatement(record, "the problem, as Programmers worded it")
+        artifacts().writeStatement(record, "a later fetch, of a page since reworded")
+
+        Files.readString(statementFile()).trim() shouldBe "the problem, as Programmers worded it"
+    }
+
+    @Test
+    fun `a statement lands beside the attempts it describes`() {
+        val record = aSubmissionRecord()
+
+        artifacts().writeStatement(record, "body")
+
+        statementFile() shouldBe RecordLayout(root).problemDirectory(record.lessonId, record.title)
+            .resolve("statement.md")
+    }
+
+    /** One trailing newline, so appending to it by hand does not need a leading blank line. */
+    @Test
+    fun `it ends with exactly one newline`() {
+        artifacts().writeStatement(aSubmissionRecord(), "body\n\n\n")
+
+        Files.readString(statementFile()) shouldBe "body\n"
+    }
+
+    private fun statementFile(): Path =
+        RecordLayout(root).statementFile(aSubmissionRecord().lessonId, aSubmissionRecord().title)
+
     private fun artifacts() = FileDerivedArtifacts(root, JsonlRecordStore.under(root))
 
     private companion object {

@@ -37,7 +37,22 @@ class ProblemReadme(private val layout: RecordLayout) {
     }
 
     private fun render(records: List<SubmissionRecord>): String =
-        frontmatter(records) + heading(records) + history(records)
+        frontmatter(records) + heading(records) + statement(records) + history(records)
+
+    /**
+     * An embed, not a copy (#275). `statement.md` is written once and this file is rewritten on
+     * every grading, so pasting the statement in here would mean re-fetching it every time to
+     * keep it. Obsidian expands the embed inline, so the reader still sees one page.
+     *
+     * Absent when there is no statement file — a page that carried none, or a record captured
+     * before this existed. The link is not written speculatively: a wikilink to a missing note
+     * renders as a broken link and puts a phantom node on the graph.
+     */
+    private fun statement(records: List<SubmissionRecord>): String {
+        val file = layout.statementFile(records.first().lessonId, titleOf(records))
+        if (!Files.exists(file)) return ""
+        return "\n![[${RecordLayout.STATEMENT}]]\n"
+    }
 
     private fun frontmatter(records: List<SubmissionRecord>): String {
         val fields = identity(records) + catalog(records) + progress(records)

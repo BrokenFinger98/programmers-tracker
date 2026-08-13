@@ -11,6 +11,12 @@ coroutines = "1.11.0"
 serialization = "1.11.0"
 
 ktor = "3.5.2"
+# The problem statement is a nested HTML fragment. Regex reads one attribute off one tag
+# (SavedCodePage, ProblemIdentityPage) and has no business converting a document — see
+# decisions/2026-08-13-a-floor-per-package-and-a-reason-per-exception on matching nested
+# markup by hand. jsoup also never throws on malformed input, which is the posture
+# development-rules §2 asks of everything that reads Programmers.
+jsoup = "1.21.2"
 kotest = "6.2.3"
 mockk = "1.14.11"
 
@@ -21,6 +27,7 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlin" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 
 # Coroutine-native WebSocket client, confined to the protocol package
 # (ADR 2026-08-04-ktor-websocket-client).

@@ -24,6 +24,15 @@ class RecordLayout(private val root: Path) {
         return existingDirectoryOf(problems, lessonId) ?: problems.resolve(nameOf(lessonId, title))
     }
 
+    /**
+     * The problem statement, beside the history of attempts against it (#275).
+     *
+     * A file of its own rather than a section of the README, because the README is regenerated
+     * on every grading and this is written once. Same split as `notes.md`, from the other side:
+     * one file the reader owns, one the server rewrites, and one it writes once and leaves.
+     */
+    fun statementFile(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve("$STATEMENT.md")
+
     /** The code of one attempt — `attempts/NNN.<ext>`, the extension following its language. */
     fun attemptFile(lessonId: Long, title: String?, attempt: Int, language: String?): Path =
         attemptsOf(lessonId, title, attempt).resolve("${numberOf(attempt)}.${extensionOf(language)}")
@@ -93,6 +102,7 @@ class RecordLayout(private val root: Path) {
 
         /** The page [ProblemReadme] writes, named here because links point at it. */
         private const val PROBLEM_PAGE = "README"
+        const val STATEMENT = "statement"
         private const val ATTEMPTS = "attempts"
         private const val SUBMISSION_LOG = "log/submissions.jsonl"
         private const val FALLBACK_EXTENSION = "txt"

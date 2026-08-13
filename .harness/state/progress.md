@@ -4595,3 +4595,38 @@ honestly.
 package renamed produced *"a rule that matches nothing rules nothing and hides that it does."*
 Both reverted. That is the check the old gate would have failed.
 
+## [2026-08-13] #275 — the records knew how you failed and not what was asked ⏳
+
+Six MCP tools returned metadata and gradings and **none could say what the problem asked.** The
+vault had the same hole: a problem note was a history of attempts against a question the note did
+not contain.
+
+The owner raised it with BaekjoonHub, which has copied statements into users' repositories for
+years. **My first objection was wrong and I withdrew it**: I argued Baekjoon's statements have
+mixed provenance while Programmers' are Grepp's own, so the precedent would not transfer — and the
+owner produced a Programmers example (lesson 276036, full statement, **public** repository). Same
+rights holder, same practice, public where ours is private. What survives is narrower: no
+complaint is evidence about risk, not about rights.
+
+**It rides on a fetch we already make.** `CodeAttachment` downloads the problem page for the saved
+code; the statement is on that same page, so `CodeFetch.Fetched` carries both and Programmers sees
+no extra request.
+
+**A file of its own, written once.** `README.md` is regenerated on every grading, so a statement
+inside it would need re-fetching every time to survive — the same trap that blocked §6.9's
+retrospectives, one file over. `statement.md` is write-if-absent and the README embeds it with
+`![[statement]]`, so the regeneration boundary stays clean and the reader still sees one page.
+
+**Parsed with jsoup, not regex.** The two parsers beside it read one attribute off one tag, which
+regex does honestly; a nested document is not that, and #272's ADR was written the same day about
+matching nested markup by hand. Programmers renders the author's Markdown into HTML and leaves
+`class="markdown"` saying so, which is what makes converting it back well-defined rather than a
+guess. Measured across lessons 120802, 12916, 151136, 17676 and 42894: twenty tags, **no nested
+`<div>`**, which is what makes the region's boundary unambiguous.
+
+**Verified against the five real captures, not only the fixture** — tables, headings, lists and
+inline code all land correctly, and one defect showed up only there: lesson 17676 wraps every
+worked example in `<p>` inside `<li>`, which the keep-what-you-do-not-know fallback printed as raw
+HTML. Fixed and pinned. The fixture in this repository is structurally verbatim with **every word
+invented** — #275 forbids a real statement here outright.
+
