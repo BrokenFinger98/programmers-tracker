@@ -156,15 +156,19 @@ val verifyBranchCoverage =
                     "Renamed or deleted? A rule that matches nothing rules nothing and hides that it does."
             }
 
-            val failures = measured.filterKeys { it !in coverageExempt }.toSortedMap().mapNotNull { (pkg, tally) ->
-                val floor = coverageFloors[pkg] ?: packageFloor
+            // Every package is reported; only the ones with a floor are enforced. An exemption
+            // that also hid its number would be the one package nobody could check on, which is
+            // how a stated "raising it is tracked separately" quietly becomes permanent (#282).
+            val failures = measured.toSortedMap().mapNotNull { (pkg, tally) ->
                 val (covered, total) = tally
                 val percent = if (total == 0) 100 else covered * 100 / total
+                val floor = coverageFloors[pkg] ?: packageFloor
+                val note = if (pkg in coverageExempt) "  — exempt" else "  (floor $floor%)"
                 logger.lifecycle(
-                    "  %-42s %3d%%  (%d/%d branches)"
-                        .format(pkg.removePrefix(packageRoot), percent, covered, total),
+                    "  %-40s %3d%%  (%d/%d branches)%s"
+                        .format(pkg.removePrefix(packageRoot), percent, covered, total, note),
                 )
-                if (percent >= floor) return@mapNotNull null
+                if (pkg in coverageExempt || percent >= floor) return@mapNotNull null
                 "$pkg is $percent% (${total - covered} of $total uncovered), below $floor%"
             }
             check(failures.isEmpty()) {

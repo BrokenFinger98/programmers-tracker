@@ -4676,3 +4676,31 @@ Placed after `attachPending` and **before** `refreshVault()`, because the vault 
 puts `![[statement]]` on the problem page — a README regenerated first would link nothing until
 the next boot.
 
+## [2026-08-14] #282 — an exemption that also hid its number ⏳
+
+`verifyBranchCoverage`, written hours earlier in #276, filtered exempt packages out **before** it
+logged. So `domain/calc/runner` — the one package with an exemption, and the one whose exemption
+promised that "raising it is tracked separately" — was the one package whose number never
+appeared. A guard that hides what it declined to enforce is
+[[decisions/2026-08-10-guards-must-prove-they-ran]] again, in a guard written the same day.
+
+It mattered immediately. **The 66% quoted in #272 was measured locally**, and locally
+`CsharpRunnerExecutionTest` skips all 8 of its tests: this machine's dotnet is an x86_64 install
+on arm64 and cannot start, which the probe correctly reports as absent (not a defect — the
+comment beside it already names that case). `CsharpRunner` holds 51 missed branches, the most of
+any class in the package. On `ubuntu-latest`, where the gate runs, those tests execute — so the
+real number was higher than the one in the ADR and nobody could see it.
+
+Every package is reported now; only the ones with a floor are enforced, and an exempt row says so:
+
+```
+  domain/calc/runner        66%  (575/862 branches)  — exempt
+```
+
+**Also a correction to what I recommended earlier today.** I proposed "the runner execution proof"
+as the next piece of work on the premise that the runners had no execution tests. They have had
+them all along — seven `*RunnerExecutionTest` classes, compiling and running generated code for
+real, with exactly the `assumeTrue` posture I was about to suggest inventing (#84, #86). 49 tests,
+8 skipped locally for the broken dotnet and none anywhere else. The premise was wrong and the
+recommendation with it.
+
