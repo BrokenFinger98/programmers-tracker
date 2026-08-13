@@ -13,7 +13,7 @@
 ## The endpoint
 
 ```
-POST http://127.0.0.1:8080/mcp
+POST http://127.0.0.1:1619/mcp
 X-Tracker-Token: <your token>
 ```
 
@@ -44,7 +44,7 @@ Most clients take a URL and a headers map. The shape is:
 {
   "mcpServers": {
     "programmers-tracker": {
-      "url": "http://127.0.0.1:8080/mcp",
+      "url": "http://127.0.0.1:1619/mcp",
       "headers": { "X-Tracker-Token": "<paste from .ps/watch-token>" }
     }
   }

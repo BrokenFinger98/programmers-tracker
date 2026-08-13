@@ -1225,7 +1225,7 @@ code nor results, and knows nothing about GitHub.
 const el = document.querySelector("[data-challengeable-id]");
 const input = document.querySelector("input[data-type=code]");
 
-const notify = () => fetch("http://localhost:8080/watch", {
+const notify = () => fetch("http://localhost:1619/watch", {
   method: "POST",
   headers: {"Content-Type": "application/json"},
   body: JSON.stringify({

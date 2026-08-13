@@ -5,7 +5,7 @@
 
 "use strict";
 
-const DEFAULTS = { port: 8080, token: "" };
+const DEFAULTS = { port: 1619, token: "" };
 
 async function settings() {
   return { ...DEFAULTS, ...(await chrome.storage.local.get(Object.keys(DEFAULTS))) };

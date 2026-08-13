@@ -357,7 +357,7 @@ keep working.**
 ```yaml
 tracker:
   record-repo: ${TRACKER_RECORD_REPO:~/ps-records}
-  port: ${TRACKER_PORT:8080}
+  port: ${TRACKER_PORT:1619}
   language: ${TRACKER_LANGUAGE:java}
   browser: ${TRACKER_BROWSER:chrome}
 ```

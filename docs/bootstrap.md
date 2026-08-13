@@ -195,11 +195,11 @@ export TRACKER_RECORD_REPO=~/ps-records
 
 ### About the port, and one thing worth understanding
 
-The server listens on **port 8080 of your machine's loopback interface only**. Nothing on
+The server listens on **port 1619 of your machine's loopback interface only**. Nothing on
 your network can reach it. This matters more than it usually would: the process holds your
 live session cookie in memory and can push to your GitHub.
 
-Change the port with `TRACKER_PORT` if 8080 is taken — in `.env` for Docker, or as an
+Change the port with `TRACKER_PORT` if 1619 is taken — in `.env` for Docker, or as an
 environment variable for a native run.
 
 > **A bind address inside a container namespace is not the same control as a bind address
@@ -207,8 +207,8 @@ environment variable for a native run.
 > container's ethernet address, never to its loopback — so a server bound to `127.0.0.1`
 > inside a container is unreachable from your browser, not merely protected. `compose.yaml`
 > therefore binds `0.0.0.0` *inside* the container and publishes the port as
-> `127.0.0.1:8080:8080`, and it is that **publish** address that keeps `/watch` off your
-> LAN. If you ever shorten it to `8080:8080`, you have exposed the whole thing.
+> `127.0.0.1:1619:1619`, and it is that **publish** address that keeps `/watch` off your
+> LAN. If you ever shorten it to `1619:1619`, you have exposed the whole thing.
 >
 > Residual, stated plainly: any other container sharing this one's Docker network can reach
 > it whatever the publish address says. The service runs on its own network and nothing
@@ -267,7 +267,7 @@ number, which is the last part of the URL, and the language tab you have open. I
 rest off the problem page.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/watch \
+curl -X POST http://127.0.0.1:1619/watch \
   -H "X-Tracker-Token: $(cat .ps/watch-token)" \
   -H 'Content-Type: application/json' \
   -d '{"lessonId":120803,"language":"java"}'
@@ -296,7 +296,7 @@ yet](#what-you-cannot-do-yet).
 **On start**, the log ends with these, in this order:
 
 ```
-Tomcat started on port 8080 (http) with context path '/'
+Tomcat started on port 1619 (http) with context path '/'
 Started TrackerApplicationKt in 1.046 seconds
 Startup reconciliation: ReconcileReport(recorded=0, duplicates=0, failed=0, skippedLines=0)
 ```
