@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [orchestration, workflow, testing, debugging-pattern]
 created: 2026-08-05
-updated: 2026-08-05
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md]
+updated: 2026-08-13
+sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md]
 ---
 
 # Building This Project With Supervised Workers
@@ -28,6 +28,20 @@ worker-start → wait ~20 s → read the terminal → if no activity marker, sen
 ```
 
 First seen 2026-08-04 ([[sources/2026-08-04-oss-workflow]]), and in every dispatch since.
+
+**The harder variant (2026-08-12): a multi-line prompt is split by the composer.** Each newline
+submits a fragment, the remainder sits unsent, and a bare Enter now submits *garbage* rather than
+the task. The dispatch layer reported `ready` for fifteen minutes throughout — **state is what
+the dispatch layer believes; the terminal is what is true**, and only reading the terminal said
+the agent had never received a task. Rule: task specs are one line, or a path to a file the
+worker reads (raw/sessions/2026-08-12-two-workers-that-never-started.md).
+
+**And the stopping rule, from the same evening.** The clean one-line re-dispatch was delivered
+intact and still never answered — no error, no heartbeat, cause never established and
+deliberately not guessed. After one diagnosed failure and one undiagnosable one, the third
+attempt is direct execution, not a third dispatch. The owner called it first ("그냥 너가 직접
+해라"), and the twenty-eight minutes bought exactly three reusable facts: the composer
+constraint, state-vs-terminal, and this rule.
 
 ## 2. Disjoint files still share a build
 
