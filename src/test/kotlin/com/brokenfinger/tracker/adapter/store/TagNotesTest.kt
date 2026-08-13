@@ -32,6 +32,26 @@ class TagNotesTest {
     }
 
     /**
+     * The word the graph colours on. An Obsidian colour group takes a search query rather than an
+     * expression, so `["status":"attempted"]` is the difference between a setting the owner can
+     * type and the two-clause negation "tried and not passed" needed without it (#250).
+     */
+    @Test
+    fun `the note says where you stand, so a colour group can be one exact match`() {
+        notes().write(
+            listOf(
+                TagCount("passed", 10, 1, 1),
+                TagCount("tried", 10, 1, 0),
+                TagCount("never", 10, 0, 0),
+            ),
+        )
+
+        Files.readString(root.resolve("tags/passed.md")) shouldContain "status: passed"
+        Files.readString(root.resolve("tags/tried.md")) shouldContain "status: attempted"
+        Files.readString(root.resolve("tags/never.md")) shouldContain "status: untouched"
+    }
+
+    /**
      * The untouched tag is the point of the map: its note exists so the graph has a node to
      * leave isolated. A view built from records alone could not produce this file.
      */

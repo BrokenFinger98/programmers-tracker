@@ -53,11 +53,14 @@ that as noise, colour it — in the graph view's settings (⚙), under **Groups*
 
 | query | what it marks |
 |---|---|
-| `["solved":0]` | every type you have not passed once |
+| `["status":"attempted"]` | **tried and not passed yet** — red is the obvious choice |
+| `["status":"untouched"]` | never met |
+| `["status":"passed"]` | cleared at least once |
 | `path:problems` | the problems themselves, so your own work stands out |
 
-Both read the frontmatter this repository already writes. No plugin, and nothing here decides
-which of those grey dots matters.
+Each tag note carries `status:` for exactly this — it is `attempted` and `solved` in one word, so
+a colour group is one exact match instead of an expression. All of it reads frontmatter this
+repository already writes: no plugin, and **nothing here decides which of those colours matters.**
 
 **Times are in whatever clock the server runs on.** That is `TZ` in the tracker's `.env`, and
 unset it is UTC — so a history whose rows are all several hours off is a setting, not a capture
