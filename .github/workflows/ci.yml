@@ -119,7 +119,10 @@ jobs:
           for attempt in 1 2 3; do
             echo "::group::attempt $attempt"
             start=$(date +%s)
-            ./gradlew test verifyEveryTestClassRan --no-daemon --no-build-cache --rerun-tasks
+            # `--rerun`, not `--rerun-tasks`: this job wants the *test task* to run three times,
+            # not three identical Kotlin compilations. Both guarantees the comment above asks for
+            # survive — the task really executes, and no build cache is consulted (#245).
+            ./gradlew test verifyEveryTestClassRan --no-daemon --no-build-cache --rerun
             echo "attempt $attempt took $(( $(date +%s) - start ))s"
             echo "::endgroup::"
           done

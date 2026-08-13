@@ -4145,6 +4145,59 @@ under the clock CI actually runs on. Also spot-checked `America/New_York`.
 Worth keeping: local runs are Asia/Seoul and CI runners are UTC, so between them a test that
 depends on *either* zone gets caught. That only holds while both keep running.
 
+## [2026-08-13] #245 — CI ran the suite on one fork, and recompiled it three times ✅
+
+Wall clock is the slowest job, and that is `repeatability (no cache)` at **5m52s** — the suite
+three times, 115s + 99s + 99s.
+
+**The Gradle cache was not the gap.** `setup-gradle@v5` is on every JVM job and the logs show
+`Cache hit` for dependencies, transforms, wrapper zips, instrumented jars and the Kotlin DSL.
+`--no-build-cache` disables the build cache only, which is the point of that job.
+
+Two things were actually costing time:
+
+| | measured on a 14-core laptop |
+|---|---|
+| `maxParallelForks` unset → 1 | 30.8s |
+| 2 | 19.9s (−35%) |
+| 4 | 17.1s (−44%) |
+| `--rerun-tasks` → `--rerun` | −10%, and the compile share is bigger on a 2-core runner |
+
+`availableProcessors() / 2` rather than a literal: runners have four cores against this laptop's
+fourteen, so the honest expectation is nearer the two-fork number.
+
+**The parallel-safety note I first wrote was wrong, and grep said so.** I claimed every
+file-touching test uses a `@TempDir`. Three counterexamples: `StateLocationTest` sets the
+JVM-global `user.home`, `McpControllerTest` writes a fixed `build/tmp/` path, and an analyzer test
+names `/tmp/ps-records` (only in a message — harmless). None of them break under
+`maxParallelForks`, because a fork is a separate JVM running its classes one at a time — but all
+of them would break under JUnit's `parallel` execution mode. The comment now says that, so the
+next person to reach for more parallelism knows what they are stepping on.
+
+Verified: three repeats under `TZ=UTC` with forks on, all green, plus the four gates. Local
+`scripts/test.sh` went 30s → 17s.
+
+**The runner numbers, which were the point** (#246 against #244, same workflow):
+
+| job | before | after | |
+|---|---|---|---|
+| gates (macos) | 4m15s | **1m37s** | −62% |
+| gates (ubuntu) | 4m14s | **2m55s** | −31% |
+| coverage report | 1m59s | 1m33s | −22% |
+| **repeatability** | **6m2s** | **5m8s** | **−15%** ← the wall |
+| gates (windows) | 4m30s | 3m53s | −14% |
+
+Wall clock **6m2s → 5m8s**. `--rerun` landed exactly where predicted: attempt 1 went 115s → 136s
+because it now carries the compile the others used to repeat, and attempts 2 and 3 went 99s → 76s
+and 75s.
+
+**What would move the wall further, and was not done:** the three attempts as a matrix of three
+jobs rather than a loop in one, which would make that job cost one attempt (~1m45s) and take the
+run to about 4m, bounded by Windows instead. Three fresh runners are arguably stronger evidence of
+non-determinism — but they are not the *same* evidence, since the current shape also runs against
+a workspace the previous attempt dirtied. Changing the shape of the check that catches flakes is
+its own issue, not a footnote in a speed PR.
+
 ## [2026-08-13] #234 — the vault is not only records ✅
 
 `reconcile()` is `git add --all`, and once the vault was worth opening, Obsidian's own state
