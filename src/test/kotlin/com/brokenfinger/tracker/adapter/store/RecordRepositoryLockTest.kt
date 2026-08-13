@@ -178,8 +178,13 @@ class RecordRepositoryLockTest {
      * if the removal above never runs. Asserted here so the two can never drift apart.
      */
     @Test
-    fun `the template record repository ignores the root lock name`() {
-        Files.readString(Path.of("template/ps-records/.gitignore")) shouldContain RecordRepositoryLock.LOCK_FILE
+    fun `the ignore rules the server writes cover the lock file`(@TempDir base: Path) {
+        // The rule moved from the template into RecordRepositoryIgnores when the template
+        // retired (#258); what matters is unchanged — a lock created before `git init` must
+        // not be committed by the repo-wide reconcile.
+        RecordRepositoryIgnores(base).ensure()
+
+        Files.readString(base.resolve(".gitignore")) shouldContain RecordRepositoryLock.LOCK_FILE
     }
 
     @Test

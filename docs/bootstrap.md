@@ -62,33 +62,38 @@ cd programmers-tracker
 
 ---
 
-## 2. Create the record repository
+## 2. The record repository — the server creates it
 
 This is your data. It is deliberately **not** inside this repository — solving records
 never enter the tool's own repository, and keeping them separate is what lets you make
 yours private while the tool stays public.
 
-```bash
-# anywhere you like; ~/ps-records is only a suggestion
-cp -R template/ps-records ~/ps-records
-cd ~/ps-records
-git init
-git add .
-git commit -m "chore: initial record repository"
-```
+**There is nothing to run.** On first start the server creates the directory
+(`~/ps-records` unless `TRACKER_RECORD_REPO` in `.env` says otherwise), runs `git init`,
+and seeds a README, an Obsidian dashboard and the ignore rules. The startup log says
+`Records live at <path>` so the location is never silent.
 
-Give it a remote if you want your records backed up to GitHub. **Create the repository as
-private** — it will contain your code and your failures.
+For an off-machine backup, put a GitHub token in `.env`:
 
 ```bash
-git remote add origin git@github.com:<you>/ps-records.git
-git push -u origin main
+# .env
+GITHUB_TOKEN=github_pat_…
 ```
 
-You can skip the remote. Records are still written and still committed locally; only the
-push is lost, and it is retried rather than dropped.
+On the next start the server asks GitHub who the token belongs to, creates a **private**
+repository named after the record directory (private is hardcoded and verified from the
+response — if GitHub ever answers with a public repository, nothing is wired), sets it as
+`origin`, stores the credential owner-only inside the records' gitignored `.ps/`, and
+pushes. You may delete the `.env` line after that first boot; the stored credential
+carries pushes from then on. Revoking the token stops pushes until you provide a new one.
 
-Come back to the tool's directory afterwards: `cd -`.
+An existing repository — initialised by hand, or wired to any remote including SSH — is
+never touched: the server adds what is missing and changes nothing that exists. To use a
+non-GitHub remote, skip the token and `git remote add origin <url>` yourself; the SSH
+mount alternative is documented in `compose.yaml`.
+
+You can also skip remotes entirely. Records are still written and committed locally; only
+the push is lost, and it is retried rather than dropped.
 
 ---
 

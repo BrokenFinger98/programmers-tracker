@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@948170fb78bd3a7408bec59609d1dd0bdb3608ee -->
+<!-- translated-from: bootstrap.md@5e6c47ec5942c2ebee1cafc93c844ea4edde6f5e -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -62,34 +62,38 @@ cd programmers-tracker
 
 ---
 
-## 2. 기록 저장소 만들기
+## 2. 기록 저장소 — 서버가 만듭니다
 
-이것은 내 데이터입니다. 일부러 이 저장소 **안에 두지 않습니다** — 풀이 기록은 도구 자신의 저장소에
-들어가지 않으며, 분리해 두어야 도구는 공개로 남고 내 기록은 비공개로 둘 수 있습니다.
+이건 여러분의 데이터입니다. 일부러 이 저장소 **안에 있지 않습니다** — 풀이 기록은 도구의
+저장소에 절대 들어가지 않고, 분리되어 있어야 도구는 공개로 두고 기록은 비공개로 만들 수
+있습니다.
 
-```bash
-# 어디든 좋습니다. ~/ps-records 는 제안일 뿐입니다
-cp -R template/ps-records ~/ps-records
-cd ~/ps-records
-git init
-git add .
-git commit -m "chore: initial record repository"
-```
+**실행할 게 없습니다.** 첫 시작 때 서버가 디렉토리를 만들고(`.env` 의 `TRACKER_RECORD_REPO`
+가 없으면 `~/ps-records`), `git init` 을 하고, README와 Obsidian 대시보드와 ignore 규칙을
+심습니다. 시작 로그에 `Records live at <경로>` 가 찍혀서 위치가 조용히 정해지는 일은
+없습니다.
 
-GitHub에 백업하고 싶다면 리모트를 붙이십시오. **저장소는 반드시 private으로 만드십시오** — 내
-코드와 내 실패가 들어갑니다.
+기계 밖 백업을 원하면 `.env` 에 GitHub 토큰을 넣으세요:
 
 ```bash
-git remote add origin git@github.com:<you>/ps-records.git
-git push -u origin main
+# .env
+GITHUB_TOKEN=github_pat_…
 ```
 
-리모트는 건너뛰어도 됩니다. 기록은 그대로 쓰이고 로컬 커밋도 그대로 됩니다. 푸시만 빠지고, 그것도
-버려지는 게 아니라 재시도됩니다.
+다음 시작 때 서버가 GitHub에 토큰의 주인이 누군지 묻고, 기록 디렉토리 이름의 **비공개**
+저장소를 만들고(비공개는 하드코딩이며 응답에서 재검증합니다 — GitHub이 공개 저장소로
+답하면 아무것도 연결하지 않습니다), `origin` 으로 등록하고, 자격증명을 기록 저장소의
+gitignore된 `.ps/` 안에 소유자 전용으로 저장한 뒤 푸시합니다. 그 첫 부팅 후에는 `.env` 의
+줄을 지워도 됩니다 — 저장된 자격증명이 이후 푸시를 담당합니다. 토큰을 revoke하면 새로 넣기
+전까지 푸시가 멈춥니다.
 
-끝나면 도구 디렉터리로 돌아옵니다: `cd -`.
+이미 있는 저장소는 — 직접 init했든, SSH를 포함해 어떤 remote가 걸려 있든 — 절대 건드리지
+않습니다: 서버는 없는 것만 추가하고 있는 것은 바꾸지 않습니다. GitHub이 아닌 remote를 쓰려면
+토큰 없이 직접 `git remote add origin <url>` 하세요. SSH 마운트 대안은 `compose.yaml` 에
+문서화되어 있습니다.
 
----
+remote를 아예 안 써도 됩니다. 기록은 여전히 쓰이고 로컬에 커밋됩니다. 잃는 건 푸시뿐이고,
+그마저 버려지지 않고 재시도됩니다.
 
 ## 3. 세션 쿠키 얻기
 

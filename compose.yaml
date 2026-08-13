@@ -53,6 +53,12 @@ services:
       # instants, wrong wall clock (#243). The server says which zone it is using at startup.
       TZ: ${TZ:-UTC}
 
+      # A GitHub token makes the first boot create a PRIVATE repository named after the record
+      # directory, wire it as origin, store the credential owner-only inside the records'
+      # gitignored .ps/, and push. Blank does nothing; an existing origin is never touched.
+      # You may delete this line after the first boot — the credential store carries pushes.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
       # Optional. Defaults live in application.yml; override only if you mean to.
       # TRACKER_BACKUP_ZONE is deliberately unset: the backup keeps TZ unless you say otherwise,
       # so the hour a record is stamped with and the hour it is pushed cannot disagree.
@@ -62,7 +68,9 @@ services:
     volumes:
       # Your records. Read-write and never a named volume: a named volume would put your
       # solving history inside Docker's storage, where `docker compose down -v` deletes it.
-      - ${TRACKER_RECORD_REPO:?set TRACKER_RECORD_REPO in .env to the absolute path of your record repository}:/records
+      # Defaults to ~/ps-records, matching application.yml — the server creates and
+      # initialises it on first start and says the path in its log. Set it to move.
+      - ${TRACKER_RECORD_REPO:-${HOME}/ps-records}:/records
 
       # The generated /watch token, and nothing else. Raw frames, timers and the backup
       # marker used to live here too; they are in `<records>/.ps/` now, beside the records
@@ -74,7 +82,9 @@ services:
       # the extension's 30-second heartbeats until the user pasted the new value.
       - ${TRACKER_STATE_DIR:-./.ps}:/app/.ps
 
-      # PUSHING NEEDS CREDENTIALS, AND THERE IS NO DEFAULT WORTH INVENTING. Nothing below
+      # PUSHING NEEDS CREDENTIALS. The primary path is GITHUB_TOKEN above — one .env line,
+      # nothing mounted. Everything below is the SSH alternative, for a non-GitHub remote or
+      # a user who prefers a deploy key. Nothing below
       # is enabled: without it the tool still captures and still commits locally, and the
       # push fails, is logged, and leaves the day owed so the next backup retries it.
       # To push over SSH, uncomment the line below and make sure the record repository's

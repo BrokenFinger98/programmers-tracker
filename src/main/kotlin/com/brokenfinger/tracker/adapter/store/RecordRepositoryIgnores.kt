@@ -89,6 +89,15 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
                     "# committing them would bury your solving history in its own scratch work.\n",
             ),
             IgnoreRule(
+                rule = ".programmers-tracker.lock",
+                because = "# The tracker's exclusive lock. It normally lives inside .git/, where git cannot\n" +
+                    "# see it; this covers the one case where it cannot — a run from before `git init`.\n",
+            ),
+            IgnoreRule(
+                rule = ".DS_Store",
+                because = "# Finder noise, which `git add --all` would otherwise commit as if it were records.\n",
+            ),
+            IgnoreRule(
                 rule = ".obsidian/",
                 because = "# Obsidian's own state, added by the server because it is the thing doing the\n" +
                     "# committing. Which panes you had open and how the graph is zoomed are not records, and\n" +

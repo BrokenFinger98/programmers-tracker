@@ -1,6 +1,9 @@
 package com.brokenfinger.tracker.adapter.config
 
 import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
+import com.brokenfinger.tracker.adapter.git.GithubRemote
+import com.brokenfinger.tracker.adapter.git.GithubToken
+import com.brokenfinger.tracker.adapter.git.RecordRepositoryInit
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
 import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
 import com.brokenfinger.tracker.adapter.store.VaultDashboard
@@ -33,8 +36,30 @@ import java.time.ZoneId
 @Configuration
 @EnableScheduling
 class GitConfiguration {
+    /**
+     * Constructed first and depended on by [gitSync], so the repository exists before the lazy
+     * is-a-repository answer is ever computed (#258). The three commands bootstrap.md §2 used to
+     * ask of the user happen here, or not at all — an existing repository is untouched.
+     */
     @Bean
-    fun gitSync(@Value("\${tracker.record-repo}") recordRepo: String): GitSync =
+    fun recordRepositoryInit(@Value("\${tracker.record-repo}") recordRepo: String): RecordRepositoryInit =
+        RecordRepositoryInit(recordRoot(recordRepo)).also { it.ensure() }
+
+    /**
+     * After [recordRepositoryInit] (it needs a repository to wire) and before any runner (the
+     * startup backup is what carries the first push). A blank token is the common case and a
+     * complete no-op; an existing origin of any kind is never touched (#258).
+     */
+    @Bean
+    fun githubRemote(
+        init: RecordRepositoryInit,
+        @Value("\${tracker.record-repo}") recordRepo: String,
+        @Value("\${tracker.github.token:}") token: String,
+    ): GithubRemote =
+        GithubRemote(recordRoot(recordRepo), token.trim().ifEmpty { null }?.let(::GithubToken)).also { it.ensure() }
+
+    @Bean
+    fun gitSync(init: RecordRepositoryInit, @Value("\${tracker.record-repo}") recordRepo: String): GitSync =
         CommandLineGitSync(recordRoot(recordRepo))
 
     /** Beside the repository whose last successful push it records (design §5.1). */
