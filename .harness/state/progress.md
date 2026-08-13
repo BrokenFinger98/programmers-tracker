@@ -4179,3 +4179,30 @@ Verified: three repeats under `TZ=UTC` with forks on, all green, plus the four g
 
 **Not done yet: the runner numbers.** A laptop with fourteen cores is not evidence about a runner
 with four. If CI does not show the saving, this comes back out.
+
+## [2026-08-13] #248 — a page said it was solved in a language it was never submitted in ✅
+
+Found by reading a problem page end to end rather than the code that writes it.
+
+```yaml
+language: "python3"     # ← from a run that produced no verdict
+verdict: PASS           # ← from the only submit, which was java
+attempts: 1
+```
+
+Lesson 120802: run java, **submit java PASS**, run java, run python3. The page took its language
+from the newest record of any kind and its verdict from the newest submit — two fields one line
+apart answering about two different gradings.
+
+`attempts`, `lastSubmit` and the whole attempt table were already submit-only. `language` was the
+single field on the page that counted runs, and the one a reader pairs with the outcome. Now the
+newest submit's, and absent when nothing has been submitted — borrowing a run's language would
+name a language nothing was ever judged in.
+
+**Fourth place today with the same root** (#235 `stats`, #237 `get_problem`, #241 the tag map's
+node size, now this). *A run is not an attempt* is design §5.1, and every one of these had to be
+told separately. `SubmissionRecord.isSubmission()` from #237 is the one place that now says it;
+this page reaches it through `submits()`, which predates it.
+
+Catalog metadata — title, level, part, acceptanceRate, tags — still reads every record. Those are
+identical whichever grading carried them.
