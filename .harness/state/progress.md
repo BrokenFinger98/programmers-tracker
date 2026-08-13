@@ -4355,3 +4355,20 @@ Measured first, and the measurement mattered twice:
 Null on records from before the field, like every schema addition — a defaulted kind would name a
 channel we never subscribed to. MCP emits it for free (the projection is derived from the stored
 record), and the dashboard gains **By kind**, the axis the owner actually asked about.
+
+## [2026-08-13] #256 merged and deployed; the seeded-file tension showed itself immediately
+
+`a21775d`. Rebuilt, restarted, `Records are stamped in Asia/Seoul` on boot.
+
+**The vault's dashboard did not gain the By kind view, and that is the design working**: the file
+existed, so the server refused to touch it. For this vault the file was an unedited copy of v1
+(checked against git before acting), so it was replaced by hand with the new shipped version.
+
+Recorded because it is #258's problem statement in miniature: **write-if-absent protects edits at
+the price of never delivering improvements.** A vault that has customised the file keeps its
+customisation and misses By kind; the README has the same shape. Whatever #258 decides for the
+README should say whether "seeded" means v1-forever-unless-deleted, and the template README now
+says exactly that in its own words ("written once… the server will not touch it again").
+
+`kind` lands in records from the next grading; the four existing records stay kind-less by
+design. Live verification of `"kind":"database"` needs one SQL run, which is the owner's browser.
