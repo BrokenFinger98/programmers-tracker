@@ -80,6 +80,12 @@ For an off-machine backup, put a GitHub token in `.env`:
 GITHUB_TOKEN=github_pat_…
 ```
 
+**Permissions**: a classic token needs the single `repo` scope. A fine-grained token needs
+access to *All repositories* with *Administration: read and write* (creation) and *Contents:
+read and write* (pushes) — and if GitHub refuses the creation anyway, the log says so; use
+classic. To tighten later, swap in a Contents-only token scoped to just this repository and
+restart: the stored credential refreshes on every boot that has one.
+
 On the next start the server asks GitHub who the token belongs to, creates a **private**
 repository named after the record directory (private is hardcoded and verified from the
 response — if GitHub ever answers with a public repository, nothing is wired), sets it as

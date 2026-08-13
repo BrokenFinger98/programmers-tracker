@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@4e13fc41a1ec845c56f90ec703cde242d0cf900e -->
+<!-- translated-from: bootstrap.md@73337a95efe8864acb2a70edd33bda51a9263567 -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -79,6 +79,12 @@ cd programmers-tracker
 # .env
 GITHUB_TOKEN=github_pat_…
 ```
+
+**권한**: classic 토큰은 `repo` 스코프 하나면 됩니다. fine-grained 토큰은 *All repositories*
+접근에 *Administration: read and write*(생성)와 *Contents: read and write*(푸시)가 필요하고 —
+그래도 GitHub이 생성을 거부하면 로그에 그렇다고 찍히니 classic을 쓰세요. 나중에 조이려면 이
+저장소 하나에만 스코프된 Contents 전용 토큰으로 갈아끼우고 재시작하면 됩니다 — 토큰이 있는
+부팅마다 저장된 자격증명이 갱신됩니다.
 
 다음 시작 때 서버가 GitHub에 토큰의 주인이 누군지 묻고, 기록 디렉토리 이름의 **비공개**
 저장소를 만들고(비공개는 하드코딩이며 응답에서 재검증합니다 — GitHub이 공개 저장소로
