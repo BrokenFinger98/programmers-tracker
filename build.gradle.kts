@@ -123,30 +123,52 @@ val verifyEveryTestClassRan =
         }
     }
 
-// The threshold deferred in `2026-08-05-ci-guard-scoping`, now that domain/calc exists.
-// Scoped to the pure calculators on purpose: they decide verdicts, they have no I/O to make
-// coverage hard, and an unexercised branch there is the silent-wrong-data failure the
-// constitution ranks worst. A global number would only invite tests that execute code
-// without asserting anything.
+// Branch coverage, floor per package, deferred in `2026-08-05-ci-guard-scoping` and widened
+// past the calculators in #272.
 //
-// Read from the XML report rather than a Kover rule because Kover's verification rules
-// cannot be narrowed to one package, and a project-wide number would measure the wrong thing.
-val verifyCalculatorCoverage =
-    tasks.register("verifyCalculatorCoverage") {
-        description = "Fails when branch coverage of domain/calc falls below the threshold."
+// **It reads every package the report contains rather than looking up names it remembers.**
+// The version before this asked for `domain/calc` by name and got exactly that: Kover emits
+// `domain/calc/runner` as a separate package, so the gate measured 132 branches and ignored the
+// 862 in the same directory — the largest uncovered pool in the repository, inside the one place
+// we told ourselves was held to 95%. Inverting the lookup makes that failure structural rather
+// than something a reader has to notice ([[decisions/2026-08-10-guards-must-prove-they-ran]]).
+//
+// Exemptions are named here with their reason, and an exemption that no longer matches a package
+// fails the build — otherwise a rename turns it into a silent free pass, which is the same defect
+// one level up.
+val verifyBranchCoverage =
+    tasks.register("verifyBranchCoverage") {
+        description = "Fails when any package's hand-written branch coverage falls below its floor."
         dependsOn(tasks.named("koverXmlReport"))
         val report = layout.buildDirectory.file("reports/kover/report.xml")
-        val minimum = 95
-        val watched = "com/brokenfinger/tracker/domain/calc"
         doLast {
             val xml = report.get().asFile
             check(xml.isFile) { "no Kover XML report at $xml" }
-            val percent = branchCoverageOf(xml.readText(), watched)
-                ?: error("Kover report has no package $watched — was it renamed, or did its tests stop running?")
-            check(percent >= minimum) {
-                "branch coverage of $watched is $percent%, below the $minimum% these calculators must hold"
+            val measured = handWrittenBranchesByPackage(xml)
+            // A parse that quietly returned nothing would pass every tree, which is the shape
+            // #194 was about. There is always at least one package.
+            check(measured.isNotEmpty()) { "read no packages from $xml — did the report format change?" }
+
+            val renamed = (coverageExempt.keys + coverageFloors.keys) - measured.keys
+            check(renamed.isEmpty()) {
+                "named in the coverage settings but absent from the report: ${renamed.joinToString()}. " +
+                    "Renamed or deleted? A rule that matches nothing rules nothing and hides that it does."
             }
-            logger.lifecycle("domain/calc branch coverage: $percent%")
+
+            val failures = measured.filterKeys { it !in coverageExempt }.toSortedMap().mapNotNull { (pkg, tally) ->
+                val floor = coverageFloors[pkg] ?: packageFloor
+                val (covered, total) = tally
+                val percent = if (total == 0) 100 else covered * 100 / total
+                logger.lifecycle(
+                    "  %-42s %3d%%  (%d/%d branches)"
+                        .format(pkg.removePrefix(packageRoot), percent, covered, total),
+                )
+                if (percent >= floor) return@mapNotNull null
+                "$pkg is $percent% (${total - covered} of $total uncovered), below $floor%"
+            }
+            check(failures.isEmpty()) {
+                "branch coverage below floor:\n  " + failures.joinToString("\n  ")
+            }
         }
     }
 
@@ -202,17 +224,87 @@ tasks.register<Test>("integrationTest") {
     shouldRunAfter(tasks.test)
 }
 
+val packageRoot = "com/brokenfinger/tracker/"
+
+/** What every package holds unless it says otherwise. Measured at 85% across the tree when set (#272). */
+val packageFloor = 80
+
 /**
- * Branch-covered percentage of one package in a Kover XML report, or null when the package
- * is absent. Reads the package's own counter rather than summing classes, so a class added
- * later is included without touching this.
+ * Floors that differ from [packageFloor], each with the reason it differs. A number without an
+ * argument is a number nobody can revisit, so both directions are stated here rather than being
+ * special cases in the task.
  */
-fun branchCoverageOf(xml: String, packagePath: String): Int? {
-    val packageBlock = Regex("""<package name="$packagePath">(.*?)</package>""", RegexOption.DOT_MATCHES_ALL)
-        .find(xml)?.groupValues?.get(1) ?: return null
-    val counter = Regex("""<counter type="BRANCH" missed="(\d+)" covered="(\d+)"/>""")
-        .findAll(packageBlock).lastOrNull() ?: return 100
-    val missed = counter.groupValues[1].toInt()
-    val covered = counter.groupValues[2].toInt()
-    return if (missed + covered == 0) 100 else covered * 100 / (missed + covered)
+val coverageFloors = mapOf(
+    // Higher: these decide verdicts, they have no I/O to make coverage hard, and an unexercised
+    // branch is the silent-wrong-data failure the constitution ranks worst.
+    "com/brokenfinger/tracker/domain/calc" to 95,
+    // Lower: the composition root. What is left below the general floor is bean factories'
+    // `?:` defaults and one private suspend helper — branches whose only honest test would
+    // assert Spring's wiring, which the context-load test and the running server already do.
+    // The classes in here that are *not* configuration (BackupSchedule, BuildIdentity) are held
+    // to nothing lower: they are unit-tested, and moving them out would let this rise.
+    "com/brokenfinger/tracker/adapter/config" to 65,
+)
+
+/**
+ * Packages held to no floor, each with the reason. Verified to exist on every run — an
+ * exemption naming a package that is gone excludes nothing while still reading as a decision.
+ */
+val coverageExempt = mapOf(
+    "com/brokenfinger/tracker/domain/calc/runner" to
+        "runner scaffolding for seven languages: it generates files and decides no verdict, so the " +
+        "argument that puts domain/calc at 95% does not transfer to it. Raising it is tracked separately.",
+)
+
+/**
+ * Branch counters that correspond to something a person wrote — not to what the Kotlin compiler
+ * emitted underneath.
+ *
+ * Default parameter values compile to one bitmask test per parameter (`if ((mask and n) != 0)
+ * param = default`), so a data class with 15 defaulted fields carries 15 forks that every call
+ * site only ever takes one way. `SubmissionRecord` alone contributed 69 such branches and made
+ * `domain` read 57% while its line coverage was 100%. Counting those measures how many optional
+ * fields our data classes have, and no test should ever be written to move the number.
+ */
+val generatedMembers = setOf("<init>", "equals", "hashCode", "copy", "copy\$default", "toString")
+
+/**
+ * Every package in a Kover XML report, mapped to its hand-written (covered, total) branches.
+ *
+ * Summed from method counters rather than read off the package counter, which is what excludes
+ * [generatedMembers]. Parsed with the JDK's own DOM rather than a regex: the previous regex
+ * silently matched one package and skipped its sub-package for weeks (#272), and nested XML is
+ * not something to match by hand twice.
+ */
+fun handWrittenBranchesByPackage(report: File): Map<String, Pair<Int, Int>> {
+    val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
+        // The report declares the JaCoCo DTD by relative path; resolving it would hit the disk
+        // or the network for a grammar this does not validate against.
+        setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+    }
+    val document = report.inputStream().use { factory.newDocumentBuilder().parse(it) }
+    val packages = document.getElementsByTagName("package")
+    return (0 until packages.length).associate { index ->
+        val pkg = packages.item(index) as org.w3c.dom.Element
+        pkg.getAttribute("name") to branchesIn(pkg)
+    }
+}
+
+private fun branchesIn(pkg: org.w3c.dom.Element): Pair<Int, Int> {
+    var covered = 0
+    var total = 0
+    val methods = pkg.getElementsByTagName("method")
+    for (index in 0 until methods.length) {
+        val method = methods.item(index) as org.w3c.dom.Element
+        if (method.getAttribute("name") in generatedMembers) continue
+        val counters = method.getElementsByTagName("counter")
+        for (position in 0 until counters.length) {
+            val counter = counters.item(position) as org.w3c.dom.Element
+            if (counter.getAttribute("type") != "BRANCH") continue
+            val hit = counter.getAttribute("covered").toInt()
+            covered += hit
+            total += hit + counter.getAttribute("missed").toInt()
+        }
+    }
+    return covered to total
 }

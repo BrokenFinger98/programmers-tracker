@@ -84,9 +84,9 @@ jobs:
       - name: build
         run: ./gradlew build -x test --no-daemon
 
-      - name: verdict-calculator coverage
+      - name: branch coverage floors
         if: matrix.os == 'ubuntu-latest'
-        run: ./gradlew verifyCalculatorCoverage --no-daemon
+        run: ./gradlew verifyBranchCoverage --no-daemon
 
       - name: Upload test results
         if: always()

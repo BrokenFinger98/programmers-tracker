@@ -34,6 +34,7 @@ class GithubRemoteTest {
     private val requests = mutableListOf<Pair<String, String>>()
     private var createStatus = 201
     private var repoPrivate = true
+    private var lookupStatus = 200
 
     @BeforeEach
     fun fakeGithub() {
@@ -59,7 +60,8 @@ class GithubRemoteTest {
             createStatus to
                 """{"private":$repoPrivate,"clone_url":"https://github.com/tester/${repo.root.fileName}.git"}"""
         path.startsWith("/repos/tester/") ->
-            200 to """{"private":$repoPrivate,"clone_url":"https://github.com/tester/${repo.root.fileName}.git",
+            lookupStatus to
+                """{"private":$repoPrivate,"clone_url":"https://github.com/tester/${repo.root.fileName}.git",
                        "permissions":{"push":true}}"""
         else -> 404 to "{}"
     }
@@ -111,6 +113,35 @@ class GithubRemoteTest {
 
         requests.map { it.first }.contains("GET /repos/tester/${repo.root.fileName}").shouldBeTrue()
         git("remote", "get-url", "origin").trim() shouldBe "https://github.com/tester/${repo.root.fileName}.git"
+    }
+
+    /**
+     * Any answer that is neither "created" nor "the name exists" — a revoked token, a scope the
+     * user did not grant, GitHub being down. Nothing is wired and the records stay local, which
+     * is the degraded mode the daily backup already reports (#272 covered this path).
+     */
+    @Test
+    fun `an answer that is neither created nor already-exists wires nothing`() {
+        createStatus = 500
+
+        remote().ensure()
+
+        git("remote").trim() shouldBe ""
+    }
+
+    /**
+     * The 422 convergence needs the lookup to succeed. When it does not — the name belongs to
+     * somebody else, or the token cannot read it — there is nothing to converge on, and guessing
+     * a URL would wire a push at a repository we never confirmed.
+     */
+    @Test
+    fun `a name that exists but cannot be read wires nothing`() {
+        createStatus = 422
+        lookupStatus = 404
+
+        remote().ensure()
+
+        git("remote").trim() shouldBe ""
     }
 
     /**
