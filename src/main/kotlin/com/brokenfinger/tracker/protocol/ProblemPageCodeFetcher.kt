@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.protocol
 
 import com.brokenfinger.tracker.application.CodeFetch
 import com.brokenfinger.tracker.application.CodeFetcher
+import com.brokenfinger.tracker.protocol.parse.ProblemStatementPage
 import com.brokenfinger.tracker.protocol.parse.SavedCodePage
 import org.slf4j.LoggerFactory
 
@@ -26,10 +27,13 @@ class ProblemPageCodeFetcher(private val pageBase: String = DEFAULT_BASE, privat
         return savedCode(response.body)
     }
 
+    // The statement rides along because it is already here: one page, both artifacts, and no
+    // second request against Programmers (#275). A page with code but no statement is still a
+    // successful fetch — the code is what this stage exists for.
     private fun savedCode(body: String): CodeFetch {
         val code = SavedCodePage.savedCodeOf(body)
             ?: return CodeFetch.Unavailable("page carried no data-type=\"code\" input")
-        return CodeFetch.Fetched(code)
+        return CodeFetch.Fetched(code, ProblemStatementPage.statementOf(body))
     }
 
     // A 302 towards the sign-in page is how an expired session shows up here; it feeds the

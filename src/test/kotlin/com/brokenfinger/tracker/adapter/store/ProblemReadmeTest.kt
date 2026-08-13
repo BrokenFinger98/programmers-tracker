@@ -235,6 +235,30 @@ class ProblemReadmeTest {
         shouldThrow<IllegalArgumentException> { write(listOf(aSubmissionRecord(), other)) }
     }
 
+    /**
+     * An embed rather than a copy (#275): this file is rewritten on every grading and
+     * `statement.md` is written once, so pasting the statement in would mean re-fetching it
+     * every time to keep it. Obsidian expands the embed, so the reader still sees one page.
+     */
+    @Test
+    fun `it embeds the statement when one has been captured`() {
+        val record = aSubmissionRecord()
+        val statement = RecordLayout(root).statementFile(record.lessonId, record.title)
+        Files.createDirectories(statement.parent)
+        Files.writeString(statement, "the problem\n")
+
+        render(listOf(record)) shouldContain "\n![[statement]]\n"
+    }
+
+    /**
+     * A wikilink to a note that is not there renders as a broken link and puts a phantom node on
+     * the graph — so a problem whose page carried no statement gets no link at all.
+     */
+    @Test
+    fun `it links nothing when no statement was captured`() {
+        render(listOf(aSubmissionRecord())) shouldNotContain "![["
+    }
+
     private fun write(records: List<SubmissionRecord>): Path = ProblemReadme(RecordLayout(root)).write(records)
 
     private fun render(records: List<SubmissionRecord>): String = Files.readString(write(records))

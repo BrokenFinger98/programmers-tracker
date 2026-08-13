@@ -1,0 +1,72 @@
+<!--
+  The statement region of a problem page, measured 2026-08-13 from lessons 120802, 12916,
+  151136, 17676 and 42894 — every block the five of them use, in one page.
+
+  SCRUBBED (dev rules §7.3, and #275 which forbids a statement in THIS repository at all):
+  every word of prose, every table cell, every heading and every URL is invented. What is
+  verbatim is the SHAPE, because the shape is the thing under test:
+
+    - `<div class="markdown solarized-dark">` opens with the first `<p>` on the SAME line
+    - no nested `<div>` anywhere inside, which is what makes the region's end unambiguous
+    - blank lines between block elements, but NOT around tables
+    - the eight-space indent before `<thead>`/`<tbody>` and the six before `</table>`,
+      which is what Programmers' renderer emits and no hand-written HTML would
+    - `<hr>`, `<br>` and `<img>` unclosed — the fragment is HTML, never XML
+    - headings skip levels (h4 beside h5), because the source markdown does
+-->
+<div class="guide-section-description">
+  <h6 class="guide-section-title">
+    문제 설명
+  </h6>
+  <div class="markdown solarized-dark"><p>정수 <code>alpha</code>와 <code>beta</code>가 주어질 때, 두 값을 <strong>합친 결과</strong>를 return 하도록 solution 함수를 완성해 주세요.</p>
+
+<hr>
+
+<h5>제한사항</h5>
+
+<ul>
+<li>-1,000 ≤ <code>alpha</code> ≤ 1,000</li>
+<li>-1,000 ≤ <code>beta</code> ≤ 1,000<br>
+두 값은 <u>서로 달라도</u> 괜찮습니다.</li>
+<li><p>결과: [<br>
+7,<br>
+11
+]</p></li>
+</ul>
+
+<hr>
+
+<h4>입출력 예</h4>
+<table class="table">
+        <thead><tr>
+<th>alpha</th>
+<th>beta</th>
+<th>result</th>
+</tr>
+</thead>
+        <tbody><tr>
+<td>7</td>
+<td>11</td>
+<td>18</td>
+</tr>
+<tr>
+<td>-4</td>
+<td>4</td>
+<td>0</td>
+</tr>
+</tbody>
+      </table>
+<hr>
+
+<h3>참고</h3>
+
+<p>그림으로 보면 <img src="https://grepp-programmers.s3.example/example-diagram.png" alt="예시 그림">와 같습니다.</p>
+
+<p>더 읽을거리는 <a href="https://example.invalid/reading" rel="nofollow">여기</a>에 있습니다.</p>
+
+<h2>주의</h2>
+
+<p>정확성 테스트와 효율성 테스트가 <strong>따로</strong> 채점됩니다.</p>
+</div>
+        </div>
+      </div>

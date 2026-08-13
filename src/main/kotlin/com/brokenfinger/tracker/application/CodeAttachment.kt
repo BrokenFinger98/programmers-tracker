@@ -89,15 +89,19 @@ class CodeAttachment(
 
     private suspend fun applied(record: SubmissionRecord, outcome: CodeFetch): AttachOutcome {
         if (outcome !is CodeFetch.Fetched) return deferred(record, outcome)
-        withContext(writerDispatcher) { attached(record, outcome.code) }
+        withContext(writerDispatcher) { attached(record, outcome) }
         return AttachOutcome.ATTACHED
     }
 
     // The confined section: every file this record's code produces lands together with the line
     // that names them, so no other grading's write can slip between the two.
-    private fun attached(record: SubmissionRecord, code: String) {
+    private fun attached(record: SubmissionRecord, fetched: CodeFetch.Fetched) {
+        val code = fetched.code
         val written = artifacts.writeCode(record, code)
         artifacts.writeRunner(record, code)
+        // Before the README, which links it. A statement that arrived is written once; a page
+        // that carried none leaves no file, because absent is honest and a placeholder is not.
+        fetched.statement?.let { artifacts.writeStatement(record, it) }
         val corrected = record.copy(
             codePath = written.codePath,
             codePending = false,
@@ -246,6 +250,16 @@ interface DerivedArtifacts {
      * reason, never written as a best-effort file.
      */
     fun writeRunner(record: SubmissionRecord, code: String)
+
+    /**
+     * Writes the problem statement **once**, and never again (#275).
+     *
+     * Write-if-absent because the README beside it is regenerated on every grading, and a
+     * statement living in a regenerated file would have to be re-fetched every time to survive.
+     * The same split `notes.md` has: this repository holds files the server owns, files the
+     * reader owns, and — now — one it writes once and then leaves alone.
+     */
+    fun writeStatement(record: SubmissionRecord, markdown: String)
 
     /** Rewrites one problem's README from its records, oldest first. */
     fun writeReadme(records: List<SubmissionRecord>)

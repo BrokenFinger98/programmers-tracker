@@ -87,6 +87,18 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
         json.decodeFromString<List<ProblemExample>>(Files.readString(directory.resolve("examples.json")))
     }.getOrDefault(emptyList())
 
+    /**
+     * Written once and never again. A second grading of the same problem finds the file there
+     * and leaves it — so a statement the reader annotated, or one Programmers has since
+     * reworded, is not overwritten by whichever page a later fetch happened to see.
+     */
+    override fun writeStatement(record: SubmissionRecord, markdown: String) {
+        val file = layout.statementFile(record.lessonId, record.title)
+        if (Files.exists(file)) return
+        Files.createDirectories(file.parent)
+        Files.writeString(file, markdown.trimEnd() + "\n")
+    }
+
     override fun writeReadme(records: List<SubmissionRecord>) {
         readme.write(records)
     }

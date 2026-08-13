@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.protocol
 
 import com.brokenfinger.tracker.application.CodeFetch
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -29,6 +30,28 @@ class ProblemPageCodeFetcherTest {
             }
             """.trimIndent(),
         )
+    }
+
+    /**
+     * One page, both artifacts, no second request (#275). This fixture is the saved-code capture
+     * and carries no statement region, which is the honest half of the pair: a page without one
+     * still fetches successfully, because the code is what this stage exists for.
+     */
+    @Test
+    fun `a page with no statement region still fetches the code`() = runBlocking<Unit> {
+        val fetcher = fetcherReturning(PageResponse(200, page))
+
+        fetcher.fetch(120804, "java").shouldBeInstanceOf<CodeFetch.Fetched>().statement.shouldBeNull()
+    }
+
+    @Test
+    fun `the statement rides along on the same response`() = runBlocking<Unit> {
+        val fetcher = fetcherReturning(PageResponse(200, page + readFixture("lesson-page-statement.html")))
+
+        val fetched = fetcher.fetch(120804, "java").shouldBeInstanceOf<CodeFetch.Fetched>()
+
+        fetched.code shouldContain "class Solution"
+        fetched.statement!! shouldContain "##### 제한사항"
     }
 
     @Test
