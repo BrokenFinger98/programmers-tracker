@@ -4417,3 +4417,14 @@ Korean twins.
 Migration for an existing install: nothing, if `TRACKER_PORT` is pinned in `.env`. Otherwise the
 MCP client config and the extension's saved port both move — the extension only changes for a
 user who never opened its options page, since a saved value wins over the default.
+
+**And one the sweep missed, caught by the owner reading the actual UI.** `extension/options.html`
+said *"Match `TRACKER_PORT`. The default is 8080."* — the replacement pass had run over a file
+list built with `--include` filters for `.kt/.yml/.js/.md/Dockerfile`, and `.html` was not among
+them. Every file the filter covered was correct; the filter was the defect. Re-swept with no
+extension filter at all: the only remaining `8080` in the tree is this file's own history, which
+is right, because those sentences were true when they were written.
+
+Third time today a filter or a memo stood in for the world and something outside it disagreed —
+grep over the tree, CI over the platforms, and now the owner over the rendered page.
+
