@@ -156,6 +156,19 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("integration")
     }
+
+    // One fork was the default and nothing had chosen it. Measured on a 14-core machine over the
+    // whole suite: 30.8s at one fork, 19.9s at two, 17.1s at four — so most of the win is the
+    // second fork, and half the cores is the conservative read on a runner that has four (#245).
+    //
+    // **Forks, not JUnit's parallel mode, and the difference is load-bearing.** A fork is its own
+    // JVM running its classes one at a time, so two things that would otherwise collide are fine:
+    // `StateLocationTest` sets the `user.home` system property, which is JVM-global, and
+    // `McpControllerTest` writes a fixed `build/tmp/` directory rather than a @TempDir — the only
+    // test that names it, so no other class can be in it at the same moment. Turning on
+    // `junit.jupiter.execution.parallel.enabled` would break both, and neither would fail every
+    // time. 41 test classes take a @TempDir and are safe either way.
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
 }
 
 // Live-verification entry for issue #6 — subscribes to a real Programmers channel and

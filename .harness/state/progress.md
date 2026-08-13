@@ -4144,3 +4144,38 @@ under the clock CI actually runs on. Also spot-checked `America/New_York`.
 
 Worth keeping: local runs are Asia/Seoul and CI runners are UTC, so between them a test that
 depends on *either* zone gets caught. That only holds while both keep running.
+
+## [2026-08-13] #245 — CI ran the suite on one fork, and recompiled it three times ⏳
+
+Wall clock is the slowest job, and that is `repeatability (no cache)` at **5m52s** — the suite
+three times, 115s + 99s + 99s.
+
+**The Gradle cache was not the gap.** `setup-gradle@v5` is on every JVM job and the logs show
+`Cache hit` for dependencies, transforms, wrapper zips, instrumented jars and the Kotlin DSL.
+`--no-build-cache` disables the build cache only, which is the point of that job.
+
+Two things were actually costing time:
+
+| | measured on a 14-core laptop |
+|---|---|
+| `maxParallelForks` unset → 1 | 30.8s |
+| 2 | 19.9s (−35%) |
+| 4 | 17.1s (−44%) |
+| `--rerun-tasks` → `--rerun` | −10%, and the compile share is bigger on a 2-core runner |
+
+`availableProcessors() / 2` rather than a literal: runners have four cores against this laptop's
+fourteen, so the honest expectation is nearer the two-fork number.
+
+**The parallel-safety note I first wrote was wrong, and grep said so.** I claimed every
+file-touching test uses a `@TempDir`. Three counterexamples: `StateLocationTest` sets the
+JVM-global `user.home`, `McpControllerTest` writes a fixed `build/tmp/` path, and an analyzer test
+names `/tmp/ps-records` (only in a message — harmless). None of them break under
+`maxParallelForks`, because a fork is a separate JVM running its classes one at a time — but all
+of them would break under JUnit's `parallel` execution mode. The comment now says that, so the
+next person to reach for more parallelism knows what they are stepping on.
+
+Verified: three repeats under `TZ=UTC` with forks on, all green, plus the four gates. Local
+`scripts/test.sh` went 30s → 17s.
+
+**Not done yet: the runner numbers.** A laptop with fourteen cores is not evidence about a runner
+with four. If CI does not show the saving, this comes back out.
