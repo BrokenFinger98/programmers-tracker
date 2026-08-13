@@ -50,15 +50,21 @@ class PushCredentialTest {
     /**
      * git runs with the record repository as its working directory, and a relative `--file`
      * would be read against whatever that happens to be. The absolute form says one thing.
+     *
+     * Built from the working directory rather than by relativizing a temp path: on Windows the
+     * two can sit on different drives, and `relativize` throws rather than answering (the same
+     * class of platform difference `ConfiguredPath` documents, and only CI can see it).
      */
     @Test
-    fun `emits an absolute path even from a relative root`() {
-        store()
+    fun `makes a relative root absolute`() {
+        PushCredential(Path.of("records")).file() shouldBe
+            Path.of("").toAbsolutePath().resolve("records").resolve(PushCredential.FILE)
+    }
 
-        val relative = Path.of("").toAbsolutePath().relativize(root)
-
-        PushCredential(relative).gitConfig() shouldBe
-            listOf("-c", "credential.helper=store --file=${root.resolve(PushCredential.FILE)}")
+    /** `..` is kept by `toAbsolutePath` alone, and this string is read by a person when a push fails. */
+    @Test
+    fun `normalises the path it emits`() {
+        PushCredential(root.resolve("sub").resolve("..")).file() shouldBe root.resolve(PushCredential.FILE)
     }
 
     private fun store(): Path {

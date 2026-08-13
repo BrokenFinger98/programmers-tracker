@@ -4497,3 +4497,13 @@ Second time today the outside reference was the tool actually running rather tha
 reads code: the fake GitHub agreed with every request we make and had no opinion about the file
 we leave in someone else's repository.
 
+**One test was written for one platform.** `emits an absolute path even from a relative root`
+built its relative path with `Path.relativize`, which on Windows **throws** when the two paths
+sit on different drives — and on a GitHub runner the temp directory and the workspace do. Caught
+by CI, which is the only reader that has ever had an opinion about Windows here (#264 was the
+same lesson twice in one PR).
+
+Rewritten as the two properties it had been conflating: a relative root becomes absolute
+(measured against the working directory, no relativize anywhere), and `..` is normalised away.
+Both are deterministic on every platform, and splitting them says which one broke when one does.
+
