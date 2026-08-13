@@ -4526,3 +4526,30 @@ A page that promised a working split today would be wrong today.
 
 Korean twin moved with it and its `translated-from` hash bumped.
 
+## [2026-08-13] #273 — a column declared and never shown, found by the owner reading the dashboard ⏳
+
+`dashboard.base` declared `note.kind: displayName: Kind` and then put `kind` in **no view's**
+`order`. `By kind` groups by it, so the split renders as headers; `Recent`, the view the vault
+opens on, said nothing about it. A declared property no view uses is the tell — it was meant to
+be a column and never became one.
+
+Added to `Recent` and `Not passed yet` — the two views that answer "what is going on", and for
+the second the question *is* whether the failures cluster on one side. Not to `By kind` (it
+groups by it), `By language` (language implies it) or `By attempts` (that view is about counts
+and carries no language either).
+
+**And #257 stopped being theoretical on the same screen.** `kind` merged at 11:54 and until 16:29
+not one record on disk carried it — nothing had been graded since. The owner solved lesson 151136
+in mysql:
+
+```
+2026-08-13T16:29:14  lesson 151136  submit  kind='database'  lang=mysql  verdict=PASS
+```
+
+frontmatter `kind: database`, badge `submit PASS 1/1`. That is the whole capture path — sensor →
+/watch → cable → record → note → commit — proven live for the first time since the field existed,
+and with the `database` value specifically, which no algorithm problem could have shown.
+
+Fourth outside reference today, and the second time it was the owner looking at rendered output
+rather than anything that reads code (#263 was the 8080 in the options page).
+

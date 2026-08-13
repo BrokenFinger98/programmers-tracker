@@ -53,6 +53,7 @@ views:
     order:
       - title
       - level
+      - kind
       - language
       - verdict
       - attempts
@@ -74,6 +75,7 @@ views:
     order:
       - title
       - level
+      - kind
       - language
       - verdict
       - attempts
