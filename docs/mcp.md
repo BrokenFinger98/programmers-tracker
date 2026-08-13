@@ -178,6 +178,19 @@ problem**, any action and any language. It separates five submits in ninety seco
 across three evenings — guessing from thinking — and it is reported, never scored. Null when there
 is genuinely no previous grading.
 
+### The problem's own words, when we have them
+
+`get_problem` carries `statement` — the problem description as Programmers worded it, converted to
+Markdown and stored in your record repository the first time that problem was graded. It is the
+one thing on this surface that is **not** about you, and without it an AI reading these records
+knows testcase 3 failed and nothing about what was asked.
+
+It is **absent for problems recorded before the server began keeping it**, and a boot-time pass
+fills those in a few at a time. `kind` is the same shape: `algorithm` or `database`, taken from
+the channel the grading was broadcast on, and missing from records older than the field.
+
+Neither absence says anything about the problem. Both say something about when you solved it.
+
 ### Missing data looks missing
 
 **A field that was never recorded is absent from the answer** — not blank, not zero, not

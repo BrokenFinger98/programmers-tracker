@@ -151,7 +151,9 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         return McpHttpResponse(status, JsonRpc.error(call.id, failure.code, failure.message, failure.data))
     }
 
-    private companion object {
+    // Not private: INSTRUCTIONS is the only thing the model reads before calling anything, so it
+    // is asserted on directly rather than scraped out of an initialize response (#286).
+    internal companion object {
         const val INITIALIZE = "initialize"
         const val PING = "ping"
         const val DISCOVER = "server/discover"
@@ -161,9 +163,63 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         const val SENTINEL = "=?base64?"
         const val SENTINEL_END = "?="
 
-        const val INSTRUCTIONS =
-            "Reads one learner's own Programmers solving history from a local record repository. " +
-                "Every tool returns stored records and counts; none of them interprets, ranks or " +
-                "advises, and a value that was never recorded is absent rather than filled in."
+        /**
+         * What the model is handed before it calls anything (#286).
+         *
+         * `docs/mcp.md` warns a **human** about every way these records mislead. The model never
+         * reads that file — this string is all it gets, and it used to be one sentence. So the
+         * warnings live here now, in the three kinds that are not the server interpreting
+         * anything: which tool answers which question, which readings are easy to get wrong, and
+         * what this data cannot say at all.
+         *
+         * Telling the reader that `elapsedSec` includes sleep is a fact about a field. Telling it
+         * the learner is weak at graphs would be a judgement about a person, and belongs nowhere
+         * near here ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
+         */
+        val INSTRUCTIONS =
+            """
+            Reads one learner's own Programmers solving history from a local record repository.
+            Every tool returns stored records and counts; none of them interprets, ranks or
+            advises, and a value that was never recorded is absent rather than filled in.
+
+            WHICH TOOL ANSWERS WHAT
+            - submissions: the whole log, newest first, narrowed by date or verdict.
+            - get_problem: one lesson in full — every grading, per-testcase results, compiler
+              output, and the problem's own statement.
+            - stats: counts per verdict, language or problem. Counts only.
+            - list_problems: the shipped catalog joined against the records. The only tool that
+              can say "untouched" — records alone cannot tell never-tried from tried-and-failed.
+            - review_queue: passes due for re-solving, most overdue first.
+            - slow_passes: passed problems ranked by their slowest testcase.
+
+            READINGS THAT ARE EASY TO GET WRONG
+            - A run is not an attempt. Pressing Run is how code gets written; `stats` counts
+              submits only, and `get_problem` splits them into submissionCount and runCount.
+            - `elapsedSec` is wall clock since the problem was first opened — sleep, other work
+              and days between sessions included. `sensor.focusedSec` is time actually in front
+              of it. One measured record carries elapsedSec 77251 beside focusedSec 37. Use
+              focusedSec for effort; they differ by orders of magnitude and neither is wrong.
+            - Absent is not zero. A field that was never recorded is left out, so a missing
+              `level` means unknown rather than level 0.
+            - `incompleteHistory` in an answer means gradings were captured that no record
+              represents. Every tool reads that same history, so any conclusion drawn from it
+              must say the denominator has holes.
+            - The catalog is a snapshot we do not own. A problem published after it was built is
+              simply missing, which is not the same as never attempted.
+            - `statement` and `kind` are absent for problems recorded before the server began
+              keeping them. Their absence says nothing about the problem.
+
+            WHAT THIS DATA CANNOT SAY
+            Nothing about other learners — there is no cohort here, so "slow" only ever means
+            slow against this learner's own other solutions. Nothing about why a submission
+            failed beyond what the judge returned. Nothing about time spent away from the tab.
+
+            THE PART THAT IS YOURS
+            The server counts and names nothing. It will not tell you which of these numbers is
+            a weakness, what to practise next, or whether a pass was lucky — not because it
+            cannot, but because deciding that is the reader's job and yours. Say what the records
+            support, say when they do not support it, and prefer citing a number over asserting
+            a pattern.
+            """.trimIndent()
     }
 }
