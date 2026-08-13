@@ -7,6 +7,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -112,20 +113,63 @@ class GithubRemoteTest {
     }
 
     /**
-     * An existing origin — SSH, another host, anything — is the user's and is never rewired,
-     * and no API call is made. The credential store IS refreshed: that is how an SSH setup
-     * migrates to the token (repoint the remote, boot) and how a rotated token takes effect,
-     * and it is inert beside an SSH remote because the helper answers only for https github.
+     * A GitHub SSH origin is repointed at HTTPS. "Never touch an existing origin" protected
+     * someone who chose SSH deliberately — and SSH is retired with `openssh-client` gone from
+     * the image, so leaving it would guarantee a push that cannot succeed rather than respect
+     * a choice. Same repository, and only when a token exists to authenticate it (#258).
      */
     @Test
-    fun `an existing origin is never rewired, and the credential still refreshes`() {
+    fun `a github ssh origin is repointed at https`() {
         git("remote", "add", "origin", "git@github.com:tester/elsewhere.git")
 
         remote().ensure()
 
-        git("remote", "get-url", "origin").trim() shouldBe "git@github.com:tester/elsewhere.git"
+        git("remote", "get-url", "origin").trim() shouldBe "https://github.com/tester/elsewhere.git"
         requests.map { it.first } shouldBe emptyList()
         Files.readString(repo.root.resolve(".ps/git-credentials")) shouldContain "x-access-token:"
+    }
+
+    /** The other SSH spelling GitHub hands out. */
+    @Test
+    fun `the ssh protocol spelling is converted too`() {
+        git("remote", "add", "origin", "ssh://git@github.com/tester/elsewhere.git")
+
+        remote().ensure()
+
+        git("remote", "get-url", "origin").trim() shouldBe "https://github.com/tester/elsewhere.git"
+    }
+
+    /**
+     * Another host is untouched: this token cannot authenticate GitLab, so rewiring would trade
+     * a working setup for a broken one.
+     */
+    @Test
+    fun `an ssh remote on another host is left alone`() {
+        git("remote", "add", "origin", "git@gitlab.com:tester/elsewhere.git")
+
+        remote().ensure()
+
+        git("remote", "get-url", "origin").trim() shouldBe "git@gitlab.com:tester/elsewhere.git"
+    }
+
+    /** An HTTPS origin is already right, whoever wired it. */
+    @Test
+    fun `an existing https origin is left exactly as it is`() {
+        git("remote", "add", "origin", "https://github.com/tester/somewhere-else.git")
+
+        remote().ensure()
+
+        git("remote", "get-url", "origin").trim() shouldBe "https://github.com/tester/somewhere-else.git"
+    }
+
+    /** No token, no authority to change anything — including an SSH URL we cannot replace. */
+    @Test
+    fun `without a token even a github ssh origin is untouched`() {
+        git("remote", "add", "origin", "git@github.com:tester/elsewhere.git")
+
+        remote(token = null).ensure()
+
+        git("remote", "get-url", "origin").trim() shouldBe "git@github.com:tester/elsewhere.git"
     }
 
     @Test
@@ -147,6 +191,9 @@ class GithubRemoteTest {
 
         val credentials = repo.root.resolve(".ps/git-credentials")
         Files.readString(credentials) shouldContain "x-access-token:ghp_test_token@github.com"
+        // Windows has no POSIX permissions and the production code degrades rather than failing
+        // there, so the assertion is skipped rather than the platform being excluded.
+        assumeTrue(credentials.fileSystem.supportedFileAttributeViews().contains("posix"))
         Files.getPosixFilePermissions(credentials).let { perms ->
             perms.contains(PosixFilePermission.OWNER_READ).shouldBeTrue()
             perms.none { it.name.startsWith("GROUP") || it.name.startsWith("OTHERS") }.shouldBeTrue()

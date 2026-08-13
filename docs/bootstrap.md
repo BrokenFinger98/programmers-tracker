@@ -98,10 +98,10 @@ the server adds what is missing and changes nothing that exists. For a non-GitHu
 skip the token and `git remote add origin <url>` yourself, with whatever credentials that
 host wants.
 
-**Installed back when pushes went over SSH?** Point the remote at HTTPS
-(`git -C ~/ps-records remote set-url origin https://github.com/<you>/<repo>.git`), put the
-token in `.env`, restart, and delete the old key mount from `compose.override.yaml` — SSH
-was retired in #258.
+**Installed back when pushes went over SSH?** Put the token in `.env` and restart — the server
+repoints a GitHub SSH origin at HTTPS by itself and says so in the log. Then delete the old key
+mount from `compose.override.yaml`. (An SSH remote on another host is left alone: this token
+cannot authenticate it.)
 
 You can also skip remotes entirely. Records are still written and committed locally; only
 the push is lost, and it is retried rather than dropped.

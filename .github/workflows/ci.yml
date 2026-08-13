@@ -280,13 +280,16 @@ jobs:
       - name: The image ships the tools the docs promise
         run: |
           set -e
-          for binary in git curl ssh; do
+          # `ssh` was on this list from #56 until #258 retired the SSH push path. Pushes now
+          # authenticate over HTTPS with the token's credential store, so the image carries no
+          # openssh-client and this check would fail for the right reason.
+          for binary in git curl; do
             docker run --rm --entrypoint sh programmers-tracker:ci -c "command -v $binary" >/dev/null \
               || { echo "REGRESSION: '$binary' is not in the image."; \
                    echo "compose.yaml and docs/bootstrap.md tell users it is there — see #56."; \
                    exit 1; }
           done
-          echo "git, curl and ssh are all present"
+          echo "git and curl are both present"
 
       - name: The HEALTHCHECK reports healthy
         run: |

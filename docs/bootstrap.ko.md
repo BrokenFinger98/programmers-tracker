@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@00bde70d05da88a41a6231ab1eb95c52dfac1186 -->
+<!-- translated-from: bootstrap.md@8e5bfc3a5b8f30c41c8bd116f3ffb07eff6df93a -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -97,10 +97,10 @@ gitignore된 `.ps/` 안에 소유자 전용으로 저장한 뒤 푸시합니다.
 서버는 없는 것만 추가하고 있는 것은 바꾸지 않습니다. GitHub이 아닌 remote를 쓰려면 토큰 없이
 직접 `git remote add origin <url>` 하고, 그 호스트가 요구하는 자격증명을 쓰세요.
 
-**예전에 SSH로 푸시하던 설치라면?** remote를 HTTPS로 바꾸고
-(`git -C ~/ps-records remote set-url origin https://github.com/<you>/<repo>.git`), `.env` 에
-토큰을 넣고 재시작한 뒤, `compose.override.yaml` 의 옛 키 마운트를 지우세요 — SSH는 #258에서
-폐기됐습니다.
+**예전에 SSH로 푸시하던 설치라면?** `.env` 에 토큰을 넣고 재시작하면 됩니다 — GitHub SSH
+origin은 서버가 알아서 HTTPS로 바꾸고 로그에 남깁니다. 그다음 `compose.override.yaml` 의 옛
+키 마운트를 지우세요. (다른 호스트의 SSH remote는 건드리지 않습니다 — 이 토큰으로는 인증할 수
+없으니까요.)
 
 remote를 아예 안 써도 됩니다. 기록은 여전히 쓰이고 로컬에 커밋됩니다. 잃는 건 푸시뿐이고,
 그마저 버려지지 않고 재시도됩니다.

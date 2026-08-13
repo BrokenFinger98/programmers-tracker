@@ -30,11 +30,12 @@ import java.util.concurrent.TimeUnit
  *   authenticate through a credential store at `.ps/git-credentials` — owner-only, inside the
  *   directory every record repository already gitignores — so a failed push logged with git's
  *   own words cannot contain it.
- * - **An existing `origin` of any kind is never rewired.** SSH users, other hosts, other names:
- *   whatever is wired stays wired. The credential store *is* still refreshed — that is the
- *   migration path from SSH (point the remote at https, boot) and the rotation path (edit
- *   `.env`, boot) — and it is inert beside an SSH remote, since the helper answers only for
- *   `https://github.com`.
+ * - **An existing `origin` is left alone, with one exception**: a *GitHub* SSH URL is repointed
+ *   at HTTPS. SSH is retired and the image no longer ships `openssh-client`, so leaving it would
+ *   not respect a choice — it would guarantee a push that cannot succeed. Any other remote,
+ *   including SSH to another host, is untouched, because this token cannot authenticate it.
+ * - The credential store is refreshed on **every** boot that has a token, which is what makes
+ *   rotation work: edit `.env`, restart.
  * - After the first boot the `.env` line may be removed; the credential store carries pushes
  *   from then on. Revoking the token stops pushes until a new one is stored.
  *
@@ -57,7 +58,7 @@ class GithubRemote(
         // ever answers for https://github.com, so an SSH remote is unaffected by its existence.
         storeCredential()
         if (hasOrigin()) {
-            logger.info("origin already exists — credential refreshed, nothing rewired")
+            convertGithubSsh()
             return
         }
         val name = recordRoot.fileName.toString()
@@ -117,6 +118,29 @@ class GithubRemote(
         git("config", "credential.helper", "store --file=${file.toAbsolutePath()}")
     }
 
+    /**
+     * A **GitHub** SSH origin is repointed at HTTPS; anything else is left exactly as it is.
+     *
+     * "Never touch an existing origin" was written to protect someone who chose SSH on purpose.
+     * SSH is retired (#258) and the image no longer carries `openssh-client`, so leaving that
+     * URL in place does not respect a choice — it guarantees a push that can never succeed. The
+     * conversion is mechanical and to the same repository, and it only runs when a token exists,
+     * which is exactly when HTTPS can authenticate.
+     *
+     * A non-GitHub SSH remote is untouched: this token cannot authenticate it, so rewiring would
+     * trade a working setup for a broken one.
+     */
+    private fun convertGithubSsh() {
+        val url = git("remote", "get-url", "origin").trim()
+        val https = GITHUB_SSH.matchEntire(url)?.let { "https://github.com/${it.groupValues[1]}.git" }
+        if (https == null) {
+            logger.info("origin already exists — credential refreshed, nothing rewired")
+            return
+        }
+        git("remote", "set-url", "origin", https)
+        logger.info("Repointed origin from SSH to {} — SSH was retired and pushes now use the token", https)
+    }
+
     private fun hasOrigin(): Boolean = git("remote").lines().any { it.trim() == "origin" }
 
     private fun api(method: String, path: String, body: String?): HttpResponse<String> {
@@ -154,6 +178,9 @@ class GithubRemote(
 
     private companion object {
         const val CREDENTIALS = ".ps/git-credentials"
+
+        /** Both spellings GitHub hands out, with the trailing `.git` optional. */
+        val GITHUB_SSH = Regex("""(?:ssh://)?git@github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?""")
 
         val OWNER_ONLY = PosixFilePermissions.fromString("rw-------")
 

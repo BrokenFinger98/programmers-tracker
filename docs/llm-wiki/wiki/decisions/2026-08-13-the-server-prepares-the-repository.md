@@ -64,8 +64,11 @@ The token's containment is structural, not promised:
   `SessionCookie` pattern), and pushes authenticate through `.ps/git-credentials` — owner-only,
   inside the directory the server itself gitignores — so a failed push logged with git's own
   words cannot contain it.
-- **An existing `origin` of any kind is never touched**, which keeps SSH users and non-GitHub
-  remotes exactly where they were.
+- **An existing `origin` is left alone, with one exception**: a *GitHub* SSH URL is repointed at
+  HTTPS when a token exists. That rule was written to protect a deliberate SSH choice — and once
+  SSH is retired and `openssh-client` is out of the image, leaving the URL does not respect a
+  choice, it guarantees a push that cannot succeed. Same repository, mechanical, and only where
+  the token can authenticate; any other host stays untouched.
 - **The `.env` line is removable after the first boot**; the credential store carries pushes
   from then on. The resident secret shrinks to a file the repository can never commit.
 

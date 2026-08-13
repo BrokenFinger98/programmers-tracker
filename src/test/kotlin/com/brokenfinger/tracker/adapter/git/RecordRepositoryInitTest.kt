@@ -63,7 +63,10 @@ class RecordRepositoryInitTest {
 
         RecordRepositoryInit(nested).ensure()
 
-        git(nested, "rev-parse", "--show-toplevel").trim() shouldBe nested.toRealPath().toString()
+        // Compared as paths, not strings: on Windows git answers with forward slashes and a
+        // long name where `toRealPath` gives backslashes and possibly a short one. The same
+        // class of mismatch ConfiguredPath documents (#41), and only CI can see it.
+        Path.of(git(nested, "rev-parse", "--show-toplevel").trim()).toRealPath() shouldBe nested.toRealPath()
     }
 
     @Test
