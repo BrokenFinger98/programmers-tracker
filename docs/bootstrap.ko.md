@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@a5465d6861f16a65f86d9b510ab4fbed39809081 -->
+<!-- translated-from: bootstrap.md@948170fb78bd3a7408bec59609d1dd0bdb3608ee -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -352,7 +352,10 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
   변경 이전에 만들어진 저장소는 상태 파일을 하나씩 나열하고 있어 이것들을 전혀 무시하지
   못하며**, 그 규칙이 없으면 `git add --all` 이 수집 이력 전체를 두 번째로 커밋합니다. 바깥에
   남는 것은 생성된 `/watch` 토큰뿐입니다. 자격 증명이고, 기록 저장소는 푸시되기 때문입니다.
-- **일일 백업의 기본값은 `Asia/Seoul`** 입니다. `TRACKER_BACKUP_ZONE` 을 내 시간대로 바꾸십시오.
+- **시각은 `TZ` 를 따르고, 설정하지 않으면 UTC입니다.** 기록에 찍히는 시계이자 일일 백업이 쓰는
+  시계이므로, 볼트의 시도 이력이 몇 시간씩 어긋나 보인다면 그건 이 설정입니다. 서버는 매 시작마다
+  자기가 정한 시간대를 출력합니다. `.env` 에 `TZ` 를 넣으십시오. `TRACKER_BACKUP_ZONE` 은 기록하는
+  시각과 다른 시각에 푸시하고 싶을 때만 씁니다.
 
 ---
 

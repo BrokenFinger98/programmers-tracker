@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
@@ -109,14 +110,23 @@ class DailyBackupTest {
         val local = GitWorkspace(base.resolve("no-remote"))
         local.write("log/submissions.jsonl", A_RECORD)
 
-        DailyBackup(CommandLineGitSync(local.root), backupLog(), fixedAt(EVENING)).runIfDue() shouldBe false
+        val backup = DailyBackup(CommandLineGitSync(local.root), backupLog(), fixedAt(EVENING), zone = SEOUL)
+
+        backup.runIfDue() shouldBe false
 
         backupLog().lastSuccessAt() shouldBe null
     }
 
     // Harness --------------------------------------------------------------------------------
 
-    private fun backup(at: Instant) = DailyBackup(CommandLineGitSync(repo.root), backupLog(), fixedAt(at))
+    /**
+     * **The zone is named, not inherited.** Every instant below is written in Seoul terms, and
+     * this test used to take that zone from `DailyBackup`'s constructor default — so it asserted
+     * the default rather than the behaviour, passed on the author's machine, and failed on CI's
+     * UTC runners the moment the default changed (#243). A test whose answer depends on where it
+     * runs is a test about the machine.
+     */
+    private fun backup(at: Instant) = DailyBackup(CommandLineGitSync(repo.root), backupLog(), fixedAt(at), zone = SEOUL)
 
     /** File-backed on purpose: every test above is really asking what a restart would read. */
     private fun backupLog(): BackupLog = FileBackupLog(AtomicStateFile(base.resolve("state/backup.json")))
@@ -127,6 +137,9 @@ class DailyBackupTest {
 
     private companion object {
         const val A_RECORD = """{"lessonId":120804}"""
+
+        /** Every instant below is a Seoul wall clock, so the backup under test is given that zone. */
+        val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
 
         /** 2026-08-05, 23:30 in Seoul — half an hour past the scheduled hour. */
         val EVENING: Instant = Instant.parse("2026-08-05T14:30:00Z")

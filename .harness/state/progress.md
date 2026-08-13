@@ -4090,3 +4090,57 @@ field of isolated dots and the reader has to be told that this is the finding.
 **Known and next**: the container runs in UTC, so `ts` is stamped `…Z` and the attempt history
 renders `05:23` for a 14:23 KST submit. The instants are correct and the display is nine hours
 out. Its own issue, next.
+
+## [2026-08-13] #243 — the server recorded in UTC, so the vault read nine hours off ✅
+
+`problems/181952/README.md` showed `05:23` for a submit made at 14:23 KST, because the record
+carried `"ts": "…T05:23:07Z"` and `ProblemReadme` renders at the offset the record carries — which
+was UTC, because the container sets no `TZ`.
+
+**The instants were always correct.** Nothing was mis-recorded and nothing needed repairing; the
+page showed the right moment on the wrong clock.
+
+Three things changed:
+
+- `TZ` in `compose.yaml` and `.env.example`, defaulting to **UTC** rather than the developer's
+  zone. Neutral by default, and the server now logs `Records are stamped in <zone>` at startup so
+  an unset clock is visible rather than discovered in a record.
+- `TRACKER_BACKUP_ZONE` **no longer defaults to `Asia/Seoul`** — it falls back to the process
+  clock. `GitConfiguration`'s own KDoc had said *a developer's timezone must not become
+  everyone's* while the default two lines below it did exactly that.
+- `ConfiguredZone`, next to `ConfiguredPath` and tested the same way: blank falls back, a present
+  value is strict, and a typo throws at startup where it is still cheap.
+
+Locally, `TZ=Asia/Seoul` added to `.env` — the compose default is UTC, so the fix does nothing
+here without it.
+
+**Rows written before the change keep `Z`,** so the attempt history steps by nine hours at the
+changeover. Rewriting stored records to change a rendering is not a trade this repository makes,
+and the step is documented in the template README so it does not read as a capture bug.
+
+**Two places the first pass missed**, found by grepping `Asia/Seoul` across the tree rather than
+re-reading the diff:
+
+- `docs/bootstrap.md` said *"The daily backup defaults to `Asia/Seoul`"* — a sentence #243 makes
+  false. Rewritten in both twins to describe `TZ` instead.
+- `DailyBackup`'s constructor default was `ZoneId.of("Asia/Seoul")`. Unused in production, since
+  the composition root always passes one, but it is the same hardcoded zone one layer down and it
+  would have applied silently to any future caller. Now `ZoneId.systemDefault()`.
+
+The change set looked complete from inside itself. The grep is what disagreed.
+
+**And then CI caught what neither of those greps could.** Replacing the hardcoded default with
+`ZoneId.systemDefault()` turned `DailyBackupTest` red on all four Linux/macOS jobs and green on
+this machine, because every instant in that test is written in Seoul terms and it had been taking
+the zone from the constructor default. It was asserting the default, not the behaviour.
+
+`DailyBackup.zone` now has **no default at all**. `systemDefault()` would have been worse than the
+hardcoded zone: a caller that omits it behaves differently on two machines. An hour means nothing
+without a zone, so every caller says which one — the composition root from `TZ`, the tests from
+`SEOUL`.
+
+Verified the way the failure asked for: `TZ=UTC ./gradlew test --rerun-tasks` — the whole suite,
+under the clock CI actually runs on. Also spot-checked `America/New_York`.
+
+Worth keeping: local runs are Asia/Seoul and CI runners are UTC, so between them a test that
+depends on *either* zone gets caught. That only holds while both keep running.

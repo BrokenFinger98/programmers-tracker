@@ -29,7 +29,16 @@ class DailyBackup(
     private val log: BackupLog,
     private val clock: Clock,
     private val at: LocalTime = LocalTime.of(23, 0),
-    private val zone: ZoneId = ZoneId.of("Asia/Seoul"),
+    /**
+     * **Required, with no default.** It was `Asia/Seoul`, which is the author's clock standing in
+     * for everyone's (#243) — and defaulting to `ZoneId.systemDefault()` instead was worse: a
+     * caller that omits it then behaves differently on two machines. `DailyBackupTest` had been
+     * inheriting the Seoul default while writing its fixtures in Seoul terms, so it passed here
+     * and failed the moment CI's UTC runners supplied a different default.
+     *
+     * An hour means nothing without a zone. Say which one.
+     */
+    private val zone: ZoneId,
 ) {
     /** Backs up when the most recent scheduled hour has not been. Returns whether it ran. */
     fun runIfDue(): Boolean {

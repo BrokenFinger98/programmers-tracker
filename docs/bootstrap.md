@@ -364,7 +364,10 @@ Stated plainly, because finding these out by trial is worse.
   without the rule `git add --all` would commit your whole capture history a second time.
   Only the generated `/watch` token stays outside, next to the tool: it is a credential, and
   the record repository is pushed.
-- **The daily backup defaults to `Asia/Seoul`.** Set `TRACKER_BACKUP_ZONE` to yours.
+- **Times follow `TZ`, and unset it is UTC.** That is the clock your records are stamped with and
+  the one the daily backup keeps, so a vault whose attempt history reads several hours off is
+  this setting. The server prints the zone it resolved on every start. Set `TZ` in `.env`;
+  `TRACKER_BACKUP_ZONE` exists only to push at a different hour than you record in.
 
 ---
 

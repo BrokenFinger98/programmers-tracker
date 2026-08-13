@@ -59,6 +59,11 @@ that as noise, colour it — in the graph view's settings (⚙), under **Groups*
 Both read the frontmatter this repository already writes. No plugin, and nothing here decides
 which of those grey dots matters.
 
+**Times are in whatever clock the server runs on.** That is `TZ` in the tracker's `.env`, and
+unset it is UTC — so a history whose rows are all several hours off is a setting, not a capture
+bug. Rows written before you set it keep the clock they were written with; the instants are
+correct either way and nothing rewrites a record to change how it reads.
+
 **What counts as a gap is yours to decide.** The server writes the numbers and never names a
 weakness — no ranking, no threshold, no "start here". That is the AI's job, or yours.
 

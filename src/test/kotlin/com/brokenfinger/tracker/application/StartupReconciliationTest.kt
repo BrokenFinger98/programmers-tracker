@@ -25,6 +25,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
@@ -145,7 +146,7 @@ class StartupReconciliationTest {
             BackupReporter(backupLog(), git, clock()),
             attachment(),
             git,
-            DailyBackup(git, backupLog(), clock()),
+            DailyBackup(git, backupLog(), clock(), zone = ZoneId.of("Asia/Seoul")),
         )
     }
 
