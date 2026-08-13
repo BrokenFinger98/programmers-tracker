@@ -107,3 +107,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-13] ingest | the tally that counted runs → 1 page updated, 1 created
 
 ## [2026-08-13] ingest | node size is what you solved → 1 page updated, 1 created
+
+## [2026-08-13] ingest | the vault is not only records → 1 page created

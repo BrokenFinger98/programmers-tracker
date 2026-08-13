@@ -2,6 +2,8 @@ package com.brokenfinger.tracker.adapter.store
 
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -71,7 +73,33 @@ class RecordRepositoryIgnoresTest {
 
         RecordRepositoryIgnores(root).ensure()
 
-        read(".gitignore") shouldBe "# mine\n.ps\n"
+        val text = read(".gitignore")
+        text.shouldStartWith("# mine\n.ps\n")
+        text.shouldNotContain(".ps/")
+    }
+
+    /**
+     * The vault's editor state is not records, and `git add --all` cannot tell the difference.
+     * On the owner's repository four commits carried `.obsidian/`, and one — the 23:00 backup —
+     * carried **nothing else**, under a message that says it reconciled records (#234).
+     */
+    @Test
+    fun `also ignores the vault's editor state`() {
+        RecordRepositoryIgnores(root).ensure()
+
+        read(".gitignore").shouldContain(".obsidian/")
+    }
+
+    /** One rule missing is one rule added; the other is left exactly as the user wrote it. */
+    @Test
+    fun `adds only the rule that is missing`() {
+        write(".gitignore", "# mine\n.obsidian\n")
+
+        RecordRepositoryIgnores(root).ensure()
+
+        val text = read(".gitignore")
+        text.shouldContain("\n.ps/\n")
+        text.shouldNotContain(".obsidian/")
     }
 
     /**

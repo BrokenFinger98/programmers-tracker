@@ -4144,3 +4144,25 @@ under the clock CI actually runs on. Also spot-checked `America/New_York`.
 
 Worth keeping: local runs are Asia/Seoul and CI runners are UTC, so between them a test that
 depends on *either* zone gets caught. That only holds while both keep running.
+
+## [2026-08-13] #234 — the vault is not only records ✅
+
+`reconcile()` is `git add --all`, and once the vault was worth opening, Obsidian's own state
+started arriving in commits. The 23:00 backup on 2026-08-12 committed **one line of graph zoom and
+nothing else**, under `chore: reconcile uncommitted records`.
+
+**Option B, and not A.** Scoping the staging to what the server writes is honest by construction
+and trades a visible annoyance for an invisible one: if the server ever writes outside the list,
+reconciliation stops catching it and a record goes uncommitted. That net exists because the tidy
+path already missed something once. `.obsidian/` is ignored instead —
+[[decisions/2026-08-13-the-vault-is-not-only-records]].
+
+**A whole directory, never a list of files inside it** (#122's lesson). Obsidian adds files on its
+own schedule.
+
+Two things this does **not** do, both stated in the PR rather than done quietly:
+
+- it does not untrack what is already tracked — `git rm --cached -r .obsidian` is the owner's to
+  run, on their own published history
+- it does not fix the shape. `reconcile` still commits an unfinished note or a dropped screenshot.
+  Option A remains the only fix for that, and its risk is unchanged.
