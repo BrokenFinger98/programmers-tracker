@@ -30,6 +30,31 @@ class VaultDashboardTest {
     }
 
     /**
+     * The README moved from the copied template into the seeds (#258): a template reaches only
+     * repositories that do not exist yet, which is how the live vault's front page described
+     * five phantom notes for months. Both twins ship, and the Korean one keeps its
+     * translated-from marker so the drift guard still applies at the source.
+     */
+    @Test
+    fun `seeds both readme twins alongside the dashboard`() {
+        VaultDashboard(root).ensure()
+
+        Files.readString(root.resolve("README.md")) shouldContain "# ps-records"
+        Files.readString(root.resolve("README.ko.md")) shouldContain "translated-from: README.md@"
+    }
+
+    /** Each seed is judged alone: a vault that kept its README still gains the dashboard. */
+    @Test
+    fun `a missing seed is written even when the others exist`() {
+        Files.writeString(root.resolve("README.md"), "mine\n")
+
+        VaultDashboard(root).ensure()
+
+        Files.readString(root.resolve("README.md")) shouldBe "mine\n"
+        Files.exists(dashboard) shouldBe true
+    }
+
+    /**
      * The reason it is seeded by the server rather than shipped in the template: a template is
      * copied once, when the repository is created, so every repository that already exists would
      * never see it. That is the staleness the vault README hit twice on 2026-08-13.

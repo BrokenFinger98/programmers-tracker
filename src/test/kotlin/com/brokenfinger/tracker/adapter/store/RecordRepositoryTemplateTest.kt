@@ -8,10 +8,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * `template/ps-records/README.md` is copied into the user's own repository, so it is the
- * first thing they read — and it is the one document this repository's own path guard
- * cannot check, because every path in it is relative to a repository that lives elsewhere
- * (see `scripts/guards.sh`, "WHICH TREES").
+ * `src/main/resources/vault/README.md` is seeded into the user's own repository (#258 —
+ * formerly a copied template), so it is the first thing they read — and it is the one
+ * document this repository's own path guard cannot check, because every path in it is
+ * relative to a repository that lives elsewhere (see `scripts/guards.sh`, "WHICH TREES").
  *
  * It drifted exactly as an unchecked document does (#96): it promised five Dataview
  * dashboard notes nothing generates, a `SolutionTest.java` the server does not write — the
@@ -89,7 +89,7 @@ class RecordRepositoryTemplateTest {
     private fun Path.readText(): String = Files.readString(this)
 
     private companion object {
-        val TEMPLATE: Path = Path.of("template/ps-records/README.md")
+        val TEMPLATE: Path = Path.of("src/main/resources/vault/README.md")
 
         /** `foo.bar`, `foo/`, or a `<ext>`-style pattern — never a prose word. */
         val NAME = Regex("""[\w.<>/-]*[\w>]\.[\w<>]+|[\w-]+/""")

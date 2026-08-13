@@ -62,33 +62,49 @@ cd programmers-tracker
 
 ---
 
-## 2. Create the record repository
+## 2. The record repository — the server creates it
 
 This is your data. It is deliberately **not** inside this repository — solving records
 never enter the tool's own repository, and keeping them separate is what lets you make
 yours private while the tool stays public.
 
-```bash
-# anywhere you like; ~/ps-records is only a suggestion
-cp -R template/ps-records ~/ps-records
-cd ~/ps-records
-git init
-git add .
-git commit -m "chore: initial record repository"
-```
+**There is nothing to run.** On first start the server creates the directory
+(`~/ps-records` unless `TRACKER_RECORD_REPO` in `.env` says otherwise), runs `git init`,
+and seeds a README, an Obsidian dashboard and the ignore rules. The startup log says
+`Records live at <path>` so the location is never silent.
 
-Give it a remote if you want your records backed up to GitHub. **Create the repository as
-private** — it will contain your code and your failures.
+For an off-machine backup, put a GitHub token in `.env`:
 
 ```bash
-git remote add origin git@github.com:<you>/ps-records.git
-git push -u origin main
+# .env
+GITHUB_TOKEN=github_pat_…
 ```
 
-You can skip the remote. Records are still written and still committed locally; only the
-push is lost, and it is retried rather than dropped.
+**Permissions**: a classic token needs the single `repo` scope. A fine-grained token needs
+access to *All repositories* with *Administration: read and write* (creation) and *Contents:
+read and write* (pushes) — and if GitHub refuses the creation anyway, the log says so; use
+classic. To tighten later, swap in a Contents-only token scoped to just this repository and
+restart: the stored credential refreshes on every boot that has one.
 
-Come back to the tool's directory afterwards: `cd -`.
+On the next start the server asks GitHub who the token belongs to, creates a **private**
+repository named after the record directory (private is hardcoded and verified from the
+response — if GitHub ever answers with a public repository, nothing is wired), sets it as
+`origin`, stores the credential owner-only inside the records' gitignored `.ps/`, and
+pushes. You may delete the `.env` line after that first boot; the stored credential
+carries pushes from then on. Revoking the token stops pushes until you provide a new one.
+
+An existing repository — initialised by hand, or wired to any remote — is never rewired:
+the server adds what is missing and changes nothing that exists. For a non-GitHub remote,
+skip the token and `git remote add origin <url>` yourself, with whatever credentials that
+host wants.
+
+**Installed back when pushes went over SSH?** Put the token in `.env` and restart — the server
+repoints a GitHub SSH origin at HTTPS by itself and says so in the log. Then delete the old key
+mount from `compose.override.yaml`. (An SSH remote on another host is left alone: this token
+cannot authenticate it.)
+
+You can also skip remotes entirely. Records are still written and committed locally; only
+the push is lost, and it is retried rather than dropped.
 
 ---
 
@@ -341,12 +357,9 @@ Stated plainly, because finding these out by trial is worse.
   connectable today — see [`mcp.md`](mcp.md) for the client configuration. What is still
   missing is the rest of the analysis half: warmup diagnosis, exam mode, per-company profiles,
   and anything that writes.
-- **Pushing from the container needs credentials you must supply.** There is no sane default
-  and none is invented. `compose.yaml` carries two commented mounts — your SSH key, or a git
-  credential store — and you choose. Over SSH, add GitHub to your host's
-  `~/.ssh/known_hosts` first (`ssh-keyscan github.com >> ~/.ssh/known_hosts`), or the push
-  fails on host verification inside the container. Without either, commits still happen
-  locally and only the push is lost.
+- **Pushing authenticates with `GITHUB_TOKEN`** — the server stores it owner-only inside the
+  records' gitignored `.ps/` and git reads it from there; nothing is mounted. Without a
+  token, commits still happen locally and only the push is lost.
 - **Do not run the container and a native instance against the same record repository.**
   A second instance refuses to start. Two mechanisms enforce it: an exclusive file lock
   (#44), and — because **Docker Desktop does not honour file locks on a bind mount**, which is

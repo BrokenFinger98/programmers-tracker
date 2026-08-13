@@ -16,6 +16,12 @@ spring:
 
 # Measured protocol facts as defaults (protocol doc §1, §10); overridable per dev rules §9.1.
 tracker:
+  github:
+    # A token here (or GITHUB_TOKEN in .env) makes the first boot create a PRIVATE repository
+    # named after the record directory, wire it as origin, store the credential owner-only in
+    # .ps/git-credentials and push. Blank = do nothing; an existing origin is never touched.
+    # The .env line may be removed after the first boot — the credential store carries pushes.
+    token: ${GITHUB_TOKEN:}
   cable:
     url: ${TRACKER_CABLE_URL:wss://ws.programmers.co.kr:443/cable}
     origin: ${TRACKER_CABLE_ORIGIN:https://school.programmers.co.kr}

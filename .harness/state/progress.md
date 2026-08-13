@@ -4373,6 +4373,24 @@ says exactly that in its own words ("written once… the server will not touch i
 `kind` lands in records from the next grading; the four existing records stay kind-less by
 design. Live verification of `"kind":"database"` needs one SQL run, which is the owner's browser.
 
+## [2026-08-13] #258 — the server prepares the record repository; the template retires ⏳
+
+Owner-steered through four decisions in one afternoon: init too, README.md as the seeded name,
+compose defaults the path, and **a GitHub token replaces the SSH path as the primary remote**.
+The token concern was raised, reaffirmed, and contained structurally — private hardcoded and
+re-verified from the response (the public-answer refusal is its own test), the token masked
+everywhere and stored owner-only inside the gitignored `.ps/`, an existing origin never touched,
+and the `.env` line removable after one boot.
+
+Everything the server now does is smaller than something it already did: it wrote into the
+directory, committed and pushed — what was left to the user was exactly the part that rotted.
+
+`template/` is gone. Its last two unique files (the READMEs) are seeds beside `dashboard.base`
+in `src/main/resources/vault/`, its four ignore rules live in `RecordRepositoryIgnores`, and the
+structure-block guard retargeted without losing a single assertion. `bootstrap.md` §2 is now
+"there is nothing to run", in both languages.
+
+ADR: [[decisions/2026-08-13-the-server-prepares-the-repository]].
 ## [2026-08-13] #261 — CONTRIBUTING gets the sixth Korean twin, by owner decision ✅
 
 The constitution pinned the twins at five and the ADR had rejected contributor-document

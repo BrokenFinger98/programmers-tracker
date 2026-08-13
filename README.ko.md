@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@789696d9b2c890d082af4198ae46479139d4d40d -->
+<!-- translated-from: README.md@b8ffd451779e3ec42a3d03057c056ca615eaba7e -->
 
 # programmers-tracker
 
@@ -76,8 +76,8 @@ Docker, 프로그래머스 로그인, 그리고 기록을 담을 내 git 저장�
 git clone https://github.com/BrokenFinger98/programmers-tracker.git
 cd programmers-tracker
 
-cp -R template/ps-records ~/ps-records && git -C ~/ps-records init   # 내 기록 — 내 것이고, 분리되어 있음
 mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session
+# 기록은 ~/ps-records 에 — 첫 시작 때 서버가 만들고 초기화합니다
 
 cp .env.example .env    # TRACKER_RECORD_REPO, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL 설정
 docker compose build && docker compose up -d   # 먼저 빌드: up 만 하면 낡은 이미지를 재사용합니다
@@ -165,8 +165,8 @@ JDK 25 위에서 네이티브로도 돌아갑니다 (`./gradlew bootRun`). 안�
 │   ├── llm-wiki/                 개발 과정 기록
 │   └── superpowers/specs/        설계 문서
 ├── scripts/                    check · test · build · guards — CI가 같은 파일을 실행
-├── src/                        Kotlin + Spring Boot
-└── template/ps-records/        기록 저장소의 초기 구조
+└── src/                        Kotlin + Spring Boot — 새 기록 저장소에 심어지는
+                                resources/vault/ 포함
 ```
 
 기록은 **직접 만드는 별도 저장소** 에 들어가고(위 *시작하기* 의 `cp -R template/ps-records …`),

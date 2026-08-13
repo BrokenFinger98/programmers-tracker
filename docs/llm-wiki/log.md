@@ -113,3 +113,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-13] ingest | the map becomes a workspace → 1 page created
 
 ## [2026-08-13] ingest | two workers that never started (recovered from inbox) → 1 page updated, 1 created
+
+## [2026-08-13] ingest | the server prepares the repository → 1 page created

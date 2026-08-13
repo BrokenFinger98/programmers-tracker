@@ -90,6 +90,19 @@ class RecordRepositoryIgnoresTest {
         read(".gitignore").shouldContain(".obsidian/")
     }
 
+    /**
+     * Both moved here from the template's .gitignore when the template retired (#258): a
+     * template reaches only repositories that do not exist yet.
+     */
+    @Test
+    fun `also ignores the lock file and finder noise`() {
+        RecordRepositoryIgnores(root).ensure()
+
+        val text = read(".gitignore")
+        text.shouldContain(".programmers-tracker.lock")
+        text.shouldContain(".DS_Store")
+    }
+
     /** One rule missing is one rule added; the other is left exactly as the user wrote it. */
     @Test
     fun `adds only the rule that is missing`() {

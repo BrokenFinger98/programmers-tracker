@@ -31,36 +31,39 @@ import java.nio.file.Path
  */
 class VaultDashboard(private val recordRoot: Path) {
     fun ensure() {
-        runCatching { writeUnlessPresent() }.onFailure { warn(it) }
+        SEEDS.forEach { seed -> runCatching { writeUnlessPresent(seed) }.onFailure { warn(it) } }
     }
 
-    private fun writeUnlessPresent() {
-        val file = recordRoot.resolve(FILE)
+    private fun writeUnlessPresent(seed: String) {
+        val file = recordRoot.resolve(seed)
         if (Files.exists(file)) return
         Files.createDirectories(recordRoot)
-        Files.writeString(file, shipped())
-        logger.info("Wrote {} — open it in Obsidian for the tables; it is yours to edit from here", file)
+        Files.writeString(file, shipped(seed))
+        logger.info("Wrote {} — seeded once; it is yours to edit from here", file)
     }
 
     // Read through the classloader rather than a path: inside the jar there is no file.
-    private fun shipped(): String =
-        checkNotNull(javaClass.getResourceAsStream(RESOURCE)) { "$RESOURCE is missing from the jar" }
+    private fun shipped(seed: String): String =
+        checkNotNull(javaClass.getResourceAsStream("/vault/$seed")) { "/vault/$seed is missing from the jar" }
             .bufferedReader()
             .use { it.readText() }
 
     private fun warn(cause: Throwable) {
         logger.warn(
-            "Could not write {} to {} ({}). The vault works without it — it is only a set of " +
-                "Obsidian table views.",
-            FILE,
+            "Could not seed a vault file into {} ({}). The vault works without it.",
             recordRoot,
             cause.javaClass.simpleName,
         )
     }
 
     private companion object {
-        const val FILE = "dashboard.base"
-        const val RESOURCE = "/vault/dashboard.base"
+        /**
+         * Everything the vault starts with and the reader then owns (#255, #258). The README is
+         * here — and not regenerated — because a user who rewrote their vault's front page must
+         * keep it; the one who deleted it gets a fresh copy on the next boot, which is the rarer
+         * intent and the recoverable mistake.
+         */
+        val SEEDS = listOf("dashboard.base", "README.md", "README.ko.md")
 
         val logger = LoggerFactory.getLogger(VaultDashboard::class.java)
     }

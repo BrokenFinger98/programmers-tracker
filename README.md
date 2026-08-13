@@ -75,8 +75,8 @@ You need Docker, a Programmers login, and a git repository of your own to keep t
 git clone https://github.com/BrokenFinger98/programmers-tracker.git
 cd programmers-tracker
 
-cp -R template/ps-records ~/ps-records && git -C ~/ps-records init   # your records — yours, and separate
 mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session
+# your records live at ~/ps-records — the server creates and initialises it on first start
 
 cp .env.example .env    # set TRACKER_RECORD_REPO, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
 docker compose build && docker compose up -d   # build first: up alone reuses a stale image
@@ -164,13 +164,13 @@ which have been built.
 │   ├── llm-wiki/                 development process records
 │   └── superpowers/specs/        design documents
 ├── scripts/                    check · test · build · guards — CI runs these same files
-├── src/                        Kotlin + Spring Boot
-└── template/ps-records/        initial structure of the record repository
+└── src/                        Kotlin + Spring Boot — including resources/vault/, the
+                                files seeded into a new record repository
 ```
 
-Your records live in a **separate repository that you create** (`cp -R template/ps-records …`
-in *Get started* above) and the server only writes into it. Open it as an Obsidian vault once
-the derived pages of §5.5 exist.
+Your records live in a **separate repository the server creates for you** (`~/ps-records`
+unless `TRACKER_RECORD_REPO` says otherwise) and only ever writes into. Open it as an
+Obsidian vault — the graph, the dashboard and the tag notes are maintained for you.
 
 > Once after cloning: `git config core.hooksPath .githooks` — activates the push gate,
 > which runs the constitution guards and then asks for a wiki record.

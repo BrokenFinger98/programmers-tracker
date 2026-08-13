@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@a9362a60bc43d41c7a580699aa1f2f615a5b6ea2 -->
+<!-- translated-from: bootstrap.md@8e5bfc3a5b8f30c41c8bd116f3ffb07eff6df93a -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -62,34 +62,48 @@ cd programmers-tracker
 
 ---
 
-## 2. 기록 저장소 만들기
+## 2. 기록 저장소 — 서버가 만듭니다
 
-이것은 내 데이터입니다. 일부러 이 저장소 **안에 두지 않습니다** — 풀이 기록은 도구 자신의 저장소에
-들어가지 않으며, 분리해 두어야 도구는 공개로 남고 내 기록은 비공개로 둘 수 있습니다.
+이건 여러분의 데이터입니다. 일부러 이 저장소 **안에 있지 않습니다** — 풀이 기록은 도구의
+저장소에 절대 들어가지 않고, 분리되어 있어야 도구는 공개로 두고 기록은 비공개로 만들 수
+있습니다.
 
-```bash
-# 어디든 좋습니다. ~/ps-records 는 제안일 뿐입니다
-cp -R template/ps-records ~/ps-records
-cd ~/ps-records
-git init
-git add .
-git commit -m "chore: initial record repository"
-```
+**실행할 게 없습니다.** 첫 시작 때 서버가 디렉토리를 만들고(`.env` 의 `TRACKER_RECORD_REPO`
+가 없으면 `~/ps-records`), `git init` 을 하고, README와 Obsidian 대시보드와 ignore 규칙을
+심습니다. 시작 로그에 `Records live at <경로>` 가 찍혀서 위치가 조용히 정해지는 일은
+없습니다.
 
-GitHub에 백업하고 싶다면 리모트를 붙이십시오. **저장소는 반드시 private으로 만드십시오** — 내
-코드와 내 실패가 들어갑니다.
+기계 밖 백업을 원하면 `.env` 에 GitHub 토큰을 넣으세요:
 
 ```bash
-git remote add origin git@github.com:<you>/ps-records.git
-git push -u origin main
+# .env
+GITHUB_TOKEN=github_pat_…
 ```
 
-리모트는 건너뛰어도 됩니다. 기록은 그대로 쓰이고 로컬 커밋도 그대로 됩니다. 푸시만 빠지고, 그것도
-버려지는 게 아니라 재시도됩니다.
+**권한**: classic 토큰은 `repo` 스코프 하나면 됩니다. fine-grained 토큰은 *All repositories*
+접근에 *Administration: read and write*(생성)와 *Contents: read and write*(푸시)가 필요하고 —
+그래도 GitHub이 생성을 거부하면 로그에 그렇다고 찍히니 classic을 쓰세요. 나중에 조이려면 이
+저장소 하나에만 스코프된 Contents 전용 토큰으로 갈아끼우고 재시작하면 됩니다 — 토큰이 있는
+부팅마다 저장된 자격증명이 갱신됩니다.
 
-끝나면 도구 디렉터리로 돌아옵니다: `cd -`.
+다음 시작 때 서버가 GitHub에 토큰의 주인이 누군지 묻고, 기록 디렉토리 이름의 **비공개**
+저장소를 만들고(비공개는 하드코딩이며 응답에서 재검증합니다 — GitHub이 공개 저장소로
+답하면 아무것도 연결하지 않습니다), `origin` 으로 등록하고, 자격증명을 기록 저장소의
+gitignore된 `.ps/` 안에 소유자 전용으로 저장한 뒤 푸시합니다. 그 첫 부팅 후에는 `.env` 의
+줄을 지워도 됩니다 — 저장된 자격증명이 이후 푸시를 담당합니다. 토큰을 revoke하면 새로 넣기
+전까지 푸시가 멈춥니다.
 
----
+이미 있는 저장소는 — 직접 init했든, 어떤 remote가 걸려 있든 — 절대 다시 연결하지 않습니다:
+서버는 없는 것만 추가하고 있는 것은 바꾸지 않습니다. GitHub이 아닌 remote를 쓰려면 토큰 없이
+직접 `git remote add origin <url>` 하고, 그 호스트가 요구하는 자격증명을 쓰세요.
+
+**예전에 SSH로 푸시하던 설치라면?** `.env` 에 토큰을 넣고 재시작하면 됩니다 — GitHub SSH
+origin은 서버가 알아서 HTTPS로 바꾸고 로그에 남깁니다. 그다음 `compose.override.yaml` 의 옛
+키 마운트를 지우세요. (다른 호스트의 SSH remote는 건드리지 않습니다 — 이 토큰으로는 인증할 수
+없으니까요.)
+
+remote를 아예 안 써도 됩니다. 기록은 여전히 쓰이고 로컬에 커밋됩니다. 잃는 건 푸시뿐이고,
+그마저 버려지지 않고 재시도됩니다.
 
 ## 3. 세션 쿠키 얻기
 
@@ -332,11 +346,10 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
   `get_problem`, `stats`, `list_problems`, `review_queue`, `slow_passes` 가 오늘 만들어져 연결
   가능합니다 — 클라이언트 설정은 [`mcp.ko.md`](mcp.ko.md) 참고. 아직 없는 것은 분석 절반의
   나머지입니다: 워밍업 진단, 시험 모드, 회사별 프로필, 그리고 쓰기를 하는 모든 것.
-- **컨테이너에서 푸시하려면 직접 자격 증명을 줘야 합니다.** 합리적인 기본값이 없고, 만들어내지도
-  않습니다. `compose.yaml` 에 주석 처리된 마운트 두 개가 있습니다 — SSH 키, 또는 git 자격 증명
-  저장소 — 선택은 여러분의 것입니다. SSH로 할 거라면 호스트의 `~/.ssh/known_hosts` 에 GitHub를
-  먼저 추가하십시오(`ssh-keyscan github.com >> ~/.ssh/known_hosts`). 안 그러면 컨테이너 안에서
-  호스트 검증에 걸려 푸시가 실패합니다. 둘 다 없어도 로컬 커밋은 되고 푸시만 빠집니다.
+- **푸시는 `GITHUB_TOKEN` 으로 인증합니다** — 서버가 기록 저장소의 gitignore된 `.ps/` 안에
+  소유자 전용으로 저장하고 git이 거기서 읽습니다. 마운트할 것이 없습니다. 토큰이 없으면
+  커밋은 로컬에 계속 쌓이고 푸시만 빠집니다.
+
 - **같은 기록 저장소에 컨테이너와 네이티브 인스턴스를 동시에 돌리지 마십시오.** 두 번째
   인스턴스는 시작을 거부합니다. 두 가지 장치가 강제합니다: 배타적 파일 락(#44), 그리고 —
   **Docker Desktop이 bind mount에서 파일 락을 지키지 않기 때문에**, 그리고 그것이 정확히

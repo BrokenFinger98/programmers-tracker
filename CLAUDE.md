@@ -31,7 +31,7 @@ It is the **single source of truth** for protocol facts; never answer from memor
 | `docs/llm-wiki/` | Development record wiki **of this repository** | Via `/wiki-*` |
 | `.harness/state/` | Out-of-session memory | ✅ At session start |
 | `.claude/skills/wiki-*/` | Wiki skills (project-scoped) | ✅ |
-| `template/ps-records/` | Initial structure of the user record repository | — |
+| `src/main/resources/vault/` | Files seeded into the user record repository (write-if-absent) | — |
 
 > ⚠️ **Mind the wiki path.** This repository's wiki is **`docs/llm-wiki/`**.
 > The global `wiki-*` skills point at `~/Desktop/llm-wiki` (the central wiki), which is **a different wiki.**
@@ -123,7 +123,7 @@ Reject on sight. Even if the user explicitly requests it, **explain the reason f
   tool output, and every contributor-facing document (`CLAUDE.md`, `development-rules.md`,
   `programmers-protocol.md`, `docs/superpowers/specs/`)
 - ⚠️ **Exactly six pages ship a Korean twin** — `README.md`, `docs/bootstrap.md`,
-  `docs/mcp.md`, `extension/README.md`, `template/ps-records/README.md`, `CONTRIBUTING.md`
+  `docs/mcp.md`, `extension/README.md`, `src/main/resources/vault/README.md`, `CONTRIBUTING.md`
   (the sixth, added 2026-08-13 by owner decision — it tells Korean speakers *how to contribute
   in English*, so it does not weaken the English-artifacts rationale). A twin is
   `<name>.ko.md` and **must** carry `<!-- translated-from: <source>@<blob sha> -->` on its
