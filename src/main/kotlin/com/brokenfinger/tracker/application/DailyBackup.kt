@@ -29,7 +29,10 @@ class DailyBackup(
     private val log: BackupLog,
     private val clock: Clock,
     private val at: LocalTime = LocalTime.of(23, 0),
-    private val zone: ZoneId = ZoneId.of("Asia/Seoul"),
+    // The clock this process runs on, which the container takes from TZ. Naming a zone here
+    // would put the author's own back where #243 took it out — this default is only ever a
+    // test's convenience; the composition root always passes one.
+    private val zone: ZoneId = ZoneId.systemDefault(),
 ) {
     /** Backs up when the most recent scheduled hour has not been. Returns whether it ran. */
     fun runIfDue(): Boolean {

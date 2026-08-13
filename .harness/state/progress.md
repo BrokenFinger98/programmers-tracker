@@ -4117,3 +4117,14 @@ here without it.
 **Rows written before the change keep `Z`,** so the attempt history steps by nine hours at the
 changeover. Rewriting stored records to change a rendering is not a trade this repository makes,
 and the step is documented in the template README so it does not read as a capture bug.
+
+**Two places the first pass missed**, found by grepping `Asia/Seoul` across the tree rather than
+re-reading the diff:
+
+- `docs/bootstrap.md` said *"The daily backup defaults to `Asia/Seoul`"* — a sentence #243 makes
+  false. Rewritten in both twins to describe `TZ` instead.
+- `DailyBackup`'s constructor default was `ZoneId.of("Asia/Seoul")`. Unused in production, since
+  the composition root always passes one, but it is the same hardcoded zone one layer down and it
+  would have applied silently to any future caller. Now `ZoneId.systemDefault()`.
+
+The change set looked complete from inside itself. The grep is what disagreed.
