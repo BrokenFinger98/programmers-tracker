@@ -66,10 +66,22 @@ that as noise, colour it — in the graph view's settings (⚙), under **Groups*
 | `["status":"untouched"]` | never met |
 | `["status":"passed"]` | cleared at least once |
 | `path:problems` | the problems themselves, so your own work stands out |
+| `["kind":"algorithm"]` | algorithm problems |
+| `["kind":"database"]` | SQL problems |
 
 Each tag note carries `status:` for exactly this — it is `attempted` and `solved` in one word, so
 a colour group is one exact match instead of an expression. All of it reads frontmatter this
 repository already writes: no plugin, and **nothing here decides which of those colours matters.**
+
+**Algorithm and SQL can also be two graphs rather than two colours.** Obsidian keeps its settings
+per pane, so splitting the graph tab (right-click → *Split right*) and putting `["kind":"algorithm"]`
+in one pane's **Filters** and `["kind":"database"]` in the other gives you both maps at once. It is
+worth doing once you have enough of each: their protocols differ, their runtimes are not
+comparable, and `dashboard.base` separates them for the same reason.
+
+`kind` is written from the channel the server subscribed on, so **records from before that field
+existed have none** and those notes join neither group. Until such a problem is solved again,
+`["language":"mysql"]` is what finds the SQL ones.
 
 **Times are in whatever clock the server runs on.** That is `TZ` in the tracker's `.env`, and
 unset it is UTC — so a history whose rows are all several hours off is a setting, not a capture

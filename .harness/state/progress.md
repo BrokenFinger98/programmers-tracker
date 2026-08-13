@@ -4507,3 +4507,22 @@ Rewritten as the two properties it had been conflating: a relative root becomes 
 (measured against the working directory, no relativize anywhere), and `..` is normalised away.
 Both are deterministic on every platform, and splitting them says which one broke when one does.
 
+## [2026-08-13] #270 — the dashboard split algorithm from SQL and the graph could not ⏳
+
+`dashboard.base` got a **By kind** view in #256; the graph got nothing. The vault README's
+Groups table — the only place graph guidance can live, since `.obsidian/` is gitignored and the
+server correctly writes no editor configuration — listed `status` and `path:problems` and no
+`kind`. So the one split the dashboard considers worth its own view was the one the graph could
+not express.
+
+Two rows added, plus the two-pane answer: Obsidian keeps settings per pane, so splitting the
+graph tab and filtering one pane per kind gives both maps at once.
+
+**Said honestly rather than sold.** `kind` comes from the channel the server subscribed on, so
+records from before that field have none and those notes join neither group — measured, all 44
+records on disk predate it, because #257 merged at 11:54 and the newest record is from the day
+before. Until such a problem is solved again, `["language":"mysql"]` is what finds the SQL ones.
+A page that promised a working split today would be wrong today.
+
+Korean twin moved with it and its `translated-from` hash bumped.
+
