@@ -4719,3 +4719,31 @@ hypothesis stated as a finding, and it was wrong. Corrected there and here. The 
 still earned itself in the same hour: a number nobody could see is a number nobody can be wrong
 about out loud.
 
+## [2026-08-14] #286 — the AI was told what the tools return and never how to read them ⏳
+
+`docs/mcp.md` is careful about how these records mislead — *"`elapsedSec` is not how long you
+spent"*, *"missing data looks missing"*, *"a history with holes says so"*. **A human reads that
+document; the model never opens it.** What the model gets is the MCP `instructions` string, and it
+was one sentence. Every trap the document warns a human about was one the model walked into
+unwarned, and the model is the reader this surface was built for (design §7).
+
+The instructions now carry three kinds of thing, none of which is the server interpreting: which
+tool answers which question, the readings that have **actually** gone wrong (a run counted as an
+attempt — #235 and #237 both; wall clock read as effort, 77,251 against 37 on one measured record;
+absent read as zero; a conclusion drawn over `incompleteHistory`), and what the data cannot speak
+about at all — there is no cohort here, so "slow" only ever means slow against this learner's own
+other passes.
+
+And the part that is the reader's, said **to** the model rather than about it: the server counts
+and names nothing, so deciding which number is a weakness is being handed over rather than
+withheld.
+
+**The test that pins the line had to be rewritten before it was right.** The first version
+blacklisted words — `weak`, `struggling`, `should practise` — and failed immediately, because the
+text says *"it will not tell you which of these numbers is a weakness"*. Refusing to name a
+weakness requires the word. The assertion now bans **shapes** (`you are `, `the learner is`,
+`you tend`), which a refusal cannot accidentally contain.
+
+`docs/mcp.md` and its twin also caught up with today: `statement` (#275/#278) and `kind` (#256)
+were undocumented there.
+
