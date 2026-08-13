@@ -87,10 +87,15 @@ response — if GitHub ever answers with a public repository, nothing is wired),
 pushes. You may delete the `.env` line after that first boot; the stored credential
 carries pushes from then on. Revoking the token stops pushes until you provide a new one.
 
-An existing repository — initialised by hand, or wired to any remote including SSH — is
-never touched: the server adds what is missing and changes nothing that exists. To use a
-non-GitHub remote, skip the token and `git remote add origin <url>` yourself; the SSH
-mount alternative is documented in `compose.yaml`.
+An existing repository — initialised by hand, or wired to any remote — is never rewired:
+the server adds what is missing and changes nothing that exists. For a non-GitHub remote,
+skip the token and `git remote add origin <url>` yourself, with whatever credentials that
+host wants.
+
+**Installed back when pushes went over SSH?** Point the remote at HTTPS
+(`git -C ~/ps-records remote set-url origin https://github.com/<you>/<repo>.git`), put the
+token in `.env`, restart, and delete the old key mount from `compose.override.yaml` — SSH
+was retired in #258.
 
 You can also skip remotes entirely. Records are still written and committed locally; only
 the push is lost, and it is retried rather than dropped.
@@ -346,12 +351,9 @@ Stated plainly, because finding these out by trial is worse.
   connectable today — see [`mcp.md`](mcp.md) for the client configuration. What is still
   missing is the rest of the analysis half: warmup diagnosis, exam mode, per-company profiles,
   and anything that writes.
-- **Pushing from the container needs credentials you must supply.** There is no sane default
-  and none is invented. `compose.yaml` carries two commented mounts — your SSH key, or a git
-  credential store — and you choose. Over SSH, add GitHub to your host's
-  `~/.ssh/known_hosts` first (`ssh-keyscan github.com >> ~/.ssh/known_hosts`), or the push
-  fails on host verification inside the container. Without either, commits still happen
-  locally and only the push is lost.
+- **Pushing authenticates with `GITHUB_TOKEN`** — the server stores it owner-only inside the
+  records' gitignored `.ps/` and git reads it from there; nothing is mounted. Without a
+  token, commits still happen locally and only the push is lost.
 - **Do not run the container and a native instance against the same record repository.**
   A second instance refuses to start. Two mechanisms enforce it: an exclusive file lock
   (#44), and — because **Docker Desktop does not honour file locks on a bind mount**, which is

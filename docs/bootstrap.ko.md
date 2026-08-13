@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@5e6c47ec5942c2ebee1cafc93c844ea4edde6f5e -->
+<!-- translated-from: bootstrap.md@4e13fc41a1ec845c56f90ec703cde242d0cf900e -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -87,10 +87,14 @@ gitignore된 `.ps/` 안에 소유자 전용으로 저장한 뒤 푸시합니다.
 줄을 지워도 됩니다 — 저장된 자격증명이 이후 푸시를 담당합니다. 토큰을 revoke하면 새로 넣기
 전까지 푸시가 멈춥니다.
 
-이미 있는 저장소는 — 직접 init했든, SSH를 포함해 어떤 remote가 걸려 있든 — 절대 건드리지
-않습니다: 서버는 없는 것만 추가하고 있는 것은 바꾸지 않습니다. GitHub이 아닌 remote를 쓰려면
-토큰 없이 직접 `git remote add origin <url>` 하세요. SSH 마운트 대안은 `compose.yaml` 에
-문서화되어 있습니다.
+이미 있는 저장소는 — 직접 init했든, 어떤 remote가 걸려 있든 — 절대 다시 연결하지 않습니다:
+서버는 없는 것만 추가하고 있는 것은 바꾸지 않습니다. GitHub이 아닌 remote를 쓰려면 토큰 없이
+직접 `git remote add origin <url>` 하고, 그 호스트가 요구하는 자격증명을 쓰세요.
+
+**예전에 SSH로 푸시하던 설치라면?** remote를 HTTPS로 바꾸고
+(`git -C ~/ps-records remote set-url origin https://github.com/<you>/<repo>.git`), `.env` 에
+토큰을 넣고 재시작한 뒤, `compose.override.yaml` 의 옛 키 마운트를 지우세요 — SSH는 #258에서
+폐기됐습니다.
 
 remote를 아예 안 써도 됩니다. 기록은 여전히 쓰이고 로컬에 커밋됩니다. 잃는 건 푸시뿐이고,
 그마저 버려지지 않고 재시도됩니다.
@@ -336,11 +340,10 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
   `get_problem`, `stats`, `list_problems`, `review_queue`, `slow_passes` 가 오늘 만들어져 연결
   가능합니다 — 클라이언트 설정은 [`mcp.ko.md`](mcp.ko.md) 참고. 아직 없는 것은 분석 절반의
   나머지입니다: 워밍업 진단, 시험 모드, 회사별 프로필, 그리고 쓰기를 하는 모든 것.
-- **컨테이너에서 푸시하려면 직접 자격 증명을 줘야 합니다.** 합리적인 기본값이 없고, 만들어내지도
-  않습니다. `compose.yaml` 에 주석 처리된 마운트 두 개가 있습니다 — SSH 키, 또는 git 자격 증명
-  저장소 — 선택은 여러분의 것입니다. SSH로 할 거라면 호스트의 `~/.ssh/known_hosts` 에 GitHub를
-  먼저 추가하십시오(`ssh-keyscan github.com >> ~/.ssh/known_hosts`). 안 그러면 컨테이너 안에서
-  호스트 검증에 걸려 푸시가 실패합니다. 둘 다 없어도 로컬 커밋은 되고 푸시만 빠집니다.
+- **푸시는 `GITHUB_TOKEN` 으로 인증합니다** — 서버가 기록 저장소의 gitignore된 `.ps/` 안에
+  소유자 전용으로 저장하고 git이 거기서 읽습니다. 마운트할 것이 없습니다. 토큰이 없으면
+  커밋은 로컬에 계속 쌓이고 푸시만 빠집니다.
+
 - **같은 기록 저장소에 컨테이너와 네이티브 인스턴스를 동시에 돌리지 마십시오.** 두 번째
   인스턴스는 시작을 거부합니다. 두 가지 장치가 강제합니다: 배타적 파일 락(#44), 그리고 —
   **Docker Desktop이 bind mount에서 파일 락을 지키지 않기 때문에**, 그리고 그것이 정확히

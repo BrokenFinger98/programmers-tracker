@@ -30,8 +30,11 @@ import java.util.concurrent.TimeUnit
  *   authenticate through a credential store at `.ps/git-credentials` — owner-only, inside the
  *   directory every record repository already gitignores — so a failed push logged with git's
  *   own words cannot contain it.
- * - **An existing `origin` of any kind is never touched.** SSH users, other hosts, other names:
- *   whatever is wired stays wired, and the token goes unused beyond a single log line.
+ * - **An existing `origin` of any kind is never rewired.** SSH users, other hosts, other names:
+ *   whatever is wired stays wired. The credential store *is* still refreshed — that is the
+ *   migration path from SSH (point the remote at https, boot) and the rotation path (edit
+ *   `.env`, boot) — and it is inert beside an SSH remote, since the helper answers only for
+ *   `https://github.com`.
  * - After the first boot the `.env` line may be removed; the credential store carries pushes
  *   from then on. Revoking the token stops pushes until a new one is stored.
  *
@@ -49,13 +52,16 @@ class GithubRemote(
 
     private fun wireUnlessWired() {
         if (token == null) return
+        // Always, not only when wiring: this is how an SSH setup migrates to the token (change
+        // the remote URL, boot) and how a rotated token in .env takes effect. The helper only
+        // ever answers for https://github.com, so an SSH remote is unaffected by its existence.
+        storeCredential()
         if (hasOrigin()) {
-            logger.info("origin already exists — the GitHub token is not needed for wiring and was not used")
+            logger.info("origin already exists — credential refreshed, nothing rewired")
             return
         }
         val name = recordRoot.fileName.toString()
         val cloneUrl = privateRepository(name) ?: return
-        storeCredential()
         git("remote", "add", "origin", cloneUrl)
         // `git push` with no upstream refuses on a fresh clone; `current` makes the first push —
         // the startup backup's — work without one, and every later push is unaffected.

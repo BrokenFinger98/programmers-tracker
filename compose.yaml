@@ -82,32 +82,11 @@ services:
       # the extension's 30-second heartbeats until the user pasted the new value.
       - ${TRACKER_STATE_DIR:-./.ps}:/app/.ps
 
-      # PUSHING NEEDS CREDENTIALS. The primary path is GITHUB_TOKEN above — one .env line,
-      # nothing mounted. Everything below is the SSH alternative, for a non-GitHub remote or
-      # a user who prefers a deploy key. Nothing below
-      # is enabled: without it the tool still captures and still commits locally, and the
-      # push fails, is logged, and leaves the day owed so the next backup retries it.
-      # To push over SSH, uncomment the line below and make sure the record repository's
-      # remote is an SSH URL (`git -C <repo> remote set-url origin git@github.com:you/ps-records.git`).
-      # Read-only, and it is your private key — decide deliberately. Mounting the whole
-      # directory hands the container every key on the machine, including ones belonging to
-      # systems that have nothing to do with this tool. Prefer a key created for this
-      # repository alone — a GitHub **deploy key**, which is scoped to one repository, so a
-      # leak costs you that repository and nothing else. Put the narrower mount in
-      # `compose.override.yaml` (gitignored, read automatically) rather than editing here:
-      #
-      #   services:
-      #     tracker:
-      #       volumes:
-      #         - ${HOME}/.ssh/ps-records-deploy:/home/tracker/.ssh/id_ed25519:ro
-      #         - ${HOME}/.ssh/known_hosts:/home/tracker/.ssh/known_hosts:ro
-      #
-      # - ${HOME}/.ssh:/home/tracker/.ssh:ro
-      #
-      # To push over HTTPS instead, put a personal access token in a git credential store
-      # on the host, mount that file read-only, and turn the helper on from .env with
-      # GIT_CONFIG_COUNT=1 / GIT_CONFIG_KEY_0=credential.helper / GIT_CONFIG_VALUE_0=store.
-      # - ${HOME}/.git-credentials:/home/tracker/.git-credentials:ro
+      # PUSHING AUTHENTICATES WITH THE GITHUB TOKEN ABOVE — nothing is mounted. The server
+      # stores it owner-only inside the records' gitignored .ps/ and git reads it from there.
+      # SSH was retired 2026-08-13 (#258): one .env line replaced the deploy key, its GitHub
+      # registration and the override mount. Without a token, records still capture and commit
+      # locally; only the push is lost, and it is retried rather than dropped.
 
     secrets:
       # Read-only by construction, and it never enters an image layer. See bootstrap.md

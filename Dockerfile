@@ -41,13 +41,11 @@ FROM eclipse-temurin:25-jre AS runtime
 # git CLI (CommandLineGitSync), so an image without it records to disk and silently never
 # commits. `curl` backs the HEALTHCHECK below.
 #
-# `openssh-client` is not optional either, and its absence was invisible: git ships without
-# it, `docker compose config` validates, the key mounts correctly, and the push then dies on
-# `ssh: not found` (#56). compose.yaml documents SSH as a credential option, and a GitHub
-# deploy key — the only credential scoped to one repository — is SSH-only, so without this
-# the image quietly pushes users toward an account-wide token instead.
+# `openssh-client` shipped from #56 to #258, while SSH was the push credential. Pushes now
+# authenticate over HTTPS through the GitHub token's credential store, so it retired with
+# the deploy-key path — an image with no use for a tool should not carry it.
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y git curl openssh-client \
+    && apt-get install --no-install-recommends -y git curl \
     && rm -rf /var/lib/apt/lists/*
 
 # The record repository arrives as a bind mount, so its owner is the host user and almost
@@ -68,7 +66,7 @@ RUN userdel --remove ubuntu && useradd --create-home --uid 1000 tracker
 
 # Stated explicitly because compose may run this as a numeric uid to match a bind mount's
 # owner, and Docker does not consult /etc/passwd for a numeric user — HOME would be `/`,
-# and every credential a user mounts at ~/.ssh or ~/.git-credentials would go unread.
+# and the git credential store the server writes under the records' .ps/ would go unread.
 ENV HOME=/home/tracker
 
 WORKDIR /app

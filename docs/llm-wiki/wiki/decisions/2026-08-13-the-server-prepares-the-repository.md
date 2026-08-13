@@ -8,7 +8,7 @@ updated: 2026-08-13
 sources: [raw/sessions/2026-08-13-the-map-becomes-a-workspace.md]
 ---
 
-# The server prepares the record repository, and a token replaces the SSH path
+# The server prepares the record repository, and the token retires SSH outright
 
 ## Context
 
@@ -39,9 +39,10 @@ not refresh.
 
 The server, on boot, in order and each step only when missing: create the directory →
 `git init --initial-branch=main` → seed `README.md`, `README.ko.md`, `dashboard.base` → ensure
-the four ignore rules → with `GITHUB_TOKEN` set and no `origin`: create a **private** repository
-named after the record directory, wire it, store the credential, and let the startup backup carry
-the first push (`push.default current`). `template/` is deleted; the seeds live once, in
+the four ignore rules → with `GITHUB_TOKEN` set: refresh the
+push credential always (that is both the SSH-migration path and token rotation), and with no
+`origin` besides: create a **private** repository named after the record directory, wire it, and
+let the startup backup carry the first push (`push.default current`). `template/` is deleted; the seeds live once, in
 `src/main/resources/vault/`, because the Docker image ships `src` and not the template.
 
 `TRACKER_RECORD_REPO` now defaults in compose exactly as it always has in `application.yml`
@@ -80,8 +81,12 @@ behind the same private check — so a crash between creation and wiring heals o
   as loss, not intent. The rarer intent loses.
 - **A defaulted record path means data lands somewhere the user did not type.** Contained by the
   boot announcement and by the default being the path every document already suggested.
-- The SSH documentation shrinks to an alternative; users who prefer it get one paragraph and a
-  compose comment instead of the front path.
+- **SSH is retired outright, not demoted** — a further owner call on the same day. The deploy-key
+  instructions, the compose mounts and `openssh-client` in the image are all gone; a non-GitHub
+  remote is still one `git remote add` away with that host's own credentials, but this tool
+  documents exactly one push path. The cost is real for anyone who preferred a
+  repository-scoped deploy key over an account token; the gain is that the tool has one story
+  and the image carries no tool it cannot use.
 
 ## Outcome
 

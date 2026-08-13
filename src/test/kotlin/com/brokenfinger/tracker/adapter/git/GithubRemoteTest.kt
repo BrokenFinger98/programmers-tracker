@@ -111,15 +111,21 @@ class GithubRemoteTest {
         git("remote", "get-url", "origin").trim() shouldBe "https://github.com/tester/${repo.root.fileName}.git"
     }
 
-    /** An existing origin — SSH, another host, anything — is the user's and is never touched. */
+    /**
+     * An existing origin — SSH, another host, anything — is the user's and is never rewired,
+     * and no API call is made. The credential store IS refreshed: that is how an SSH setup
+     * migrates to the token (repoint the remote, boot) and how a rotated token takes effect,
+     * and it is inert beside an SSH remote because the helper answers only for https github.
+     */
     @Test
-    fun `an existing origin of any kind is left exactly as it is`() {
+    fun `an existing origin is never rewired, and the credential still refreshes`() {
         git("remote", "add", "origin", "git@github.com:tester/elsewhere.git")
 
         remote().ensure()
 
         git("remote", "get-url", "origin").trim() shouldBe "git@github.com:tester/elsewhere.git"
         requests.map { it.first } shouldBe emptyList()
+        Files.readString(repo.root.resolve(".ps/git-credentials")) shouldContain "x-access-token:"
     }
 
     @Test
