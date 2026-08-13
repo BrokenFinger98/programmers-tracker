@@ -40,6 +40,12 @@ class CommandLineGitSync(
     private val waitFor: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GitSync {
     /**
+     * Carried on our own invocations rather than written into the repository's config, so the
+     * user's working copy is left as they keep it (#267). See [PushCredential].
+     */
+    private val credential = PushCredential(root)
+
+    /**
      * Asked once, on the first git call rather than at construction — the composition root
      * builds this before the user has any chance to fix it, and a lazy answer keeps the
      * message next to the work it stopped. `by lazy` is synchronized, so concurrent first
@@ -206,8 +212,15 @@ class CommandLineGitSync(
         }
     }
 
+    /**
+     * The exact argument list handed to the process, credential prefix included. Internal
+     * because it is the wiring itself: [PushCredential] computing the right `-c` is worth
+     * nothing if it never reaches a git call, and that is not observable from the outside.
+     */
+    internal fun commandFor(args: List<String>): List<String> = listOf(GIT) + credential.gitConfig() + args
+
     private fun exitCodeOf(args: List<String>, output: Path): Int {
-        val process = ProcessBuilder(listOf(GIT) + args)
+        val process = ProcessBuilder(commandFor(args))
             .directory(root.toFile())
             .redirectErrorStream(true)
             .redirectOutput(output.toFile())

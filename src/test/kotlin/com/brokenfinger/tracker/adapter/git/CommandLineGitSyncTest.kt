@@ -342,6 +342,30 @@ class CommandLineGitSyncTest {
         return log.second.trim().lines().filter { it.isNotBlank() }
     }
 
+    /**
+     * The wiring half of #267. [PushCredential] computing the right `-c` is worth nothing if it
+     * never reaches a git call, and the old arrangement — `git config` inside the record
+     * repository — is exactly what this replaces, so both halves are asserted here: the prefix is
+     * on the command, and the repository's own config stays empty.
+     */
+    @Test
+    fun `carries the push credential on every call and writes none into the repository`() {
+        val credentials = root.resolve(PushCredential.FILE)
+        Files.createDirectories(credentials.parent)
+        Files.writeString(credentials, "https://x-access-token:token@github.com\n")
+
+        CommandLineGitSync(root).commandFor(listOf("push")) shouldBe
+            listOf("git", "-c", "credential.helper=store --file=$credentials", "push")
+        // `run`, not `git`: the key being absent is the assertion, and git exits 1 to say so.
+        run(listOf("config", "--local", "--get-all", "credential.helper"), root).second shouldBe ""
+    }
+
+    /** A user who never set a token pushes to nothing, and git is invoked exactly as before. */
+    @Test
+    fun `adds nothing when no credential was ever stored`() {
+        CommandLineGitSync(root).commandFor(listOf("status")) shouldBe listOf("git", "status")
+    }
+
     private fun filesInHead(): List<String> =
         git("show", "--name-only", "--format=").trim().lines().filter { it.isNotBlank() }.sorted()
 

@@ -48,8 +48,34 @@ class GithubRemote(
     private val apiBase: String = "https://api.github.com",
 ) {
     fun ensure() {
+        // First, and regardless of the token: an install from before #267 carries our pointer in
+        // the record repository's own config, and the `fatal:` it prints on the host — over a
+        // push that succeeded — does not stop until that entry is gone.
+        runCatching { forgetOurPointer() }.onFailure { warn(it) }
         runCatching { wireUnlessWired() }.onFailure { warn(it) }
     }
+
+    /**
+     * Removes the `credential.helper` **we** wrote into the repository's own config, and nothing
+     * else. Matching on our own file name is what tells our entry from the user's: `store
+     * --file=~/.git-credentials` is git's documented default location, so anything looser would
+     * delete a setting that was never ours to touch.
+     *
+     * Values are read, filtered and rewritten rather than unset by a regex — a value-pattern
+     * would have to survive both path separators and the dot in `.ps`, and getting that subtly
+     * wrong deletes the user's helper instead of ours.
+     */
+    private fun forgetOurPointer() {
+        val helpers = localHelpers()
+        val theirs = helpers.filterNot { it.contains(OUR_STORE) || it.contains(OUR_STORE_ON_WINDOWS) }
+        if (theirs.size == helpers.size) return
+        git("config", "--local", "--unset-all", "credential.helper")
+        theirs.forEach { git("config", "--local", "--add", "credential.helper", it) }
+        logger.info("Removed our credential pointer from the record repository's config — it is passed per command now")
+    }
+
+    private fun localHelpers(): List<String> =
+        git("config", "--local", "--get-all", "credential.helper").lines().filter { it.isNotBlank() }
 
     private fun wireUnlessWired() {
         if (token == null) return
@@ -108,14 +134,15 @@ class GithubRemote(
      * gitignore the server itself maintains keeps it out of every commit.
      */
     private fun storeCredential() {
-        val file = recordRoot.resolve(CREDENTIALS)
+        val file = PushCredential(recordRoot).file()
         Files.createDirectories(file.parent)
         runCatching {
             Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY))
         }
         Files.writeString(file, "https://x-access-token:${token!!.raw()}@github.com\n")
         runCatching { Files.setPosixFilePermissions(file, OWNER_ONLY) }
-        git("config", "credential.helper", "store --file=${file.toAbsolutePath()}")
+        // No `git config` here on purpose. The pointer is passed per command instead, because
+        // this repository's config is the user's too and the path we would write is ours (#267).
     }
 
     /**
@@ -177,7 +204,9 @@ class GithubRemote(
     private val client: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
 
     private companion object {
-        const val CREDENTIALS = ".ps/git-credentials"
+        /** Both spellings of our own store, so a user's `store --file=~/.git-credentials` is safe. */
+        val OUR_STORE = PushCredential.FILE
+        val OUR_STORE_ON_WINDOWS = PushCredential.FILE.replace('/', '\\')
 
         /** Both spellings GitHub hands out, with the trailing `.git` optional. */
         val GITHUB_SSH = Regex("""(?:ssh://)?git@github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?""")
