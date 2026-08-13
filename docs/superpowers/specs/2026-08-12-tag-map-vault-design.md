@@ -95,7 +95,14 @@ tag pane and search, wikilinks drive the graph and backlinks — and removing th
 break something that works today. If the graph's tag option is enabled a name may appear as two
 nodes; that is a viewer setting the owner controls, not the server's call.
 
-### 3.3 Tags link to the tags they share problems with
+### 3.3 Tags link to the tags they share problems with — ⚠️ reversed 2026-08-13 (#241)
+
+> **Kept for the record; the edges came back out.** Obsidian sizes a graph node by how many notes
+> link to it and cannot read frontmatter, so 27 catalog neighbours against 2 solved problems made
+> `implementation` the largest node on the map of someone who had solved two problems. The edges
+> fixed the *shape* and cost both signals the map exists for — what you have solved a lot of, and
+> what you have never met. See §3.6.
+
 
 Added 2026-08-13 (#231) after the first version shipped and the live vault showed **81 of 83
 tags isolated.** The reasoning had been sound and its premise was wrong: *an isolated node is a
@@ -123,11 +130,49 @@ What is deliberately *not* built here is prerequisite ordering — design §6.10
 our own taxonomy is forbidden outright. Co-occurrence is different in kind: it counts what
 solved.ac already tagged.
 
-### 3.4 The tag note does not list its problems
+### 3.4 The tag note does not list its problems — ⚠️ reversed 2026-08-13 (#241)
 
 Obsidian's backlink pane already answers *"which problems link here"*. Generating that list would
 create a second copy of something the records already say, and a second copy is a thing that can
 disagree with the first.
+
+> **Reversed.** The second-copy objection does not survive contact with how this file is written:
+> the note is overwritten whole from the records on every pass, exactly as the counts are, so the
+> list cannot drift from them any more than `solved: 2` can. And the backlink pane is one panel
+> further than where a reader who just clicked a tag node is looking. The counts now name the
+> records they came from. See §3.6.
+
+### 3.6 What the tag note links to, after #241
+
+**Tags link only to the problems whose records raised their counts, and never to another tag.**
+
+| | |
+|---|---|
+| `implementation` links before | 27 tags + 2 problems = **29** |
+| `implementation` links after | **2** |
+| what node size then means | the problems you have worked on under that tag |
+
+Two lines, both plain lists of records that exist:
+
+```markdown
+Met 2 of 48, passed 2.
+
+Passed: [[problems/120802-두-수의-합-구하기/README|두 수의 합 구하기]] …
+Attempted without a pass: …
+```
+
+Split because the counts above already draw that line and one list would throw it away. Neither
+is a ranking, and a tag with nothing submitted renders neither.
+
+**"Never met" is carried by colour, not by isolation.** An Obsidian graph colour group on
+`["solved":0]` marks every untouched tag and does not touch node size, which is strictly more
+than isolation ever said — it survives the vault growing. That is a viewer setting the reader
+owns; the server writes the frontmatter it reads and stops there. The recipe is in
+`template/ps-records/README.md`.
+
+The link target comes from `RecordLayout`, which owns the directory name. Composing it from the
+title instead is #233 exactly, and the test that resolves every emitted link against the files on
+disk covers both kinds now.
 
 ### 3.5 When it is written
 

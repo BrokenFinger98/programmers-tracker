@@ -55,6 +55,17 @@ class RecordLayout(private val root: Path) {
      */
     fun tagNoteLink(tag: String): String = "$TAGS/${slugOf(tag)}"
 
+    /**
+     * What a wikilink to one problem's page must say — resolved through [problemDirectory], so a
+     * problem Programmers renamed is linked at the directory it actually has rather than at the
+     * name today's title would produce.
+     *
+     * Asking here rather than composing the string is the whole of #233: the link and the path
+     * have to come from one place, or half of them name files that do not exist.
+     */
+    fun problemNoteLink(lessonId: Long, title: String?): String =
+        "$PROBLEMS/${problemDirectory(lessonId, title).fileName}/$PROBLEM_PAGE"
+
     private fun attemptsOf(lessonId: Long, title: String?, attempt: Int): Path {
         require(attempt >= 1) { "attempt must be at least 1, a run writes no attempt file: $attempt" }
         return problemDirectory(lessonId, title).resolve(ATTEMPTS)
@@ -79,6 +90,9 @@ class RecordLayout(private val root: Path) {
 
         private const val PROBLEMS = "problems"
         private const val TAGS = "tags"
+
+        /** The page [ProblemReadme] writes, named here because links point at it. */
+        private const val PROBLEM_PAGE = "README"
         private const val ATTEMPTS = "attempts"
         private const val SUBMISSION_LOG = "log/submissions.jsonl"
         private const val FALLBACK_EXTENSION = "txt"

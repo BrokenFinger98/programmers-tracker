@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [boundary, obsidian, aggregation, constitution, vault]
 author: BrokenFinger98
 created: 2026-08-12
-updated: 2026-08-12
+updated: 2026-08-13
 sources: [raw/sessions/2026-08-12-clean-slate-verification.md]
 ---
 
@@ -99,6 +99,13 @@ time of writing.
 shape, and design §5.5's amendment now points here instead of leaving the conflict open.
 
 ## Amended 2026-08-13 (#231): the map needed edges between tags, not only into them
+
+> ⚠️ **Superseded 2026-08-13 by [[decisions/2026-08-13-node-size-is-what-you-solved]] (#241).**
+> Kept in full because the reasoning below is intact and the thing it missed is the lesson:
+> Obsidian sizes a node by its link count, so 510 catalog edges made every map's biggest node the
+> catalog's rather than the reader's. The core decision of this page — the server counts and names
+> nothing — is untouched.
+
 
 The first version shipped and the live vault showed **81 of 83 tags isolated.** The decision's
 own argument had been that an isolated node is the finding — and it holds only **when isolation

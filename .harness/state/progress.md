@@ -4051,3 +4051,42 @@ a record?
 | `sensor.focusedSec` | non-zero on 4 records (32 s, 37 s), 0 on the 18 from the automated E2E run — the field is alive, and 0 there is the correct reading of a tab that never had focus |
 
 The record repository and the filesystem agree exactly, in both directions.
+
+## [2026-08-13] #241 — the tag↔tag edges come back out, and the tags name their problems ✅
+
+Owner opened the graph and asked two things I had not: **why is node size the catalog, and why
+can I not click a type and reach the problems I did.** Both were right.
+
+Obsidian sizes a node by how many notes link to it and cannot read frontmatter, so on the live
+vault:
+
+| tag | links | of which are the owner's problems |
+|---|---|---|
+| `implementation` | 29 | **2 (7%)** |
+| `arithmetic` | 7 | **2 (29%)** |
+
+`implementation` would need **27+ solved problems** before the owner's own work matched the
+catalog's contribution to its own node. Until then the biggest node on the map is the catalog's,
+identically for every user.
+
+**#231 was solving the wrong problem.** The dust cloud was not a defect — it was an accurate
+picture of four solved problems. 510 catalog edges made the map *look* informative while removing
+both signals it existed for. And colour does the "never met" job better than isolation ever did:
+`["solved":0]` keeps working at any vault size and costs the map nothing.
+
+Reversed in [[decisions/2026-08-13-node-size-is-what-you-solved]]; the #231 amendment is marked
+superseded rather than deleted, and spec §3.3 and §3.4 carry the same mark. §3.4 had refused to
+list the problems on the grounds that a generated list is a second copy that can disagree with
+the backlink pane — it cannot, because the note is overwritten whole from the records exactly as
+`solved: 2` is.
+
+`RecordLayout.problemNoteLink` owns the link for the same reason `tagNoteLink` does (#233), and
+the resolution test now resolves **every** emitted link — tag and problem — against files on
+disk, with the regex widened to match aliased links.
+
+Colour recipe documented in the template README and its Korean twin, because a new vault is now a
+field of isolated dots and the reader has to be told that this is the finding.
+
+**Known and next**: the container runs in UTC, so `ts` is stamped `…Z` and the attempt history
+renders `05:23` for a 14:23 KST submit. The instants are correct and the display is nine hours
+out. Its own issue, next.
