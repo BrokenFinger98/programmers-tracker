@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-08-13
-sources: [raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
+updated: 2026-08-14
+sources: [raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -297,6 +297,26 @@ Twice in two days is what settled the shape of the fix: the rule became
 spelled out wherever it happens to be needed. **Two views of one thing should not need two
 vocabularies**, and the surest way to keep them from drifting is to give them one sentence to
 share rather than one convention to remember.
+
+## Three refutations in one night, all of them mine
+
+2026-08-14 produced the cleanest run of this pattern yet, because each claim was checked within an
+hour of being made ([[sources/2026-08-14-the-night-the-records-learned-the-question]]).
+
+| I asserted | The measurement | What the difference cost |
+|---|---|---|
+| `SubmissionRecord`'s 70 uncovered branches are generated `equals`/`hashCode` | 69 are in `<init>` — Kotlin compiles each default parameter into a bitmask test, and the class has 15 defaulted fields | It was in a GitHub issue before it was measured. Same conclusion, and the *mechanism* is what decides how to filter it |
+| The runner package's 66% is depressed by C# execution tests skipping locally | CI's uploaded artifacts: 49 execution tests, **0 skipped**, and the package reads **575/862 on both machines** | The number was already right; execution proofs add zero branch coverage |
+| The runners have no execution proof, so building one is the next work | Seven have existed since #84/#86, with the exact `assumeTrue` posture I was about to propose | A recommendation that would have had someone rediscover 49 passing tests |
+
+All three share one shape: **an inference stated with the confidence of a measurement**, and each
+took under five minutes to check. The second is the sharpest, because the fix that exposed it was
+built *for* that purpose — the gate had been hiding the exempt package's number, and the first
+thing the number did once visible was refute the hypothesis that asked for it.
+
+The practical rule this leaves: when a claim explains *why* a number is what it is, the claim is
+about the number and can be checked against it. `find`, a downloaded artifact and a method-level
+counter each settled one of these; none needed an argument.
 
 ## The counter-practice
 
