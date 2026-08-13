@@ -194,6 +194,13 @@ Since this tool uses a private protocol, the judgment and responsibility for usi
 
 ---
 
+## Security
+
+This tool holds your Programmers login, a generated `/watch` token and — optionally, for one boot
+— a GitHub token. [`SECURITY.md`](SECURITY.md) says where each of them lives, why two of them
+deliberately do not live with the records, how to report something privately, and which parts of
+the design are decisions rather than holes.
+
 ## Contributing
 
 Issues and PRs are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first
