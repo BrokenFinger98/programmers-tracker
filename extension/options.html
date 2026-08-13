@@ -15,8 +15,10 @@
   <body>
     <label for="token">Watch token</label>
     <input id="token" type="password" autocomplete="off" spellcheck="false" />
-    <p>The contents of <code>.ps/watch-token</code> in your record repository. It is stored
-      by this extension only, and never sent anywhere but your own machine.</p>
+    <p>The contents of <code>.ps/watch-token</code> in <strong>this repository's
+      checkout</strong> — not your record repository. It is a credential, and that repository
+      is pushed. Stored by this extension only, and never sent anywhere but your own
+      machine.</p>
 
     <label for="port">Server port</label>
     <input id="port" type="number" min="1" max="65535" />
