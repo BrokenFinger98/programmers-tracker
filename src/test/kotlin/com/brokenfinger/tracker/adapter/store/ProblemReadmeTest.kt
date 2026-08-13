@@ -41,6 +41,52 @@ class ProblemReadmeTest {
         text shouldContain """language: "java""""
     }
 
+    /**
+     * The language beside `verdict: PASS` has to be the language that passed. It was taken from
+     * the newest record of any kind, so lesson 120802 — passed in java, then *run* once in
+     * python3 — published `language: "python3"` next to `verdict: PASS` for a python3 grading
+     * that never produced a verdict (#248). A run is not an attempt (design §5.1), and this was
+     * the fourth place that needed telling.
+     */
+    @Test
+    fun `the language is the one that was submitted, not the one last run`() {
+        val text = render(
+            listOf(
+                aSubmissionRecord(action = GradingAction.SUBMIT, language = "java", verdict = Verdict.PASS),
+                aSubmissionRecord(action = GradingAction.RUN, language = "python3", verdict = null),
+            ),
+        )
+
+        text shouldContain """language: "java""""
+        text shouldNotContain "python3"
+    }
+
+    /** Two submits, and the newest wins — a problem re-solved in another language moved on. */
+    @Test
+    fun `a problem re-solved in another language reports the newer one`() {
+        val text = render(
+            listOf(
+                aSubmissionRecord(action = GradingAction.SUBMIT, language = "java"),
+                aSubmissionRecord(action = GradingAction.SUBMIT, language = "kotlin"),
+            ),
+        )
+
+        text shouldContain """language: "kotlin""""
+    }
+
+    /**
+     * Nothing submitted, so there is no language to report — absent rather than borrowed from a
+     * run, for the same reason an unrecorded title has no key. `runCount` still says the problem
+     * was touched.
+     */
+    @Test
+    fun `a problem only ever run reports no language`() {
+        val text = render(listOf(aSubmissionRecord(action = GradingAction.RUN, language = "python3")))
+
+        text shouldNotContain "language:"
+        text shouldContain "runCount: 1"
+    }
+
     @Test
     fun `the frontmatter carries the progress the records add up to`() {
         val records = listOf(aRun(elapsedSec = 100), aSubmit(attempt = 1), aRun(elapsedSec = 700))

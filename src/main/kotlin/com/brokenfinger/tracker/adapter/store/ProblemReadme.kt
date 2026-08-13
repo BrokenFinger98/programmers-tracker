@@ -47,8 +47,24 @@ class ProblemReadme(private val layout: RecordLayout) {
     private fun identity(records: List<SubmissionRecord>): List<String> = listOfNotNull(
         "lessonId: ${records.first().lessonId}",
         field("title", quoted(titleOf(records))),
-        field("language", quoted(latest(records) { it.language.ifBlank { null } })),
+        field("language", quoted(languageOf(records))),
     )
+
+    /**
+     * **The language that was submitted**, so it means the same thing as the `verdict` two lines
+     * below it.
+     *
+     * It used to be the newest record of any kind, and lesson 120802 — passed in java, then run
+     * once in python3 — published `language: "python3"` beside `verdict: PASS`, for a run that
+     * produced no verdict at all (#248). Everything else on this page that varies per grading is
+     * submit-only already; this was the one field counting runs, and the one a reader pairs with
+     * the outcome.
+     *
+     * Absent when nothing has been submitted. Borrowing a run's language would name a language
+     * nothing was ever judged in, and `runCount` already says the problem was touched.
+     */
+    private fun languageOf(records: List<SubmissionRecord>): String? =
+        latest(submits(records)) { it.language.ifBlank { null } }
 
     // Omitted rather than defaulted when a record carries no catalog metadata: `level: 0`
     // would be indistinguishable from a genuine Lv0 problem.
