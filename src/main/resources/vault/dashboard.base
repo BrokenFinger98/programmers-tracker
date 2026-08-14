@@ -1,7 +1,4 @@
 formulas:
-  # Every problem page is named README.md, so the file name is useless as a label and the
-  # folder is what identifies it: `120802-<slug>`. The title property is the
-  # readable one and comes first; this is here for when two problems share a title.
   directory: |
     file.folder
 properties:
@@ -42,9 +39,6 @@ properties:
   file.name:
     displayName: Open
 views:
-  # Recent first, because that is a fact rather than a claim. Every other ordering below is a
-  # view you choose, not a verdict this vault reached — the server writes the numbers and which
-  # of them is a weakness is yours to say (decisions/2026-08-12-the-server-counts-and-names-nothing).
   - type: table
     name: Recent
     filters:
@@ -63,9 +57,6 @@ views:
     sort:
       - property: lastSubmit
         direction: DESC
-
-  # The point of the whole tool: what did not pass. A problem you failed and never came back to
-  # is invisible on Programmers' own scoreboard, which only remembers that you eventually solved it.
   - type: table
     name: Not passed yet
     filters:
@@ -85,9 +76,6 @@ views:
     sort:
       - property: lastSubmit
         direction: DESC
-
-  # Attempts and runs side by side. A problem taken in one submit after twenty runs and one taken
-  # in twenty submits are different stories, and neither number tells it alone.
   - type: table
     name: By attempts
     filters:
@@ -104,7 +92,6 @@ views:
     sort:
       - property: attempts
         direction: DESC
-
   - type: table
     name: By part
     filters:
@@ -123,10 +110,6 @@ views:
     sort:
       - property: level
         direction: ASC
-
-  # Algorithm and SQL are different practices — their protocols differ, their runtimes are not
-  # comparable, and a review plan usually treats them separately. `kind` is written by the server
-  # from the channel it subscribed on (#256); records from before that field simply have none.
   - type: table
     name: By kind
     filters:
@@ -146,7 +129,6 @@ views:
     sort:
       - property: lastSubmit
         direction: DESC
-
   - type: table
     name: By language
     filters:
@@ -165,9 +147,6 @@ views:
     sort:
       - property: lastSubmit
         direction: DESC
-
-  # The tag map as a table. `catalogTotal` is the denominator that keeps it honest: an untouched
-  # tag with one problem in the whole catalog and an untouched tag with 38 are not the same gap.
   - type: table
     name: Tags
     filters:
