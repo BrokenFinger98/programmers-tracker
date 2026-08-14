@@ -73,7 +73,7 @@ class TagNotes(private val layout: RecordLayout) {
 
     // The alias is the title as recorded; `[`, `]` and `|` would end the link early, so they go.
     private fun linkTo(problem: TouchedProblem): String =
-        "[[${layout.problemNoteLink(problem.lessonId, problem.title)}|${aliasOf(problem.title)}]]"
+        "[${aliasOf(problem.title)}](${layout.problemNoteLinkFromTag(problem.lessonId, problem.title)})"
 
     private fun aliasOf(title: String): String = title.filterNot { it in "[]|" }.trim().ifEmpty { "untitled" }
 }

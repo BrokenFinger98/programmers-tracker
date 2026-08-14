@@ -4776,3 +4776,40 @@ and simpler the moment that setting is flipped, which is the owner's to flip.
 Every path and anchor it names was checked to resolve, including the two deep links into
 `docs/mcp.md` and `README.md`.
 
+## [2026-08-14] #293 — the vault rendered in Obsidian and broke in the two places records are read ⏳
+
+The owner opened a problem page on github.com and saw `![[statement]]` printed as literal text.
+Then IntelliJ, same. Not a broken link — **not a link at all** in either.
+
+Wikilinks are Obsidian's own syntax, and of the three renderers these records are opened in,
+exactly one understands them:
+
+| renderer | `[[wikilink]]` | `![[embed]]` | `[text](path.md)` |
+|---|---|---|---|
+| Obsidian | ✅ | ✅ | ✅ |
+| github.com | ❌ literal | ❌ literal | ✅ |
+| IntelliJ preview | ❌ literal | ❌ literal | ✅ |
+
+**Every link the server writes was a wikilink** — the statement, the tag links on each problem
+page, the problem links on each tag note. So a record repository was fully legible in Obsidian and
+half-broken everywhere else, *including the host it is pushed to*. #292 said github.com had no
+index; the truth was that the pages themselves did not render there.
+
+All three now emit standard markdown links. The paths are safe to write raw because `slugOf`
+collapses everything that is not a letter or a number — measured against the shipped catalog,
+whose worst titles are `스티커 모으기(2)` → `스티커-모으기-2` and `[1차] 추석 트래픽` →
+`1차-추석-트래픽`. Nothing that can reach a link's parentheses.
+
+**The cost is stated rather than hidden: the statement stops being embedded.** No syntax embeds in
+Obsidian *and* renders on GitHub — `![](statement.md)` embeds in one and is a broken **image** in
+the other. Readable in three beats inlined in one, for a file sitting in the same directory.
+
+Seven tests failed on the change, which is the correct number: they were pinning the format on
+purpose. The strongest of them got stronger — `every link a note emits resolves to a file that
+exists` (#233's guard) now resolves each link **from the note's own directory**, which is what a
+relative link means and what a renderer will actually do with it.
+
+**One claim I cannot verify from here**: that Obsidian's graph still draws edges from markdown
+links. The documentation says both formats are equivalent, and the tag map rests on those edges
+(#229, #241) — so it is the first thing to look at in Obsidian after this lands.
+

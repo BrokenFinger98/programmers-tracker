@@ -13,7 +13,8 @@ import java.nio.file.Path
 
 class TagNotesTest {
     /** Any wikilink, alias stripped — the target is what has to resolve. */
-    private val link = Regex("""\[\[([^\]|]+)(?:\|[^\]]*)?]]""")
+    /** `[text](relative/path.md)` — the format every renderer understands, not just Obsidian (#293). */
+    private val link = Regex("""\[[^\]]*]\(([^)]+)\)""")
 
     @TempDir
     lateinit var root: Path
@@ -89,7 +90,7 @@ class TagNotesTest {
 
         val text = Files.readString(root.resolve("tags/prime-factorization.md"))
         text shouldContain "tag: prime factorization"
-        text shouldContain "[[problems/1-두-수의-합/README|두 수의 합]]"
+        text shouldContain "[두 수의 합](../problems/1-두-수의-합/README.md)"
     }
 
     /**
@@ -112,7 +113,9 @@ class TagNotesTest {
             paths.toList().flatMap { link.findAll(Files.readString(it)).map { m -> m.groupValues[1] } }
         }
         links.shouldNotBeEmpty()
-        links.forEach { target -> Files.exists(root.resolve("$target.md")) shouldBe true }
+        // Resolved from the note's own directory, which is what a relative link means and what
+        // every renderer will do with it — a stricter check than the vault-root one it replaces.
+        links.forEach { target -> Files.exists(root.resolve("tags").resolve(target).normalize()) shouldBe true }
     }
 
     /** The page a link points at, written the way [ProblemReadme] would name it. */
@@ -145,8 +148,8 @@ class TagNotesTest {
         notes().write(listOf(TagCount("dp", 38, 2, 1, touched = touched)))
 
         val text = Files.readString(root.resolve("tags/dp.md"))
-        text shouldContain "Passed: [[problems/1-solved-one/README|solved one]]"
-        text shouldContain "Attempted without a pass: [[problems/2-open-one/README|open one]]"
+        text shouldContain "Passed: [solved one](../problems/1-solved-one/README.md)"
+        text shouldContain "Attempted without a pass: [open one](../problems/2-open-one/README.md)"
     }
 
     /**

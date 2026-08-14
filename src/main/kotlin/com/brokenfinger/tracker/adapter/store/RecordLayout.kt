@@ -55,25 +55,33 @@ class RecordLayout(private val root: Path) {
     fun tagNote(tag: String): Path = root.resolve(TAGS).resolve("${slugOf(tag)}.md")
 
     /**
-     * What a wikilink to that note must say — the **file name**, not the tag.
+     * A tag note's path **as written from a problem page**, two directories down.
      *
-     * They differ for 43 of the shipped catalog's 83 tags, because `binary_search` slugs to
-     * `binary-search`, and writing the tag instead shipped a map whose links resolved to
-     * nothing (#233). Both writers ask here rather than building the string themselves: one
-     * place owns the name, for the same reason there is only one sanitiser.
+     * A relative markdown link rather than a wikilink (#293): of the three renderers these
+     * records are read in, only Obsidian understands `[[…]]` — github.com and IntelliJ print it
+     * as literal text, and github.com is where the repository is pushed. All three understand
+     * this.
+     *
+     * The **file name**, not the tag: they differ for 43 of the shipped catalog's 83 tags,
+     * because `binary_search` slugs to `binary-search`, and writing the tag instead shipped a map
+     * whose links resolved to nothing (#233). Both writers ask here rather than building the
+     * string themselves, for the same reason there is only one sanitiser.
+     *
+     * Safe to write raw: [slugOf] collapses everything that is not a letter or a number, so no
+     * bracket, space or parenthesis can reach a link's parentheses.
      */
-    fun tagNoteLink(tag: String): String = "$TAGS/${slugOf(tag)}"
+    fun tagNoteLinkFromProblem(tag: String): String = "../../$TAGS/${slugOf(tag)}.md"
 
     /**
-     * What a wikilink to one problem's page must say — resolved through [problemDirectory], so a
-     * problem Programmers renamed is linked at the directory it actually has rather than at the
-     * name today's title would produce.
+     * A problem page's path **as written from a tag note**, one directory up.
      *
-     * Asking here rather than composing the string is the whole of #233: the link and the path
-     * have to come from one place, or half of them name files that do not exist.
+     * Resolved through [problemDirectory], so a problem Programmers renamed is linked at the
+     * directory it actually has rather than at the name today's title would produce. Asking here
+     * rather than composing the string is the whole of #233: the link and the path have to come
+     * from one place, or half of them name files that do not exist.
      */
-    fun problemNoteLink(lessonId: Long, title: String?): String =
-        "$PROBLEMS/${problemDirectory(lessonId, title).fileName}/$PROBLEM_PAGE"
+    fun problemNoteLinkFromTag(lessonId: Long, title: String?): String =
+        "../$PROBLEMS/${problemDirectory(lessonId, title).fileName}/$PROBLEM_PAGE.md"
 
     private fun attemptsOf(lessonId: Long, title: String?, attempt: Int): Path {
         require(attempt >= 1) { "attempt must be at least 1, a run writes no attempt file: $attempt" }

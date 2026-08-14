@@ -102,7 +102,7 @@ class TagMapWritingTest {
         attachment(FileDerivedArtifacts(root, store)).refreshVault()
 
         val page = RecordLayout(root).problemDirectory(120804, "두 수의 곱 구하기").resolve("README.md")
-        Files.readString(page) shouldContain "[[tags/arithmetic]]"
+        Files.readString(page) shouldContain "[arithmetic](../../tags/arithmetic.md)"
     }
 
     /**
