@@ -1,8 +1,10 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.CaptureKey
+import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.domain.Verdict
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -138,6 +140,34 @@ class RecordWriter private constructor(
     private fun committed(record: SubmissionRecord) {
         runCatching { git.commitSubmission(record, pathsOf(record)) }
             .onFailure { logger.warn("Lesson {} was recorded but not committed", record.lessonId, it) }
+    }
+
+    /**
+     * The git work that had to wait for a network fetch — called once [CodeAttachment] has
+     * written the files it could only write after fetching the source (#316).
+     *
+     * [committed] carries the two things that exist the moment a grading settles: the log line
+     * and the raw frames. Everything else a record consists of — the solution, the statement,
+     * the runner, the problem page, the index, the tag notes — is written afterwards and used to
+     * wait for the 23:00 backup. **Measured 2026-08-14**: the commit a pass pushed contained
+     * `submissions.jsonl` and `001.raw.jsonl` and nothing else, so the one moment the design
+     * promises an off-machine copy was the moment that copy had the least in it.
+     *
+     * **This adds a push rather than moving the first one.** Moving it would make the verdict —
+     * unrecoverable — wait on the source, which can be fetched again; that is the ordering
+     * [copiedRawPath] already argues against, and the reason the scoped commit fires first.
+     *
+     * Reconcile-then-push, unconditionally on a pass and with no branch on how the attachment
+     * went: [GitSync.reconcile] is idempotent and a no-op on a clean tree, so a deferred
+     * attachment — expired session, rate limit — finds nothing to add and this costs one
+     * no-op push, leaving exactly the previous behaviour.
+     */
+    fun attached(record: SubmissionRecord) {
+        if (record.action != GradingAction.SUBMIT || record.verdict != Verdict.PASS) return
+        runCatching {
+            git.reconcile()
+            git.push()
+        }.onFailure { logger.warn("Lesson {}'s attached files were not sent up", record.lessonId, it) }
     }
 
     /**

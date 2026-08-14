@@ -56,6 +56,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-13 [[decisions/2026-08-13-a-floor-per-package-and-a-reason-per-exception]] — The coverage gate named a directory and read 13% of it; every package now carries a floor, compiler-generated branches are not counted, and each deviation is an argument rather than a number
 - 2026-08-13 [[decisions/2026-08-13-the-statement-travels-with-the-record]] — The records knew how you failed and not what was asked; the statement rides on a fetch we already make, is written once beside the attempts, and never enters this repository
 - 2026-08-14 [[decisions/2026-08-14-a-preview-api-under-a-test]] — `Flow.timeout` stays on the observation socket: the acceptance rests on the two tests that pin what it means, and the build reaches zero warnings for the first time
+- 2026-08-14 [[decisions/2026-08-14-the-push-waits-for-the-fetch-the-commit-does-not]] — The commit a pass pushed held the verdict and the frames and not the solution; a second push follows the fetch, and the first one stays where it is
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
