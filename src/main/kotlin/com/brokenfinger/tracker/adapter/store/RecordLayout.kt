@@ -33,6 +33,19 @@ class RecordLayout(private val root: Path) {
      */
     fun statementFile(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve("$STATEMENT.md")
 
+    /**
+     * The index of everything under `problems/` (#292).
+     *
+     * A directory README, because GitHub renders one at the root of any directory — and browsing
+     * into `problems/` is exactly where someone asks what has been solved. `dashboard.base`
+     * answers the same question better, and only inside Obsidian.
+     */
+    fun problemIndex(): Path = root.resolve(PROBLEMS).resolve("$PROBLEM_PAGE.md")
+
+    /** A problem page's path **as written from the index beside it**, one directory down. */
+    fun problemNoteLinkFromIndex(lessonId: Long, title: String?): String =
+        "${problemDirectory(lessonId, title).fileName}/$PROBLEM_PAGE.md"
+
     /** The code of one attempt — `attempts/NNN.<ext>`, the extension following its language. */
     fun attemptFile(lessonId: Long, title: String?, attempt: Int, language: String?): Path =
         attemptsOf(lessonId, title, attempt).resolve("${numberOf(attempt)}.${extensionOf(language)}")

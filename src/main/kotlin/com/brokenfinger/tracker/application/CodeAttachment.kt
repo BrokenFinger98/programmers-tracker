@@ -109,6 +109,7 @@ class CodeAttachment(
         )
         store.append(SubmissionRecordJson.encode(corrected))
         artifacts.writeReadme(lessonHistory(corrected.lessonId))
+        artifacts.writeIndex(RecordHistory.of(store.read()))
         artifacts.writeTagNotes(coverageOf(corrected.tags))
     }
 
@@ -135,6 +136,7 @@ class CodeAttachment(
      */
     fun refreshVault() {
         refreshProblemPages()
+        artifacts.writeIndex(RecordHistory.of(store.read()))
         artifacts.writeTagNotes(tagCoverage())
     }
 
@@ -263,6 +265,13 @@ interface DerivedArtifacts {
 
     /** Rewrites one problem's README from its records, oldest first. */
     fun writeReadme(records: List<SubmissionRecord>)
+
+    /**
+     * Rewrites `problems/README.md` — what has been solved, in the one form a browser renders
+     * (#292). Takes the **whole** history rather than one problem's, because an index of one
+     * problem is a problem page.
+     */
+    fun writeIndex(records: List<SubmissionRecord>)
 
     /**
      * Rewrites the vault's tag map for the counts given (#229) — one problem's tags after a
