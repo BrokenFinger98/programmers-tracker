@@ -79,15 +79,29 @@ class RecordRepositoryIgnoresTest {
     }
 
     /**
-     * The vault's editor state is not records, and `git add --all` cannot tell the difference.
+     * The vault's **window layout** is not records, and `git add --all` cannot tell the difference.
      * On the owner's repository four commits carried `.obsidian/`, and one — the 23:00 backup —
      * carried **nothing else**, under a message that says it reconciled records (#234).
      */
     @Test
-    fun `also ignores the vault's editor state`() {
+    fun `ignores the vault's window layout`() {
         RecordRepositoryIgnores(root).ensure()
 
-        read(".gitignore").shouldContain(".obsidian/")
+        read(".gitignore").shouldContain(".obsidian/workspace.json")
+        read(".gitignore").shouldContain(".obsidian/workspace-mobile.json")
+    }
+
+    /**
+     * And **only** that file. The rule used to take the whole directory, which threw away
+     * `graph.json` — the colour groups the reader built — to escape a layout file that changes
+     * because the vault was opened. A tool whose argument is that nothing is lost should not be
+     * dropping somebody's configuration from their own backup (#306).
+     */
+    @Test
+    fun `leaves the graph settings and the rest of the vault's configuration versioned`() {
+        RecordRepositoryIgnores(root).ensure()
+
+        read(".gitignore").shouldNotContain("\n.obsidian/\n")
     }
 
     /**
@@ -116,9 +130,14 @@ class RecordRepositoryIgnoresTest {
         text.shouldContain(".DS_Store")
     }
 
-    /** One rule missing is one rule added; the other is left exactly as the user wrote it. */
+    /**
+     * One rule missing is one rule added; the other is left exactly as the user wrote it — and a
+     * reader who wrote `.obsidian` meant the **whole directory**, so appending
+     * `.obsidian/workspace.json` underneath would be the server arguing with a broader decision
+     * they already made (#306).
+     */
     @Test
-    fun `adds only the rule that is missing`() {
+    fun `adds only the rule that is missing, and never under a directory already ignored`() {
         write(".gitignore", "# mine\n.obsidian\n")
 
         RecordRepositoryIgnores(root).ensure()

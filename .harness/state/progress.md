@@ -4953,3 +4953,33 @@ A fifth rule, with the same escape hatch as the fourth. **It does not untrack wh
 committed** — an ignore rule has no effect on a tracked file, and a server that started running
 `git rm --cached` on a user's repository would be an ignore rule grown into something else.
 
+## [2026-08-14] #306 — the rule threw away the graph settings to escape the window layout ⏳
+
+The owner asked whether `.obsidian/` needed to be out of GitHub at all. It did not, and the
+history said so. Before the rule landed, file-by-file:
+
+```
+5 changes  .obsidian/workspace.json     which panes are open, scroll position, window size
+5 changes  .obsidian/graph.json         the colour groups and filters
+2 changes  core-plugins / appearance / app.json
+```
+
+`workspace.json` changes because Obsidian was **opened**. `graph.json` changes because somebody
+**configured the graph** — the `["status":"passed"]` and `["kind":"database"]` groups built on
+2026-08-13, which took time and thought.
+
+#234's complaint was a backup commit carrying *nothing but a graph setting under a message about
+records*. That is a **noise** complaint, and the blanket rule answered it by throwing away the
+valuable half — in a tool whose whole argument is that nothing is lost. A laptop dying took those
+settings with it while every record survived.
+
+Narrowed to `.obsidian/workspace.json` and its mobile twin. The rest is versioned, so a vault
+cloned onto another machine opens **configured** rather than blank.
+
+**And a rule the reader already wrote now wins.** `alreadyIgnores` matched a line exactly, so a
+`.gitignore` saying `.obsidian` would have had `.obsidian/workspace.json` appended underneath it —
+the server arguing with a broader decision somebody already made. It checks ancestors now.
+
+`.idea/` stays ignored whole (#304): a folder of markdown opened in IntelliJ has no configuration
+worth carrying.
+

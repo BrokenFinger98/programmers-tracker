@@ -57,8 +57,24 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
 
     // Both spellings mean the same thing to git, and the user may have written either. Only the
     // exact rule counts: `.ps/session` names one file and ignores nothing else.
-    private fun String.alreadyIgnores(rule: String): Boolean =
-        lineSequence().map { it.trim() }.any { it == rule || it == rule.removeSuffix("/") }
+    /**
+     * The rule itself, however they spelled the trailing slash — **or a directory above it**.
+     *
+     * A reader who wrote `.obsidian` meant the whole directory, and appending
+     * `.obsidian/workspace.json` underneath would be the server arguing with a broader decision
+     * they already made. Their file is theirs; a missing line is added and nothing else (#306).
+     */
+    private fun String.alreadyIgnores(rule: String): Boolean {
+        val spellings = ancestorsOf(rule).flatMap { listOf(it, "$it/") }.toSet()
+        return lineSequence().map { it.trim() }.any { it in spellings }
+    }
+
+    /** `.obsidian/workspace.json` → itself and `.obsidian`; a rule with no slash → just itself. */
+    private fun ancestorsOf(rule: String): List<String> {
+        val trimmed = rule.removeSuffix("/")
+        val parts = trimmed.split("/")
+        return parts.indices.map { parts.take(it + 1).joinToString("/") }
+    }
 
     /** One directory, and the sentence that stops a later tidy-up removing it as leftovers. */
     private data class IgnoreRule(val rule: String, val because: String) {
@@ -98,12 +114,19 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
                 because = "# Finder noise, which `git add --all` would otherwise commit as if it were records.\n",
             ),
             IgnoreRule(
-                rule = ".obsidian/",
-                because = "# Obsidian's own state, added by the server because it is the thing doing the\n" +
-                    "# committing. Which panes you had open and how the graph is zoomed are not records, and\n" +
-                    "# `git add --all` cannot tell the difference — one backup commit here contained nothing\n" +
-                    "# but a changed graph setting, under a message about records. Delete this line if you\n" +
-                    "# would rather version your vault's settings; nothing else depends on it.\n",
+                rule = ".obsidian/workspace.json",
+                because = "# Obsidian's window layout — which panes are open, where they are scrolled. It changes\n" +
+                    "# because the vault was *opened*, and `git add --all` cannot tell that from a record: one\n" +
+                    "# backup commit carried nothing else, under a message about records (#234).\n" +
+                    "#\n" +
+                    "# Only this file. `graph.json` beside it holds the colour groups you built, and the rest\n" +
+                    "# are settings — versioning them is why a vault cloned onto another machine opens\n" +
+                    "# configured rather than blank, which is the same promise the records themselves make\n" +
+                    "# (#306, narrowing the rule that took the whole directory).\n",
+            ),
+            IgnoreRule(
+                rule = ".obsidian/workspace-mobile.json",
+                because = "# The same file, from the phone.\n",
             ),
             IgnoreRule(
                 rule = ".idea/",
