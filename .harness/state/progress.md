@@ -4840,3 +4840,32 @@ the honest answer: an index of an empty directory helps nobody.
 Counts and never a verdict — how many recorded and how many passed are facts, and newest-first is
 an ordering of when things happened rather than a ranking of them.
 
+## [2026-08-14] #296 — the statement on the page itself ⏳
+
+The owner asked why the statement is a link rather than just being in the README. The honest
+answer: **my original objection had expired.** #275 chose an embed over inlining because this file
+is regenerated on every grading, so a statement inside it would have to be re-fetched every time to
+survive. That stopped being true the moment `statement.md` existed — the text is on disk and
+inlining costs a file read.
+
+Then #293 replaced the embed with a link, correctly, and the one thing it cost was **one page**.
+Inlining gives it back in all three renderers instead of the one Obsidian gave it in.
+
+`statement.md` stays. This is derived and that is the source: delete the derived file and nothing
+is lost, delete the source and the only way back is a request. It is also the copy a reader may
+annotate, which is the same argument `notes.md` rests on.
+
+**Placed last, against what the issue first proposed.** A KAKAO statement runs several kilobytes,
+so putting it first pushes every page's attempt history below the fold — and the history is the
+half a *record* is opened for. Last also keeps the top of every problem page the same shape
+whatever the statement's length.
+
+**A new cost, and the owner's graph screenshot is what made it visible**: the link had made
+`statement` a node with an edge, six of them on the map right now. Inlining removes the link and
+those become isolated dots. Filterable in Obsidian (`-path:statement`), and the tag map is
+unaffected because it is built from problem↔tag edges — but named rather than discovered.
+
+**And that same screenshot closed #293's open question.** Markdown links do draw edges in Obsidian:
+README↔tag edges are on the map and the colour groups still fire. That was the one claim #293
+shipped without being able to verify from outside Obsidian.
+
