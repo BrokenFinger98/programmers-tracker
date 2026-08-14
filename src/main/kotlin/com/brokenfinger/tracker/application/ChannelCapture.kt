@@ -121,10 +121,16 @@ class ChannelCapture(
      * Stage 3, once the verdict is durable. A failure here costs files that can be written
      * again from a page that still holds the code (protocol doc §10), so it is absorbed and
      * left to the startup retry pass — never allowed back onto the capture path.
+     *
+     * Stage 4 runs either way, which is the point of it: [RecordWriter.attached] reconciles and
+     * pushes on a pass, and reconciling is a no-op when the attachment above wrote nothing. A
+     * failed attachment therefore leaves exactly the push the scoped commit already made,
+     * rather than needing this branch to know how it went (#316).
      */
     private suspend fun attach(record: SubmissionRecord) {
         runCatching { attachment.attach(record) }
             .onFailure { logger.warn("Lesson {} was recorded but its code was not attached", lessonId(), it) }
+        writer.attached(record)
     }
 
     private fun captureOf(rawSessionId: RawSessionId, session: GradingSession, frames: List<String>) = SettledCapture(

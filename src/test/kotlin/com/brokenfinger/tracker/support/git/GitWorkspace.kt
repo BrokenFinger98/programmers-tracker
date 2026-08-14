@@ -30,6 +30,10 @@ class GitWorkspace(private val base: Path) {
     fun withRemote(): Path {
         val remote = base.resolve("remote.git")
         git("init", "--bare", "-b", "main", remote.toString(), at = base)
+        // The same reason as the working repository's copy above, and it was missing here until
+        // a test first read *paths* off the remote rather than commit subjects (#316): the bare
+        // repo has its own config, so it escaped every Korean problem directory it was asked about.
+        git("config", "core.quotePath", "false", at = remote)
         git("remote", "add", "origin", remote.toString())
         write("README.md", "# records")
         git("add", "--all")
@@ -53,6 +57,14 @@ class GitWorkspace(private val base: Path) {
 
     fun filesInHead(): List<String> =
         git("show", "--name-only", "--format=").trim().lines().filter { it.isNotBlank() }.sorted()
+
+    /**
+     * Every path the tree at HEAD carries — *what this repository holds*, which [filesInHead]
+     * (one commit's own diff) does not answer. Defaults to the working repository; pass a bare
+     * remote to ask what actually left the machine (#316).
+     */
+    fun filesAtHead(at: Path = root): List<String> =
+        git("ls-tree", "-r", "--name-only", "HEAD", at = at).trim().lines().filter { it.isNotBlank() }.sorted()
 
     fun statusOf(relative: String): String = git("status", "--porcelain", "--", relative).trim()
 

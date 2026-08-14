@@ -5092,3 +5092,39 @@ in a comment. ADR outcome extended:
 `Console.Clear()` is measured in the execution suite and unreachable from a generation test),
 Kotlin 20, Python 16, C++ 16, JavaScript 14, Java 14. All above their floor; no exemption, so any
 regression fails the build rather than being noted.
+
+---
+
+## 2026-08-14 · #316 — the push a pass triggered did not contain the solution
+
+Found by the first-run e2e, not by reading code. Solving 120811 from a blank vault produced
+`[Lv0] 중앙값 구하기 — PASS (9/9…)` — a commit holding **`submissions.jsonl` and
+`001.raw.jsonl` and nothing else.** The solution, the statement, the runner, the problem page, the
+index and both tag notes were untracked when `pushOnPass` fired, and would have waited for the
+23:00 backup. Up to ~24 hours where the off-machine copy of a solved problem has no solution in it.
+
+**I reversed my own recommendation while implementing.** I proposed *moving* the push after the
+attachment — one push, tidy. Reading `copiedRawPath` again killed it: *"the verdict is
+unrecoverable and the copy is not"*. Moving the push makes the unrecoverable half wait on a
+network fetch of the recoverable half, which is exactly why option A was rejected. So the push is
+**added**, not moved:
+
+- verdict commit + push — immediate, unchanged, survives a hung fetch or an expired session;
+- `RecordWriter.attached` — `reconcile()` then `push()` on a pass, seconds later.
+
+**No branch on how the attachment went**, because `reconcile` is documented idempotent and a no-op
+on a clean tree: a deferred attachment finds nothing to add and this degrades to exactly the old
+behaviour. `ChannelCapture` calls it whether the attach threw or not.
+
+ADR: [[decisions/2026-08-14-the-push-waits-for-the-fetch-the-commit-does-not]].
+
+**The test's first failure was the fixture, not the code.** Asserting at the remote — where the
+defect lives — showed the bare repository escaping every Korean problem directory
+(`problems/120804-\353\221\220…`). `GitWorkspace` has set `core.quotePath=false` on the working
+repository since it was written, with a comment naming this exact trap; the bare remote never got
+it, because until now nothing read *paths* off a remote rather than commit subjects. Fixed at the
+fixture.
+
+Costs taken knowingly: two pushes per pass, and a `chore: reconcile` commit per solved problem
+instead of one nightly. That message now under-describes what it carries — naming it after its
+problem needs a new port operation and is not in this change.

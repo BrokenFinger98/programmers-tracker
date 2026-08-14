@@ -10,7 +10,10 @@ import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.git.GitWorkspace
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldStartWith
@@ -90,6 +93,87 @@ class RecordWriterGitTest {
         repo.subjects(at = remote).size shouldBe 1
     }
 
+    /**
+     * #316, asserted where it was measured: **at the remote**.
+     *
+     * The scoped commit carries the log line and the raw frames, because those are what exists
+     * the moment a grading settles. The solution, the statement and the problem page need a
+     * network fetch first, so `CodeAttachment` writes them afterwards — and they used to wait for
+     * the 23:00 backup. The push a pass triggered therefore contained everything except the thing
+     * that passed.
+     *
+     * The exact directory name is the layout's business; what is under test here is that files
+     * appearing after the verdict still leave the machine on the same pass.
+     */
+    @Test
+    fun `the files written after the verdict reach the remote on the same pass`() = runBlocking<Unit> {
+        val remote = repo.withRemote()
+        val writer = writer()
+        val passed = writer.write(aSubmit(fixture = "algorithm-pass.jsonl", name = "pass"))
+
+        repo.write("$PROBLEM/Solution.java", "class Solution {}")
+        repo.write("$PROBLEM/statement.md", "the question that was asked")
+        repo.filesAtHead(at = remote) shouldNotContain "$PROBLEM/Solution.java"
+
+        writer.attached(passed!!)
+
+        repo.filesAtHead(at = remote) shouldContainAll listOf("$PROBLEM/Solution.java", "$PROBLEM/statement.md")
+    }
+
+    /**
+     * The push was **added, not moved**. Moving it would make the verdict — which cannot be
+     * fetched again — wait on the source, which can; that is the ordering `copiedRawPath` argues
+     * against. This is the state while the fetch is still in flight, and the verdict is already up.
+     */
+    @Test
+    fun `the verdict reaches the remote before any fetch has returned`() = runBlocking<Unit> {
+        val remote = repo.withRemote()
+
+        writer().write(aSubmit(fixture = "algorithm-pass.jsonl", name = "pass"))
+
+        repo.filesAtHead(at = remote) shouldContain "log/submissions.jsonl"
+    }
+
+    /** A deferred attachment — expired session, rate limit — wrote nothing, so there is nothing to add. */
+    @Test
+    fun `an attachment that wrote nothing adds no commit`() = runBlocking<Unit> {
+        repo.withRemote()
+        val writer = writer()
+        val passed = writer.write(aSubmit(fixture = "algorithm-pass.jsonl", name = "pass"))
+        val before = repo.subjects().size
+
+        writer.attached(passed!!)
+
+        repo.subjects().size shouldBe before
+    }
+
+    /** The pass is still the trigger. A wrong answer's files keep riding to the daily backup. */
+    @Test
+    fun `a wrong answer's attached files are not sent up`() = runBlocking<Unit> {
+        val remote = repo.withRemote()
+        val writer = writer()
+        val wrong = writer.write(aSubmit())
+        repo.write("$PROBLEM/Solution.java", "class Solution {}")
+
+        writer.attached(wrong!!)
+
+        repo.filesAtHead(at = remote) shouldNotContain "$PROBLEM/Solution.java"
+    }
+
+    /**
+     * Same contract as [committed]: the record is already durable when this runs, so a broken git
+     * must not escape and take the capture path down with it.
+     */
+    @Test
+    fun `a git that cannot run leaves the pass recorded rather than raising`() = runBlocking<Unit> {
+        val writer = writer(git = BrokenGitSync)
+        val passed = writer.write(aSubmit(fixture = "algorithm-pass.jsonl", name = "pass"))
+
+        writer.attached(passed!!)
+
+        logLines().size shouldBe 1
+    }
+
     @Test
     fun `a record still lands when every git call fails`() = runBlocking<Unit> {
         val written = writer(git = BrokenGitSync).write(aSubmit())
@@ -159,6 +243,9 @@ class RecordWriterGitTest {
 
     private companion object {
         val NOW: Instant = Instant.parse("2026-08-04T05:23:01Z")
+
+        /** Where the layout puts lesson 120804 — a stand-in for "wherever the attached files land". */
+        const val PROBLEM = "problems/120804-두-수의-곱-구하기"
     }
 }
 
