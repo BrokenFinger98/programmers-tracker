@@ -5002,3 +5002,28 @@ resolves. Nothing tested it; every case in `ProblemIndexTest` passed a real titl
 observation socket is a preview API, and `@OptIn` is not a suppression — it is a written
 acceptance that a coroutines upgrade may break the silence deadline (#94). That is a decision with
 an ADR attached, not a line to slip into a typo fix.
+
+---
+
+## 2026-08-14 · #308 — the narrowing that could not reach an existing install
+
+#307 narrowed `.obsidian/` to `.obsidian/workspace.json`, and #308 is the observation that it
+therefore reached **only repositories created after it**. `RecordRepositoryIgnores` adds a missing
+line and edits nothing — that is the rule, it is in the class's KDoc, and it means an older
+`.gitignore` keeps the rules its version had. The new ancestor-aware `alreadyIgnores` then makes
+it look deliberate: the server sees `.obsidian/` and correctly declines to add the narrower rule.
+
+**No machinery.** This is #300 one file over — an improvement that cannot reach an existing
+install — and the seeds got a ledger because seeds change often. Ignore rules do not: five rules
+in the tool's history, one of them ever narrowed. The answer is a sentence, not a migrator, and
+the rule's own comment already ends with the instruction (*"Delete this line if you would rather
+version your vault's settings"*).
+
+So `docs/bootstrap.md` gains an upgrader's paragraph beside the SSH one, which is the same
+register, and the Korean twin gains its translation. The owner's own repository is already
+correct — the 2026-08-13 wipe rewrote that `.gitignore` from scratch, so the by-hand deletion the
+issue asked for had already happened by accident. Verified: it carries the two narrowed rules and
+no `.obsidian/`.
+
+Not done, on purpose: **the server never rewrites or removes a line in that file.** It has always
+been the reader's, and a tool that edits the reader's decisions is worse than a stale rule.
