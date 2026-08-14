@@ -5027,3 +5027,31 @@ no `.obsidian/`.
 
 Not done, on purpose: **the server never rewrites or removes a line in that file.** It has always
 been the reader's, and a tool that edits the reader's decisions is worse than a stale rule.
+
+---
+
+## 2026-08-14 · #310 — the last build warning, and the test that made it affordable
+
+`Flow.timeout` on the observation socket is `@FlowPreview`. It had warned on every build for
+weeks, invisible under #309's warning until that one came out — which is the whole argument for
+removing a warning nobody reads.
+
+**The decision was settled by looking for a test, not by reasoning about risk.** `@OptIn` is a
+written acceptance that a coroutines upgrade may break the line #94 put above the heartbeat
+filter, so the question is what would catch it:
+
+- removal → **compile failure**, loud and unmissable;
+- silent change of meaning (gap-between-emissions → total-collection-time) →
+  `heartbeats hold the socket open and never reach the capture` runs a 200 ms deadline against a
+  flow emitting for 600 ms and asserts zero reconnects. It goes red.
+
+Both caught, so accept. **Had the second row been empty the answer would have been a hand-written
+per-emission timer** — `withTimeoutOrNull` is not a drop-in, it bounds the whole collection and
+would kill a healthy socket the first time a channel stayed open past the deadline.
+
+ADR: [[decisions/2026-08-14-a-preview-api-under-a-test]], including the cost that deleting that
+test silently revokes the basis for the decision — said again in the KDoc at the call site, where
+somebody about to delete it will be.
+
+`./gradlew compileKotlin --rerun-tasks` now emits **zero warnings, for the first time in the
+project's history.** That is the deliverable: the next warning to appear is one nobody has read.

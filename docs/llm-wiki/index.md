@@ -55,6 +55,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-13 [[decisions/2026-08-13-the-pointer-is-passed-not-persisted]] — The credential pointer was written into the repository the host shares, so a host push printed `fatal:` over a push that had succeeded; it is passed per command now and persisted nowhere
 - 2026-08-13 [[decisions/2026-08-13-a-floor-per-package-and-a-reason-per-exception]] — The coverage gate named a directory and read 13% of it; every package now carries a floor, compiler-generated branches are not counted, and each deviation is an argument rather than a number
 - 2026-08-13 [[decisions/2026-08-13-the-statement-travels-with-the-record]] — The records knew how you failed and not what was asked; the statement rides on a fetch we already make, is written once beside the attempts, and never enters this repository
+- 2026-08-14 [[decisions/2026-08-14-a-preview-api-under-a-test]] — `Flow.timeout` stays on the observation socket: the acceptance rests on the two tests that pin what it means, and the build reaches zero warnings for the first time
 - 2026-08-05 [[decisions/2026-08-05-code-pending-correction-append]] — `codePending` is cleared by appending a correction, not by editing the line (owner-accepted 2026-08-06; changes what a JSONL line means)
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
@@ -95,3 +96,4 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-13 [[sources/2026-08-13-the-tally-that-counted-runs]] — The vault verified against the running server, and two MCP tools that answered 8 and 15 for the same problem
 - 2026-08-13 [[sources/2026-08-13-the-map-becomes-a-workspace]] — The owner starts using the vault: the tag-edge reversal, four run-is-not-attempt sites, the UTC clock, the seeded dashboard, and the record finally saying algorithm or database
 - 2026-08-14 [[sources/2026-08-14-the-night-the-records-learned-the-question]] — Eleven PRs, seven defects, none found by reading code — and three findings that refuted something I had asserted within the hour
+- 2026-08-14 [[sources/2026-08-14-the-warnings-and-what-was-under-them]] — The owner's own build output was the finding; one warning hid another, and the safe call was standing on a live untested fallback

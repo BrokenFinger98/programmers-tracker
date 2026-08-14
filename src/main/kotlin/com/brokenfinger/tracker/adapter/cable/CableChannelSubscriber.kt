@@ -13,6 +13,7 @@ import com.brokenfinger.tracker.protocol.SubscriptionRejectedException
 import com.brokenfinger.tracker.protocol.parse.ObservedFrames
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -109,6 +110,24 @@ class CableChannelSubscriber(
      * `application` and never names a wire type
      * ([[decisions/2026-08-05-protocol-dependency-direction]] decision 2).
      */
+    /**
+     * `Flow.timeout` is `@FlowPreview`, and the annotation is the acceptance rather than a
+     * suppression: a coroutines upgrade may rename or remove it (#310).
+     *
+     * The acceptance is affordable because **both halves of what it means are pinned by tests**,
+     * not because a preview API in the critical path is fine. Removal is a compile failure and
+     * cannot be missed. The failure worth worrying about is a silent change of meaning — from
+     * *gap between emissions* to *total collection time* — and
+     * `heartbeats hold the socket open and never reach the capture` runs a 200 ms deadline against
+     * a flow that emits for 600 ms and asserts zero reconnects. That test goes red the moment the
+     * meaning shifts.
+     *
+     * The stable alternative is not equivalent: `withTimeoutOrNull` bounds the whole collection,
+     * which would end a healthy socket the first time a channel stayed open past the deadline. A
+     * per-emission timer written by hand is the only other option, and it is more code in the one
+     * path where being wrong means a silently dead subscription.
+     */
+    @OptIn(FlowPreview::class)
     private suspend fun collectOnce(channel: ChannelKey, capture: ChannelCapture): Boolean {
         var received = false
         runCatching {
