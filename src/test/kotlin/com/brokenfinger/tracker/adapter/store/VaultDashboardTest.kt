@@ -82,6 +82,37 @@ class VaultDashboardTest {
         Files.readString(dashboard) shouldBe "views: [] # mine\n"
     }
 
+    /**
+     * The third state (#300). Absent and edited were the only two considered, which left a file
+     * **nobody had touched** frozen at whatever shipped the day the vault was made — and twice on
+     * 2026-08-13 an improvement reached the one existing vault only by hand.
+     */
+    @Test
+    fun `refreshes a seed the reader never touched`() {
+        VaultDashboard(root).ensure()
+        Files.writeString(dashboard, "stale content the server itself wrote")
+        SeedLedger(root).record("dashboard.base", "stale content the server itself wrote")
+
+        VaultDashboard(root).ensure()
+
+        Files.readString(dashboard) shouldContain "views:"
+    }
+
+    /**
+     * A vault seeded before the ledger existed. It may well be untouched and there is no way to
+     * know, so it is left alone — overwriting what a person wrote cannot be undone from here,
+     * while a stale file costs a hand-copy that was already the status quo.
+     */
+    @Test
+    fun `leaves a seed alone when nothing recorded what it was written from`() {
+        Files.createDirectories(root)
+        Files.writeString(dashboard, "from a vault older than the ledger\n")
+
+        VaultDashboard(root).ensure()
+
+        Files.readString(dashboard) shouldBe "from a vault older than the ledger\n"
+    }
+
     /** Startup runs on every boot; the second pass must be a no-op, not a second write. */
     @Test
     fun `is idempotent across boots`() {

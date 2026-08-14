@@ -15,9 +15,20 @@ import java.nio.file.Path
  * *query* Obsidian evaluates against frontmatter, so it cannot go stale — and the moment the
  * reader adds a column or changes a sort, it is theirs.
  *
- * So this writes **only when the file is absent** and never again. A server that rewrote it would
- * silently undo the reader's edits on the next restart, and nothing would say why their view kept
- * resetting. Same posture as [RecordRepositoryIgnores]: add what is missing, touch nothing else.
+ * So this never rewrites a file the reader has touched. A server that did would silently undo
+ * their edits on the next restart, and nothing would say why their view kept resetting. Same
+ * posture as [RecordRepositoryIgnores]: add what is missing, touch nothing else.
+ *
+ * ### The third state: untouched, and stale
+ *
+ * Absent and edited were the only two cases considered, which left **a file nobody has touched**
+ * frozen at whatever shipped the day the vault was created. Twice on 2026-08-13 an improvement
+ * reached the shipped seed and the one existing vault only because somebody edited it by hand
+ * (#300).
+ *
+ * [SeedLedger] records the bytes written, so an untouched file can be recognised and replaced
+ * while an edited one — a single character different — is left alone forever. A vault seeded
+ * before the ledger existed has no record and counts as edited: absence is not permission.
  *
  * ### Why the server and not the template
  *
@@ -29,17 +40,25 @@ import java.nio.file.Path
  * Failure is logged, never thrown. A grading Programmers has broadcast cannot be replayed
  * (protocol §11), and losing one to a dashboard file would be the wrong trade in every direction.
  */
-class VaultDashboard(private val recordRoot: Path) {
+class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger = SeedLedger(recordRoot)) {
     fun ensure() {
-        SEEDS.forEach { seed -> runCatching { writeUnlessPresent(seed) }.onFailure { warn(it) } }
+        SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }
     }
 
-    private fun writeUnlessPresent(seed: String) {
+    private fun seed(seed: String) {
         val file = recordRoot.resolve(seed)
-        if (Files.exists(file)) return
+        val shipped = shipped(seed)
+        if (Files.exists(file) && !ledger.isUnchanged(seed, file)) return
+        val fresh = !Files.exists(file)
+        if (!fresh && Files.readString(file) == shipped) return
         Files.createDirectories(recordRoot)
-        Files.writeString(file, shipped(seed))
-        logger.info("Wrote {} — seeded once; it is yours to edit from here", file)
+        Files.writeString(file, shipped)
+        ledger.record(seed, shipped)
+        if (fresh) {
+            logger.info("Wrote {} — seeded once; it is yours to edit from here", file)
+            return
+        }
+        logger.info("Refreshed {} — it was still exactly as this server wrote it, so it was ours to update", file)
     }
 
     // Read through the classloader rather than a path: inside the jar there is no file.
