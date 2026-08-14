@@ -4869,6 +4869,29 @@ unaffected because it is built from problem↔tag edges — but named rather tha
 README↔tag edges are on the map and the colour groups still fire. That was the one claim #293
 shipped without being able to verify from outside Obsidian.
 
+## [2026-08-14] #300 — a seeded file never received an improvement ⏳
+
+`README.md`, `README.ko.md` and `dashboard.base` are seeded write-if-absent (#254), on a rule that
+is right and stays: *editing is respected forever; deletion is read as loss, not intent.*
+
+Absent and edited were the only two states it considered, which left a third — **untouched, and
+stale**. Twice on 2026-08-13 an improvement reached the shipped seed and the one existing vault
+only because I edited it by hand: the graph's `kind` colour groups (#271) and the `Kind` column
+(#274). Every future seed change has that shape, and the count of hand-patches only grows.
+
+`SeedLedger` records the SHA-256 of what the server wrote, in `.ps/seeds.json` beside the timers
+and the backup marker (#126). A file that still hashes to that is ours to replace; **one character
+different and it is theirs, permanently.** Every word of #254 stays true and the case it did not
+consider is answered.
+
+**No record means edited.** A vault seeded before the ledger has none, and absence is not
+permission — the mistake runs one way only. Overwriting what a person wrote cannot be undone from
+here; leaving a stale file costs a hand-copy that was already the status quo. A corrupt ledger
+reads as empty for the same reason.
+
+Rejected: shipping the bytes of every version ever seeded (grows without bound, needs a release
+process this project does not have), and a marker inside the file (visible in a document meant to
+be read, deletable by accident, and it puts the tool's bookkeeping in the reader's face).
 ## [2026-08-14] #298 — the one CI job that downloaded the world every run ⏳
 
 Six of seven jobs cache `~/.gradle` through `setup-gradle`. The seventh could not: `docker image
