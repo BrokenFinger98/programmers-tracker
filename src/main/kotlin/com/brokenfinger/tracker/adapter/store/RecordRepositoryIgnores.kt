@@ -105,6 +105,13 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
                     "# but a changed graph setting, under a message about records. Delete this line if you\n" +
                     "# would rather version your vault's settings; nothing else depends on it.\n",
             ),
+            IgnoreRule(
+                rule = ".idea/",
+                because = "# The other editor's state, here for the same reason as the line above (#304). This is a\n" +
+                    "# Kotlin project, so a vault opened in IntelliJ is not an edge case — and `git add --all`\n" +
+                    "# cannot tell a window layout from a record any better than it could tell a graph zoom.\n" +
+                    "# Delete this line if you would rather version it; nothing else depends on it.\n",
+            ),
         )
 
         private val logger = LoggerFactory.getLogger(RecordRepositoryIgnores::class.java)

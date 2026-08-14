@@ -4938,3 +4938,18 @@ what the Dockerfile's layer split was designed to give and had never delivered i
 keeps the `programmers-tracker:ci` tag for the steps that boot the container and assert its
 network posture.
 
+## [2026-08-14] #304 — the server ignored one editor's directory and committed the other's ⏳
+
+`RecordRepositoryIgnores` carries `.obsidian/`, added after a 23:00 backup committed nothing but a
+changed graph setting under a message about records (#234). `.idea/` was not there — and measured
+on the owner's repository, it was **tracked and pushed**, sitting beside `problems/` and `log/` on
+github.com.
+
+The argument that added `.obsidian/` never mentioned Obsidian. It is that `git add --all` cannot
+tell an editor's state from a record and the server is the thing doing the committing. This is a
+Kotlin project; a vault opened in IntelliJ is not an edge case.
+
+A fifth rule, with the same escape hatch as the fourth. **It does not untrack what is already
+committed** — an ignore rule has no effect on a tracked file, and a server that started running
+`git rm --cached` on a user's repository would be an ignore rule grown into something else.
+
