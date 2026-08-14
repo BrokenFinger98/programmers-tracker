@@ -74,9 +74,14 @@ class ProblemIndex(private val layout: RecordLayout) {
      * A relative markdown link, resolved through the layout so a problem Programmers renamed is
      * linked at the directory it actually has (#233) — and readable in every renderer rather than
      * only in Obsidian (#293).
+     *
+     * The title is a non-null `String` whose **blank** spelling means unknown:
+     * `SettledCapture.toRecord` writes `problem?.title.orEmpty()`, so a problem the cached catalog
+     * has never seen arrives here as `""`. The lesson id is what the row links by then — the
+     * directory is named for it either way, so the link still resolves; only its text changes.
      */
     private fun link(record: SubmissionRecord): String {
-        val title = record.title?.ifBlank { null } ?: record.lessonId.toString()
+        val title = record.title.ifBlank { null } ?: record.lessonId.toString()
         return "[$title](${layout.problemNoteLinkFromIndex(record.lessonId, record.title)})"
     }
 

@@ -4983,3 +4983,22 @@ the server arguing with a broader decision somebody already made. It checks ance
 `.idea/` stays ignored whole (#304): a folder of markdown opened in IntelliJ has no configuration
 worth carrying.
 
+
+---
+
+## 2026-08-14 · #309 — the safe call the type system had already answered
+
+Every build since #295 printed `ProblemIndex.kt:79 Unnecessary safe call on a non-null receiver`.
+One character, and the reason to bother is not the character: a warning that appears on **every**
+build is how a reader learns to skip the warning block, and #310 was sitting right underneath it.
+
+The half that was not cosmetic is what the safe call was standing on. `SettledCapture.toRecord`
+writes `title = problem?.title.orEmpty()`, so **a problem the cached catalog has never seen records
+an empty title** — blank is how "unknown" is spelled in the JSONL. `link()` falls back to the
+lesson id there, `RecordLayout` names that directory `<lessonId>` with no slug, and the row still
+resolves. Nothing tested it; every case in `ProblemIndexTest` passed a real title. Pinned now.
+
+**The remaining warning is #310** and is deliberately not in this branch. `Flow.timeout` on the
+observation socket is a preview API, and `@OptIn` is not a suppression — it is a written
+acceptance that a coroutines upgrade may break the silence deadline (#94). That is a decision with
+an ADR attached, not a line to slip into a typo fix.
