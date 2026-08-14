@@ -106,6 +106,18 @@ cannot authenticate it.)
 You can also skip remotes entirely. Records are still written and committed locally; only
 the push is lost, and it is retried rather than dropped.
 
+**Upgrading, and something the release notes promised did not appear?** Look at your record
+repository's `.gitignore`. The server **adds a missing rule and never edits or removes one** —
+that file is yours, and a tool that rewrites the reader's decisions is worse than a stale line.
+The cost is that a `.gitignore` written by an older version keeps the rules that version had.
+
+One is worth revisiting. Installs from before this rule was narrowed ignore `.obsidian/`
+**whole**, which takes the graph colours and every other vault setting with it; the rule now
+names only `.obsidian/workspace.json` and its mobile twin, so a vault cloned onto another
+machine opens configured rather than blank. If you want that, delete the `.obsidian/` line by
+hand — the narrowed rules are added on the next start, because the server stops looking once an
+ancestor rule already covers the path.
+
 ---
 
 ## 3. Get your session cookie
