@@ -254,12 +254,15 @@ val coverageFloors = mapOf(
 /**
  * Packages held to no floor, each with the reason. Verified to exist on every run — an
  * exemption naming a package that is gone excludes nothing while still reading as a decision.
+ *
+ * **Empty, and that is the point.** `domain/calc/runner` was the only entry: 66% when the
+ * exemption was written, with the honest note *"raising it is tracked separately"* — the sentence
+ * that most often turns an exemption permanent. It was raised to 78% by the value tables (#272)
+ * and to 83% by C's own table (#302), which cleared the general floor and retired it. The map
+ * stays because the machinery is worth keeping for the next one; what it must not become again is
+ * a place where a number goes to stop being looked at.
  */
-val coverageExempt = mapOf(
-    "com/brokenfinger/tracker/domain/calc/runner" to
-        "runner scaffolding for seven languages: it generates files and decides no verdict, so the " +
-        "argument that puts domain/calc at 95% does not transfer to it. Raising it is tracked separately.",
-)
+val coverageExempt = emptyMap<String, String>()
 
 /**
  * Branch counters that correspond to something a person wrote — not to what the Kotlin compiler

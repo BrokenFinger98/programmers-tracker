@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [ci, testing, coverage, guards]
 author: BrokenFinger98
 created: 2026-08-13
-updated: 2026-08-13
-sources: [raw/sessions/2026-08-13-the-map-becomes-a-workspace.md]
+updated: 2026-08-14
+sources: [raw/sessions/2026-08-13-the-map-becomes-a-workspace.md, raw/sessions/2026-08-14-the-warnings-and-what-was-under-them.md]
 ---
 
 # A branch-coverage floor for every package, and a written reason for every exception
@@ -130,3 +130,19 @@ CI to read higher than the local 66% because 8 C# execution tests skip on that m
 uploaded results said 49 execution tests ran with none skipped, and the figure was identical to
 the branch. Which is the argument for reporting an exemption rather than the argument I made for
 it — a number nobody can see is a number nobody can be wrong about out loud.
+
+**The exemption is retired, 2026-08-14 (#302).** `domain/calc/runner` went 66% → 78% (the value
+tables, #272) → **83%** (C's own table), cleared the general 80% floor, and came out of the map.
+`coverageExempt` is now empty and every package in the tree carries an enforced floor.
+
+C was last for a reason the other six did not have: it is the language where **one wire value is
+not one parameter** — `int n[], size_t n_len`, and `int** n, size_t n_rows, size_t n_cols` — so a
+table keyed on *one declared type, one value* could not express it, and 47 branches stayed dark
+while every other language was tabled. The 54 new cases are almost entirely **refusals**, because
+the happy paths already had tests and the refusals are where being wrong is expensive: in C a
+mis-sized array is not a wrong answer, it is a read past the end of a block.
+
+What made this closable was the number being visible. *"Raising it is tracked separately"* is the
+sentence that usually ends an exemption's life as a permanent one; it survived here only because
+#283 forced the row to keep printing, so the distance left was a fact on every CI run rather than
+a promise in a comment.

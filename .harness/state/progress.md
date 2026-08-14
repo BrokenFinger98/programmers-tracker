@@ -5055,3 +5055,40 @@ somebody about to delete it will be.
 
 `./gradlew compileKotlin --rerun-tasks` now emits **zero warnings, for the first time in the
 project's history.** That is the deliverable: the next warning to appear is one nobody has read.
+
+---
+
+## 2026-08-14 · #302 — the exemption is retired, not raised
+
+`coverageExempt` is **empty**. Every package in the tree now carries an enforced floor.
+
+`domain/calc/runner` was 66% when the exemption was written, went to 78% with the value tables
+(#272), and **83%** here — clear of the general 80% floor, so the entry came out of the map rather
+than getting a lower floor written for it.
+
+**Measured before writing anything.** The issue said C had ~30 branches left and that `gridLocals`
+was unreachable from a single-parameter table; the Kover method counters said **47**, and
+`CRunnerTest` had been reaching `gridLocals` all along. The gap was not the happy paths — it was
+`scalarLiteral` 9, `gridLocals` 7, `intLiteral` 7, `checkFor` 5, `arrayLocals` 4, `textLiteral` 4,
+`blockFor` 4. Almost entirely **refusals**.
+
+C earned its own table for a reason the other six do not have: **one wire value is not one
+parameter.** `int n[], size_t n_len` and `int** n, size_t n_rows, size_t n_cols` — so a table keyed
+on *one declared type, one value* cannot express it. 54 cases, and the refusals are the half that
+matters here more than anywhere: in C a mis-sized array is not a wrong answer, it is a read past
+the end of a block.
+
+**54/54 passed on the first run**, which the two previous tables did not — both of those failed
+because I asserted refusals the code does not make. The difference was reading `CRunner` end to
+end and predicting each arm before writing the assertion.
+
+What made this closable at all is that the number was visible. *"Raising it is tracked
+separately"* is the sentence that usually makes an exemption permanent; #283 forced the exempt row
+to keep printing its number, so the distance left was a fact on every CI run instead of a promise
+in a comment. ADR outcome extended:
+[[decisions/2026-08-13-a-floor-per-package-and-a-reason-per-exception]].
+
+**Remaining: 142 branches across the other six generators** — C# 29 (the OS-dependent
+`Console.Clear()` is measured in the execution suite and unreachable from a generation test),
+Kotlin 20, Python 16, C++ 16, JavaScript 14, Java 14. All above their floor; no exemption, so any
+regression fails the build rather than being noted.
