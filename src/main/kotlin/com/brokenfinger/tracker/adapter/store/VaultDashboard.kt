@@ -48,6 +48,7 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
     private fun seed(seed: String) {
         val file = recordRoot.resolve(seed)
         val shipped = shipped(seed)
+        if (adopted(seed, file, shipped)) return
         if (Files.exists(file) && !ledger.isUnchanged(seed, file)) return
         val fresh = !Files.exists(file)
         if (!fresh && Files.readString(file) == shipped) return
@@ -59,6 +60,27 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
             return
         }
         logger.info("Refreshed {} — it was still exactly as this server wrote it, so it was ours to update", file)
+    }
+
+    /**
+     * A file that already **is** what we would write is ours, whatever the ledger remembers — so
+     * record it and stop (#314).
+     *
+     * This is the only claim of ownership that cannot cost anybody an edit, because there is no
+     * edit: the bytes are identical, and writing them would be a no-op. Without it the ledger has
+     * a one-way door. `dashboard.base` reaches this state on its own — Obsidian rewrites it the
+     * first time the Base view renders, stripping the comments, and since 2026-08-14 that
+     * stripped form is exactly what ships. A vault seeded before then holds our current bytes
+     * under a ledger entry naming the old ones, and every later improvement would be declined as
+     * an edit the reader never made.
+     *
+     * Recorded only when the ledger disagrees, so a settled vault does not rewrite `.ps/seeds.json`
+     * on every boot.
+     */
+    private fun adopted(seed: String, file: Path, shipped: String): Boolean {
+        if (!Files.exists(file) || Files.readString(file) != shipped) return false
+        if (!ledger.isUnchanged(seed, file)) ledger.record(seed, shipped)
+        return true
     }
 
     // Read through the classloader rather than a path: inside the jar there is no file.

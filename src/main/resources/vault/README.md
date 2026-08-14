@@ -38,6 +38,28 @@ languages get none, and the server logs why. Its own header carries the command 
 `java RunnerTest.java`, `python3 runner_test.py`, and so on — and it is replaced after every
 run, so edits to it are lost. C# also gets a `runner_test.csproj` beside it.
 
+### What each dashboard table is for
+
+The file itself carries no comments explaining this, on purpose: **Obsidian rewrites
+`dashboard.base` the first time you open it and strips every comment out** (measured 2026-08-14 —
+the file changes the moment the view renders). A note that cannot survive being read is not a
+note, so it lives here instead.
+
+| table | why it exists |
+|---|---|
+| **Recent** | Newest first, because that is a fact rather than a claim. Every other ordering is a view you chose, not a verdict this vault reached |
+| **Not passed yet** | The point of the whole tool. A problem you failed and never came back to is invisible on Programmers' own scoreboard, which only remembers that you eventually solved it |
+| **By attempts** | Attempts and runs side by side. One submit after twenty runs, and twenty submits, are different stories — neither number tells it alone |
+| **By part** · **By language** | Where your work actually went, as opposed to where you think it went |
+| **By kind** | Algorithm and SQL are different practices: different protocols, runtimes that do not compare, and review plans that usually separate them |
+| **Tags** | The tag map as a table. `catalogTotal` is the denominator that keeps it honest — an untouched tag with one problem in the whole catalog and one with 38 are not the same gap |
+
+Two details that are easy to misread. The **Problem** column shows the *folder*, not the file
+name: every problem page is called `README.md`, so the folder — `120802-<slug>` — is what
+identifies it, and the readable title comes first. And **the server writes the numbers, never a
+judgement about them**: which of these tables is showing you a weakness is yours to say
+([the decision, and why](https://github.com/BrokenFinger98/programmers-tracker/blob/main/docs/llm-wiki/wiki/decisions/2026-08-12-the-server-counts-and-names-nothing.md)).
+
 ## Viewing this as an Obsidian vault
 
 Open this folder as a vault and the graph shows your problem types. Each problem links to its

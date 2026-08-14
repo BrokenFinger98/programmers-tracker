@@ -5128,3 +5128,34 @@ fixture.
 Costs taken knowingly: two pushes per pass, and a `chore: reconcile` commit per solved problem
 instead of one nightly. That message now under-describes what it carries — naming it after its
 problem needs a new port operation and is not in this change.
+
+---
+
+## 2026-08-14 · #314 — the seed Obsidian rewrote, and the door that locked behind it
+
+**Confirmed by the owner, after my own reproduction failed.** I claimed the trigger was "having the
+vault open"; restoring the commented file and waiting 75 minutes with Obsidian running changed
+nothing, and I said so in the issue rather than leaving the claim standing. The owner opened the
+dashboard Base view and the hash moved inside the minute: `9fc964011f10` → `a3967cdb98c6`, 15
+comment lines to **0**, no additions. Same output hash as the 14:11:37 write, so the transform is
+deterministic and that earlier write is explained.
+
+`SeedLedger` then reads the file as edited and never updates that vault's dashboard again — for a
+reader who edited nothing. The two plain-markdown seeds were untouched, which is the tell: this hit
+the one seed that is not markdown.
+
+**Fixed by shipping Obsidian's own output.** Deletions only, nothing left to delete, so its output
+is a fixed point of its own transform — measured, not assumed. The comments' content moved to the
+vault `README.md` (and its Korean twin), which survives being read; a guard test fails if anyone
+re-adds a comment, because re-adding one would look like an improvement.
+
+**And the door is unlocked.** `VaultDashboard.adopted` records the hash when a file's bytes already
+equal what we would write. Without it the fix reached only vaults created after today: every
+existing vault whose owner opened the dashboard **already holds today's shipped bytes** under a
+ledger entry naming the old form. Claiming a file that *is* what we would write cannot cost an
+edit — there is none, and writing would be a no-op. Unlike #308's ignore rules, there was a safe
+automatic answer here, so it got one.
+
+ADR: [[decisions/2026-08-14-the-seed-ships-in-the-form-its-reader-rewrites-it-to]], including the
+cost that the fixed point is Obsidian's and a future version reformatting differently reopens this
+with nothing to notice it.

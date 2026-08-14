@@ -1,7 +1,10 @@
 package com.brokenfinger.tracker.adapter.store
 
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -132,6 +135,63 @@ class VaultDashboardTest {
     @Test
     fun `does not throw when the vault cannot be written`() {
         VaultDashboard(root.resolve("no/such/directory")).ensure()
+    }
+
+    /**
+     * The reason the shipped file carries no comments at all (#314).
+     *
+     * **Obsidian rewrites `dashboard.base` the first time the Base view renders** and drops every
+     * comment: measured 2026-08-14, `9fc9640…` → `a3967cd…` the moment the owner opened it, 15
+     * comment lines to 0, with **no** additions. That put the file one character away from what
+     * the ledger recorded, so `isUnchanged` answered "edited" and the vault silently stopped
+     * receiving dashboard improvements — for a reader who had edited nothing.
+     *
+     * The shipped bytes are now Obsidian's own output, which is a fixed point of its transform:
+     * deletions only, and nothing left to delete. Re-adding a comment here would look harmless
+     * and would re-open the door, so it fails here instead. The explanations those comments
+     * carried live in the vault README, which survives being read.
+     */
+    @Test
+    fun `ships a dashboard Obsidian will not rewrite`() {
+        VaultDashboard(root).ensure()
+
+        Files.readAllLines(dashboard).filter { it.isBlank() || it.trimStart().startsWith("#") }
+            .shouldBeEmpty()
+    }
+
+    /**
+     * The one-way door in the ledger, and the population it stranded (#314).
+     *
+     * Every vault whose owner ever opened the dashboard already holds today's shipped bytes —
+     * Obsidian put them there. Its ledger entry still names the old commented form, so without
+     * this the file is "edited" forever and no later improvement can land, even though the two
+     * agree exactly.
+     *
+     * Claiming a file that **is** what we would write can never cost an edit: there is none, and
+     * writing would be a no-op.
+     */
+    @Test
+    fun `adopts a seed that already matches what we ship, whatever the ledger says`() {
+        VaultDashboard(root).ensure()
+        val ours = Files.readString(dashboard)
+        SeedLedger(root).record("dashboard.base", "what an older version of this server shipped")
+
+        VaultDashboard(root).ensure()
+
+        SeedLedger(root).isUnchanged("dashboard.base", dashboard).shouldBeTrue()
+        Files.readString(dashboard) shouldBe ours
+    }
+
+    /** Adoption is not a licence to overwrite: one character different is still theirs. */
+    @Test
+    fun `does not adopt a seed that differs by a single character`() {
+        VaultDashboard(root).ensure()
+        Files.writeString(dashboard, Files.readString(dashboard) + " ")
+        SeedLedger(root).record("dashboard.base", "something else entirely")
+
+        VaultDashboard(root).ensure()
+
+        Files.readString(dashboard) shouldEndWith " "
     }
 
     /**
