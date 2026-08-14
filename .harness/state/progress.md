@@ -4892,6 +4892,36 @@ reads as empty for the same reason.
 Rejected: shipping the bytes of every version ever seeded (grows without bound, needs a release
 process this project does not have), and a marker inside the file (visible in a document meant to
 be read, deletable by accident, and it puts the tool's bookkeeping in the reader's face).
+
+## [2026-08-14] #272 follow-up — the runner exemption, from 66% to 78% ⏳
+
+`domain/calc/runner` was the largest untested surface in the repository: 287 branches no test
+reached, and #285 had already corrected *why* — the seven execution suites exist, run 49 tests on
+CI with none skipped, and move the number by nothing, because the generation branches are what is
+uncovered and executing generated code proves it correct without visiting a new path.
+
+Two table-driven suites, **679/862 = 78%** now, 104 branches taken. `RunnerValueTableTest` walks
+every declared type each generator renders and every value it must refuse; `StdinRunnerTableTest`
+does the `main`-reads-stdin half for all seven languages. Table-driven because the shapes are a
+matrix, and a language missing from the list shows up as a gap — the shape §6.2 already uses for
+the compile-error fixtures, after #212 classified six of seven languages by patterns written for
+two others.
+
+**Both tables failed on first run because I asserted a refusal the code does not make.** Twice:
+
+- a quoted number for a numeric parameter (`int` ← `"7"`) is **accepted** and rendered `7`;
+- an unquoted number as stdin is **accepted** and fed as its own text — while the refusal message
+  three lines away says "quoted text".
+
+Neither is measured — no `examples.json` and no fixture has ever carried either shape — so the
+code was not changed on a guess. Both are pinned as the behaviour that exists, labelled as never
+measured. That is the third and fourth time in two days that an assertion of mine turned out to be
+an assumption; the difference is that this time the test was written before the claim reached
+anything but a test.
+
+What is left is #302: C's `int arr[], size_t arr_len` pair needs a table shaped around it, C#'s
+stdin runner is OS-dependent and lives in the execution suite, and the signature parsers hold the
+rest.
 ## [2026-08-14] #298 — the one CI job that downloaded the world every run ⏳
 
 Six of seven jobs cache `~/.gradle` through `setup-gradle`. The seventh could not: `docker image
