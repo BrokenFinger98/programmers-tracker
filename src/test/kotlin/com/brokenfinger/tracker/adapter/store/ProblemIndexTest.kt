@@ -61,6 +61,18 @@ class ProblemIndexTest {
         render(listOf(aSubmissionRecord())) shouldNotContain "[["
     }
 
+    /**
+     * A blank title is how "the catalog has never seen this problem" is spelled in the JSONL —
+     * `SettledCapture.toRecord` writes `problem?.title.orEmpty()`. The row still has to link
+     * somewhere, and the directory is named for the lesson id alone in exactly that case, so the
+     * id becomes the link text too rather than the row rendering as `[](...)` (#309).
+     */
+    @Test
+    fun `a problem the catalog never named is linked by its lesson id`() {
+        render(listOf(aSubmissionRecord(lessonId = 120804, title = ""))) shouldContain
+            "[120804](120804/README.md)"
+    }
+
     /** Newest first is a fact about when things happened, not a ranking of them. */
     @Test
     fun `the newest problem is first`() {
