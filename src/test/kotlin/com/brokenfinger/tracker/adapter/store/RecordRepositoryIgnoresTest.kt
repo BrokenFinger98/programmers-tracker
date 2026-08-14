@@ -91,6 +91,19 @@ class RecordRepositoryIgnoresTest {
     }
 
     /**
+     * And the other editor's, for the reason above rather than for Obsidian's sake (#304). The
+     * argument was never about Obsidian: `git add --all` cannot tell a window layout from a
+     * record. This is a Kotlin project, so a vault opened in IntelliJ is not an edge case — and
+     * the owner's repository had `.idea/` tracked and pushed until this rule existed.
+     */
+    @Test
+    fun `also ignores the other editor's state`() {
+        RecordRepositoryIgnores(root).ensure()
+
+        read(".gitignore").shouldContain(".idea/")
+    }
+
+    /**
      * Both moved here from the template's .gitignore when the template retired (#258): a
      * template reaches only repositories that do not exist yet.
      */
