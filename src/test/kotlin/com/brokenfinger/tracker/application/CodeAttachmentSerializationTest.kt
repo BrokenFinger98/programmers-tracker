@@ -185,5 +185,7 @@ private class ProbedArtifacts(private val delegate: DerivedArtifacts, private va
 
     override fun writeReadme(records: List<SubmissionRecord>) = probe.around { delegate.writeReadme(records) }
 
+    override fun writeIndex(records: List<SubmissionRecord>) = probe.around { delegate.writeIndex(records) }
+
     override fun writeTagNotes(counts: List<TagCount>) = probe.around { delegate.writeTagNotes(counts) }
 }

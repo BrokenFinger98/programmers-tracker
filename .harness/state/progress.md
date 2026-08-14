@@ -4813,3 +4813,30 @@ relative link means and what a renderer will actually do with it.
 links. The documentation says both formats are equivalent, and the tag map rests on those edges
 (#229, #241) — so it is the first thing to look at in Obsidian after this lands.
 
+## [2026-08-14] #292 — an index github.com can render ⏳
+
+Opening the record repository in a browser showed nothing you had solved: `dashboard.base` renders
+as raw YAML because it is an Obsidian query and Obsidian is not there, the root `README.md` is a
+usage guide, `problems/` is a folder listing, and the log is machine-readable. Everything the
+repository knows was in it and none of it legible where a browser opens.
+
+`problems/README.md`, because **GitHub renders a README at the root of any directory** — and
+browsing into `problems/` is exactly where the question gets asked. It also adds **no fourth kind
+of file**: it is regenerated from the records like every problem page and tag note beside it.
+
+Two shapes were costed and rejected. **Markers in the root README** (`<!-- index:start -->`) put
+the table where GitHub shows it first and make one file *half* server-owned — the ambiguity that
+blocked §6.9 and that `statement.md` was split out to avoid — and an existing vault has no markers
+anyway, since that seed is write-if-absent. **The root README becoming the index** demotes a page
+carrying the graph groups, the `.ps/` warning and the timezone note, and moves a Korean twin and
+its `translated-from` hash with it.
+
+**Two tests failed and the behaviour was wrong, not the tests.** `a boot with nothing left behind
+commits nothing` broke because the index was written even for an empty history — manufacturing a
+commit to announce that nothing had happened, in the one place `StartupReconciliation` states out
+loud that a boot with nothing to recover does nothing. No records now means no file, which is also
+the honest answer: an index of an empty directory helps nobody.
+
+Counts and never a verdict — how many recorded and how many passed are facts, and newest-first is
+an ordering of when things happened rather than a ranking of them.
+

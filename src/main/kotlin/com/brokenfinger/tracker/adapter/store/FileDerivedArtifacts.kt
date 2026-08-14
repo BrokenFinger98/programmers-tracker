@@ -34,6 +34,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
     private val readme = ProblemReadme(layout)
+    private val index = ProblemIndex(layout)
     private val tagNotes = TagNotes(layout)
 
     /**
@@ -101,6 +102,10 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
 
     override fun writeReadme(records: List<SubmissionRecord>) {
         readme.write(records)
+    }
+
+    override fun writeIndex(records: List<SubmissionRecord>) {
+        index.write(records)
     }
 
     override fun writeTagNotes(counts: List<TagCount>) {
