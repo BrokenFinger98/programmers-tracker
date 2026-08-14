@@ -40,18 +40,25 @@ class ProblemReadme(private val layout: RecordLayout) {
         frontmatter(records) + heading(records) + statement(records) + history(records)
 
     /**
-     * An embed, not a copy (#275). `statement.md` is written once and this file is rewritten on
-     * every grading, so pasting the statement in here would mean re-fetching it every time to
-     * keep it. Obsidian expands the embed inline, so the reader still sees one page.
+     * A link, not a copy (#275) and no longer an embed (#293).
+     *
+     * `statement.md` is written once and this file is rewritten on every grading, so pasting the
+     * statement in here would mean re-fetching it every time to keep it.
+     *
+     * It was `![[statement]]`, which Obsidian expands inline and **github.com and IntelliJ print
+     * as literal text** — and github.com is where this repository is pushed. No syntax embeds in
+     * Obsidian and renders on GitHub: `![](statement.md)` embeds in one and is a broken *image*
+     * in the other. Readable in three renderers beats inlined in one, especially for a file
+     * sitting in the same directory.
      *
      * Absent when there is no statement file — a page that carried none, or a record captured
-     * before this existed. The link is not written speculatively: a wikilink to a missing note
-     * renders as a broken link and puts a phantom node on the graph.
+     * before this existed. Never written speculatively: a link to a missing note is a broken link
+     * everywhere and a phantom node on Obsidian's graph.
      */
     private fun statement(records: List<SubmissionRecord>): String {
         val file = layout.statementFile(records.first().lessonId, titleOf(records))
         if (!Files.exists(file)) return ""
-        return "\n![[${RecordLayout.STATEMENT}]]\n"
+        return "\n[Problem statement](${RecordLayout.STATEMENT}.md)\n"
     }
 
     private fun frontmatter(records: List<SubmissionRecord>): String {
@@ -119,7 +126,7 @@ class ProblemReadme(private val layout: RecordLayout) {
     private fun tagLinks(records: List<SubmissionRecord>): String {
         val tags = tagsOf(records).orEmpty()
         if (tags.isEmpty()) return ""
-        return "\nTags: " + tags.joinToString(" ") { "[[${layout.tagNoteLink(it)}]]" } + "\n"
+        return "\nTags: " + tags.joinToString(" ") { "[$it](${layout.tagNoteLinkFromProblem(it)})" } + "\n"
     }
 
     // Our own labels are English (dev rules §12); the tag words come from the data and stay verbatim.

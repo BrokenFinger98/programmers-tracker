@@ -238,16 +238,20 @@ class ProblemReadmeTest {
     /**
      * An embed rather than a copy (#275): this file is rewritten on every grading and
      * `statement.md` is written once, so pasting the statement in would mean re-fetching it
-     * every time to keep it. Obsidian expands the embed, so the reader still sees one page.
+     * every time to keep it.
+     *
+     * A link rather than an embed since #293: `![[statement]]` inlines in Obsidian and prints as
+     * literal text on github.com and in IntelliJ, which is two of the three places these records
+     * are read — and github.com is where they are pushed.
      */
     @Test
-    fun `it embeds the statement when one has been captured`() {
+    fun `it links to the statement when one has been captured`() {
         val record = aSubmissionRecord()
         val statement = RecordLayout(root).statementFile(record.lessonId, record.title)
         Files.createDirectories(statement.parent)
         Files.writeString(statement, "the problem\n")
 
-        render(listOf(record)) shouldContain "\n![[statement]]\n"
+        render(listOf(record)) shouldContain "\n[Problem statement](statement.md)\n"
     }
 
     /**
@@ -315,8 +319,8 @@ class ProblemReadmeTest {
     fun `the page links to each of its tag notes and keeps the hashtags`() {
         val text = render(listOf(aSubmissionRecord(tags = listOf("dp", "math"))))
 
-        text shouldContain "[[tags/dp]]"
-        text shouldContain "[[tags/math]]"
+        text shouldContain "[dp](../../tags/dp.md)"
+        text shouldContain "[math](../../tags/math.md)"
         text shouldContain "#dp"
     }
 
@@ -355,7 +359,7 @@ class ProblemReadmeTest {
     fun `a tag the filesystem renames is linked by its file name`() {
         val text = render(listOf(aSubmissionRecord(tags = listOf("binary_search"))))
 
-        text shouldContain "[[tags/binary-search]]"
-        text shouldNotContain "[[tags/binary_search]]"
+        text shouldContain "(../../tags/binary-search.md)"
+        text shouldNotContain "binary_search.md"
     }
 }
