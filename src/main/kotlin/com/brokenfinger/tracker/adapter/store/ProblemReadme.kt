@@ -37,28 +37,35 @@ class ProblemReadme(private val layout: RecordLayout) {
     }
 
     private fun render(records: List<SubmissionRecord>): String =
-        frontmatter(records) + heading(records) + statement(records) + history(records)
+        frontmatter(records) + heading(records) + history(records) + statement(records)
 
     /**
-     * A link, not a copy (#275) and no longer an embed (#293).
+     * The problem itself, written into the page (#296).
      *
-     * `statement.md` is written once and this file is rewritten on every grading, so pasting the
-     * statement in here would mean re-fetching it every time to keep it.
+     * It was a link, and before that an Obsidian embed, on one argument: this file is regenerated
+     * on every grading, so a statement inside it would have to be **re-fetched every time to
+     * survive** (#275). That stopped being true the moment `statement.md` existed — the text is on
+     * disk and inlining it costs a file read. The embed's one page comes back, and in all three
+     * renderers rather than in Obsidian alone (#293).
      *
-     * It was `![[statement]]`, which Obsidian expands inline and **github.com and IntelliJ print
-     * as literal text** — and github.com is where this repository is pushed. No syntax embeds in
-     * Obsidian and renders on GitHub: `![](statement.md)` embeds in one and is a broken *image*
-     * in the other. Readable in three renderers beats inlined in one, especially for a file
-     * sitting in the same directory.
+     * **Last, under its own heading.** This file is the record: frontmatter, tags, and what you
+     * did. The problem is reference material, and a KAKAO statement runs several kilobytes — put
+     * it first and every page's attempt history sits below the fold, which is the half you open a
+     * *record* for. Every page also keeps the same shape at the top, whatever the statement's
+     * length, which is what makes several of them scannable.
      *
-     * Absent when there is no statement file — a page that carried none, or a record captured
-     * before this existed. Never written speculatively: a link to a missing note is a broken link
-     * everywhere and a phantom node on Obsidian's graph.
+     * **`statement.md` stays.** This is derived and that is the source: delete this and nothing is
+     * lost, delete that and the only way back is a request. It is also the copy a reader may
+     * annotate, and an annotation there survives every regeneration — the same reason `notes.md`
+     * exists.
+     *
+     * Absent when there is no statement — a page that carried none, or a record captured before
+     * the server kept them. Nothing is written speculatively.
      */
     private fun statement(records: List<SubmissionRecord>): String {
         val file = layout.statementFile(records.first().lessonId, titleOf(records))
-        if (!Files.exists(file)) return ""
-        return "\n[Problem statement](${RecordLayout.STATEMENT}.md)\n"
+        val text = runCatching { Files.readString(file).trim() }.getOrNull()?.ifEmpty { null } ?: return ""
+        return "\n$PROBLEM\n\n$text\n"
     }
 
     private fun frontmatter(records: List<SubmissionRecord>): String {
@@ -198,6 +205,7 @@ class ProblemReadme(private val layout: RecordLayout) {
     private companion object {
         const val README = "README.md"
         const val HISTORY = "## Attempt history"
+        const val PROBLEM = "## Problem"
         const val HEADER = "| # | Time | Verdict | Testcases | Elapsed | Diff |"
         const val SEPARATOR = "|---|---|---|---|---|---|"
         const val NONE = "-"

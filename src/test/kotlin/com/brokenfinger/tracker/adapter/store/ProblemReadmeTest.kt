@@ -237,30 +237,56 @@ class ProblemReadmeTest {
 
     /**
      * An embed rather than a copy (#275): this file is rewritten on every grading and
-     * `statement.md` is written once, so pasting the statement in would mean re-fetching it
-     * every time to keep it.
-     *
-     * A link rather than an embed since #293: `![[statement]]` inlines in Obsidian and prints as
-     * literal text on github.com and in IntelliJ, which is two of the three places these records
-     * are read — and github.com is where they are pushed.
+     * Written into the page since #296. It was a link, and before that an Obsidian embed, on the
+     * argument that this file is regenerated and a statement inside it would need re-fetching —
+     * which stopped being true when `statement.md` started existing on disk.
      */
     @Test
-    fun `it links to the statement when one has been captured`() {
-        val record = aSubmissionRecord()
-        val statement = RecordLayout(root).statementFile(record.lessonId, record.title)
-        Files.createDirectories(statement.parent)
-        Files.writeString(statement, "the problem\n")
+    fun `it writes the statement into the page when one has been captured`() {
+        writeStatement("정수 두 개를 더해 return 하세요.")
 
-        render(listOf(record)) shouldContain "\n[Problem statement](statement.md)\n"
+        val text = render(listOf(aSubmissionRecord()))
+
+        text shouldContain "## Problem"
+        text shouldContain "정수 두 개를 더해 return 하세요."
     }
 
     /**
-     * A wikilink to a note that is not there renders as a broken link and puts a phantom node on
-     * the graph — so a problem whose page carried no statement gets no link at all.
+     * The record leads and the problem follows. A KAKAO statement runs kilobytes; first would put
+     * every page's attempt history below the fold, which is the half a *record* is opened for.
      */
     @Test
-    fun `it links nothing when no statement was captured`() {
-        render(listOf(aSubmissionRecord())) shouldNotContain "![["
+    fun `the problem comes after the attempt history`() {
+        writeStatement("the problem")
+
+        val text = render(listOf(aSubmissionRecord()))
+
+        (text.indexOf("## Attempt history") < text.indexOf("## Problem")) shouldBe true
+    }
+
+    /** An unreadable statement must not take the record's own page down with it. */
+    @Test
+    fun `a statement that cannot be read leaves the rest of the page intact`() {
+        val record = aSubmissionRecord()
+        Files.createDirectories(RecordLayout(root).statementFile(record.lessonId, record.title))
+
+        val text = render(listOf(record))
+
+        text shouldContain "## Attempt history"
+        text shouldNotContain "## Problem"
+    }
+
+    private fun writeStatement(text: String) {
+        val record = aSubmissionRecord()
+        val file = RecordLayout(root).statementFile(record.lessonId, record.title)
+        Files.createDirectories(file.parent)
+        Files.writeString(file, "$text\n")
+    }
+
+    /** Nothing is written speculatively — a problem whose page carried no statement gets no section. */
+    @Test
+    fun `it writes nothing when no statement was captured`() {
+        render(listOf(aSubmissionRecord())) shouldNotContain "## Problem"
     }
 
     private fun write(records: List<SubmissionRecord>): Path = ProblemReadme(RecordLayout(root)).write(records)
