@@ -4892,4 +4892,19 @@ reads as empty for the same reason.
 Rejected: shipping the bytes of every version ever seeded (grows without bound, needs a release
 process this project does not have), and a marker inside the file (visible in a document meant to
 be read, deletable by accident, and it puts the tool's bookkeeping in the reader's face).
+## [2026-08-14] #298 — the one CI job that downloaded the world every run ⏳
+
+Six of seven jobs cache `~/.gradle` through `setup-gradle`. The seventh could not: `docker image
+boots` runs `docker build`, and the Gradle that matters runs **inside** the image where the host
+cache does not reach. So every run re-resolved Spring Boot, Ktor and the rest — from a layer the
+Dockerfile already isolates for exactly this purpose and that nothing was caching.
+
+It had already cost a **429 from Maven Central** on one run. A job that re-downloads everything is
+one rate limit away from a red build that says nothing about the code.
+
+Built through `docker/build-push-action` with `type=gha` layer cache now. The dependency layer is
+reused until `build.gradle.kts`, `settings.gradle.kts` or `gradle.properties` change — which is
+what the Dockerfile's layer split was designed to give and had never delivered in CI. `load: true`
+keeps the `programmers-tracker:ci` tag for the steps that boot the container and assert its
+network posture.
 
