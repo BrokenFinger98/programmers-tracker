@@ -117,3 +117,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-08-13] ingest | the server prepares the repository → 1 page created
 
 ## [2026-08-14] ingest | the night the records learned the question → 1 page updated, 2 created
+
+## [2026-08-14] ingest | the clean slate + the first-run test → 1 page updated, 2 created

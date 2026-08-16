@@ -99,3 +99,5 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-13 [[sources/2026-08-13-the-map-becomes-a-workspace]] — The owner starts using the vault: the tag-edge reversal, four run-is-not-attempt sites, the UTC clock, the seeded dashboard, and the record finally saying algorithm or database
 - 2026-08-14 [[sources/2026-08-14-the-night-the-records-learned-the-question]] — Eleven PRs, seven defects, none found by reading code — and three findings that refuted something I had asserted within the hour
 - 2026-08-14 [[sources/2026-08-14-the-warnings-and-what-was-under-them]] — The owner's own build output was the finding; one warning hid another, and the safe call was standing on a live untested fallback
+- 2026-08-14 [[sources/2026-08-14-the-clean-slate]] — Recovered from the inbox: the seed ledger's third state, the two editor directories, the statement inlined, and the wipe that made a first boot possible
+- 2026-08-14 [[sources/2026-08-14-the-first-run-test-and-what-it-found]] — Two Lv0 problems solved from a blank vault, the last coverage exemption retired, and two defects only a first run could surface
