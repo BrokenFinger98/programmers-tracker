@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
 updated: 2026-08-14
-sources: [raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -317,6 +317,43 @@ thing the number did once visible was refute the hypothesis that asked for it.
 The practical rule this leaves: when a claim explains *why* a number is what it is, the claim is
 about the number and can be checked against it. `find`, a downloaded artifact and a method-level
 counter each settled one of these; none needed an argument.
+
+## Two more the same day, and one I reversed before it shipped
+
+The afternoon of 2026-08-14 added two, and they differ from the three above in a way worth keeping
+([[sources/2026-08-14-the-first-run-test-and-what-it-found]]).
+
+**The one I caught myself, mid-implementation.** #316 needed a decision, and I recommended moving
+the push that a pass triggers to after the source fetch — one push, tidy, and the owner approved
+it. Reading the code to build it turned up `copiedRawPath`'s own comment: *"the verdict is
+unrecoverable and the copy is not."* Moving the push makes the unrecoverable half wait on a
+network fetch of the recoverable half, which is a milder form of the option I had just rejected on
+exactly that ground. The push is now **added** rather than moved.
+
+The claim was not refuted by a measurement — it was refuted by a sentence already written in the
+repository, which I had cited approvingly one message earlier while arguing against a *different*
+option. **A principle you can quote is not the same as one you have applied**, and the gap between
+the two closed only because implementing it meant reading the file again.
+
+**The one I could not settle from this side.** The #314 issue body stated that opening the vault in
+Obsidian rewrites `dashboard.base`. The restored file then sat untouched for 75 minutes with the
+vault open and Obsidian running. That is a failed reproduction, and the right move was to strike
+the claim in the issue, separate what was still measured from what was not, and name the one step
+this side cannot take — rendering the Base view, which needs the owner's application.
+
+They did it, and the hash moved inside the minute to byte-for-byte the earlier output. **The
+original diagnosis was right and its trigger was wrong**, and those are two claims, not one. The
+cost of not separating them would have been a fix shipped against a mechanism nobody had
+reproduced.
+
+| I asserted | What happened |
+|---|---|
+| Moving the push after the fetch is the clean fix | Refuted by a comment in the repository, while implementing — the verdict must not wait on the source |
+| Having the vault open rewrites the dashboard | Reproduction failed at 75 minutes; corrected in the issue, then confirmed with a narrower trigger the owner could produce |
+
+**A failed reproduction is a result.** Reporting it and narrowing the claim is what let the real
+trigger be found; carrying the original wording forward would have made the eventual confirmation
+look like agreement with something that was never true.
 
 ## The counter-practice
 
