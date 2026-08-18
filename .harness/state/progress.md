@@ -5159,3 +5159,41 @@ automatic answer here, so it got one.
 ADR: [[decisions/2026-08-14-the-seed-ships-in-the-form-its-reader-rewrites-it-to]], including the
 cost that the fixed point is Obsidian's and a future version reformatting differently reopens this
 with nothing to notice it.
+
+---
+
+## 2026-08-19 · #319 — the toolchain the workflow never declared
+
+`gates (windows-latest)` failed once on #318: no `dotnet`, `CsharpRunnerExecutionTest` skipped 8,
+the skip-guard fired. **I re-ran it and it passed** — and the comment above the `setup-node` pin,
+written after the same thing happened twice with node (#174, #208), says exactly what that costs:
+
+> rerunning until it passes trains us to rerun on a guard failure, which is how a guard stops
+> meaning anything
+
+The training it warns about, performed on the first guard failure after it was written. The guard
+was right; what was missing was upstream of it.
+
+**Measured which of the seven are declared** rather than assuming: `java`/`kotlin` ride the JDK
+(Kotlin compiles through `kotlin-compiler-embeddable`, a build dependency), `javascript` had
+`setup-node` — and `python3`, `gcc`/`clang`, `g++`/`clang++`, `dotnet` were all inherited from
+whatever the image happened to ship. Four, not one.
+
+- `setup-dotnet@v6` pinned to **8.0**, which is what `CsharpRunner` writes into the generated
+  csproj — the pin follows the generator, not the image's default.
+- `setup-python@v7` pinned to 3.13.
+- No first-party action pins a C compiler, so a preflight step asserts the *pair* each suite
+  accepts and names the missing binary at setup time instead of leaving a skip for a grep four
+  steps later to infer. **Both paths run locally before committing** — pass, and a forced-missing
+  run exiting 1.
+- Action majors were checked against the registry, not recalled: my first guesses (`setup-dotnet@v5`,
+  `setup-python@v6`) were both a major behind.
+
+**And the job whose whole claim was weakened.** `repeatability` runs the same suites three times
+with no skip-guard, so eight C# tests skipping on every attempt would satisfy *"reliably green
+rather than green once"* exactly as well as eight passing ones. It had only the JDK. Same
+declarations now — not a second guard, since `gates` also runs on ubuntu and would fail loudly.
+
+`coverage` is deliberately left alone, with the reason written beside it: #283/#285 measured the
+runner package identical with and without the execution suites, so a skip there cannot move the
+number.
