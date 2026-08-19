@@ -45,7 +45,49 @@ jobs:
         with:
           node-version: '24'
 
+      # The same declaration, arrived at the same way and one incident later (#319). On
+      # 2026-08-14 the Windows image came without dotnet, `CsharpRunnerExecutionTest` skipped
+      # all 8, the guard below fired — and the fix applied was a re-run, which passed. That is
+      # exactly the training the node comment above warns about, performed on the very next
+      # guard failure after it was written.
+      #
+      # `net8.0` is what `CsharpRunner` writes into the generated csproj, so the pin follows the
+      # generator rather than the image's current default.
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0'
+
+      # Python was inherited for the same reason dotnet was: it is on every image, until it is
+      # not. Nothing has dropped it yet — this is the cheap half of not waiting to find out.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
       - uses: gradle/actions/setup-gradle@v5
+
+      # The two toolchains with no first-party action to pin them. Both C suites accept either
+      # compiler, so this asserts the *pair* the tests will look for rather than a product name.
+      #
+      # Inheriting these is a smaller bet than inheriting dotnet was — a C compiler is load-bearing
+      # for the images themselves, not a product shipped alongside — but "smaller" is not "none",
+      # and the failure it would otherwise produce is the one #319 is about: a skip several steps
+      # away from a grep that infers why. Failing here names the missing binary at setup time.
+      - name: the C and C++ compilers no action pins are present
+        shell: bash
+        run: |
+          set -e
+          for pair in "gcc clang" "g++ clang++"; do
+            found=""
+            for tool in $pair; do
+              command -v "$tool" >/dev/null 2>&1 && found="$tool"
+            done
+            if [ -z "$found" ]; then
+              echo "MISSING: none of [$pair] is on PATH."
+              echo "The C/C++ execution proof would skip, and the skip-guard would call it a regression."
+              exit 1
+            fi
+            echo "$pair → $found ($($found --version 2>&1 | head -1))"
+          done
 
       - name: ktlint
         run: ./gradlew ktlintCheck --no-daemon
@@ -110,6 +152,27 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+
+      # This job runs the same execution suites `gates` does, and had only the JDK declared
+      # (#319). It carries no skip-guard, so a missing toolchain here does not fail — it skips,
+      # three times, and the job reports green. That is the one claim this job exists to make:
+      # "reliably green" rather than "green once". Eight C# tests skipping on all three attempts
+      # would satisfy it exactly as well as eight passing ones.
+      #
+      # The declarations, not a second guard: `gates` also runs on ubuntu-latest, so an image
+      # that drops one of these fails there loudly. What this job needed was to stop depending
+      # on the image at all.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0'
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
 
       - uses: gradle/actions/setup-gradle@v5
 
@@ -354,6 +417,12 @@ jobs:
 
   # Report-only: the point is seeing which failure branches are never exercised,
   # not defending a number.
+  #
+  # The one job that runs the suite and is deliberately left with only the JDK declared (#319).
+  # A skipped execution suite cannot move this number: #283/#285 measured the runner package at
+  # 575/862 with all 49 execution tests running and the identical figure without them, because
+  # what they prove is that generated code compiles and passes, not that a new branch was taken.
+  # Declaring three toolchains here would buy nothing and imply they mattered to the number.
   coverage:
     name: coverage report
     runs-on: ubuntu-latest
