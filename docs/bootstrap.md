@@ -118,6 +118,24 @@ machine opens configured rather than blank. If you want that, delete the `.obsid
 hand — the narrowed rules are added on the next start, because the server stops looking once an
 ancestor rule already covers the path.
 
+**And one is worth checking even if you never open Obsidian.** If you have opened your records in
+IntelliJ, look for a `<name>.iml` at the root:
+
+```bash
+git ls-files '*.iml'
+```
+
+An ignore rule has no effect on a file git already tracks, so a rule added later cannot help one
+that has already landed — and the server will not untrack it for you, because a tool that runs
+`git rm --cached` on your repository has stopped being an ignore rule. This one is worth the
+manual step: the file lists every problem directory IntelliJ has indexed, so it **outlives the
+records it names**. On the repository this was found in, it still published four problem titles
+after that history had been cleared. To remove it:
+
+```bash
+git rm --cached <name>.iml && git commit -m "chore: untrack the IDE module file"
+```
+
 ---
 
 ## 3. Get your session cookie

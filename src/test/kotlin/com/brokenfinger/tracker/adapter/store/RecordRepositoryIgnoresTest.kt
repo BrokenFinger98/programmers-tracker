@@ -118,6 +118,34 @@ class RecordRepositoryIgnoresTest {
     }
 
     /**
+     * The half of that editor's state the rule above cannot reach (#323). IntelliJ writes
+     * `<project>.iml` at the **root**, outside `.idea/`, and it lists every problem directory it
+     * has indexed — so it outlives the records it names. Measured on a repository whose history
+     * had just been cleared: the `.iml` still published four problem titles, two of them already
+     * deleted. A wipe that leaves a list of what was wiped is not a wipe.
+     */
+    @Test
+    fun `ignores the module file IntelliJ writes outside its own directory`() {
+        RecordRepositoryIgnores(root).ensure()
+
+        read(".gitignore").shouldContain("*.iml")
+    }
+
+    /**
+     * Neither rule is an ancestor of the other, so the ancestor check that stops the server
+     * arguing with a broader decision (#306) must not swallow this one: a reader who wrote
+     * `.idea/` said nothing about a file at the root.
+     */
+    @Test
+    fun `a repository that already ignores the editor's directory still gains the module file`() {
+        Files.writeString(root.resolve(".gitignore"), ".idea/\n")
+
+        RecordRepositoryIgnores(root).ensure()
+
+        read(".gitignore").shouldContain("*.iml")
+    }
+
+    /**
      * Both moved here from the template's .gitignore when the template retired (#258): a
      * template reaches only repositories that do not exist yet.
      */
