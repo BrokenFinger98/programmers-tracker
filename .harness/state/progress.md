@@ -5197,3 +5197,32 @@ declarations now — not a second guard, since `gates` also runs on ubuntu and w
 `coverage` is deliberately left alone, with the reason written beside it: #283/#285 measured the
 runner package identical with and without the execution suites, so a skip there cannot move the
 number.
+
+---
+
+## 2026-08-19 · #323 — the file that outlived the records it named
+
+Found while wiping the record repository, and it is the reason the wipe was checked rather than
+assumed complete. After every record was gone, `ps-records.iml` — tracked and pushed — still read:
+
+```
+problems/120802-두-수의-합-구하기   problems/120803-두-수의-차-구하기
+problems/120804-두-수의-곱-구하기   problems/181952-문자열-출력하기
+```
+
+**Two of those had been deleted in the earlier clean slate.** A repository reporting zero solved
+problems was publishing a list of four.
+
+`.idea/` (#304) cannot reach it: IntelliJ writes `<project>.iml` at the **root**. `*.iml` added
+beside it, and a test pins that the two are independent — neither is an ancestor of the other, so
+#307's ancestor check must not swallow the second when a reader has already written the first.
+
+**Both new tests were run against the code with the rule removed** and both failed, then passed
+with it. Green alone is consistent with a check that is not there — and this file's whole lesson
+is that something can look absent and not be.
+
+The rule reaches only repositories that have not tracked it yet, which is #304's own standing
+decision (*an ignore rule has no effect on a tracked file, and a server running `git rm --cached`
+has stopped being an ignore rule*). So `docs/bootstrap.md` gains the manual step, with the
+`git ls-files '*.iml'` that finds it — and the Korean twin with it. The owner's own file is
+removed by hand, in `ps-records`, not by the server.

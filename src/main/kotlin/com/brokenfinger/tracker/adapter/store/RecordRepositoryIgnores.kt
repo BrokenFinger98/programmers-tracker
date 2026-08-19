@@ -135,6 +135,14 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
                     "# cannot tell a window layout from a record any better than it could tell a graph zoom.\n" +
                     "# Delete this line if you would rather version it; nothing else depends on it.\n",
             ),
+            IgnoreRule(
+                rule = "*.iml",
+                because = "# The rest of that editor's state, which the line above cannot reach: IntelliJ writes\n" +
+                    "# <project>.iml at the ROOT, not inside .idea/. It lists every problem directory it has\n" +
+                    "# indexed, so it outlives the records it names — measured on a repository whose history\n" +
+                    "# had been cleared, still publishing four problem titles, two of them already deleted\n" +
+                    "# (#323). Same escape hatch as the line above.\n",
+            ),
         )
 
         private val logger = LoggerFactory.getLogger(RecordRepositoryIgnores::class.java)
