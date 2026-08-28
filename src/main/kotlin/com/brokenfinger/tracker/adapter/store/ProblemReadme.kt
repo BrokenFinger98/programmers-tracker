@@ -112,6 +112,7 @@ class ProblemReadme(private val layout: RecordLayout) {
         "attempts: ${submits(records).maxOfOrNull { it.attempt } ?: 0}",
         "runCount: ${records.count { it.action == GradingAction.RUN }}",
         "elapsedSec: ${records.last().elapsedSec}",
+        field("focusedSec", latest(records) { it.sensor?.focusedSec }?.toString()),
         "firstSeen: ${records.first().ts.toLocalDate()}",
         field("lastSubmit", submits(records).lastOrNull()?.ts?.toLocalDate()?.toString()),
     )
@@ -152,7 +153,8 @@ class ProblemReadme(private val layout: RecordLayout) {
 
     private fun row(record: SubmissionRecord): String =
         "| ${record.attempt} | ${record.ts.format(TIME)} | ${verdictOf(record)} " +
-            "| ${testcasesOf(record)} | ${elapsedOf(record.elapsedSec)} | ${diffOf(record)} |"
+            "| ${testcasesOf(record)} | ${elapsedOf(record.elapsedSec)} " +
+            "| ${focusedOf(record)} | ${diffOf(record)} |"
 
     /**
      * An unjudged submit reports its outcome; borrowing a neighbouring verdict would invent
@@ -180,6 +182,21 @@ class ProblemReadme(private val layout: RecordLayout) {
         return "%dh%02dm%02ds".format(minutes / 60, minutes % 60, seconds % 60)
     }
 
+    /**
+     * The number that answers "how long did you actually work on it", beside the one that does
+     * not (#327).
+     *
+     * The column left of this one is wall clock since the problem was first opened, and the
+     * header used to call it `Elapsed` — which reads as effort and is not. Measured on lesson
+     * 181945: **188h05m31s beside 6m05s of focused time**, on a page opened eight days before it
+     * was solved. The MCP surface has warned about this pairing since #287; the file a person
+     * opens said nothing.
+     *
+     * **Absent, never zero.** The sensor extension is optional, so a record without one has no
+     * measurement here — and `0m00s` would be a claim that the problem took no time at all.
+     */
+    private fun focusedOf(record: SubmissionRecord): String = record.sensor?.focusedSec?.let { elapsedOf(it) } ?: NONE
+
     private fun diffOf(record: SubmissionRecord): String = if (record.diffFromPrev.isNullOrBlank()) "no" else "yes"
 
     private fun titleOf(records: List<SubmissionRecord>): String? = latest(records) { it.title.ifBlank { null } }
@@ -206,8 +223,8 @@ class ProblemReadme(private val layout: RecordLayout) {
         const val README = "README.md"
         const val HISTORY = "## Attempt history"
         const val PROBLEM = "## Problem"
-        const val HEADER = "| # | Time | Verdict | Testcases | Elapsed | Diff |"
-        const val SEPARATOR = "|---|---|---|---|---|---|"
+        const val HEADER = "| # | Time | Verdict | Testcases | Since opened | Focused | Diff |"
+        const val SEPARATOR = "|---|---|---|---|---|---|---|"
         const val NONE = "-"
 
         // Rendered at the offset the record carries, which is the clock the user submitted under.

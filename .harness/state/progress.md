@@ -5257,3 +5257,36 @@ New fixture measured from the live page and scrubbed per §7.3: shape verbatim, 
 
 Still open: 181945's own `statement.md` holds the broken text. `StatementBackfill` fills what is
 **missing**, not what is wrong, so re-fetching it is a separate step.
+
+---
+
+## 2026-08-28 · #327 — the column that said 188 hours about six minutes of work
+
+The same record that produced #325. Its attempt history read `Elapsed | 188h05m31s`, and the
+record behind it carried **both** numbers all along:
+
+```
+elapsedSec = 677131   (188h — wall clock since the page was first opened, eight days earlier)
+focusedSec =    365   (6m05s — the tab actually visible)
+```
+
+**Not a data defect.** `elapsedSec` is exactly what #205 designed — calendar time from first
+encounter — and its own KDoc says *"it is simply not the one the name suggests"*.
+
+The defect is who was told. The MCP surface has carried the full warning since #287, with a
+measured example, because that issue was about teaching a model to read these records. **The file a
+person opens carried none of it** — which is #287 in reverse, and worse, because the reader has no
+reason to doubt a column labelled `Elapsed`.
+
+So the word goes, since the word is what does the damage: `Since opened | Focused`, side by side,
+each named for what it is. Both land in the frontmatter too, which is what Obsidian's tables and
+the MCP read.
+
+**Absent, never zero.** The sensor extension is optional, so most records have no measurement —
+and `0m00s` would claim the problem took no time at all, which is the failure
+[[decisions/2026-08-10-sensor-observations]] already argued about this exact field. Two of the
+four new tests are about that, and two existing assertions moved to the wider row, showing `-`
+for a fixture that has no sensor.
+
+Nothing changed about what `elapsedSec` measures. It is the right number for "how long has this
+been hanging over me", which is what design §6.4's spacing wants — it was just the only one shown.
