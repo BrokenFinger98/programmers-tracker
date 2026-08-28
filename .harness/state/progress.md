@@ -5226,3 +5226,34 @@ decision (*an ignore rule has no effect on a tracked file, and a server running 
 has stopped being an ignore rule*). So `docs/bootstrap.md` gains the manual step, with the
 `git ls-files '*.iml'` that finds it — and the Korean twin with it. The owner's own file is
 removed by hand, in `ps-records`, not by the server.
+
+---
+
+## 2026-08-28 · #325 — the other shape of statement, unparsed until a stdin problem was solved
+
+The owner solved lesson 181945 (문자열 돌리기) and asked what had been recorded. Everything was
+there — PASS 3/3, both compile errors kept, `examples.json` carrying the raw newline inside quotes,
+a generated runner that I ran and that printed `ALL PASS` — except the statement, which held raw
+HTML: `<div class="highlight"><pre class="codehilite">…</pre></div>`.
+
+**`pre` had a handler the whole time.** `div` did not, so the wrapper fell to the unknown-element
+fallback — which preserves rather than drops, correctly — and took the `pre` inside it along. A
+`div` is a container, not content; it recurses now.
+
+**Two shapes of statement, and only one had ever been recorded.** A `solution`-function problem
+states its worked examples as a `<table>`; a `main`-reads-stdin problem states them as code blocks.
+Every problem in the vault was the first kind until this one.
+
+`ProblemStatementPageTest` has asserted `shouldNotContain "<div"` since it was written. It passed
+because the only fixture it ran against was the table kind — **the assertion was right and had
+nothing to fail on.** Three new tests, all three verified failing with the fix removed.
+
+**And a measured claim that was a claim about five problems.** The old fixture's header recorded
+*"no nested `<div>` anywhere inside, which is what makes the region's end unambiguous"* as fact.
+Corrected in place rather than deleted: it is a fact about those five, it was written as a fact
+about the region, and jsoup never relied on it — the reader of that header did.
+
+New fixture measured from the live page and scrubbed per §7.3: shape verbatim, every word invented.
+
+Still open: 181945's own `statement.md` holds the broken text. `StatementBackfill` fills what is
+**missing**, not what is wrong, so re-fetching it is a separate step.

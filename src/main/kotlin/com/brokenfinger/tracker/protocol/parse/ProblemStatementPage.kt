@@ -54,6 +54,12 @@ object ProblemStatementPage {
         "table" -> tableOf(node as Element) + "\n"
         "blockquote" -> "> " + inlineOf(node).replace("\n", "\n> ") + "\n\n"
         "pre" -> "```\n" + (node as Element).wholeText().trim() + "\n```\n\n"
+        // A container, not content: recurse rather than render. Measured 2026-08-28 on lesson
+        // 181945, the first stdin-style problem recorded — it states its worked examples as
+        // `<div class="highlight"><pre class="codehilite">` where a solution-function problem
+        // uses a `<table>`, and the wrapper sent the `pre` inside it to `outerHtml()`. The
+        // handler for `pre` had been right all along and was never reached (#325).
+        "div" -> node.childNodes().joinToString("") { block(it) }
         // The newlines the renderer leaves between blocks. Every block above ends itself, so
         // passing these through would only add blank lines to collapse again.
         "#text" -> if ((node as TextNode).wholeText.isBlank()) "" else inline(node)

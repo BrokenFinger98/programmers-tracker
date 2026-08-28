@@ -1,0 +1,44 @@
+<!--
+  The statement region of a **stdin-style** problem, measured 2026-08-28 from lesson 181945 —
+  the first shape recorded whose worked examples are code blocks rather than a table.
+
+  This is the counterexample to a line in `lesson-page-statement.html`'s own header, which
+  recorded as measured fact that there is "no nested <div> anywhere inside". Five problems said
+  so; the sixth does not. A `solution`-function problem states its examples in a `<table>`, and a
+  `main`-reads-stdin problem states them as `<div class="highlight"><pre class="codehilite">`.
+  Until 181945 was solved, every problem in the vault was the first kind.
+
+  SCRUBBED (dev rules §7.3, and #275 which forbids a statement in THIS repository at all):
+  every word of prose and every example value is invented. What is verbatim is the SHAPE:
+
+    - `<div class="markdown solarized-dark">` opens with the first `<p>` on the SAME line
+    - `<div class="highlight">` and its `<pre class="codehilite">` are on ONE line, with no
+      space between the two opening tags and none before `</div>`
+    - no blank line between the `<p>` that labels an example and the block that holds it,
+      while every other block pair has one
+    - the code text ends with a newline INSIDE `<code>`, before the closing tag
+    - the region's own `</div>` follows the last nested one immediately: `</div></div>`
+    - `<hr>` and `<br>` unclosed — the fragment is HTML, not XHTML
+-->
+<div class="markdown solarized-dark"><p>정수 <code>n</code>이 주어집니다.<br>
+아래 예시와 같은 모양이 되도록 출력하는 코드를 작성해 보세요.</p>
+
+<hr>
+
+<h5>조건</h5>
+
+<p>2 ≤ <code>n</code> ≤ 20</p>
+
+<hr>
+
+<h5>예시</h5>
+
+<p>주어지는 값 #1</p>
+<div class="highlight"><pre class="codehilite"><code>wxyz
+</code></pre></div>
+<p>나오는 값 #1</p>
+<div class="highlight"><pre class="codehilite"><code>w
+x
+y
+z
+</code></pre></div></div>

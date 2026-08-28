@@ -3,7 +3,7 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-08-14
+updated: 2026-08-28
 sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
 ---
 
@@ -354,6 +354,38 @@ reproduced.
 **A failed reproduction is a result.** Reporting it and narrowing the claim is what let the real
 trigger be found; carrying the original wording forward would have made the eventual confirmation
 look like agreement with something that was never true.
+
+## A fact about five, written as a fact about the class
+
+`lesson-page-statement.html` is a scrubbed fixture whose header lists what is verbatim about it,
+so a later reader knows which details are the measurement. One line read:
+
+> no nested `<div>` anywhere inside, which is what makes the region's end unambiguous
+
+Measured 2026-08-13 across lessons 120802, 12916, 151136, 17676 and 42894. True of all five. It is
+a sentence about **those five**, and it was written — in the place reserved for measured facts — as
+a sentence about **problem pages**.
+
+Lesson 181945, solved 2026-08-28, nests one. It is a `main`-reads-stdin problem, and that kind
+states its worked examples as `<div class="highlight"><pre class="codehilite">` where a
+`solution`-function problem uses a `<table>`. Every problem recorded until then was the first kind,
+so the sample was not five arbitrary problems — it was five of the same kind, and nothing in the
+header said so.
+
+**The parser had the right handler and never reached it.** `pre` rendered a fenced code block from
+the beginning; the unrecognised `div` wrapping it went to the preserve-as-`outerHtml` fallback and
+carried the `pre` with it. Nothing was lost, which is the fallback working — but the note read as
+raw HTML.
+
+**And a test had been asking the right question for weeks.** `shouldNotContain "<div"` was written
+into `ProblemStatementPageTest` from the start. It passed every run, because the only fixture it
+ran against was the kind that cannot fail it. A green assertion is evidence about the *inputs it
+was given*, never about the inputs it was not.
+
+The practical rule: when a fixture header states what is verbatim, say what the sample was —
+"across five problems, all of which turned out to be the same kind" is a different claim from "in
+problem pages", and only the first one stays true when the sixth arrives. Corrected in place rather
+than deleted, because the difference between the two is the whole lesson.
 
 ## The counter-practice
 
