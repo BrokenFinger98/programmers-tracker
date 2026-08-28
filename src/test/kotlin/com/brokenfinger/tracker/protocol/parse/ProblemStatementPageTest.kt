@@ -95,4 +95,51 @@ class ProblemStatementPageTest {
     fun `it is trimmed`() {
         statement shouldBe statement.trim()
     }
+
+    /**
+     * The **other** shape of statement, and the one nothing had ever parsed (#325).
+     *
+     * A `solution`-function problem writes its worked examples as a `<table>`; a
+     * `main`-reads-stdin problem writes them as `<div class="highlight"><pre class="codehilite">`.
+     * Every problem in the vault was the first kind until lesson 181945 was solved on 2026-08-28,
+     * and its `statement.md` came out carrying the raw wrapper.
+     *
+     * `pre` had a handler the whole time. `div` did not, so it fell to the unknown-element
+     * fallback — which preserves rather than drops, correctly — and took the `pre` inside it
+     * along.
+     */
+    @Test
+    fun `a statement whose examples are code blocks renders them as code blocks`() {
+        val text = ProblemStatementPage.statementOf(FixtureLoader.text("lesson-page-statement-code-block.html"))!!
+
+        text shouldContain "```\nwxyz\n```"
+        text shouldContain "```\nw\nx\ny\nz\n```"
+    }
+
+    /**
+     * The same assertion the table fixture already makes, against the fixture that can fail it.
+     * It has been in this class since it was written and had nothing to catch: the nested `<div>`
+     * only appears in the shape nothing was parsing.
+     */
+    @Test
+    fun `the code-block shape leaves no raw html behind either`() {
+        val text = ProblemStatementPage.statementOf(FixtureLoader.text("lesson-page-statement-code-block.html"))!!
+
+        text shouldNotContain "<div"
+        text shouldNotContain "<pre"
+        text shouldNotContain "codehilite"
+    }
+
+    /**
+     * The label and its block are separate elements with no blank line between them in the
+     * source, and they must not run together. In 181945's record they did: the closing `</div>`
+     * of one example was followed immediately by the next example's label, on the same line.
+     */
+    @Test
+    fun `an example's label stays on its own line, not glued to the block before it`() {
+        val text = ProblemStatementPage.statementOf(FixtureLoader.text("lesson-page-statement-code-block.html"))!!
+
+        text shouldContain "\n나오는 값 #1"
+        text shouldNotContain "```나오는"
+    }
 }
