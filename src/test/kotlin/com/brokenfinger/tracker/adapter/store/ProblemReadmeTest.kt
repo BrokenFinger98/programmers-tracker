@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import io.kotest.assertions.throwables.shouldThrow
@@ -155,14 +156,58 @@ class ProblemReadmeTest {
     fun `a row states the verdict, the testcases, the elapsed time and whether a diff exists`() {
         val text = render(listOf(aSubmissionRecord(attempt = 2, elapsedSec = 847)))
 
-        rowsOf(text).single() shouldBe "| 2 | 14:23 | PASS | 1/1 | 14m07s | yes |"
+        rowsOf(text).single() shouldBe "| 2 | 14:23 | PASS | 1/1 | 14m07s | - | yes |"
+    }
+
+    /**
+     * The two numbers side by side, each named for what it is (#327).
+     *
+     * The left one is wall clock since the problem was first opened and the header used to call
+     * it `Elapsed`, which reads as effort. Measured on lesson 181945: **188h05m31s beside 6m05s**
+     * of focused time, on a page opened eight days before it was solved. A review plan built on
+     * the first number alone ranks a six-minute Lv0 problem as the hardest thing in the vault.
+     *
+     * The MCP tools have carried this warning since #287. The file a person opens carried none of
+     * it, which is that fix in reverse.
+     */
+    @Test
+    fun `the row separates time since the problem was opened from time actually spent on it`() {
+        val record = aSubmissionRecord(elapsedSec = 677131, sensor = aSensorObservation(focusedSec = 365))
+
+        rowsOf(render(listOf(record))).single() shouldContain "| 188h05m31s | 6m05s |"
+    }
+
+    /**
+     * The sensor extension is optional, so most records have no measurement here. **Absent, never
+     * zero** — `0m00s` is a claim that the problem took no time at all, and the whole reason this
+     * column exists is that a number people read as effort was not one
+     * ([[decisions/2026-08-10-sensor-observations]]).
+     */
+    @Test
+    fun `a record written without the extension shows no focused time rather than none spent`() {
+        rowsOf(render(listOf(aSubmissionRecord(sensor = null)))).single() shouldContain "| 14m07s | - |"
+    }
+
+    /** Both numbers in the frontmatter too, which is what Obsidian's tables and the MCP read. */
+    @Test
+    fun `the frontmatter carries both numbers`() {
+        val text = render(listOf(aSubmissionRecord(elapsedSec = 677131, sensor = aSensorObservation(focusedSec = 365))))
+
+        text shouldContain "elapsedSec: 677131"
+        text shouldContain "focusedSec: 365"
+    }
+
+    /** And omits the one it does not have, rather than writing a zero into the frontmatter. */
+    @Test
+    fun `the frontmatter omits focused time when nothing measured it`() {
+        render(listOf(aSubmissionRecord(sensor = null))) shouldNotContain "focusedSec:"
     }
 
     @Test
     fun `a submit that was never judged shows its outcome instead of borrowing a verdict`() {
         val record = aSubmissionRecord(outcome = Outcome.INCOMPLETE, verdict = null, diffFromPrev = null)
 
-        rowsOf(render(listOf(record))) shouldBe listOf("| 2 | 14:23 | INCOMPLETE | 1/1 | 14m07s | no |")
+        rowsOf(render(listOf(record))) shouldBe listOf("| 2 | 14:23 | INCOMPLETE | 1/1 | 14m07s | - | no |")
     }
 
     @Test
