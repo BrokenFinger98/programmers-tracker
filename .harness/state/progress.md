@@ -5257,3 +5257,34 @@ New fixture measured from the live page and scrubbed per §7.3: shape verbatim, 
 
 Still open: 181945's own `statement.md` holds the broken text. `StatementBackfill` fills what is
 **missing**, not what is wrong, so re-fetching it is a separate step.
+
+---
+
+## 2026-08-28 · #329 — an instruction that was true for the tool and not for its reader
+
+The third thing lesson 181945 turned up, and the only one I found by **following the record's own
+advice**. Every generated Java runner said:
+
+```
+// Run it with:  java RunnerTest.java  (Solution.java beside it)
+```
+
+On my shell — JDK 21 — that gives `cannot find symbol: variable Solution`, which points at the
+generated file rather than at the JDK. On JDK 25 the same two files print `ALL PASS`. The
+difference is JEP 458, which taught the launcher to resolve a second source file and shipped in
+**JDK 22**.
+
+**True for the tool, false for its reader.** The tracker requires 25 and CI runs 25, so nothing
+was ever going to catch this. But the record repository is the user's own folder, opened with
+whatever JDK they have — and Programmers offers Java 8 and 11 for many problems, so 11, 17 or 21
+locally is the ordinary case.
+
+`javac RunnerTest.java Solution.java && java RunnerTest` works on every JDK since 8, with the
+one-liner kept as the shorter form where it applies. **Verified on the JDK 21 that failed**, not
+only in a test.
+
+Java only — checked all seven. The others either compile explicitly (`g++`, `gcc`, `kotlinc`) or
+are interpreted (`node`, `python3`), so none depends on a launcher feature.
+
+Two tests pin the header, for both shapes. Nothing had been watching it, which is how an
+instruction drifts from what it instructs.

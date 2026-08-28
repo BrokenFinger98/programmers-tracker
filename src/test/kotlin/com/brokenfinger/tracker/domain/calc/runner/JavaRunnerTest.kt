@@ -141,4 +141,36 @@ class JavaRunnerTest {
         // double IS covered — this asserts the positive case so the list below stays honest.
         JavaRunner.generate(code, examples).shouldBeInstanceOf<Runner.Generated>()
     }
+
+    /**
+     * The header told the reader to run `java RunnerTest.java`, which needs **JDK 22+** — that is
+     * when JEP 458 taught the launcher to resolve a second source file beside the first. On JDK 21
+     * it fails with `cannot find symbol: variable Solution`, which points at the generated file
+     * rather than at the JDK (#329).
+     *
+     * The tool requires 25 and CI runs 25, so the instruction was true *for the tool*. The record
+     * repository is the user's own folder, opened with whatever they have — and Programmers offers
+     * Java 8 and 11 for many problems, so 11, 17 or 21 locally is the normal case.
+     *
+     * Both source files named, on every JDK since 8. Pinned here because the defect was an
+     * instruction drifting from what actually runs, and nothing was watching it.
+     */
+    @Test
+    fun `the header's command names both source files, so it works before JDK 22`() {
+        val code = "class Solution { public int solution(int a, int b) { return a + b; } }"
+        val runner = JavaRunner.generate(code, listOf(ProblemExample("6, 7", "13")))
+            .shouldBeInstanceOf<Runner.Generated>()
+
+        runner.source shouldContain "javac RunnerTest.java Solution.java && java RunnerTest"
+    }
+
+    /** The same for the stdin shape, which carries its own header. */
+    @Test
+    fun `the stdin runner's header names both source files too`() {
+        val code = "public class Solution {\n    public static void main(String[] args) {\n    }\n}"
+        val runner = JavaRunner.generate(code, listOf(ProblemExample("\"3 4\"", "\"7\"")))
+            .shouldBeInstanceOf<Runner.Generated>()
+
+        runner.source shouldContain "javac RunnerTest.java Solution.java && java RunnerTest"
+    }
 }
