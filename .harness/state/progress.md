@@ -5423,3 +5423,10 @@ booted on the cached file with zero hand-offs. Also measured: 103 hand-offs in 3
 value — a sign-in re-sets the same cookie on many responses. The change trigger now dedupes on the
 last change seen (`decide.changeToPush`, tested); the server-asked path stays unconditional.
 Next: /commit → /pull-request → CI → merge → rebuild from main.
+
+## 2026-09-30 — #333 the registry has one lock (branch fix/333-registry-one-lock)
+- Red on the old code, every run: 16 concurrent admissions into capacity 4 → 5 entries. A pin racing a
+  refresh could be overwritten (get-then-put).
+- `watched` → HashMap, every public method under one lock; KDoc's "one writer" sentence replaced.
+- Tests: concurrent admissions (20 rounds), pin vs refresh (10 rounds); class 19/19 ×3.
+  ADR [[decisions/2026-09-30-the-registry-has-one-lock]].

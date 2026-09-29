@@ -2,7 +2,6 @@ package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.ChannelKey
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 
 /** What a `/watch` did, so the caller knows whether to subscribe, unsubscribe, or fail. */
 sealed interface WatchResult {
@@ -46,25 +45,30 @@ data class WatchedChannel(val channel: ChannelKey, val lastHeartbeat: Instant, v
  * No clock inside: `now` arrives with the heartbeat that caused the call, which keeps the
  * eviction order testable and identical on the reconnect replay path.
  *
- * Sized for one writer (the `/watch` handler) plus concurrent readers (diagnostics); entries
- * are immutable and replaced wholesale, so a reader never observes a half-updated one.
+ * **Every operation is atomic under one lock.** This used to say "sized for one writer", and
+ * `/watch` used to be one: it is now one `runBlocking` per request, so there are as many writers
+ * as open tabs, and an admission that is a get → size → remove → put over a concurrent map lets
+ * two of them pass the capacity check together, or a heartbeat refresh drop a pin that landed
+ * between its read and its write (#333). Eight entries and a few operations a second: a lock
+ * costs nothing here, and the invariants are worth more than the parallelism.
  */
 class SubscriptionRegistry(private val capacity: Int = DEFAULT_CAPACITY) {
-    private val watched = ConcurrentHashMap<ChannelKey, WatchedChannel>()
+    private val lock = Any()
+    private val watched = HashMap<ChannelKey, WatchedChannel>()
 
     init {
         require(capacity > 0) { "capacity must be positive: $capacity" }
     }
 
     /** Opens a subscription, or refreshes one we already hold. */
-    fun watch(channel: ChannelKey, now: Instant): WatchResult {
+    fun watch(channel: ChannelKey, now: Instant): WatchResult = synchronized(lock) {
         val existing = watched[channel]
         if (existing != null) return refresh(existing, now)
         supersededBy(channel)?.let { return admit(channel, now, evicted = it) }
         if (watched.size < capacity) return admit(channel, now, evicted = null)
         val victim = evictionVictim() ?: return WatchResult.Saturated
         watched.remove(victim.channel)
-        return admit(channel, now, victim.channel)
+        admit(channel, now, victim.channel)
     }
 
     /**
@@ -90,19 +94,19 @@ class SubscriptionRegistry(private val capacity: Int = DEFAULT_CAPACITY) {
     }
 
     /** Pins the channel against eviction — a grading session is running on it. */
-    fun markActive(channel: ChannelKey) = replace(channel) { it.activated() }
+    fun markActive(channel: ChannelKey) = synchronized(lock) { replace(channel) { it.activated() } }
 
     /** Releases the pin once the session reached a terminal frame or its timeout. */
-    fun markSettled(channel: ChannelKey) = replace(channel) { it.settled() }
+    fun markSettled(channel: ChannelKey) = synchronized(lock) { replace(channel) { it.settled() } }
 
     /** Whether a grading session is running on the channel right now. */
-    fun isGrading(channel: ChannelKey): Boolean = watched[channel]?.pinned == true
+    fun isGrading(channel: ChannelKey): Boolean = synchronized(lock) { watched[channel]?.pinned == true }
 
     /** Drops the subscription; `false` means there was nothing to drop. */
-    fun unwatch(channel: ChannelKey): Boolean = watched.remove(channel) != null
+    fun unwatch(channel: ChannelKey): Boolean = synchronized(lock) { watched.remove(channel) != null }
 
     /** Diagnostics view, oldest heartbeat first — the order eviction would follow. */
-    fun snapshot(): List<WatchedChannel> = watched.values.sortedBy { it.lastHeartbeat }
+    fun snapshot(): List<WatchedChannel> = synchronized(lock) { watched.values.sortedBy { it.lastHeartbeat } }
 
     private fun refresh(existing: WatchedChannel, now: Instant): WatchResult {
         watched[existing.channel] = existing.heartbeatAt(now)
