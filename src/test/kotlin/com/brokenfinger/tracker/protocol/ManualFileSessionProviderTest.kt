@@ -5,8 +5,10 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -133,6 +135,7 @@ class ManualFileSessionProviderTest {
 
     @Test
     fun `a file that cannot be written still serves the new value, and says it was not persisted`() {
+        assumeTrue(posixPermissions(), "this test denies the write with POSIX permissions")
         val readOnlyDir = Files.createDirectory(dir.resolve("ro"))
         val file = readOnlyDir.resolve("session")
         Files.writeString(file, "old-value")
@@ -152,6 +155,7 @@ class ManualFileSessionProviderTest {
     /** Review of #332: a write that failed is tried again on the next hand-off, even of the same value. */
     @Test
     fun `a value that could not be written is written on the next hand-off once the location allows it`() {
+        assumeTrue(posixPermissions(), "this test denies the write with POSIX permissions")
         val lockedDir = Files.createDirectory(dir.resolve("locked"))
         val file = lockedDir.resolve("session")
         Files.writeString(file, "old-value")
@@ -172,6 +176,7 @@ class ManualFileSessionProviderTest {
     /** Review of #332: a hand-pasted file must not stay shadowed by a value the server could not write. */
     @Test
     fun `a file changed by hand wins over a value held in memory`() {
+        assumeTrue(posixPermissions(), "this test denies the write with POSIX permissions")
         val lockedDir = Files.createDirectory(dir.resolve("locked2"))
         val file = lockedDir.resolve("session")
         Files.writeString(file, "old-value")
@@ -192,6 +197,7 @@ class ManualFileSessionProviderTest {
     /** Review of #332: a parent directory that cannot be searched is an error, not a missing cookie. */
     @Test
     fun `an unreadable location is not reported as missing`() {
+        assumeTrue(posixPermissions(), "this test denies the write with POSIX permissions")
         val sealed = Files.createDirectory(dir.resolve("sealed"))
         val file = sealed.resolve("session")
         Files.writeString(file, "present")
@@ -218,4 +224,7 @@ class ManualFileSessionProviderTest {
         shouldThrow<MissingSessionException> { ManualFileSessionProvider(dir.resolve("nope")).cookie() }
         shouldThrow<MissingSessionException> { ManualFileSessionProvider(sessionFile("  ")).cookie() }
     }
+
+    /** Windows has no POSIX permissions to deny a write with; these tests skip there, as GithubRemoteTest does. */
+    private fun posixPermissions(): Boolean = FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
 }
