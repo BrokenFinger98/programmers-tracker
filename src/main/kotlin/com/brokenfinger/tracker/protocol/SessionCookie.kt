@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.protocol
 
+import java.security.MessageDigest
+
 /**
  * The Programmers `_session_production` cookie header value, kept in memory only.
  *
@@ -13,6 +15,16 @@ value class SessionCookie(private val raw: String) {
     }
 
     fun headerValue(): String = raw
+
+    /**
+     * A stable digest of the value, for telling one credential from another without holding
+     * either: the observation that authenticated with one cookie has to notice when the file now
+     * holds a different one (#331). Never logged either — a digest of a credential is still a
+     * fact about it.
+     */
+    fun fingerprint(): String = MessageDigest.getInstance("SHA-256")
+        .digest(raw.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
 
     override fun toString(): String = "SessionCookie(***)"
 }

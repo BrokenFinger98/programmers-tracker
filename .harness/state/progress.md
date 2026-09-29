@@ -5318,3 +5318,64 @@ for a fixture that has no sensor.
 
 Nothing changed about what `elapsedSec` measures. It is the right number for "how long has this
 been hanging over me", which is what design §6.4's spacing wants — it was just the only one shown.
+
+## 2026-09-29 — #331 a replaced credential reopens the observation (branch fix/331-reopen-on-credential-change)
+
+**Measured, not reasoned.** Lesson 151136: subscription opened 09:54 under a dead cookie, file
+replaced in place 09:58, `/watch` said `session: alive, subscription: live` from 10:00:40, a PASS
+at 10:09:47 was not recorded, `docker restart` 10:12:01, a PASS at 10:12:46 was recorded. The
+socket has no expiry signal ([[sources/2026-08-11-expiry-has-no-socket-signal]]) and therefore no
+replacement signal either; nothing asked it which cookie it carried.
+
+**What changed.** `SessionCookie.fingerprint()`; `CableChannelSubscriber` remembers the digest
+each attempt connected with and `reauthenticate(channel)` reopens the job under `compute` when
+the current digest differs; `WatchService.watch` asks on every heartbeat and, on a reopen, calls
+`SessionHealth.credentialReplaced()` so the five-minute cache does not keep a dead `EXPIRED`.
+Unreadable credential → no change; digest never logged; reopened → `PENDING`.
+
+**Tests.** +3 subscriber, +1 watch service, +1 session health, +2 cookie. ADR
+[[decisions/2026-09-29-a-replaced-credential-reopens-the-observation]].
+
+**Review (reviewer agent) — two blocking findings, both taken.** B1: `renew` cancelled the old job
+without waiting, so two `ChannelCapture` collectors could briefly share a channel; now one lock over
+the three maps, the job is taken out first, `cancel` + bounded `join` (5 s) before the new one opens,
+and a job no longer held never writes a fingerprint. Two tests pin it: the old observation closes
+before the new one opens, and a reopen racing an unsubscribe leaves nothing running (25 rounds).
+B2: the plan put merge before the live check — the exact pattern this issue is about. Reordered.
+
+**Order now.** Gates → build the image from this branch → **live: cookie replaced in place with the
+container running, observation reopened without a restart, badge green, next submit recorded** →
+/commit → /pull-request → CI → merge.
+
+**Live, 10:47 (image built from the branch, container never restarted).** Junk written in place →
+same heartbeat: reopen logged, `session: expired`, `subscription: pending`. Original bytes restored
+in place → next heartbeat: reopen logged, `session: alive`, `live` 3 s later. Remaining live item:
+the owner's next submit is recorded on the reopened socket. Critic's adversarial pass on the
+concurrency pending; then /commit → /pull-request → CI → merge.
+
+**Live, 10:52:44 — the item the issue was opened for.** Lesson 133024's socket reopened through the
+credential-change path (junk 10:51:19, original restored 10:51:20, both logged), then the owner's
+submit was recorded through it: attempt 3, PASS 1/1, `session: alive`, `subscription: live`, no
+restart. Earlier the same minute, a submit on a socket opened fresh after the container recreate
+(133024 attempt 2, 10:48:24) was recorded too, which proves the fresh path but not the reopened one.
+
+**Critic (adversarial pass) — five of five invariants attacked, two broken for real, one structurally.**
+I2 broken 70/200: a replaced job wrote `health` under the channel name and the reopen read it as
+"still wanted"; the race test ran serially and could not see it. Also: no rollback when a reopen is
+interrupted (channel `PENDING` forever), an in-flight probe overwriting `credentialReplaced()`, the
+cookie read twice per attempt, a blocking file read outside every timeout. Redesigned: one
+`Observation` object per channel (job + health + digest), one map, one lock; the successor takes
+the place first, the old job is cancelled and joined with a bounded patience, the successor starts
+in `finally` unless stopped meanwhile; the cookie is read once and handed to the client; the file is
+read on IO; `SessionHealth` carries a generation. Tests: race rewritten to actually race (emitting
+flow, real dispatcher, "nothing collected after the stop"), interrupted reopen, patience expiry,
+in-flight probe. Pre-existing registry single-writer assumption filed as its own issue.
+
+**Critic, second pass on the redesign — I1–I7 all hold (520 rounds). Three behaviours fixed:**
+F1 a reopen cancelled the old job past its own `connectionLost()`, so a grading it held open stayed
+pinned in the registry un-evictably with no log (measured: `/watch` Saturated) — told now once the
+close is confirmed, never on the patience path; F2 `runCatching` around the credential read swallowed
+the caller's cancellation — rethrown; F3 cache invalidation was tied to "reopened" — `reauthenticate`
+now answers `CredentialCheck(changed, reopened)` and the cache is forgotten on `changed`, once per
+change rather than once per channel. Low/informational items recorded as accepted costs (torn read,
+green badge during a reopen); probe dedup under concurrent heartbeats filed as its own issue.

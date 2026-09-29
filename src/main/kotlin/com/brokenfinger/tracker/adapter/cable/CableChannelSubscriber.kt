@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.cable
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
 import com.brokenfinger.tracker.application.ConnectionLiveness
+import com.brokenfinger.tracker.application.CredentialCheck
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.protocol.ActionCableClient
@@ -13,6 +14,7 @@ import com.brokenfinger.tracker.protocol.SubscriptionRejectedException
 import com.brokenfinger.tracker.protocol.parse.ObservedFrames
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.timeout
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
@@ -46,16 +50,43 @@ class CableChannelSubscriber(
     private val scope: CoroutineScope,
     private val silenceDeadline: Duration = ConnectionLiveness.DEFAULT_DEADLINE,
     private val waitFor: suspend (Duration) -> Unit = { delay(it.toMillis()) },
+    private val closePatience: Duration = DEFAULT_CLOSE_PATIENCE,
     private val captureFor: (ChannelKey) -> ChannelCapture,
 ) : ChannelSubscriber {
-    private val jobs = ConcurrentHashMap<ChannelKey, Job>()
-    private val health = ConcurrentHashMap<ChannelKey, SubscriptionHealth>()
+    /**
+     * Everything one channel's observation owns, in one object: its job, what it has proved so
+     * far, and the digest of the credential it connected with (#331).
+     *
+     * One object rather than three maps, because the review of #331 found the seam between
+     * them: a job already replaced kept writing its health under the channel's *name*, and a
+     * reopen read that as "still wanted" and brought a stopped channel back. A job now writes
+     * only to its own observation. Whether that object is still the one [held] for the channel
+     * is decided under [lock], and nowhere else.
+     */
+    private class Observation(val channel: ChannelKey, val capture: ChannelCapture) {
+        @Volatile var job: Job? = null
+
+        @Volatile var health: SubscriptionHealth = SubscriptionHealth.PENDING
+
+        /** The digest of the credential this observation connected with — never the value. */
+        @Volatile var openedWith: String? = null
+    }
+
+    private val held = ConcurrentHashMap<ChannelKey, Observation>()
+
+    /**
+     * The digest the last heartbeat saw, for any channel. "The credential changed" is decided
+     * against this, not against a socket: a socket that reconnected on its own already carries
+     * the new one, and the cached session answer would otherwise outlive the replacement.
+     */
+    private var lastSeen: String? = null
+
+    // Every change to what is held — a start, a stop, a reopen — happens under this lock, so a
+    // stop and a reopen cannot interleave halfway through each other. Nothing suspends under it.
+    private val lock = Any()
 
     override fun subscribe(channel: ChannelKey) {
-        jobs.computeIfAbsent(channel) {
-            health[it] = SubscriptionHealth.PENDING
-            observe(it)
-        }
+        synchronized(lock) { held.computeIfAbsent(channel) { start(it) } }
     }
 
     /**
@@ -68,8 +99,8 @@ class CableChannelSubscriber(
      *
      * 1. a WARN per switch saying *anything broadcast meanwhile is lost*, about a stop we asked
      *    for — and it shares a log with the reconnect warnings that do mean something
-     * 2. an `UNREACHABLE` written back into [health] **after** the line below removed it,
-     *    leaving an entry for a channel nobody watches
+     * 2. an `UNREACHABLE` written back **after** the line below removed the channel, leaving an
+     *    entry for a channel nobody watches
      * 3. one more pass of the retry loop, which called `connectionLost()` and settled any
      *    grading still in flight as INCOMPLETE, logging it as *dropped mid-grading*
      *
@@ -78,27 +109,102 @@ class CableChannelSubscriber(
      * method working.
      */
     override fun unsubscribe(channel: ChannelKey) {
-        jobs.remove(channel)?.cancel()
-        health.remove(channel)
+        synchronized(lock) { held.remove(channel) }?.job?.cancel()
         logger.info("Stopped observing lesson {}", channel.lessonId.value)
     }
 
     /**
-     * Absent means UNREACHABLE, not PENDING. A channel this class holds no job for is not
+     * Absent means UNREACHABLE, not PENDING. A channel this class holds nothing for is not
      * being watched, and answering optimistically is the defect #167 exists to remove.
      */
-    override fun healthOf(channel: ChannelKey): SubscriptionHealth = health[channel] ?: SubscriptionHealth.UNREACHABLE
+    override fun healthOf(channel: ChannelKey): SubscriptionHealth =
+        held[channel]?.health ?: SubscriptionHealth.UNREACHABLE
 
-    private fun observe(channel: ChannelKey): Job {
-        val capture = captureFor(channel)
-        return scope.launch { observeUntilCancelled(channel, capture) }
+    override suspend fun reauthenticate(channel: ChannelKey): CredentialCheck {
+        val current = currentFingerprint() ?: return CredentialCheck.UNCHANGED
+        val (changed, stale, successor) = synchronized(lock) {
+            val changed = lastSeen != null && lastSeen != current
+            lastSeen = current
+            val observation = held[channel] ?: return CredentialCheck(changed, reopened = false)
+            val authenticatedWith = observation.openedWith ?: return CredentialCheck(changed, reopened = false)
+            if (authenticatedWith == current) return CredentialCheck(changed, reopened = false)
+            // The successor takes the channel's place before the old socket is closed. A second
+            // heartbeat then finds nothing to reopen (no fingerprint yet), a subscribe finds the
+            // channel held, and a stop removes it — which is how a stop wins, below.
+            val next = Observation(channel, captureFor(channel))
+            held[channel] = next
+            Triple(changed, observation, next)
+        }
+        logger.info("The session credential changed — reopening the observation of lesson {}", channel.lessonId.value)
+        try {
+            closeBeforeReopening(stale)
+        } finally {
+            // Started whatever happened during the close: a heartbeat interrupted mid-join must
+            // not leave the channel held by an observation that never connects, which the badge
+            // would show as PENDING forever. Unless a stop arrived meanwhile — then the successor
+            // is no longer held, and a stop stays a stop.
+            synchronized(lock) {
+                if (held[channel] === successor) successor.job = observe(successor)
+            }
+        }
+        return CredentialCheck(changed, reopened = true)
     }
 
-    private suspend fun observeUntilCancelled(channel: ChannelKey, capture: ChannelCapture) {
+    /**
+     * The old socket is closed before the new one opens — two collectors on one channel would
+     * break [ChannelCapture]'s one-collector rule. The wait is bounded, because a heartbeat must
+     * not hang on a close that is stuck behind, say, a push on the way out of a grading.
+     *
+     * After the patience runs out the successor opens while the old observation may still be
+     * finishing its last frame. It cannot receive another: a flow's `emit` checks cancellation
+     * (the kotlinx.coroutines contract for the `flow` builder [ActionCableClient.observe] uses),
+     * so no frame reaches two captures. What can overlap is one capture finishing and another
+     * starting, and that is the accepted cost, stated here rather than assumed away.
+     */
+    private suspend fun closeBeforeReopening(stale: Observation) {
+        val job = stale.job ?: return
+        job.cancel()
+        if (withTimeoutOrNull(closePatience.toMillis()) { job.join() } != null) {
+            // Closed by us, so the retry loop's own `connectionLost()` never ran for this attempt
+            // (a cancellation is rethrown past it, #217). Without this a grading the old socket
+            // held open stays pinned in the registry, un-evictable, with no log line — the review
+            // of #331 measured a slot lost for good. Safe here and only here: the job is done, so
+            // no collector is inside the capture.
+            stale.capture.connectionLost()
+            return
+        }
+        logger.warn(
+            "The old observation of lesson {} did not close within {} — opening the new one anyway",
+            stale.channel.lessonId.value,
+            closePatience,
+        )
+    }
+
+    /**
+     * A credential that cannot be read right now says nothing about whether it changed. Tearing
+     * down a working observation over a missing file would turn a typo into a lost grading.
+     *
+     * Read on the IO dispatcher: the heartbeat handler runs on a virtual thread, and file I/O
+     * would pin its carrier.
+     */
+    private suspend fun currentFingerprint(): String? = try {
+        withContext(Dispatchers.IO) { sessions.cookie().fingerprint() }
+    } catch (cancelled: CancellationException) {
+        throw cancelled // the caller's cancellation, never a "cannot tell"
+    } catch (unreadable: Exception) {
+        null
+    }
+
+    private fun start(channel: ChannelKey): Observation =
+        Observation(channel, captureFor(channel)).also { it.job = observe(it) }
+
+    private fun observe(me: Observation): Job = scope.launch { observeUntilCancelled(me) }
+
+    private suspend fun observeUntilCancelled(me: Observation) {
         var attempt = 0
         while (currentCoroutineContext().isActive) {
-            attempt = if (collectOnce(channel, capture)) 1 else attempt + 1
-            capture.connectionLost()
+            attempt = if (collectOnce(me)) 1 else attempt + 1
+            me.capture.connectionLost()
             waitFor(ConnectionLiveness.retryDelayFor(attempt))
         }
     }
@@ -128,23 +234,27 @@ class CableChannelSubscriber(
      * path where being wrong means a silently dead subscription.
      */
     @OptIn(FlowPreview::class)
-    private suspend fun collectOnce(channel: ChannelKey, capture: ChannelCapture): Boolean {
+    private suspend fun collectOnce(me: Observation): Boolean {
         var received = false
         runCatching {
-            client.observe(ChannelIdentifier.from(channel), sessions)
+            // Read once per attempt and handed to the client as it is, so the digest remembered
+            // here describes exactly the credential this socket connects with (#331).
+            val cookie = sessions.cookie()
+            me.openedWith = cookie.fingerprint()
+            client.observe(ChannelIdentifier.from(me.channel), SessionProvider { cookie })
                 .onEach {
                     received = true
                     // A heartbeat proves the subscription as well as a broadcast does — it is
                     // the only traffic an idle channel produces, so waiting for a grading to
                     // call a channel live would call every quiet channel broken.
-                    health[channel] = SubscriptionHealth.LIVE
+                    me.health = SubscriptionHealth.LIVE
                 }
                 // The deadline sits ABOVE the filter on purpose (#94): the heartbeat is the
                 // only traffic an idle channel produces, so it must reach the timeout — and
                 // it must not reach the capture, which records what it is given.
                 .timeout(silenceDeadline.toKotlinDuration())
                 .filter { it !is CableEvent.Heartbeat }
-                .collect { capture.onFrame(ObservedFrames.of(it)) }
+                .collect { me.capture.onFrame(ObservedFrames.of(it)) }
         }.onFailure {
             // `runCatching` catches CancellationException like anything else, and for OUR OWN
             // cancellation that is never right — see [unsubscribe] for the three things it was
@@ -157,13 +267,13 @@ class CableChannelSubscriber(
             // existing deadline test caught exactly that. What separates them is whether the
             // job itself was cancelled: a timeout leaves it active, `unsubscribe` does not.
             if (it is CancellationException && !currentCoroutineContext().isActive) throw it
-            health[channel] = healthAfter(it)
-            report(channel, it)
+            me.health = healthAfter(it)
+            report(me.channel, it)
         }
         // A flow that completed without ever emitting proved nothing — that is the ~30-minute
         // silent close, which throws nothing. Left alone it would keep an earlier LIVE on
         // record for a channel that is no longer connected.
-        if (!received) health.computeIfPresent(channel) { _, current -> notLive(current) }
+        if (!received) me.health = notLive(me.health)
         return received
     }
 
@@ -209,5 +319,8 @@ class CableChannelSubscriber(
 
     private companion object {
         val logger = LoggerFactory.getLogger(CableChannelSubscriber::class.java)
+
+        /** Chosen, not measured: a websocket close is milliseconds; five seconds is "something is wrong". */
+        val DEFAULT_CLOSE_PATIENCE: Duration = Duration.ofSeconds(5)
     }
 }

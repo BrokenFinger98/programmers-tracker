@@ -1,31 +1,42 @@
 package com.brokenfinger.tracker.adapter.cable
 
 import com.brokenfinger.tracker.application.ChannelCapture
+import com.brokenfinger.tracker.application.CredentialCheck
 import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 import com.brokenfinger.tracker.protocol.ActionCableClient
 import com.brokenfinger.tracker.protocol.CableEvent
 import com.brokenfinger.tracker.protocol.ChannelIdentifier
+import com.brokenfinger.tracker.protocol.SessionCookie
+import com.brokenfinger.tracker.protocol.SessionProvider
 import com.brokenfinger.tracker.protocol.SubscriptionRejectedException
 import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -326,6 +337,295 @@ class CableChannelSubscriberTest {
     }
 
     /**
+     * A socket accepted with a dead cookie stays confirmed, pinged and empty for as long as it
+     * lives ([[sources/2026-08-11-expiry-has-no-socket-signal]]), so replacing the cookie has to
+     * replace the observation too (#331). The heartbeat asks; this is what it gets.
+     */
+    @Test
+    fun `a replaced credential reopens the observation with the new one, after the old one has closed`() =
+        runBlocking<Unit> {
+            var value = "_session_production=first"
+            val opened = AtomicInteger()
+            val events = CopyOnWriteArrayList<String>()
+            val subscriber = subscriberOver(sessions = SessionProvider { SessionCookie(value) }) {
+                val n = opened.incrementAndGet()
+                events += "opened:$n"
+                flow {
+                    try {
+                        emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                        delay(FOREVER_MS)
+                    } finally {
+                        events += "closed:$n"
+                    }
+                }
+            }
+            subscriber.subscribe(channel)
+            awaitHealth(subscriber, SubscriptionHealth.LIVE)
+            subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+
+            value = "_session_production=second"
+            subscriber.reauthenticate(channel) shouldBe CredentialCheck(changed = true, reopened = true)
+
+            awaitAtLeast(opened, 2)
+            awaitHealth(subscriber, SubscriptionHealth.LIVE)
+            // One collector at a time: the first observation had closed before the second opened.
+            events.indexOf("closed:1") shouldBeLessThan events.indexOf("opened:2")
+            // The new socket carries the new cookie, so there is nothing left to reopen.
+            subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+        }
+
+    /**
+     * Review of #331: a reopen racing a stop must not bring a stopped channel back. The flow emits
+     * throughout and the reopen runs on a real dispatcher, so the two actually contend — the first
+     * version of this test ran them one after the other and passed for the wrong reason.
+     */
+    @Test
+    fun `a reopen racing an unsubscribe leaves the channel stopped`() = runBlocking<Unit> {
+        repeat(25) {
+            var value = "_session_production=first"
+            val opened = AtomicInteger()
+            val closed = AtomicInteger()
+            val delivered = AtomicInteger()
+            val capture = mockk<ChannelCapture>(relaxed = true)
+            coEvery { capture.onFrame(any()) } coAnswers {
+                delivered.incrementAndGet()
+                Unit
+            }
+            val subscriber = subscriberOver(capture = capture, sessions = SessionProvider { SessionCookie(value) }) {
+                opened.incrementAndGet()
+                flow {
+                    try {
+                        while (true) {
+                            emit(CableEvent.SubscriptionConfirmed("""{"type":"confirm_subscription"}"""))
+                            delay(POLL_MS)
+                        }
+                    } finally {
+                        closed.incrementAndGet()
+                    }
+                }
+            }
+            subscriber.subscribe(channel)
+            awaitAtLeast(delivered, 1)
+            value = "_session_production=second"
+
+            val reopen = launch(Dispatchers.Default) { subscriber.reauthenticate(channel) }
+            subscriber.unsubscribe(channel)
+            reopen.join()
+
+            // Every observation that was opened has closed, and nothing is collected after the stop.
+            // `timeout` hands frames downstream through a channel, so one emitted just before the
+            // stop can still land after the producer's finally ran: let it, then watch for more.
+            awaitAtLeast(closed, opened.get())
+            delay(SETTLE_MS)
+            val afterTheStop = delivered.get()
+            delay(SETTLE_MS)
+            delivered.get() shouldBe afterTheStop
+            subscriber.healthOf(channel) shouldBe SubscriptionHealth.UNREACHABLE
+        }
+    }
+
+    /**
+     * Review of #331: a heartbeat interrupted while the old socket is closing must not leave the
+     * channel held by an observation that never connects — the badge would say PENDING forever.
+     */
+    @Test
+    fun `a reopen interrupted during the close still opens the new observation`() = runBlocking<Unit> {
+        var value = "_session_production=first"
+        val opened = AtomicInteger()
+        val closing = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val subscriber = subscriberOver(sessions = SessionProvider { SessionCookie(value) }) {
+            val n = opened.incrementAndGet()
+            flow {
+                try {
+                    emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                    delay(FOREVER_MS)
+                } finally {
+                    // The first socket's close hangs until released — a push on the way out, say.
+                    if (n == 1) {
+                        closing.complete(Unit)
+                        withContext(NonCancellable) { release.await() }
+                    }
+                }
+            }
+        }
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        value = "_session_production=second"
+
+        val reopen = launch(Dispatchers.Default) { subscriber.reauthenticate(channel) }
+        closing.await()
+        reopen.cancel()
+        reopen.join()
+
+        awaitAtLeast(opened, 2)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        release.complete(Unit)
+    }
+
+    /** When the old socket will not close, the new one opens once the patience runs out; the channel is not left dark. */
+    @Test
+    fun `an old observation that will not close is not waited for beyond the patience`() = runBlocking<Unit> {
+        var value = "_session_production=first"
+        val opened = AtomicInteger()
+        val release = CompletableDeferred<Unit>()
+        val capture = mockk<ChannelCapture>(relaxed = true)
+        val subscriber = subscriberOver(
+            capture = capture,
+            sessions = SessionProvider { SessionCookie(value) },
+            closePatience = Duration.ofMillis(200),
+        ) {
+            val n = opened.incrementAndGet()
+            flow {
+                try {
+                    emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                    delay(FOREVER_MS)
+                } finally {
+                    if (n == 1) withContext(NonCancellable) { release.await() }
+                }
+            }
+        }
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED // the heartbeat has seen the first one
+        value = "_session_production=second"
+
+        val started = System.nanoTime()
+        subscriber.reauthenticate(channel) shouldBe CredentialCheck(changed = true, reopened = true)
+        val waitedMs = ((System.nanoTime() - started) / 1_000_000).toInt()
+
+        waitedMs shouldBeLessThan 3000
+        awaitAtLeast(opened, 2)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        // The old socket was never confirmed closed, so its capture is not told it lost the
+        // connection: telling it while a collector may still be inside would break its contract.
+        coVerify(exactly = 0) { capture.connectionLost() }
+        release.complete(Unit)
+    }
+
+    /**
+     * Review of #331: a reopen closes the old socket itself, so the retry loop's own
+     * `connectionLost()` never runs for it. A grading that socket held open would stay pinned in
+     * the registry, un-evictable, with no log line. Told here, once the old job is known to be done.
+     */
+    @Test
+    fun `a reopened observation tells its old capture the connection was lost`() = runBlocking<Unit> {
+        var value = "_session_production=first"
+        val opened = AtomicInteger()
+        val capture = mockk<ChannelCapture>(relaxed = true)
+        val subscriber = subscriberOver(capture = capture, sessions = SessionProvider { SessionCookie(value) }) {
+            opened.incrementAndGet()
+            flow {
+                emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                delay(FOREVER_MS)
+            }
+        }
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        value = "_session_production=second"
+
+        subscriber.reauthenticate(channel).reopened shouldBe true
+
+        awaitAtLeast(opened, 2)
+        coVerify(exactly = 1) { capture.connectionLost() }
+    }
+
+    /**
+     * Review of #331: a socket that reconnected on its own between the replacement and the
+     * heartbeat already carries the new credential. Nothing to reopen — but the credential did
+     * change, and the caller's cached session answer is about the old one.
+     */
+    @Test
+    fun `a socket that reconnected with the new credential on its own is changed but not reopened`() =
+        runBlocking<Unit> {
+            var value = "_session_production=first"
+            val opened = AtomicInteger()
+            val endTheFirstSocket = CompletableDeferred<Unit>()
+            val subscriber = subscriberOver(sessions = SessionProvider { SessionCookie(value) }) {
+                val n = opened.incrementAndGet()
+                flow {
+                    emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                    if (n == 1) endTheFirstSocket.await() else delay(FOREVER_MS)
+                }
+            }
+            subscriber.subscribe(channel)
+            awaitHealth(subscriber, SubscriptionHealth.LIVE)
+            subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+
+            value = "_session_production=second"
+            endTheFirstSocket.complete(Unit) // the socket drops and the retry loop reconnects with the new cookie
+            awaitAtLeast(opened, 2)
+            awaitHealth(subscriber, SubscriptionHealth.LIVE)
+
+            subscriber.reauthenticate(channel) shouldBe CredentialCheck(changed = true, reopened = false)
+            subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+        }
+
+    /** Review of #331: the caller's cancellation is not a "cannot tell" — it is rethrown, as everywhere in this class. */
+    @Test
+    fun `a cancelled heartbeat does not get an answer about the credential`() = runBlocking<Unit> {
+        val reading = CompletableDeferred<Unit>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        val reads = AtomicInteger()
+        val sessions = SessionProvider {
+            // The observation's own connect reads it too; only the heartbeat's read is held.
+            if (reads.incrementAndGet() > 1) {
+                reading.complete(Unit)
+                release.await()
+            }
+            SessionCookie(FAKE_COOKIE)
+        }
+        val subscriber = subscriberOver(sessions = sessions) { neverEnding() }
+        subscriber.subscribe(channel)
+        awaitAtLeast(reads, 1)
+        var outcome = "none"
+
+        val heartbeat = launch(Dispatchers.Default) {
+            try {
+                subscriber.reauthenticate(channel)
+                outcome = "answered"
+            } catch (cancelled: CancellationException) {
+                outcome = "cancelled"
+                throw cancelled
+            }
+        }
+        reading.await()
+        heartbeat.cancel()
+        release.countDown()
+        heartbeat.join()
+
+        outcome shouldBe "cancelled"
+    }
+
+    /** A credential that cannot be read says nothing about whether it changed; a typo must not cost a grading. */
+    @Test
+    fun `an unreadable credential leaves the observation alone`() = runBlocking<Unit> {
+        var readable = true
+        val opened = AtomicInteger()
+        val sessions = SessionProvider {
+            if (readable) SessionCookie(FAKE_COOKIE) else error("Session file not found")
+        }
+        val subscriber = subscriberOver(sessions = sessions) {
+            opened.incrementAndGet()
+            neverEnding()
+        }
+        subscriber.subscribe(channel)
+        awaitAtLeast(opened, 1)
+
+        readable = false
+
+        subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+        opened.get() shouldBe 1
+    }
+
+    @Test
+    fun `a channel nobody subscribed to has nothing to reopen`() = runBlocking<Unit> {
+        val subscriber = subscriberOver { neverEnding() }
+
+        subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+    }
+
+    /**
      * `/watch` is idempotent and the extension heartbeats every thirty seconds, so a stop for a
      * channel this instance never held is an ordinary arrival — after a restart, every one of
      * them is. Nothing to cancel is not an error (#272).
@@ -399,6 +699,10 @@ class CableChannelSubscriberTest {
         deadline: Duration = Duration.ofSeconds(30),
         capture: ChannelCapture = mockk(relaxed = true),
         attempts: AtomicInteger = AtomicInteger(),
+        // Synthetic value — never a real credential (dev rules §7.3). A real provider rather than
+        // a relaxed mock: every attempt now reads it to remember what it connected with (#331).
+        sessions: SessionProvider = SessionProvider { SessionCookie(FAKE_COOKIE) },
+        closePatience: Duration = Duration.ofSeconds(5),
         observation: (ChannelKey) -> Flow<CableEvent>,
     ): CableChannelSubscriber {
         val client = mockk<ActionCableClient>()
@@ -407,9 +711,10 @@ class CableChannelSubscriberTest {
         every { client.observe(any(), any()) } answers { observation(firstArg<ChannelIdentifier>().key) }
         return CableChannelSubscriber(
             client = client,
-            sessions = mockk(relaxed = true),
+            sessions = sessions,
             scope = scope,
             silenceDeadline = deadline,
+            closePatience = closePatience,
             // The schedule belongs to ConnectionLiveness and is tested there. Here the wait is
             // replaced by a short yield: skipping it entirely turns the retry loop into a busy
             // spin that outlives the test.
@@ -422,6 +727,7 @@ class CableChannelSubscriberTest {
     }
 
     private companion object {
+        const val FAKE_COOKIE = "_session_production=fake-value-for-tests"
         const val FOREVER_MS = 60_000L
         const val POLL_MS = 5L
         const val PATIENCE_MS = 10_000L

@@ -4,6 +4,21 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import com.brokenfinger.tracker.domain.SubscriptionHealth
 
 /**
+ * What a heartbeat's look at the credential found (#331).
+ *
+ * Two answers, because they drive two different things: [changed] — the credential is not the
+ * one the last heartbeat saw — is what makes a cached session answer stale, whether or not any
+ * socket had to move; [reopened] says this channel's observation was closed and started again
+ * under the current one. A socket that reconnected on its own between the replacement and the
+ * heartbeat is `changed` and not `reopened`, and the cache must still be forgotten.
+ */
+data class CredentialCheck(val changed: Boolean, val reopened: Boolean) {
+    companion object {
+        val UNCHANGED = CredentialCheck(changed = false, reopened = false)
+    }
+}
+
+/**
  * Outbound port for holding a channel subscription open. Separated from [WatchRequestHandler]
  * so the registry's bookkeeping is testable without a socket, and so eviction has somewhere
  * to send its "stop listening to this one" (design §4.1).
@@ -26,4 +41,19 @@ interface ChannelSubscriber {
      * [SubscriptionHealth.UNREACHABLE]: the optimistic default is the bug.
      */
     fun healthOf(channel: ChannelKey): SubscriptionHealth
+
+    /**
+     * Reopens the observation of [channel] if the credential it authenticated with is no longer
+     * the current one, and says whether it did.
+     *
+     * A socket accepted with a dead cookie stays confirmed, pinged and empty for as long as it
+     * lives, and nothing on it says so ([[sources/2026-08-11-expiry-has-no-socket-signal]]). So
+     * when the credential is replaced the observation has to be replaced with it, and the only
+     * caller regular enough to notice is the heartbeat (#331). A channel this subscriber holds
+     * nothing for has nothing to reopen; whether the credential changed is answered regardless.
+     *
+     * Suspends because the old observation is closed *before* the new one opens: two collectors
+     * on one channel would break [ChannelCapture]'s one-collector rule.
+     */
+    suspend fun reauthenticate(channel: ChannelKey): CredentialCheck
 }
