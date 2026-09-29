@@ -1,6 +1,9 @@
 package com.brokenfinger.tracker.application
 
 import com.brokenfinger.tracker.domain.SessionState
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 
 /**
  * Outbound port for "does the session cookie still authenticate".
@@ -23,6 +26,11 @@ fun interface SessionProbe {
  * **The cached answer is never `UNKNOWN`.** A failed probe is not remembered: the next heartbeat
  * asks again, because an unreachable check that stuck for five minutes would report nothing
  * useful for five minutes.
+ *
+ * **One probe in flight at a time.** Each open tab's heartbeat is served on its own thread, and
+ * on a cold or just-reset cache they all found nothing cached and all asked — eight tabs, eight
+ * requests for one answer (#334). The first caller probes; the others wait for its answer. If it
+ * fails them — cancelled, or a probe that threw — they ask for themselves.
  */
 class SessionHealth(
     private val probe: SessionProbe,
@@ -38,22 +46,48 @@ class SessionHealth(
     /** Bumped by [credentialReplaced], so an answer still in flight can tell it is about the old one. */
     private var generation = 0L
 
+    /** The probe another caller is running right now, for the rest to wait on (#334). */
+    private var inFlight: CompletableDeferred<SessionState>? = null
+
     suspend fun state(): SessionState {
-        val askedIn = synchronized(lock) {
+        val (mine, shared, askedIn) = synchronized(lock) {
             cached()?.let { return it }
-            generation
+            inFlight?.let { return@synchronized Triple(false, it, generation) }
+            CompletableDeferred<SessionState>().let { fresh ->
+                inFlight = fresh
+                Triple(true, fresh, generation)
+            }
         }
-        val fresh = probe.probe()
+        if (!mine) return awaitOrAsk(shared)
+        val fresh = try {
+            probe.probe()
+        } catch (failed: Throwable) {
+            synchronized(lock) { inFlight = null }
+            shared.completeExceptionally(failed)
+            throw failed
+        }
         synchronized(lock) {
+            inFlight = null
             // A question asked before the credential was replaced was about the old one. Its
             // answer still goes to whoever asked — it is what Programmers said — but it is not
             // remembered over the replacement (review of #331).
-            if (askedIn != generation) return fresh
-            answer = fresh
-            askedAt = if (fresh == SessionState.UNKNOWN) null else clock.instant()
-            track(fresh)
+            if (askedIn == generation) {
+                answer = fresh
+                askedAt = if (fresh == SessionState.UNKNOWN) null else clock.instant()
+                track(fresh)
+            }
         }
+        shared.complete(fresh)
         return fresh
+    }
+
+    // A waiter takes the prober's answer. If the prober failed it — cancelled, or a probe that
+    // threw — the waiter, still active itself, asks for itself; only its own cancellation ends it.
+    private suspend fun awaitOrAsk(shared: CompletableDeferred<SessionState>): SessionState = try {
+        shared.await()
+    } catch (failed: Throwable) {
+        if (!currentCoroutineContext().isActive) throw failed
+        state()
     }
 
     /**

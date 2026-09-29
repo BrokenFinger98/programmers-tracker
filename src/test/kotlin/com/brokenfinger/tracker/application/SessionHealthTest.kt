@@ -3,6 +3,11 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.domain.SessionState
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -22,6 +27,54 @@ import java.util.concurrent.atomic.AtomicInteger
 class SessionHealthTest {
     private val clock = MovableClock()
     private val asked = AtomicInteger()
+
+    /**
+     * #334 — the extension posts one heartbeat per open tab, each served by its own thread. On a
+     * cold or just-reset cache they all found nothing cached and all probed: eight tabs, eight
+     * requests to Programmers for one answer. One probe is in flight at a time; the rest wait for it.
+     */
+    @Test
+    fun `concurrent callers on an empty cache share one probe`() = runBlocking<Unit> {
+        val release = CompletableDeferred<Unit>()
+        val health = SessionHealth({
+            asked.incrementAndGet()
+            release.await()
+            SessionState.ALIVE
+        }, clock)
+
+        val callers = (1..8).map { async(Dispatchers.Default) { health.state() } }
+        awaitAsked(1)
+        release.complete(Unit)
+
+        callers.awaitAll().toSet() shouldBe setOf(SessionState.ALIVE)
+        asked.get() shouldBe 1
+    }
+
+    /** #334 — a probe that fails for one caller must not leave the others waiting forever. */
+    @Test
+    fun `a probe that throws releases the callers waiting on it, who ask again`() = runBlocking<Unit> {
+        val release = CompletableDeferred<Unit>()
+        var first = true
+        val health = SessionHealth({
+            asked.incrementAndGet()
+            if (first) {
+                first = false
+                release.await()
+                throw IllegalStateException("the first probe blew up")
+            }
+            SessionState.ALIVE
+        }, clock)
+
+        val prober = async(Dispatchers.Default) { runCatching { health.state() } }
+        awaitAsked(1)
+        val waiter = async(Dispatchers.Default) { health.state() }
+        delay(50)
+        release.complete(Unit)
+
+        prober.await().isFailure shouldBe true
+        waiter.await() shouldBe SessionState.ALIVE
+        asked.get() shouldBe 2
+    }
 
     @Test
     fun `the first call asks`() = runBlocking<Unit> {
@@ -199,6 +252,14 @@ class SessionHealthTest {
         health.state()
 
         health.muteChanged().shouldBeNull()
+    }
+
+    private suspend fun awaitAsked(target: Int) {
+        val deadline = System.nanoTime() + 5_000_000_000
+        while (asked.get() < target) {
+            if (System.nanoTime() > deadline) error("probe never started")
+            delay(5)
+        }
     }
 
     private fun healthAnswering(state: SessionState) = SessionHealth({
