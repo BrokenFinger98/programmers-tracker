@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "programmers-tracker sensor",
-  "version": "0.1.0",
-  "description": "Tells your local programmers-tracker which problem you are looking at, and reports the focused time and whether the questions tab was opened. Four fields, nothing else.",
+  "version": "0.2.0",
+  "description": "Tells your local programmers-tracker which problem you are looking at, reports the focused time and whether the questions tab was opened, and hands it your Programmers session cookie when the server says it has none or a dead one.",
   "permissions": [
-    "storage"
+    "storage",
+    "cookies"
   ],
   "host_permissions": [
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "https://*.programmers.co.kr/*"
   ],
   "action": {
     "default_title": "programmers-tracker sensor",

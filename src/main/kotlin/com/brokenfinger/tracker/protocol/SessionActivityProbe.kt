@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.protocol
 
 import com.brokenfinger.tracker.application.SessionProbe
 import com.brokenfinger.tracker.domain.SessionState
+import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 
 /**
@@ -30,13 +31,20 @@ class SessionActivityProbe(
     private val base: String = DEFAULT_BASE,
     private val year: () -> Int = { java.time.Year.now().value },
 ) : SessionProbe {
-    override suspend fun probe(): SessionState = runCatching { pages.get(url()).let { stateOf(it.status, it.body) } }
-        .getOrElse {
-            // A probe that could not run says nothing about the cookie. Reporting EXPIRED
-            // here would tell the user to replace a credential that is probably fine.
-            logger.debug("Session probe could not reach Programmers ({})", it.javaClass.simpleName)
-            SessionState.UNKNOWN
-        }
+    override suspend fun probe(): SessionState = try {
+        pages.get(url()).let { stateOf(it.status, it.body) }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (nothingToPresent: MissingSessionException) {
+        // Not a failed probe and not an expired cookie: there is no cookie. The sensor can
+        // supply one (#332), and the badge should ask for that rather than for a replacement.
+        SessionState.MISSING
+    } catch (failed: Exception) {
+        // A probe that could not run says nothing about the cookie. Reporting EXPIRED
+        // here would tell the user to replace a credential that is probably fine.
+        logger.debug("Session probe could not reach Programmers ({})", failed.javaClass.simpleName)
+        SessionState.UNKNOWN
+    }
 
     private fun stateOf(status: Int, body: String): SessionState = when {
         // An HTML error page served as 200 is not a session, and it is not an expired one

@@ -73,8 +73,10 @@ class CaptureConfiguration {
     fun cableEndpoint(@Value("\${tracker.cable.url}") url: String, @Value("\${tracker.cable.origin}") origin: String) =
         CableEndpoint(url, origin)
 
+    // Declared as the concrete type: /session hands it new values (#332); everything else keeps
+    // injecting the SessionProvider port.
     @Bean
-    fun sessionProvider(@Value("\${tracker.session-file}") sessionFile: String): SessionProvider =
+    fun sessionProvider(@Value("\${tracker.session-file}") sessionFile: String): ManualFileSessionProvider =
         ManualFileSessionProvider(Path.of(sessionFile))
 
     @Bean

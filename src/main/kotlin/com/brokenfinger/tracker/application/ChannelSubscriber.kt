@@ -54,6 +54,10 @@ interface ChannelSubscriber {
      *
      * Suspends because the old observation is closed *before* the new one opens: two collectors
      * on one channel would break [ChannelCapture]'s one-collector rule.
+     *
+     * [mayReopen] false answers whether the credential changed but leaves the socket alone: a
+     * grading in flight on it is worth more than a fresher cookie, and the next heartbeat after
+     * it settles will reopen (#332).
      */
-    suspend fun reauthenticate(channel: ChannelKey): CredentialCheck
+    suspend fun reauthenticate(channel: ChannelKey, mayReopen: Boolean = true): CredentialCheck
 }

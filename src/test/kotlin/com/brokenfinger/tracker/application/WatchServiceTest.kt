@@ -92,6 +92,19 @@ class WatchServiceTest {
         asked.get() shouldBe 1
     }
 
+    /** #332: a grading in flight on the socket is worth more than a fresher cookie. */
+    @Test
+    fun `a heartbeat during a grading does not allow the socket to be reopened`() = runBlocking<Unit> {
+        service.watch(aCommand(lessonId = 120804))
+        registry.markActive(channelOf(120804))
+
+        service.watch(aCommand(lessonId = 120804))
+        registry.markSettled(channelOf(120804))
+        service.watch(aCommand(lessonId = 120804))
+
+        subscriber.reopenAllowed shouldContainExactly listOf(true, false, true)
+    }
+
     @Test
     fun `a repeat watch refreshes without touching the socket`() = runBlocking<Unit> {
         service.watch(aCommand(lessonId = 120804))
@@ -200,6 +213,7 @@ class WatchServiceTest {
         ChannelSubscriber {
         val calls = mutableListOf<String>()
         var credential = CredentialCheck.UNCHANGED
+        val reopenAllowed = mutableListOf<Boolean>()
 
         override fun subscribe(channel: ChannelKey) {
             calls += "subscribe:${channel.lessonId.value}"
@@ -211,7 +225,10 @@ class WatchServiceTest {
 
         override fun healthOf(channel: ChannelKey) = health
 
-        override suspend fun reauthenticate(channel: ChannelKey) = credential
+        override suspend fun reauthenticate(channel: ChannelKey, mayReopen: Boolean): CredentialCheck {
+            reopenAllowed += mayReopen
+            return credential
+        }
     }
 
     /** Each read advances a second, so heartbeat order is deterministic without sleeping. */

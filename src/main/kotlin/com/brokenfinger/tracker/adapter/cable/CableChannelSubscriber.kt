@@ -120,7 +120,7 @@ class CableChannelSubscriber(
     override fun healthOf(channel: ChannelKey): SubscriptionHealth =
         held[channel]?.health ?: SubscriptionHealth.UNREACHABLE
 
-    override suspend fun reauthenticate(channel: ChannelKey): CredentialCheck {
+    override suspend fun reauthenticate(channel: ChannelKey, mayReopen: Boolean): CredentialCheck {
         val current = currentFingerprint() ?: return CredentialCheck.UNCHANGED
         val (changed, stale, successor) = synchronized(lock) {
             val changed = lastSeen != null && lastSeen != current
@@ -128,6 +128,7 @@ class CableChannelSubscriber(
             val observation = held[channel] ?: return CredentialCheck(changed, reopened = false)
             val authenticatedWith = observation.openedWith ?: return CredentialCheck(changed, reopened = false)
             if (authenticatedWith == current) return CredentialCheck(changed, reopened = false)
+            if (!mayReopen) return CredentialCheck(changed, reopened = false)
             // The successor takes the channel's place before the old socket is closed. A second
             // heartbeat then finds nothing to reopen (no fingerprint yet), a subscribe finds the
             // channel held, and a stop removes it — which is how a stop wins, below.

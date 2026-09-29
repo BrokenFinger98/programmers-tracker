@@ -98,6 +98,14 @@ Sent when the page opens, whenever those values change, and every 30 seconds. Th
 idempotent — a repeat answers `refreshed` rather than `started` — which is what re-registers
 the problem after a server restart.
 
+And one `POST /session`, when it is needed: `{ "cookie": "<your _session_production>" }`.
+The browser is the only party that ever holds a fresh Programmers session, so when the
+server answers that it has no cookie or a dead one, the sensor reads the cookie from your
+signed-in browser and hands it over; it does the same the moment the cookie changes, which
+is what a re-login does. The server writes it to `.ps/session`, checks it against Programmers
+at once, and reopens its observations on the next heartbeat — which the sensor sends right
+away. Nothing to paste, nothing to restart. The answer never contains the value.
+
 ## Why the request goes through the service worker
 
 A content script's cross-origin `fetch` is subject to the page's CORS rules, and the local
@@ -112,8 +120,15 @@ browser reach it. So `sensor.js` reads the DOM and hands the body to `background
 | `storage` | remembers your watch token and port |
 | `host_permissions: http://127.0.0.1/*` | the only place it ever sends anything |
 | content script on `school.programmers.co.kr/learn/courses/*/lessons/*` | reads the lesson number and the open language tab |
+| `cookies` + `host_permissions: https://*.programmers.co.kr/*` | reads **one** cookie, `_session_production`, to hand it to your local server when the server says it has none or a dead one, or when the cookie changes. The cookie is scoped to `.programmers.co.kr`, and Chrome delivers its change events only to an extension whose host permission covers that domain — hence the wildcard. Nothing else on the site is read, and the cookie goes to `127.0.0.1` only |
 
-There is no `tabs` permission, no history access, and no remote code.
+There is no `tabs` permission, no history access, and no remote code. Updating from a version
+without the `cookies` permission means reloading the unpacked extension and accepting the new
+permission; Chrome disables it until you do.
+
+The hand-off decisions — which answers call for a cookie, which cookie changes count, and that
+a value is never withheld — live in `decide.js` and are tested with `node --test extension/decide.test.js`,
+which `scripts/test.sh` runs.
 
 ## What is measured, and what is not
 

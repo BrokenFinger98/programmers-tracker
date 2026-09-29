@@ -5,7 +5,19 @@
 
 "use strict";
 
+importScripts("decide.js");
+
 const DEFAULTS = { port: 1619, token: "" };
+
+// The session hand-off (#332). The browser is the only party that ever holds a fresh
+// `_session_production`, so when the server says it has none or a dead one, the sensor reads
+// the cookie and posts it to the server — loopback, same token, nothing else ever sees it.
+// Two triggers: the cookie changing (a re-login), and a /watch answer that asks for it. The
+// server compares the value and answers `changed: false` for one it already holds, so a
+// hand-off is always safe to repeat — and it is repeated on every heartbeat that asks, because
+// a server that lost the cookie must get it again (review of #332).
+let lastWatchBody = null;
+let lastChangeSeen = null;
 
 async function settings() {
   return { ...DEFAULTS, ...(await chrome.storage.local.get(Object.keys(DEFAULTS))) };
@@ -56,8 +68,11 @@ function report(state, detail) {
 // `unknown` is not shown. A probe that could not run says nothing about the cookie, and alarming
 // on it would teach the user to ignore the one message that means "replace your credential".
 function sessionExpired(session) {
+  if (session === "missing") {
+    return ["blind", "the server holds no Programmers session yet — sign in to Programmers and the sensor hands it over; nothing is recorded until then"];
+  }
   if (session !== "expired") return null;
-  return ["blind", "your Programmers session has expired — nothing is being recorded. Paste a fresh _session_production value into .ps/session; it heals within a few minutes without a restart"];
+  return ["blind", "your Programmers session has expired — nothing is being recorded. Sign in to Programmers again and the sensor hands the new cookie over (or paste it into .ps/session yourself)"];
 }
 
 function subscriptionState(subscription) {
@@ -87,12 +102,50 @@ function agoOf(iso) {
   return `${Math.round(seconds / 3600)}h ago`;
 }
 
+async function readSessionCookie() {
+  try {
+    const cookie = await chrome.cookies.get({ url: `https://${decide.SESSION_HOST}/`, name: decide.SESSION_COOKIE });
+    return cookie ? cookie.value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function push(value) {
+  const { port, token } = await settings();
+  if (!token || !decide.shouldPush(value)) return;
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Tracker-Token": token },
+      body: JSON.stringify({ cookie: value }),
+    });
+    if (!response.ok) {
+      const failure = await response.json().catch(() => ({}));
+      report("failed", `${response.status} ${failure.error ?? ""} — the session cookie could not be handed over`);
+      return;
+    }
+    const answer = await response.json();
+    // The server reopens its observations on the next heartbeat; send one now, not in 30 s.
+    if (answer.changed && lastWatchBody) await watch(lastWatchBody);
+    if (answer.persisted === false) {
+      // Held in memory only: a restart will need the hand-off again. Shown until the next
+      // heartbeat repaints the badge, and logged where a person debugging will look.
+      console.warn("programmers-tracker: the server could not write the session cookie to .ps/session — check the mount");
+      report("missing", "the server accepted the session cookie but could not write it — a restart will ask for it again; check the .ps mount");
+    }
+  } catch {
+    report("failed", `cannot reach the server on port ${port} — is it running?`);
+  }
+}
+
 async function watch(body) {
   const { port, token } = await settings();
   if (!token) {
     report("missing", "no token yet. Open the extension's options and paste .ps/watch-token");
     return;
   }
+  lastWatchBody = body;
   try {
     const response = await fetch(`http://127.0.0.1:${port}/watch`, {
       method: "POST",
@@ -101,6 +154,10 @@ async function watch(body) {
     });
     if (response.ok) {
       const answer = await response.json();
+      if (decide.needsCredential(answer.session)) {
+        const value = await readSessionCookie();
+        if (value) push(value);
+      }
       const blind = sessionExpired(answer.session) ?? subscriptionState(answer.subscription);
       if (blind) {
         report(blind[0], `lesson ${answer.lessonId} in ${answer.language} — ${blind[1]}`);
@@ -118,6 +175,13 @@ async function watch(body) {
     report("failed", `cannot reach the server on port ${port} — is it running?`);
   }
 }
+
+chrome.cookies.onChanged.addListener((change) => {
+  const value = decide.changeToPush(decide.cookieChangeToPush(change), lastChangeSeen);
+  if (!value) return;
+  lastChangeSeen = value;
+  push(value);
+});
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === "watch") watch(message.body);

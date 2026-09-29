@@ -5379,3 +5379,47 @@ the caller's cancellation — rethrown; F3 cache invalidation was tied to "reope
 now answers `CredentialCheck(changed, reopened)` and the cache is forgotten on `changed`, once per
 change rather than once per channel. Low/informational items recorded as accepted costs (torn read,
 green badge during a reopen); probe dedup under concurrent heartbeats filed as its own issue.
+
+## 2026-09-29 — #332 the sensor hands over the session (branch feat/332-extension-hands-over-cookie)
+
+**Server.** `SessionState.MISSING` (unauthenticated; probe maps `MissingSessionException` → MISSING,
+rethrows cancellation); `ManualFileSessionProvider.replace()` — atomic owner-only write beside the
+file, equal value is `changed=false`, unwritable location serves from memory with `persisted=false`;
+`POST /session` under the watch token, body read by hand, answer is a shape and never the value,
+probe at once on a change. Error handler scoped to both sensor endpoints.
+
+**Extension 0.2.0.** `cookies` + `https://school.programmers.co.kr/*`; `decide.js` (pure, tested
+with `node --test`, run by `scripts/test.sh`); `background.js` pushes on `cookies.onChanged` and on
+an `expired`/`missing` answer, once per value per worker, and re-sends the last heartbeat after a
+change so #331 reopens within a second. Badge text for `missing`.
+
+**Compose.** The cookie moves from the read-only secret mount to the writable `.ps/` directory —
+same host file. Docs: SECURITY, extension README (+ko), bootstrap (+ko), README quickstart, ADR
+[[decisions/2026-09-29-the-sensor-hands-over-the-session]].
+
+**Live, pending.** Reload the unpacked extension (new permission), sign out and in on Programmers,
+badge green within a heartbeat with no manual step, next submit recorded; restart with the browser
+closed boots on the cached file.
+
+**Review + critic on #332 — taken.** Reviewer: host permission must cover the cookie's own domain
+(`*.programmers.co.kr`, else `cookies.onChanged` never fires — matches the silent re-login at 12:2x),
+`.env.example`/troubleshooting still described `TRACKER_SESSION_FILE`, ADR outcome claimed what was
+pending. Critic: JSON null/number/boolean written into the file as text (critical; strings only
+now, cookie-octet shape, `;`/spaces refused); the "once per value" dedupe blocked recovery when the
+server lost the cookie (removed — an equal value is free server-side); a failed persist was never
+retried and shadowed a hand-pasted file forever (retry on the next hand-off, file wins once it
+changes, `persisted:false` shown on the badge); `Files.exists` turned an unsearchable parent into
+MISSING (absent vs unreadable now distinct); `contains('=')` misread base64 padding (decided by the
+cookie's name); web origins now refused (403 FORBIDDEN_ORIGIN, extension origins admitted); a
+heartbeat during a grading no longer reopens the socket (`mayReopen` from `registry.isGrading`).
+The port-squatter exposure is stated as an accepted cost: a process running as the owner can read
+`.ps/session` already. Live so far: trigger 2 at 12:33:49–50. Trigger 1 and the submit pending.
+
+**Live, 2026-09-30 08:23 — trigger 1 measured.** Sign-out/sign-in with the widened host permission:
+`handed over: changed=true, persisted=true` at 08:23:09.693 with no `expired` answer before it (the
+change trigger, not the server asking); the open tab's channel reopened at 08:23:22; a submit at
+08:23:36 recorded (133024 attempt 4) through a socket opened after the hand-off; restart at 08:24:36
+booted on the cached file with zero hand-offs. Also measured: 103 hand-offs in 33 s, one with a new
+value — a sign-in re-sets the same cookie on many responses. The change trigger now dedupes on the
+last change seen (`decide.changeToPush`, tested); the server-asked path stays unconditional.
+Next: /commit → /pull-request → CI → merge → rebuild from main.

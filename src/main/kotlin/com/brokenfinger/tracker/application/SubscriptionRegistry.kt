@@ -95,6 +95,9 @@ class SubscriptionRegistry(private val capacity: Int = DEFAULT_CAPACITY) {
     /** Releases the pin once the session reached a terminal frame or its timeout. */
     fun markSettled(channel: ChannelKey) = replace(channel) { it.settled() }
 
+    /** Whether a grading session is running on the channel right now. */
+    fun isGrading(channel: ChannelKey): Boolean = watched[channel]?.pinned == true
+
     /** Drops the subscription; `false` means there was nothing to drop. */
     fun unwatch(channel: ChannelKey): Boolean = watched.remove(channel) != null
 

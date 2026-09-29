@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 
 /**
- * The one error shape `/watch` ever answers with.
+ * The one error shape the sensor's endpoints — `/watch` and `/session` — ever answer with.
  *
  * `error` is a stable machine code — the extension branches on it, so it must survive
  * message rewording. `message` is for the human reading the extension's console, and
@@ -25,31 +25,38 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 data class WatchError(val error: String, val message: String, val field: String? = null)
 
 /**
- * Maps the three failure kinds onto status codes, scoped to [WatchController] so it can
- * never silently swallow another endpoint's exceptions.
+ * Maps the failure kinds onto status codes, scoped to the sensor's two endpoints —
+ * [WatchController] and [SessionController] — so it can never silently swallow another
+ * endpoint's exceptions.
  *
  * Nothing derived from an exception's stack, and nothing the caller presented as a
  * credential, may reach the body — dumping request internals is forbidden (CLAUDE.md).
  */
-@RestControllerAdvice(assignableTypes = [WatchController::class])
+@RestControllerAdvice(assignableTypes = [WatchController::class, SessionController::class])
 class WatchErrorHandler {
     @ExceptionHandler(InvalidWatchRequestException::class)
     fun invalidRequest(thrown: InvalidWatchRequestException): ResponseEntity<WatchError> {
-        log.warn("Rejected a /watch request: {}", thrown.message)
+        log.warn("Rejected a sensor request: {}", thrown.message)
         return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", thrown.message.orEmpty(), thrown.field)
     }
 
     /** A body Spring itself could not read. Its message quotes the payload, so it is not reused. */
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadableBody(thrown: HttpMessageNotReadableException): ResponseEntity<WatchError> {
-        log.warn("Rejected a /watch request with an unreadable body")
+        log.warn("Rejected a sensor request with an unreadable body")
         return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "the request body could not be read")
     }
 
     @ExceptionHandler(UnauthorizedWatchException::class)
     fun unauthorized(thrown: UnauthorizedWatchException): ResponseEntity<WatchError> {
-        log.warn("Refused an unauthorized /watch request")
+        log.warn("Refused an unauthorized sensor request")
         return respond(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "a valid ${WatchController.TOKEN_HEADER} is required")
+    }
+
+    @ExceptionHandler(ForbiddenOriginException::class)
+    fun forbiddenOrigin(thrown: ForbiddenOriginException): ResponseEntity<WatchError> {
+        log.warn("Refused a sensor request from a web origin")
+        return respond(HttpStatus.FORBIDDEN, "FORBIDDEN_ORIGIN", "a web page may not call this endpoint")
     }
 
     /**
