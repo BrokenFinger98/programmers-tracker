@@ -20,6 +20,16 @@ class SessionActivityProbeTest {
         probeOver(PageResponse(200, """{"activities":[]}""")).probe() shouldBe SessionState.ALIVE
     }
 
+    /** #332 — no cookie at all is its own answer: the sensor can supply one, a replacement is not what is missing. */
+    @Test
+    fun `no credential to present is missing, not unknown and not expired`() = runBlocking<Unit> {
+        val probe = SessionActivityProbe(
+            pages = { throw MissingSessionException("Session file not found: .ps/session") },
+        )
+
+        probe.probe() shouldBe SessionState.MISSING
+    }
+
     @Test
     fun `401 means it does not`() = runBlocking<Unit> {
         probeOver(PageResponse(401, """{"code":"authenticate_user"}""")).probe() shouldBe SessionState.EXPIRED

@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@ef987e7c0f344d2d454c8cd0171ffb20f5ffbde7 -->
+<!-- translated-from: bootstrap.md@7cb64827be69c4ed628dc858357da9dc76fef79a -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -138,6 +138,10 @@ git rm --cached <이름>.iml && git commit -m "chore: untrack the IDE module fil
 
 서버는 나로서 프로그래머스 채점 채널을 구독합니다. 쿠키 하나, `_session_production` 이 필요합니다.
 
+**센서 확장을 설치했다면 이 절은 건너뛰어도 됩니다.** 확장이 로그인된 브라우저에서 쿠키를 읽어,
+서버가 쿠키가 없거나 죽었다고 말할 때마다, 그리고 새로 로그인하는 순간 서버에 넘겨줍니다 (#332).
+아래는 수동 경로입니다 — 확장이 없는 브라우저이거나, 확장을 설정하기 전에 파일을 먼저 채워 두려 할 때.
+
 1. 브라우저에서 <https://school.programmers.co.kr> 에 로그인합니다.
 2. DevTools를 엽니다 (`F12`, macOS는 `Cmd+Option+I`).
 3. **Application**(Chrome) 또는 **Storage**(Firefox) → **Cookies** →
@@ -157,11 +161,11 @@ chmod 600 .ps/session
 `.ps/` 는 통째로 gitignore 되어 있고, 그 아래 무엇이든 커밋되면 저장소 가드가 빌드를 실패시킵니다.
 파일에는 값만 넣습니다. `_session_production=` 접두사는 도구가 직접 붙입니다.
 
-**반드시 위의 `printf … > .ps/session` 처럼 제자리에 덮어쓰세요.** Docker 에서는 이 파일이 inode
-단위로 bind-mount 됩니다. 임시 파일에 쓴 뒤 이름을 바꾸는 방식으로 저장하는 에디터나 `mv` 는
-호스트에 새 파일을 만들고 컨테이너는 옛 파일을 계속 읽어, 아무것도 회복되지 않습니다. 실행 중인
-서버는 제자리 교체를 다음 하트비트에서 알아채고 — 관찰을 새 쿠키로 다시 열고 배지는 재시작 없이
-초록으로 돌아옵니다 (#331).
+실행 중인 서버는 교체를 다음 하트비트에서 알아채고 — 관찰을 새 쿠키로 다시 열고 배지는 재시작 없이
+초록으로 돌아옵니다 (#331). Docker 에서는 `.ps/` 디렉터리 전체가 마운트되고, 센서가 쿠키를 넘겨주면
+서버가 이 파일을 직접 — 원자적으로, 소유자 전용으로 — 쓰므로 손으로 쓰는 어떤 방법도 됩니다.
+(예전 `compose.yaml` 은 이 파일 하나를 inode 단위로 마운트했습니다. 거기서는 이름 바꾸기가 아니라
+`printf` 로 제자리에 덮어써야 합니다.)
 
 **비밀번호처럼 다루십시오.** 이것이 내 로그인입니다. 만료됩니다 — 만료되면 구독이 실패하기
 시작하고, 이 단계를 다시 하게 됩니다.
@@ -361,7 +365,7 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
 | `400 {"error":"INVALID_REQUEST","field":"..."}` | 그 필드가 페이지에 없었습니다. 프로그래머스가 마크업을 바꿨거나, 문제 페이지가 아닌 곳에서 실행했습니다. |
 | `503 {"error":"WATCHER_SATURATED"}` | 이미 여덟 문제를 보고 있고 전부 채점 중입니다. 기다리거나 재시작하십시오. |
 | `curl: (7) Failed to connect` | 서버가 안 떠 있거나 `TRACKER_PORT` 가 다릅니다. |
-| `Session file not found` | 3단계를 건너뛰었거나 `TRACKER_SESSION_FILE` 이 다른 곳을 가리킵니다. |
+| `Session file not found` | 3단계를 건너뛰었고 센서가 아직 쿠키를 넘기지 않았습니다 — 확장을 켠 채 Programmers 에 로그인하거나 직접 붙여넣으세요. compose 에서는 파일이 `<TRACKER_STATE_DIR>/session` 이고, 네이티브 실행에서는 `TRACKER_SESSION_FILE` 입니다. |
 | 시작할 때 `not a git repository` 경고 | `TRACKER_RECORD_REPO` 가 git 저장소를 가리키지 않습니다. 기록은 쓰이지만 커밋은 되지 않습니다. |
 | `git push failed with 128: ... No configured push destination` | 리모트가 없습니다. 2단계의 그 부분을 건너뛰었다면 정상입니다. |
 | `git reconcile failed with 128: Author identity unknown` | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` 이 설정되지 않았습니다. 기록은 쓰이지만 커밋되지 않습니다. |

@@ -62,6 +62,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[decisions/2026-08-04-test-environment]] — No Spring in layer tests · integrationTest task split · fixture-file enforcement
 - 2026-08-04 [[decisions/2026-08-04-ktor-websocket-client]] — WebSocket client library = Ktor client (CIO engine)
 - 2026-09-29 [[decisions/2026-09-29-a-replaced-credential-reopens-the-observation]] — A socket accepted with a dead cookie has no replacement signal either; the heartbeat compares the credential's digest and reopens the observation
+- 2026-09-29 [[decisions/2026-09-29-the-sensor-hands-over-the-session]] — The browser is the only party that ever holds a fresh cookie, so the extension posts it to `/session` on two triggers and the manual paste becomes the fallback
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits

@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@5ceffa061411c8d095bda782e2d8b20ce37df527 -->
+<!-- translated-from: README.md@0afc25a4b7ba722edf82079d764e599bb58034be -->
 
 # programmers-tracker
 
@@ -76,7 +76,7 @@ Docker, 프로그래머스 로그인, 그리고 기록을 담을 내 git 저장�
 git clone https://github.com/BrokenFinger98/programmers-tracker.git
 cd programmers-tracker
 
-mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session
+mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session   # 또는 생략: 센서 확장이 넘겨줍니다
 # 기록은 ~/ps-records 에 — 첫 시작 때 서버가 만들고 초기화합니다
 
 cp .env.example .env    # TRACKER_RECORD_REPO, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL 설정

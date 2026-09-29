@@ -75,7 +75,7 @@ You need Docker, a Programmers login, and a git repository of your own to keep t
 git clone https://github.com/BrokenFinger98/programmers-tracker.git
 cd programmers-tracker
 
-mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session
+mkdir -p .ps && printf '%s' 'YOUR__session_production_COOKIE' > .ps/session   # or skip: the sensor extension hands it over
 # your records live at ~/ps-records — the server creates and initialises it on first start
 
 cp .env.example .env    # set TRACKER_RECORD_REPO, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL

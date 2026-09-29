@@ -41,7 +41,10 @@ class WatchService(
         // and where a cached session answer about the old one is forgotten. The two are asked
         // apart: a socket that reconnected on its own is not reopened, and the answer is still
         // stale (#331).
-        if (subscriber.reauthenticate(channel).changed) sessions.credentialReplaced()
+        // Not while a grading is running on the socket: the frames it is delivering are worth
+        // more than a fresher cookie, and the heartbeat after the grading settles reopens (#332).
+        val check = subscriber.reauthenticate(channel, mayReopen = !registry.isGrading(channel))
+        if (check.changed) sessions.credentialReplaced()
         // Asked after the subscription rather than assumed from it: whether the socket lives
         // is not something this call can promise (#167).
         //

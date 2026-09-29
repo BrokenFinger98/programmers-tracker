@@ -23,8 +23,15 @@ enum class SessionState {
      * confidently wrong health answer (#175).
      */
     UNKNOWN,
+
+    /**
+     * No credential is held at all — the session file is absent or empty and nothing has
+     * supplied one yet (#332). Distinct from [EXPIRED] because the remedy is different: not
+     * "replace it" but "sign in, and the sensor hands it over".
+     */
+    MISSING,
     ;
 
     /** Whether a grading would be delivered to us at all if one happened now. */
-    fun authenticated(): Boolean = this != EXPIRED
+    fun authenticated(): Boolean = this != EXPIRED && this != MISSING
 }

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 
 class ManualFileSessionProviderTest {
     @TempDir
@@ -83,4 +84,138 @@ class ManualFileSessionProviderTest {
     }
 
     private fun sessionFile(content: String): Path = dir.resolve("session").also { Files.writeString(it, content) }
+
+    // ---- #332: the sensor hands over a value ----
+
+    @Test
+    fun `replacing writes the value owner-only and serves it from then on`() {
+        val file = sessionFile("old-value")
+        val provider = ManualFileSessionProvider(file)
+
+        val result = provider.replace("new-value")
+
+        result shouldBe SessionReplacement(changed = true, persisted = true)
+        Files.readString(file) shouldBe "new-value"
+        provider.cookie().headerValue() shouldBe "_session_production=new-value"
+        runCatching { Files.getPosixFilePermissions(file) }.getOrNull()?.let {
+            PosixFilePermissions.toString(it) shouldBe "rw-------"
+        }
+    }
+
+    @Test
+    fun `replacing with the value already held changes nothing`() {
+        val file = sessionFile("same-value")
+        val provider = ManualFileSessionProvider(file)
+
+        provider.replace("same-value") shouldBe SessionReplacement(changed = false, persisted = true)
+        provider.replace("_session_production=same-value") shouldBe
+            SessionReplacement(changed = false, persisted = true)
+    }
+
+    @Test
+    fun `replacing a missing file creates it`() {
+        val file = dir.resolve("not-yet").resolve("session")
+        val provider = ManualFileSessionProvider(file)
+
+        provider.replace("fresh") shouldBe SessionReplacement(changed = true, persisted = true)
+
+        Files.readString(file) shouldBe "fresh"
+    }
+
+    @Test
+    fun `a blank value is refused before anything is written`() {
+        val file = sessionFile("kept")
+
+        shouldThrow<IllegalArgumentException> { ManualFileSessionProvider(file).replace("   ") }
+
+        Files.readString(file) shouldBe "kept"
+    }
+
+    @Test
+    fun `a file that cannot be written still serves the new value, and says it was not persisted`() {
+        val readOnlyDir = Files.createDirectory(dir.resolve("ro"))
+        val file = readOnlyDir.resolve("session")
+        Files.writeString(file, "old-value")
+        Files.setPosixFilePermissions(readOnlyDir, PosixFilePermissions.fromString("r-x------"))
+        try {
+            val provider = ManualFileSessionProvider(file)
+
+            provider.replace("new-value") shouldBe SessionReplacement(changed = true, persisted = false)
+
+            provider.cookie().headerValue() shouldBe "_session_production=new-value"
+            Files.readString(file) shouldBe "old-value"
+        } finally {
+            Files.setPosixFilePermissions(readOnlyDir, PosixFilePermissions.fromString("rwx------"))
+        }
+    }
+
+    /** Review of #332: a write that failed is tried again on the next hand-off, even of the same value. */
+    @Test
+    fun `a value that could not be written is written on the next hand-off once the location allows it`() {
+        val lockedDir = Files.createDirectory(dir.resolve("locked"))
+        val file = lockedDir.resolve("session")
+        Files.writeString(file, "old-value")
+        Files.setPosixFilePermissions(lockedDir, PosixFilePermissions.fromString("r-x------"))
+        val provider = ManualFileSessionProvider(file)
+        try {
+            provider.replace("new-value") shouldBe SessionReplacement(changed = true, persisted = false)
+        } finally {
+            Files.setPosixFilePermissions(lockedDir, PosixFilePermissions.fromString("rwx------"))
+        }
+
+        provider.replace("new-value") shouldBe SessionReplacement(changed = false, persisted = true)
+
+        Files.readString(file) shouldBe "new-value"
+        provider.cookie().headerValue() shouldBe "_session_production=new-value"
+    }
+
+    /** Review of #332: a hand-pasted file must not stay shadowed by a value the server could not write. */
+    @Test
+    fun `a file changed by hand wins over a value held in memory`() {
+        val lockedDir = Files.createDirectory(dir.resolve("locked2"))
+        val file = lockedDir.resolve("session")
+        Files.writeString(file, "old-value")
+        Files.setPosixFilePermissions(lockedDir, PosixFilePermissions.fromString("r-x------"))
+        val provider = ManualFileSessionProvider(file)
+        try {
+            provider.replace("from-sensor")
+            provider.cookie().headerValue() shouldBe "_session_production=from-sensor"
+        } finally {
+            Files.setPosixFilePermissions(lockedDir, PosixFilePermissions.fromString("rwx------"))
+        }
+
+        Files.writeString(file, "pasted-by-hand")
+
+        provider.cookie().headerValue() shouldBe "_session_production=pasted-by-hand"
+    }
+
+    /** Review of #332: a parent directory that cannot be searched is an error, not a missing cookie. */
+    @Test
+    fun `an unreadable location is not reported as missing`() {
+        val sealed = Files.createDirectory(dir.resolve("sealed"))
+        val file = sealed.resolve("session")
+        Files.writeString(file, "present")
+        Files.setPosixFilePermissions(sealed, PosixFilePermissions.fromString("---------"))
+        try {
+            val thrown = runCatching { ManualFileSessionProvider(file).cookie() }.exceptionOrNull()
+            (thrown is MissingSessionException) shouldBe false
+            (thrown == null) shouldBe false
+        } finally {
+            Files.setPosixFilePermissions(sealed, PosixFilePermissions.fromString("rwx------"))
+        }
+    }
+
+    /** Decided by the cookie's name, not by "=": a bare value may carry base64 padding. */
+    @Test
+    fun `a bare value with padding is still wrapped, and a named header passes through`() {
+        ManualFileSessionProvider(sessionFile("abc==")).cookie().headerValue() shouldBe "_session_production=abc=="
+        ManualFileSessionProvider(sessionFile("x=1; _session_production=abc")).cookie().headerValue() shouldBe
+            "x=1; _session_production=abc"
+    }
+
+    @Test
+    fun `an absent or empty file is a missing session, not a generic failure`() {
+        shouldThrow<MissingSessionException> { ManualFileSessionProvider(dir.resolve("nope")).cookie() }
+        shouldThrow<MissingSessionException> { ManualFileSessionProvider(sessionFile("  ")).cookie() }
+    }
 }

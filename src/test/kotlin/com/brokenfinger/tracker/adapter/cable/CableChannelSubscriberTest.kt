@@ -561,6 +561,30 @@ class CableChannelSubscriberTest {
             subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
         }
 
+    /** #332: a grading in flight is worth more than a fresher cookie — the reopen waits for the next heartbeat that allows it. */
+    @Test
+    fun `a reopen can be deferred and then taken`() = runBlocking<Unit> {
+        var value = "_session_production=first"
+        val opened = AtomicInteger()
+        val subscriber = subscriberOver(sessions = SessionProvider { SessionCookie(value) }) {
+            opened.incrementAndGet()
+            flow {
+                emit(CableEvent.Heartbeat("""{"type":"ping","message":1}"""))
+                delay(FOREVER_MS)
+            }
+        }
+        subscriber.subscribe(channel)
+        awaitHealth(subscriber, SubscriptionHealth.LIVE)
+        subscriber.reauthenticate(channel) shouldBe CredentialCheck.UNCHANGED
+        value = "_session_production=second"
+
+        subscriber.reauthenticate(channel, mayReopen = false) shouldBe CredentialCheck(changed = true, reopened = false)
+        opened.get() shouldBe 1
+
+        subscriber.reauthenticate(channel, mayReopen = true) shouldBe CredentialCheck(changed = false, reopened = true)
+        awaitAtLeast(opened, 2)
+    }
+
     /** Review of #331: the caller's cancellation is not a "cannot tell" — it is rethrown, as everywhere in this class. */
     @Test
     fun `a cancelled heartbeat does not get an answer about the credential`() = runBlocking<Unit> {

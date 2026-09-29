@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@d9c7e111cc4beb636cabc3e4fb3ba4e16b7358a1 -->
+<!-- translated-from: README.md@d1e524b587d907b9e061412d2476c9a53996fe23 -->
 
 # 센서 확장
 
@@ -96,6 +96,13 @@ Chrome 또는 Chromium 계열 브라우저에 압축 해제 상태로 — 스토
 다시 보내면 `started` 가 아니라 `refreshed` 로 답합니다 — 이것이 서버 재시작 후 문제를 다시
 등록해 주는 장치입니다.
 
+그리고 필요할 때 한 번, `POST /session`: `{ "cookie": "<내 _session_production>" }`.
+새 Programmers 세션을 가진 쪽은 브라우저뿐이므로, 서버가 쿠키가 없거나 죽었다고 답하면 센서가
+로그인된 브라우저에서 쿠키를 읽어 넘겨줍니다. 쿠키가 바뀌는 순간 — 다시 로그인하면 그렇게 됩니다 —
+에도 같은 일을 합니다. 서버는 그 값을 `.ps/session` 에 쓰고, 즉시 Programmers 에 확인하고, 다음
+하트비트에서 관찰을 다시 엽니다 — 그 하트비트는 센서가 바로 보냅니다. 붙여넣을 것도, 재시작할 것도
+없습니다. 응답에 값은 절대 담기지 않습니다.
+
 ## 왜 요청이 서비스 워커를 거치나
 
 콘텐츠 스크립트의 교차 출처 `fetch` 는 페이지의 CORS 규칙을 따르는데, 로컬 서버는 CORS를
@@ -110,8 +117,16 @@ Chrome 또는 Chromium 계열 브라우저에 압축 해제 상태로 — 스토
 | `storage` | watch 토큰과 포트를 기억 |
 | `host_permissions: http://127.0.0.1/*` | 무언가를 보내는 유일한 곳 |
 | `school.programmers.co.kr/learn/courses/*/lessons/*` 콘텐츠 스크립트 | 문제 번호와 열려 있는 언어 탭을 읽음 |
+| `cookies` + `host_permissions: https://*.programmers.co.kr/*` | 쿠키 **하나**, `_session_production` 만 읽어, 서버가 쿠키가 없거나 죽었다고 답하거나 쿠키가 바뀌었을 때 로컬 서버에 넘깁니다. 이 쿠키의 범위는 `.programmers.co.kr` 이고, Chrome 은 그 도메인을 host 권한으로 가진 확장에만 변경 이벤트를 전달하므로 와일드카드입니다. 사이트의 다른 것은 읽지 않고, 쿠키는 `127.0.0.1` 로만 갑니다 |
 
 `tabs` 권한도, 방문 기록 접근도, 원격 코드도 없습니다.
+
+`cookies` 권한이 없던 버전에서 올라오면 압축 해제된 확장을 다시 로드하고 새 권한을 승인해야 합니다.
+그때까지 Chrome 은 확장을 꺼 둡니다.
+
+넘겨줄지 말지의 판단 — 어떤 응답이 쿠키를 필요로 하는지, 어떤 쿠키 변경이 해당하는지, 값을 결코
+보류하지 않는다는 것 — 은 `decide.js` 에 있고 `node --test extension/decide.test.js` 로 검사합니다.
+`scripts/test.sh` 가 이를 실행합니다.
 
 ## 무엇이 실측되었고 무엇이 아닌가
 

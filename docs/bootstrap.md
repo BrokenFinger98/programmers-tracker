@@ -143,6 +143,11 @@ git rm --cached <name>.iml && git commit -m "chore: untrack the IDE module file"
 The server subscribes to Programmers' grading channel as you. That needs one cookie,
 `_session_production`.
 
+**With the sensor extension installed, you can skip this section.** The extension reads the
+cookie from your signed-in browser and hands it to the server whenever the server says it holds
+none or a dead one, and again the moment you sign in afresh (#332). What follows is the manual
+path — for a browser without the extension, or to seed the file before the extension is set up.
+
 1. Log in to <https://school.programmers.co.kr> in your browser.
 2. Open DevTools (`F12`, or `Cmd+Option+I` on macOS).
 3. **Application** (Chrome) or **Storage** (Firefox) → **Cookies** →
@@ -163,11 +168,12 @@ chmod 600 .ps/session
 ever committed. The file holds the bare value; the tool adds the `_session_production=`
 prefix itself.
 
-**Replace it in place, with the `printf … > .ps/session` above.** Under Docker the file is
-bind-mounted by inode: an editor that saves through a temporary file and a rename, or `mv`, gives
-the host a new file while the container keeps reading the old one, and nothing heals. A running
-server picks up an in-place replacement on the next heartbeat — the observation is reopened with
-the new cookie and the badge returns to green without a restart (#331).
+A running server picks a replacement up on the next heartbeat — the observation is reopened
+with the new cookie and the badge returns to green without a restart (#331). Under Docker the
+whole `.ps/` directory is mounted, and the server writes this file itself when the sensor hands a
+cookie over — atomically, owner-only — so any way of writing it by hand works too. (An older
+`compose.yaml` mounted the file alone, by inode; there, replace it in place with `printf`, never
+by rename.)
 
 **Treat it as a password.** It is your login. It expires — when it does, subscriptions
 start failing and you repeat this step.
@@ -372,7 +378,7 @@ if the machine was asleep).
 | `400 {"error":"INVALID_REQUEST","field":"..."}` | That field was missing from the page. Programmers changed its markup, or you ran the snippet off a problem page. |
 | `503 {"error":"WATCHER_SATURATED"}` | Eight problems are already being watched and all are mid-grading. Wait, or restart. |
 | `curl: (7) Failed to connect` | The server is not running, or `TRACKER_PORT` differs. |
-| `Session file not found` | Step 3 was skipped, or `TRACKER_SESSION_FILE` points elsewhere. |
+| `Session file not found` | Step 3 was skipped and the sensor has not handed a cookie over yet — sign in to Programmers with the extension loaded, or paste one; under compose the file is `<TRACKER_STATE_DIR>/session`, natively `TRACKER_SESSION_FILE`. |
 | `not a git repository` warning at start | `TRACKER_RECORD_REPO` is not pointing at a git repository. Records are still written; nothing is committed. |
 | `git push failed with 128: ... No configured push destination` | No remote. Expected if you skipped that part of step 2. |
 | `git reconcile failed with 128: Author identity unknown` | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` are unset. Records are written but never committed. |

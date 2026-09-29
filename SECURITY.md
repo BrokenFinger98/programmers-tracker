@@ -20,7 +20,7 @@ Three secrets, in three places, on purpose.
 
 | | What it is | Where it lives |
 |---|---|---|
-| **Session cookie** | Your Programmers login | `.ps/session` in this repository's checkout — never in the record repository |
+| **Session cookie** | Your Programmers login | `.ps/session` in this repository's checkout — never in the record repository. The sensor extension hands a fresh one to `POST /session` on loopback, under the `/watch` token, and the server writes it there itself; pasting it by hand is the fallback |
 | **`/watch` token** | Generated; gates the endpoint the browser extension calls | `.ps/watch-token`, same place, owner-only |
 | **GitHub token** | Optional, first boot only; creates and wires the record repository | `.env`, then a credential store at `<records>/.ps/git-credentials`, owner-only |
 
@@ -50,6 +50,16 @@ Stated where it is implemented rather than repeated here:
   re-verified private in the response before anything is wired to it; an answer that comes back
   public wires nothing:
   [`decisions/2026-08-13-the-server-prepares-the-repository`](docs/llm-wiki/wiki/decisions/2026-08-13-the-server-prepares-the-repository.md).
+- **The sensor's hand-off** — the extension reads one cookie, `_session_production` (scoped to
+  `.programmers.co.kr`, hence the wildcard host permission), and only when the server says it
+  holds none or a dead one, or the browser reports the cookie changed (a re-login). It goes to `127.0.0.1:<port>/session` with the `/watch` token and nowhere else,
+  and the answer is a shape — changed, persisted, session state — never the value. The endpoint
+  refuses web origins and requires the token; what it cannot do is prove to the extension that the
+  listener on the port is this server — a local process squatting the port would receive the
+  cookie. That process runs as you, and `.ps/session` is readable by you already, so the hand-off
+  grants it nothing it did not have; it is stated here rather than assumed away:
+  [`extension/README.md`](extension/README.md#permissions-and-why-each-is-needed) and
+  [`decisions/2026-09-29-the-sensor-hands-over-the-session`](docs/llm-wiki/wiki/decisions/2026-09-29-the-sensor-hands-over-the-session.md).
 - **This repository** — `scripts/guards.sh` fails the build on a committed record, a
   session-cookie-shaped string or the live `/watch` token, and the pre-push hook runs it.
 
