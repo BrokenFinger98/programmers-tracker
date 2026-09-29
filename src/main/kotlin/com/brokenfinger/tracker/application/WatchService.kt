@@ -35,6 +35,13 @@ class WatchService(
         // timer refuses a reading for a problem it has no clock for.
         command.observation?.let { timer.observed(command.lessonId, it) }
         val outcome = outcomeOf(channel, registry.watch(channel, clock.instant()))
+        // The credential can change under an open socket, and the socket will not say so
+        // ([[sources/2026-08-11-expiry-has-no-socket-signal]]). The heartbeat is the one caller
+        // regular enough to notice, so it is where a replaced cookie reopens the observation —
+        // and where a cached session answer about the old one is forgotten. The two are asked
+        // apart: a socket that reconnected on its own is not reopened, and the answer is still
+        // stale (#331).
+        if (subscriber.reauthenticate(channel).changed) sessions.credentialReplaced()
         // Asked after the subscription rather than assumed from it: whether the socket lives
         // is not something this call can promise (#167).
         //

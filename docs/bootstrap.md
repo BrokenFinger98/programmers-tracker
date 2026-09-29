@@ -163,6 +163,12 @@ chmod 600 .ps/session
 ever committed. The file holds the bare value; the tool adds the `_session_production=`
 prefix itself.
 
+**Replace it in place, with the `printf … > .ps/session` above.** Under Docker the file is
+bind-mounted by inode: an editor that saves through a temporary file and a rename, or `mv`, gives
+the host a new file while the container keeps reading the old one, and nothing heals. A running
+server picks up an in-place replacement on the next heartbeat — the observation is reopened with
+the new cookie and the badge returns to green without a restart (#331).
+
 **Treat it as a password.** It is your login. It expires — when it does, subscriptions
 start failing and you repeat this step.
 

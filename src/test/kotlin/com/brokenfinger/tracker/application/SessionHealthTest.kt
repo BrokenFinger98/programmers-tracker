@@ -53,6 +53,38 @@ class SessionHealthTest {
         asked.get() shouldBe 2
     }
 
+    /** #331 — a cached EXPIRED is about a cookie that has just been replaced; repeating it for five minutes is wrong. */
+    @Test
+    fun `a replaced credential forgets the cached answer`() = runBlocking<Unit> {
+        val health = healthAnswering(SessionState.EXPIRED)
+
+        health.state() shouldBe SessionState.EXPIRED
+        health.credentialReplaced()
+        health.state()
+
+        asked.get() shouldBe 2
+    }
+
+    /** Review of #331: an answer in flight when the credential was replaced is about the old one. */
+    @Test
+    fun `an answer in flight when the credential was replaced is not remembered`() = runBlocking<Unit> {
+        lateinit var health: SessionHealth
+        var replaceMidProbe = true
+        health = SessionHealth({
+            asked.incrementAndGet()
+            if (replaceMidProbe) {
+                replaceMidProbe = false
+                health.credentialReplaced()
+            }
+            SessionState.EXPIRED
+        }, clock)
+
+        health.state() shouldBe SessionState.EXPIRED
+        health.state()
+
+        asked.get() shouldBe 2
+    }
+
     /**
      * An expired answer is cached like any other: it is a fact about the credential, not a
      * failure of the check, and re-asking every heartbeat would hammer Programmers precisely

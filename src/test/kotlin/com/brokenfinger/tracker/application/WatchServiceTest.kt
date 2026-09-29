@@ -17,6 +17,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The registry decides what should be held; this decides when the socket changes. The
@@ -44,6 +45,51 @@ class WatchServiceTest {
         service.watch(aCommand(lessonId = 120804))
 
         timer.started shouldContainExactly listOf(120804L)
+    }
+
+    /**
+     * #331 — the session answer is cached for five minutes, and the answer being cached is about
+     * the cookie that was just replaced. A heartbeat that reopened the observation asks again.
+     */
+    @Test
+    fun `a heartbeat that finds the credential replaced asks the session again at once`() = runBlocking<Unit> {
+        val asked = AtomicInteger()
+        val sessions = SessionHealth(
+            {
+                asked.incrementAndGet()
+                SessionState.ALIVE
+            },
+            Clock.systemUTC(),
+        )
+        val service = WatchService(registry, subscriber, timer, identities, sessions, SteppingClock())
+        service.watch(aCommand(lessonId = 120804))
+        service.watch(aCommand(lessonId = 120804))
+        asked.get() shouldBe 1
+
+        // Changed but not reopened — the socket had reconnected on its own — still forgets the cache.
+        subscriber.credential = CredentialCheck(changed = true, reopened = false)
+        service.watch(aCommand(lessonId = 120804))
+
+        asked.get() shouldBe 2
+    }
+
+    @Test
+    fun `a reopen of a socket the heartbeat already knew the credential for does not ask again`() = runBlocking<Unit> {
+        val asked = AtomicInteger()
+        val sessions = SessionHealth(
+            {
+                asked.incrementAndGet()
+                SessionState.ALIVE
+            },
+            Clock.systemUTC(),
+        )
+        val service = WatchService(registry, subscriber, timer, identities, sessions, SteppingClock())
+        service.watch(aCommand(lessonId = 120804))
+
+        subscriber.credential = CredentialCheck(changed = false, reopened = true)
+        service.watch(aCommand(lessonId = 120804))
+
+        asked.get() shouldBe 1
     }
 
     @Test
@@ -153,6 +199,7 @@ class WatchServiceTest {
     private class RecordingSubscriber(private val health: SubscriptionHealth = SubscriptionHealth.LIVE) :
         ChannelSubscriber {
         val calls = mutableListOf<String>()
+        var credential = CredentialCheck.UNCHANGED
 
         override fun subscribe(channel: ChannelKey) {
             calls += "subscribe:${channel.lessonId.value}"
@@ -163,6 +210,8 @@ class WatchServiceTest {
         }
 
         override fun healthOf(channel: ChannelKey) = health
+
+        override suspend fun reauthenticate(channel: ChannelKey) = credential
     }
 
     /** Each read advances a second, so heartbeat order is deterministic without sleeping. */

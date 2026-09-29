@@ -35,10 +35,20 @@ class SessionHealth(
     private var unansweredSince: java.time.Instant? = null
     private var reportedMute = false
 
+    /** Bumped by [credentialReplaced], so an answer still in flight can tell it is about the old one. */
+    private var generation = 0L
+
     suspend fun state(): SessionState {
-        synchronized(lock) { cached() }?.let { return it }
+        val askedIn = synchronized(lock) {
+            cached()?.let { return it }
+            generation
+        }
         val fresh = probe.probe()
         synchronized(lock) {
+            // A question asked before the credential was replaced was about the old one. Its
+            // answer still goes to whoever asked — it is what Programmers said — but it is not
+            // remembered over the replacement (review of #331).
+            if (askedIn != generation) return fresh
             answer = fresh
             askedAt = if (fresh == SessionState.UNKNOWN) null else clock.instant()
             track(fresh)
@@ -63,6 +73,17 @@ class SessionHealth(
         if (mute == reportedMute) return null
         reportedMute = mute
         return mute
+    }
+
+    /**
+     * Forgets the cached answer: it was about a credential that no longer exists. The next call
+     * asks with the new one, instead of repeating a minutes-old EXPIRED for a cookie that has just
+     * been replaced (#331).
+     */
+    fun credentialReplaced(): Unit = synchronized(lock) {
+        askedAt = null
+        answer = SessionState.UNKNOWN
+        generation += 1
     }
 
     private fun isMute(): Boolean {
