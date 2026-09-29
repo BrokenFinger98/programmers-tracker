@@ -5,6 +5,10 @@ import com.brokenfinger.tracker.support.fixtures.anAlgorithmChannel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -189,6 +193,57 @@ class SubscriptionRegistryTest {
 
         registry.snapshot().map { it.channel.lessonId.value }.toSet() shouldBe
             setOf(other.lessonId.value, 120805L)
+    }
+
+    /**
+     * #333 — `/watch` runs one `runBlocking` per request, so there are as many writers as open
+     * tabs, and the admission used to be a get → size → remove → put sequence over a concurrent
+     * map: two admissions could both pass the capacity check. Every operation is atomic now.
+     */
+    @Test
+    fun `concurrent admissions never exceed the capacity`() = runBlocking<Unit> {
+        repeat(20) { round ->
+            val registry = SubscriptionRegistry(capacity = 4)
+            val started = java.util.concurrent.atomic.AtomicInteger()
+            (1..16).map { n ->
+                launch(Dispatchers.Default) {
+                    val result = registry.watch(channel(round * 100 + n), at(n.toLong()))
+                    if (result is WatchResult.Started) started.incrementAndGet()
+                }
+            }.joinAll()
+
+            registry.snapshot().size shouldBe 4
+            started.get() shouldBe 16
+        }
+    }
+
+    /**
+     * #333 — a pin racing a heartbeat refresh. Each was a get-then-put over a concurrent map, so a
+     * refresh that read the entry before the pin and wrote after it dropped the pin on the floor —
+     * and an evictable channel mid-grading is the loss protocol §11 is about.
+     */
+    @Test
+    fun `a pin is never lost to a concurrent refresh`() = runBlocking<Unit> {
+        repeat(10) {
+            val registry = SubscriptionRegistry(capacity = 4)
+            (1..4).forEach { n -> registry.watch(channel(n), at(n.toLong())) }
+            val pinners = (1..4).map { n ->
+                launch(Dispatchers.Default) {
+                    repeat(200) {
+                        registry.markActive(channel(n))
+                        registry.isGrading(channel(n)) shouldBe true
+                        registry.markSettled(channel(n))
+                    }
+                }
+            }
+            val refresher = launch(Dispatchers.Default) {
+                repeat(800) { i -> registry.watch(channel(1 + i % 4), at(100L + i)) }
+            }
+            (pinners + refresher).joinAll()
+
+            registry.snapshot().size shouldBe 4
+            registry.snapshot().none { it.pinned } shouldBe true
+        }
     }
 
     private fun channel(n: Int): ChannelKey = anAlgorithmChannel(lessonId = 120800L + n, challengeableId = 14600L + n)
