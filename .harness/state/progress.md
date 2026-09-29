@@ -5430,3 +5430,8 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - `watched` → HashMap, every public method under one lock; KDoc's "one writer" sentence replaced.
 - Tests: concurrent admissions (20 rounds), pin vs refresh (10 rounds); class 19/19 ×3.
   ADR [[decisions/2026-09-30-the-registry-has-one-lock]].
+
+## 2026-09-30 — #334 one probe in flight (branch fix/334-one-probe-in-flight)
+- Red on the old code: 8 concurrent callers on a cold cache → 8 probes. Now the first caller owns a
+  Deferred, the rest await it; a probe that throws releases them and they ask again; the #331
+  generation guard unchanged. Class 14/14 ×3, gates green. ADR [[decisions/2026-09-30-one-probe-in-flight]].
