@@ -3,8 +3,8 @@ type: source
 project: programmers-tracker
 tags: [protocol, credentials, measurement, failed-attempts, sensor]
 created: 2026-08-11
-updated: 2026-08-11
-sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md]
+updated: 2026-09-30
+sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md]
 ---
 
 # 2026-08-11 — measuring what an expired session does
@@ -17,6 +17,12 @@ sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md]
    (`start`, `testcase` ×2, `result`) and the invalid one received **zero** broadcasts.
 3. Therefore the socket carries **no signal for session expiry at all** — confirm, ping cadence
    and socket health are identical between a working session and a dead one.
+   ⚠️ (2026-09-29) The corollary took seven weeks to bite: there is no *replacement* signal
+   either. A socket opened under a dead cookie stayed confirmed and empty after the cookie was
+   replaced, and a solve was lost with every indicator green
+   (`raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md`). The
+   heartbeat now compares a digest of the credential and reopens the observation —
+   [[decisions/2026-09-29-a-replaced-credential-reopens-the-observation]].
 4. `SubscriptionHealth.REJECTED`, shipped hours earlier, is dead code for the scenario its own
    ADR names. What survives of that change is unreachable-socket detection, which is real but is
    not the failure anyone feared.

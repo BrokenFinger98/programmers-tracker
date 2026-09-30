@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, testing, fixtures, protocol, failed-attempts]
 created: 2026-08-11
-updated: 2026-08-13
-sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md, raw/sessions/2026-08-12-clean-slate-verification.md, raw/sessions/2026-08-13-the-map-that-linked-to-nothing.md]
+updated: 2026-09-30
+sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md, raw/sessions/2026-08-12-clean-slate-verification.md, raw/sessions/2026-08-13-the-map-that-linked-to-nothing.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md]
 ---
 
 # Tests That Explain the Defect Instead of Catching It
@@ -225,3 +225,26 @@ produced it.** A rule and its restatement cannot disagree; a rule and the filesy
 Recorded also because of who wrote it: this page was cited twice on the day the defect was
 written, by the author of the defect. Knowing the pattern is not protection from it — only
 asking the outside question is.
+
+## A race test that did not race
+
+*(raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md)*
+
+The fourth instance is the concurrency cousin of the first three. `a reopen racing an unsubscribe
+leaves the channel stopped` launched the reopen with `launch { … }` inside `runBlocking` and no
+dispatcher, then called `unsubscribe` on the same thread: the reopen could not start until the test
+suspended at `join()`, so the stop always won, every round, and the test asserted the outcome of
+that one ordering twenty-five times. Its flow also emitted nothing, so the write it was meant to
+catch — a replaced job writing health under the channel's name — never executed at all.
+
+The adversarial pass measured it: over 200 rounds the order was `[unsubscribe, reauthenticate]`
+200 times. The same pass ran the two against each other and brought a stopped channel back in 70.
+
+The rewrite is the whole lesson: a flow that emits throughout, the reopen on `Dispatchers.Default`,
+and the assertion *nothing is collected after the stop* — with a settle window first, because the
+`timeout` operator hands frames downstream through a channel and one emitted just before the stop
+can still land after the producer's `finally` ran. A concurrency test earns its rounds only if each
+round can come out either way.
+
+The counter-practice gains a line. **Before trusting a repeated test, check that its repetitions
+can differ.** If every round is the same interleaving, the count is decoration.

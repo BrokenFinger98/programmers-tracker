@@ -5,7 +5,7 @@ tags: [concurrency, sensor, measurement]
 author: BrokenFinger98
 created: 2026-09-30
 updated: 2026-09-30
-sources: [decisions/2026-09-29-a-replaced-credential-reopens-the-observation, decisions/2026-08-05-failure-taxonomy]
+sources: [decisions/2026-09-29-a-replaced-credential-reopens-the-observation, decisions/2026-08-05-failure-taxonomy, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md]
 ---
 
 # The registry has one lock

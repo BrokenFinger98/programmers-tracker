@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [credentials, sensor, protocol, measurement, courtesy]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-08-12
-sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, decisions/2026-08-11-a-watch-answer-is-not-a-promise, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md]
+updated: 2026-09-30
+sources: [raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, decisions/2026-08-11-a-watch-answer-is-not-a-promise, raw/sessions/2026-08-12-the-improvement-loop-turns-inward.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md]
 ---
 
 # The session is checked where it can answer, not where we were looking
@@ -73,7 +73,13 @@ cookie dying mid-session is noticed inside one problem rather than after it.
 
 - **A dead cookie is invisible for up to five minutes**, and up to a whole grading can be lost in
   that window. Shorter means more traffic; the interval is the dial and it is stated rather than
-  hidden.
+  hidden. ⚠️ (2026-09-29) A *replaced* cookie was worse than invisible: the probe healed and the
+  open socket did not, because nothing asked it which credential it carried — a solve was lost
+  while `/watch` said `alive` and `live`. Closed by
+  [[decisions/2026-09-29-a-replaced-credential-reopens-the-observation]]; the cache is now
+  forgotten on a change instead of waiting out the interval, and since
+  [[decisions/2026-09-29-the-sensor-hands-over-the-session]] the replacement itself is the
+  extension's, not the owner's.
 - **The probe is a request Programmers did not ask for.** It is one small authenticated GET per
   five minutes while a problem tab is open, and zero when the browser is closed — but it is
   traffic on their servers for our benefit, which §9.3 says to state plainly.

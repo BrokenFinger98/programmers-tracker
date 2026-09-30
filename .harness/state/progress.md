@@ -5435,3 +5435,10 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - Red on the old code: 8 concurrent callers on a cold cache → 8 probes. Now the first caller owns a
   Deferred, the rest await it; a probe that throws releases them and they ask again; the #331
   generation guard unchanged. Class 14/14 ×3, gates green. ADR [[decisions/2026-09-30-one-probe-in-flight]].
+
+## 2026-09-30 — wiki ingest (#339, branch docs/339-ingest-session-expiry-sessions)
+- Four raw sessions: 08-19 and 08-28 recovered from the inbox (two Wiki-Skip segments with no record),
+  09-29 and 09-30 from the live context. Four source stubs, indexed; the four new ADRs and the two
+  2026-08-11 expiry pages carry the raw sessions in `sources:` with ⚠️ follow-ups; the two concept
+  pages gain the September cases and two counter-practice lines. Inbox emptied (the 09-22 sessionend
+  snapshot was a cosal-judge check, out of this wiki's scope).
