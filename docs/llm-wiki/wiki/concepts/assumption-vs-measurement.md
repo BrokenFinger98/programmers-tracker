@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-08-28
-sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md]
+updated: 2026-09-30
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -387,6 +387,45 @@ The practical rule: when a fixture header states what is verbatim, say what the 
 problem pages", and only the first one stays true when the sixth arrives. Corrected in place rather
 than deleted, because the difference between the two is the whole lesson.
 
+## Two days in September: the claim that was a promise, and the ones that were tests
+
+*(raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md,
+raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md)*
+
+- **"Heals within a few minutes without a restart"** had been written on the badge for the probe
+  and read, by everyone including its author, as a promise about recording. It was measured for
+  the probe on 08-11 and never for the observation; the observation could not heal, and a solve
+  was lost with every indicator green. The sentence was true; what it was true *of* had been
+  assumed.
+- **A first cut that reasoned about concurrency and a test that agreed with it.** Three maps and
+  a `compute`; the race test launched its second side inside `runBlocking` without a dispatcher,
+  so the two sides ran one after the other, and twenty-five rounds of "passes" said nothing. The
+  adversarial pass ran them against each other and resurrected a stopped channel in 70 of 200.
+  The test now emits during the race, runs on a real dispatcher and asserts that nothing is
+  collected after the stop — it was rewritten to be able to fail before it was allowed to pass.
+- **Three sentences in one design that were wrong on the same axis.** "A cancelled job cannot
+  deliver a frame" (it can finish the one it has, and a push on the way out of a grading can hold
+  it for seconds); "the cache is forgotten when the socket is reopened" (a socket that
+  reconnected on its own is *not* reopened and the cache is still stale); "send each value once"
+  (the server that lost the cookie asks again and the sensor refuses forever). All three came
+  from reasoning about the common path and none survived the adversarial pass; all three are
+  tests.
+- **A permission that looked right and could never work.** `school.programmers.co.kr` as the host
+  permission for a cookie scoped to `.programmers.co.kr`: Chrome hands `cookies.onChanged` only to
+  a permission covering the cookie's own domain. A re-login went silent; the reviewer named the
+  rule; the next re-login measured it fixed. The guess had been about which URL the *request*
+  goes to, and the rule is about which domain the *cookie* has.
+- **The same cookie set a hundred times in thirty seconds.** Nobody would have designed the
+  change trigger for that, and the first cut did not; the server log measured it on the first
+  real sign-in, and the dedupe that had been *removed* for breaking recovery came back on the one
+  trigger where it belongs.
+
+Two smaller ones from the recovered August segments: a fixture header recording *"no nested
+`<div>` anywhere"* as measured fact was a fact about five problems written as one about the class
+(raw/sessions/2026-08-28-the-first-real-record.md); and a CI comment had predicted, in so many
+words, that a guard failure would be rerun rather than read — and was right about its author
+(raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md).
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -416,6 +455,12 @@ than deleted, because the difference between the two is the whole lesson.
   server picks the channel by — sat one parameter away (#256). The wire value is `database`, not
   `sql`, so guessing the vocabulary instead of measuring it would have shipped a word the
   protocol never uses.
+- **A test must be able to fail before it is allowed to pass.** Run the code it guards *without*
+  the fix, or with the race actually racing; twenty-five green rounds of a test that cannot lose
+  are twenty-five rounds of nothing (09-29).
+- **A sentence measured for one thing is not a promise about another.** When a claim moves from
+  the component it was verified on to the outcome the user cares about, it needs measuring again
+  where it now stands.
 - **Ask two consumers of the same data the same question.** Where a rule is applied by hand at
   several call sites, the site that forgot it cannot be seen from inside — every test there
   agrees with the code, because the same author wrote both. Comparing two answers is what made

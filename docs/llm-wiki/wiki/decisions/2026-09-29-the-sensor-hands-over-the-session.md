@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [credentials, sensor, extension, courtesy]
 author: BrokenFinger98
 created: 2026-09-29
-updated: 2026-09-29
-sources: [decisions/2026-09-29-a-replaced-credential-reopens-the-observation, decisions/2026-08-11-the-session-is-checked-where-it-can-answer]
+updated: 2026-09-30
+sources: [decisions/2026-09-29-a-replaced-credential-reopens-the-observation, decisions/2026-08-11-the-session-is-checked-where-it-can-answer, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md]
 ---
 
 # The sensor hands over the session

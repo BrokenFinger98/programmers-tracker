@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [credentials, sensor, protocol, measurement]
 author: BrokenFinger98
 created: 2026-09-29
-updated: 2026-09-29
-sources: [decisions/2026-08-11-the-session-is-checked-where-it-can-answer, sources/2026-08-11-expiry-has-no-socket-signal]
+updated: 2026-09-30
+sources: [decisions/2026-08-11-the-session-is-checked-where-it-can-answer, sources/2026-08-11-expiry-has-no-socket-signal, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md]
 ---
 
 # A replaced credential reopens the observation

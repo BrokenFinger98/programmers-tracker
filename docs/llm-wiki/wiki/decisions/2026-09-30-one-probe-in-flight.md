@@ -5,7 +5,7 @@ tags: [sensor, courtesy, concurrency]
 author: BrokenFinger98
 created: 2026-09-30
 updated: 2026-09-30
-sources: [decisions/2026-08-11-the-session-is-checked-where-it-can-answer, decisions/2026-09-29-the-sensor-hands-over-the-session]
+sources: [decisions/2026-08-11-the-session-is-checked-where-it-can-answer, decisions/2026-09-29-the-sensor-hands-over-the-session, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md]
 ---
 
 # One probe in flight
