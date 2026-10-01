@@ -97,6 +97,34 @@ class VerdictResolverTest {
         verdict.shouldBeNull()
     }
 
+    /**
+     * A database run carries no message whether it passed or failed (protocol doc §6); a failed
+     * one that returned a table is a query that ran and did not match — WRONG, measured
+     * 2026-10-01 on lesson 131118 (#341). Three of them had been filed as UNKNOWN.
+     */
+    @Test
+    fun `a failure with no message that returned a result is WRONG`() {
+        val verdict = VerdictResolver.resolve(
+            testcases = listOf(
+                aTestcaseResult(passed = false, msg = null, runTime = null, memorySize = null, returnedResult = true),
+            ),
+            boundErrorText = null,
+        )
+
+        verdict shouldBe Verdict.WRONG
+    }
+
+    /** No message and nothing returned says nothing about why; the honest answer stays unknown. */
+    @Test
+    fun `a failure with no message and no result stays unknown`() {
+        val verdict = VerdictResolver.resolve(
+            testcases = listOf(aTestcaseResult(passed = false, msg = null, returnedResult = false)),
+            boundErrorText = null,
+        )
+
+        verdict.shouldBeNull()
+    }
+
     @Test
     fun `no testcases at all resolves to no verdict rather than a vacuous pass`() {
         VerdictResolver.resolve(testcases = emptyList(), boundErrorText = null).shouldBeNull()

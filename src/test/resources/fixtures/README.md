@@ -15,6 +15,7 @@ verbatim — failure classification depends on them (protocol doc section 7).
 | `algorithm-compile.jsonl` | §7, §15 #9 — lesson 120820, same `msg` as runtime error (indistinguishable on submit path) | |
 | `sql-pass.jsonl` | §6, §15 #7 — lesson 131528, snake_case fields, **no `finish` frame** | |
 | `sql-run.jsonl` | §6, §15 #8 — `returned_rows` double-encoded, `msg` explicitly null | |
+| `sql-run-wrong.jsonl` | §6, §15 #17 — lesson 131118, 2026-10-01: a **failing** database run, `passed:false` with the returned table and `msg` still null (#341) | `challengeable_id` 2801 → 2779 and `testcase_id` 5483 → 5439 substituted (undocumented for the lesson); the table's columns are the problem's own schema and kept, its one row invented |
 | `algorithm-run-error.jsonl` | §7 run path, §15 #12–13 — HTML-escaped compiler output / stack trace | **truncated: `start · error · error`, no `result`** — see below |
 | `algorithm-run-pass.jsonl` | **Our own live capture**, lesson 120804, 2026-08-04 and reproduced 2026-08-05 (issues #6, #10) | the only fixture not transcribed from the protocol doc — see below |
 | `algorithm-cached-result.jsonl` | lesson 181952, 2026-08-07: `start` then `error` `같은 코드로 채점한 결과가 있습니다.` — **a truncated capture, not the whole protocol.** It was read as "no verdict frames at all"; in fact this code closed the stream at the error and lost the rest (#154) | kept as the capture it is, and as what a grading interrupted mid-flight looks like |

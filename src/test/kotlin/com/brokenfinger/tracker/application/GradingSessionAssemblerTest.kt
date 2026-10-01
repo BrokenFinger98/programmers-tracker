@@ -157,6 +157,21 @@ class GradingSessionAssemblerTest {
         session.testcasesComplete shouldBe true
     }
 
+    /**
+     * A failed database run carries no message (#341). It is a query that ran and returned a
+     * table that did not match — WRONG, not a result the server could not classify. Measured
+     * 2026-10-01 on lesson 131118; three such runs had been filed as UNKNOWN.
+     */
+    @Test
+    fun `a failed database run is WRONG, not unknown`() {
+        val session = anAssembledSession("sql-run-wrong.jsonl", channel = aSqlChannel())
+
+        session.action shouldBe GradingAction.RUN
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.WRONG
+        session.testcases.map { it.id } shouldContainExactly listOf(5439L)
+    }
+
     // For algorithm submits result_lesson_challenge arrives before finish; the late finish
     // belongs to the same grading, not to a new one (design §4.2).
     @Test

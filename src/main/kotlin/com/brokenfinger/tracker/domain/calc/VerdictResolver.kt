@@ -93,7 +93,7 @@ object VerdictResolver {
     fun resolve(testcases: List<TestcaseResult>, boundErrorText: String?): Verdict? {
         if (testcases.isEmpty()) return nothingRanVerdict(boundErrorText)
         val failed = testcases.sortedBy { it.id }.firstOrNull { it.hasFailed() } ?: return Verdict.PASS
-        return verdictOf(failed.msg, boundErrorText)
+        return verdictOf(failed, boundErrorText)
     }
 
     /**
@@ -118,8 +118,17 @@ object VerdictResolver {
         return errorVerdictOf(errorText)
     }
 
-    private fun verdictOf(msg: String?, boundErrorText: String?): Verdict? {
-        if (msg == null) return null
+    /**
+     * A database run says nothing in words whether it passed or failed — `msg` is null both
+     * ways (protocol doc §6) — but a failed one carries the table its query returned. A query
+     * that ran and did not match is a wrong answer; recording it as UNKNOWN put the badge's
+     * "could not classify" mark on an ordinary wrong query, three times in one afternoon
+     * (#341, measured 2026-10-01 on lesson 131118). A failure with neither a message nor a
+     * result still says nothing, and stays unknown.
+     */
+    private fun verdictOf(failed: TestcaseResult, boundErrorText: String?): Verdict? {
+        val msg = failed.msg
+        if (msg == null) return if (failed.returnedResult == true) Verdict.WRONG else null
         if (timeoutMessage.containsMatchIn(msg)) return Verdict.TIMEOUT
         if (runtimeFailureMessage.containsMatchIn(msg)) return errorVerdictOf(boundErrorText)
         if (measuredMessage.containsMatchIn(msg)) return Verdict.WRONG

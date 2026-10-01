@@ -5442,3 +5442,12 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   2026-08-11 expiry pages carry the raw sessions in `sources:` with ⚠️ follow-ups; the two concept
   pages gain the September cases and two counter-practice lines. Inbox emptied (the 09-22 sessionend
   snapshot was a cosal-judge check, out of this wiki's scope).
+
+## 2026-10-01 — #341 a failed run that returned a result is WRONG (branch fix/341-failed-sql-run-is-wrong)
+- Measured: three wrong SQL runs on lesson 131118 recorded `UNKNOWN`, badge `?`; the finish frame is
+  `passed:false` + `returned_rows` + `msg:null` — the classifier had only ever matched a message.
+- `TestcaseResult.returnedResult` (domain-named, nullable, default null); mapper sets it from the
+  finish frame; resolver reads a null message as WRONG when a result was returned, unknown otherwise.
+- Fixture `sql-run-wrong.jsonl` scrubbed (ids substituted, table columns kept, row invented); protocol
+  §6 + §15 #17; tests at all three layers. ADR [[decisions/2026-10-01-a-failed-run-that-returned-a-result-is-wrong]].
+- Pending: live — a wrong SQL run on the rebuilt container shows `✓ run WRONG 0/1`.
