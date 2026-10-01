@@ -12,4 +12,5 @@ fun aTestcaseResult(
     msg: String? = "통과 (0.01ms, 85.2MB)",
     runTime: String? = "0.01",
     memorySize: Long? = 89338675L,
-) = TestcaseResult(id, passed, msg, runTime, memorySize)
+    returnedResult: Boolean? = null,
+) = TestcaseResult(id, passed, msg, runTime, memorySize, returnedResult)

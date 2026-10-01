@@ -65,6 +65,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-09-29 [[decisions/2026-09-29-the-sensor-hands-over-the-session]] — The browser is the only party that ever holds a fresh cookie, so the extension posts it to `/session` on two triggers and the manual paste becomes the fallback
 - 2026-09-30 [[decisions/2026-09-30-the-registry-has-one-lock]] — `/watch` became one runBlocking per request, so the registry's single-writer assumption went false; every operation is atomic under one lock now
 - 2026-09-30 [[decisions/2026-09-30-one-probe-in-flight]] — Each tab's heartbeat probed on its own on a cold cache; the first caller owns the probe and the rest take its answer
+- 2026-10-01 [[decisions/2026-10-01-a-failed-run-that-returned-a-result-is-wrong]] — A database run carries no message either way; a failed one that returned a table is a wrong answer, not a result the server could not classify
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits

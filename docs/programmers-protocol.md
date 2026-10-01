@@ -157,6 +157,19 @@ Every response arrives wrapped as `{"identifier":"…","message":{…}}`.
 `returned_rows` is a **double-encoded JSON string**. It must be parsed once more to get the table.
 `run` and `submit` use different testcases (example 5437 vs grading 5438).
 
+**A failing run has the same shape — `msg` is still null** (measured 2026-10-01 on lesson 131118,
+three runs, §15 #17). The result is `passed: false` beside the table the query returned:
+
+```jsonc
+{"action":"run","type":"finish","testcase_id":5483,"returned_rows":"{\"columns\":[...],\"data\":[[...]]}",
+ "msg":null,"passed":false,"challengeable_type":"database","challengeable_id":2801}
+```
+
+So the message string that classifies every other failure (§7) is absent on this path, pass or
+fail. What distinguishes a wrong query from a result nothing can be said about is that a table
+came back: `passed: false` with `returned_rows` present is a wrong answer. Fixture
+`sql-run-wrong.jsonl`.
+
 ### Differences from algorithm problems
 
 | Item | Algorithm | SQL |
@@ -680,6 +693,7 @@ observation. It never received a broadcast and was never rejected.
 
 | 15 | **181951** | Algorithm (`main` + stdin) | `run` | **The other problem shape, captured live** — `start` carries `testcases:[{input,output}]` as for `solution(...)`, but the per-case frame is **`testcase`** (not `error`) and carries `stdout` · `stderr` · `exitCode` · `wallTime`. `input` is the stdin text as a **quoted JSON string**; the expected output holds a **raw newline inside quotes**, which strict JSON rejects. `stdout` encodes newlines as `<br/>` while the expected output uses `\n`. Captured 2026-08-06 by hooking `App.cable.connection.webSocket` in the browser. Details in §7.1 |
 | 16 | 181951 | Algorithm | submit | **Cached-result path reproduced** — a submit immediately after an identical `run` returned `submit/error` `"같은 코드로 채점한 결과가 있습니다."` and no verdict, confirming §13.2. Recorded with outcome `UNKNOWN`, which is the intended handling |
+| 17 | 131118 | SQL | `run` | **A failing database run, captured live** — `finish` carries `passed:false`, the `returned_rows` table, and `msg:null`, exactly as a passing one does but for the flag. Three such runs on 2026-10-01 were recorded `UNKNOWN` because the classifier had only ever matched a message (#341). Kept scrubbed as `sql-run-wrong.jsonl` |
 
 Server-side effect confirmed by the solved count rising 90 → 92. Rating 1371 → 1372.
 Entries 9~11 were intentional failing submissions, so those problems remain unsolved.

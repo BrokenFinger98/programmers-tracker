@@ -188,10 +188,12 @@ object GradingMessageMapper {
         return TestcaseResult(id, message.passed, message.msg, message.runTime, message.memorySize)
     }
 
-    // Timing and memory are not reported on this path at all — absent, not zero.
+    // Timing and memory are not reported on this path at all — absent, not zero. What it does
+    // report is the table the query returned, pass or fail (#341).
     private fun gradedCase(message: SubmitMessage.Finish): TestcaseResult? {
         val id = message.testcaseId ?: return null
-        return TestcaseResult(id, message.passed, message.msg, null, null)
+        val returnedResult = message.returnedRows != null
+        return TestcaseResult(id, message.passed, message.msg, null, null, returnedResult)
     }
 
     // Substituting an id would file a real result under a fabricated one, which is worse

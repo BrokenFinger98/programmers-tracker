@@ -122,7 +122,23 @@ class GradingMessageMapperTest {
     @Test
     fun `the sql run finish frame is itself a testcase result`() {
         GradingMessageMapper.testcaseOf(sqlRun[1]) shouldBe
-            aTestcaseResult(id = 5437, msg = null, runTime = null, memorySize = null)
+            aTestcaseResult(id = 5437, msg = null, runTime = null, memorySize = null, returnedResult = true)
+    }
+
+    /** A failed run reports the table it returned on the same frame, and still no message (#341). */
+    @Test
+    fun `a failed sql run finish frame says a result was returned`() {
+        val sqlRunWrong = FixtureLoader.messages("sql-run-wrong.jsonl")
+
+        GradingMessageMapper.testcaseOf(sqlRunWrong[1]) shouldBe
+            aTestcaseResult(
+                id = 5439,
+                passed = false,
+                msg = null,
+                runTime = null,
+                memorySize = null,
+                returnedResult = true,
+            )
     }
 
     @Test
