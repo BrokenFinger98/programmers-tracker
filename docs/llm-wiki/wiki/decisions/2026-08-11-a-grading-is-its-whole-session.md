@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [capture, dedup, protocol, records, measurement]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-08-11
-sources: [decisions/2026-08-05-capture-pipeline-stages, decisions/2026-08-05-write-serialization, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
+updated: 2026-10-06
+sources: [decisions/2026-08-05-capture-pipeline-stages, decisions/2026-08-05-write-serialization, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
 # A grading is its whole session, not the frame that ended it
@@ -137,6 +137,26 @@ Nothing changes in behaviour, and that is the point: #159 had already moved the 
 live path, so both runs were recorded correctly. What is retired is the belief that the
 remaining replay-path exposure is SQL-shaped. A crash with two identical failed runs queued
 folds them into one, in any language.
+
+### ⚠️ "Recorded correctly" was true of the log and false of every reader — measured 2026-10-03 (#343)
+
+⚠️ (old) — "#159 had already moved the index off the live path, so both runs were recorded
+correctly."
+
+They were written correctly. They are not *read* correctly. `RecordHistory.of` resolves the log as
+newest line per capture key — the rule the `codePending` correction needs — so two distinct
+gradings that share a key are one record to `get_problem`, `stats`, `submissions` and everything
+else that wants record state. #159 asked where the key may be consulted and answered for the
+writer; the readers consult it on every call.
+
+Measured on lesson 131537: the log holds 10 runs and 3 submits; `get_problem` answers
+`runCount: 5`, `submissionCount: 1`. Five wrong runs that returned the same table share one key,
+and three passing submits of the same query share another
+(raw/sessions/2026-10-06-the-history-that-folded.md). The collision domain
+stated above — every grading with no per-case timing — is exactly the domain the readers fold.
+
+Fix not yet chosen: the correction line needs an identity that is per grading rather than per
+bytes, and old logs must keep resolving.
 
 Recorded rather than quietly edited, because the wrong half is the *estimate*, and an ADR that
 silently improves its own estimates cannot be audited

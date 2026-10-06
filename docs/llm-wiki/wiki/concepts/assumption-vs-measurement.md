@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-09-30
-sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md]
+updated: 2026-10-06
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -426,6 +426,23 @@ Two smaller ones from the recovered August segments: a fixture header recording 
 words, that a guard failure would be rerun rather than read — and was right about its author
 (raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md).
 
+## October: a fix measured, and a count nobody compared to the disk
+
+*(raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md,
+raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md,
+raw/sessions/2026-10-06-the-history-that-folded.md)*
+
+- **"UNKNOWN until measured" held, twice in one afternoon.** A failing SQL run's frame was
+  unmeasured; when it arrived it carried a table and no message, and the fix keyed on the table
+  rather than loosening the rule. Two days later the next unmeasured shape (an SQL-error run, with
+  MySQL's error tuple as its message) arrived and stayed `UNKNOWN` — the resolver refused to guess,
+  which is the behaviour, not a gap.
+- **A count reported without being compared to the bytes.** Asked for a problem's history, the
+  assistant read `get_problem`, said "four runs", and minutes later listed eight raw sessions for
+  the same problem while answering a different question — and did not notice. The tool was folding
+  distinct gradings that share a capture key (#343); the log had all eight. This is "two views of one log disagreed" (above) again, with the
+  second view on screen.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -455,6 +472,9 @@ words, that a guard failure would be rerun rather than read — and was right ab
   server picks the channel by — sat one parameter away (#256). The wire value is `database`, not
   `sql`, so guessing the vocabulary instead of measuring it would have shipped a word the
   protocol never uses.
+- **A count from a reader is a claim about the log.** Before reporting "N runs", compare it once
+  with what the bytes say — the raw sessions or the log itself. Two views that should agree and
+  were never put side by side are how #237 and #343 both shipped.
 - **A test must be able to fail before it is allowed to pass.** Run the code it guards *without*
   the fix, or with the race actually racing; twenty-five green rounds of a test that cannot lose
   are twenty-five rounds of nothing (09-29).
