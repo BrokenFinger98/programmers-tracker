@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [storage, jsonl, idempotency, codefetch, append-only]
 created: 2026-08-05
-updated: 2026-08-05
-sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md]
+updated: 2026-10-06
+sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
 # Clearing `codePending` by appending a correction, not by editing the line
@@ -101,6 +101,13 @@ Two things the merge itself surfaced, both of the same shape as the cost above:
   nothing deduplicated; the moment a reader resolved newest-per-key it collapsed a whole log
   into one record, and six reader tests that had been passing for the wrong reason turned red.
   `aSubmissionRecord()` now issues a fresh key per call, which is what a real repository does.
+
+⚠️ **2026-10-03 (#343): the key the correction pairs on is not a record identity.** "Newest line
+per capture key is the record" assumed one key per grading. The key is derived from the grading's
+bytes, and since #159 (2026-08-11) the live path records two byte-identical gradings as two lines
+— so the resolution rule folds them back into one on read. Measured on lesson 131537: 3 submits
+and 10 runs recorded, 1 and 5 visible
+([[decisions/2026-08-11-a-grading-is-its-whole-session]]).
 
 Related: [[decisions/2026-08-05-capture-pipeline-stages]] ·
 [[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-06-mcp-read-slice]].

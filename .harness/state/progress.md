@@ -5451,3 +5451,16 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - Fixture `sql-run-wrong.jsonl` scrubbed (ids substituted, table columns kept, row invented); protocol
   §6 + §15 #17; tests at all three layers. ADR [[decisions/2026-10-01-a-failed-run-that-returned-a-result-is-wrong]].
 - Pending: live — a wrong SQL run on the rebuilt container shows `✓ run WRONG 0/1`.
+- ✅ Live 2026-10-03 15:23:52 KST, lesson 131537: wrong SQL run recorded `JUDGED · WRONG`, `returnedResult: true`.
+
+## 2026-10-06 — wiki ingest (#344, branch docs/344-ingest-failed-sql-run-sessions)
+- Three raw sessions (10-01, 10-03 from the inbox snapshot of `b240e44e`; 10-06 the finding made while
+  ingesting) + source stubs, indexed.
+- ADR 2026-10-01 Outcome: verified live; the SQL-error frame measured (MySQL error tuple as `msg`, no
+  table → `UNKNOWN`, correct under the ADR; compile-error classification proposed, not decided, not
+  yet in the protocol doc).
+- Found while ingesting: every reader folds distinct gradings sharing a capture key — lesson 131537
+  log 10 runs / 3 submits, `get_problem` 5 / 1. Filed #343 (not fixed). ⚠️ notes on ADRs 2026-08-11
+  and 2026-08-05 (code-pending correction); concept `assumption-vs-measurement` gains the case.
+- Inbox emptied: 22 sessionend snapshots of 2026-10-06 were handout-writing workers (out of scope).
+- Open: #343 (needs an ADR — per-grading identity for the correction line).

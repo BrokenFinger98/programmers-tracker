@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [protocol, verdict, measurement, sensor]
 author: BrokenFinger98
 created: 2026-10-01
-updated: 2026-10-01
-sources: [decisions/2026-08-05-failure-taxonomy, concepts/verdict-classification]
+updated: 2026-10-06
+sources: [decisions/2026-08-05-failure-taxonomy, concepts/verdict-classification, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md]
 ---
 
 # A failed run that returned a result is WRONG
@@ -63,6 +63,21 @@ spelling, so the domain learns nothing about `returned_rows`.
 
 ## Outcome
 
-Issue #341. Resolver tests for both branches, a mapper test on the new fixture, an assembler test
-through it (`RUN`, `JUDGED`, `WRONG`). Live verification: a wrong SQL run on the rebuilt
-container shows `✓` with `run WRONG 0/1`.
+Issue #341, PR #342 (merged 2026-10-01 16:48). Resolver tests for both branches, a mapper test on
+the new fixture, an assembler test through it (`RUN`, `JUDGED`, `WRONG`).
+
+**Verified live 2026-10-03.** On lesson 131537 a wrong SQL run at 15:23:52 KST was recorded
+`JUDGED · WRONG` with `returnedResult: true` — the first wrong run after the container was rebuilt
+from main (raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md).
+
+**The accepted cost above was measured the same afternoon.** Two runs that MySQL rejected carry
+`passed: false`, no `returned_rows`, and a `msg` that is the database's own error tuple —
+`(1054, "Unknown column …")`, `(1222, 'The used SELECT statements have a different number of
+columns')`. So the frame *does* carry a message; it matches no measured verdict string, and both
+were recorded `UNKNOWN` — the correct answer under this decision. Filing that shape as a compile
+error (the query is refused before it runs) was proposed and not decided; it needs its own ADR and
+the frames as fixtures, and the shape is not yet in the protocol document.
+
+The same verification surfaced an unrelated defect in how the history is *read*: several of that
+afternoon's wrong runs, recorded correctly, are invisible to every reader (#343, see
+[[decisions/2026-08-11-a-grading-is-its-whole-session]]).

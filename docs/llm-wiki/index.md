@@ -110,3 +110,6 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-28 [[sources/2026-08-28-the-first-real-record]] — Recovered from the inbox: the first real record was fine; 188 hours "Elapsed", raw HTML in a stdin statement, and a runner instruction that needed JDK 22
 - 2026-09-29 [[sources/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive]] — A replaced cookie healed the probe and not the observation; two solves lost with every indicator green; the first cut broken by its own race test's silence
 - 2026-09-30 [[sources/2026-09-30-the-sensor-hands-the-session-over]] — Trigger 1 measured at a real sign-in, a hundred identical cookie sets in thirty seconds, JSON null in the credential file, and two defects shipped beside the work
+- 2026-10-01 [[sources/2026-10-01-a-wrong-query-and-the-purple-question-mark]] — A failing SQL run carries a table and no message; three false `?` alarms in an afternoon, and the field that fixed them
+- 2026-10-03 [[sources/2026-10-03-the-fix-measured-and-an-sql-error-frame]] — The fix verified live on a wrong run; the first SQL-error frame measured, carrying MySQL's error tuple and staying UNKNOWN
+- 2026-10-06 [[sources/2026-10-06-the-history-that-folded]] — Every reader folds distinct gradings that share a capture key: 10 runs and 3 submits recorded, 5 and 1 visible (#343)

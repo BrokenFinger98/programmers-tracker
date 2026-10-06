@@ -123,3 +123,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-09-30] ingest | the vault reset + the first real record (recovered from the inbox, 08-19 and 08-28) → 1 page updated, 4 created
 
 ## [2026-09-30] ingest | a session expiry and the sensor that hands the session over (09-29, 09-30) → 8 pages updated, 4 created
+
+## [2026-10-06] ingest | a wrong query, the fix measured, and the history that folded (10-01, 10-03, 10-06) → 4 pages updated, 3 created
