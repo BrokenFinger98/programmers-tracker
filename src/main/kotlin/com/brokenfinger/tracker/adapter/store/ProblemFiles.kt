@@ -1,7 +1,9 @@
 package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
+import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
@@ -27,6 +29,10 @@ import java.nio.file.Path
  * `problems` would carry the bound to wherever the link leads. Then a regular file only, because a FIFO
  * would block the calling thread for a writer that never comes.
  *
+ * **A hard link passes.** It is the file itself rather than a pointer to one, so a hard link to the token
+ * under `problems/` would be read. Git cannot store or deliver one — a clone writes two separate files —
+ * so making it takes a shell on this machine, which can read the token directly.
+ *
  * **Never throws, and says why.** Whatever is not read is absent, the posture every reader here already
  * takes. A missing file or a dangling link is the normal path and says nothing; every other refusal logs
  * one warning naming the path the reader was handed and the reason — out of bounds, not a regular file,
@@ -34,23 +40,35 @@ import java.nio.file.Path
  * each of those can name the very file this keeps out. [RecordLayout] stays lexical; this is the half
  * that looks at the filesystem.
  */
-class ProblemFiles(private val layout: RecordLayout) {
+internal class ProblemFiles(private val layout: RecordLayout) {
     /** [Files.readAllBytes], bounded — for a reader that decodes leniently itself. */
-    fun readAllBytes(candidate: Path): ByteArray? = read(candidate) { Files.readAllBytes(it) }
+    fun readAllBytes(candidate: Path): ByteArray? = read(candidate) { it }
 
     /** [Files.readString], bounded, and as strict as it is: bytes that are not UTF-8 are absent, not replaced. */
-    fun readString(candidate: Path): String? = read(candidate) { Files.readString(it) }
+    fun readString(candidate: Path): String? = read(candidate, ::strictUtf8)
 
-    private fun <T : Any> read(candidate: Path, reading: (Path) -> T): T? =
-        runCatching { containedRegularFile(candidate)?.let(reading) }.getOrElse { failed(candidate, it) }
+    private fun <T : Any> read(candidate: Path, decoding: (ByteArray) -> T): T? =
+        runCatching { containedRegularFile(candidate)?.let(::bytesOf)?.let(decoding) }
+            .getOrElse { failed(candidate, it) }
 
-    // The real path is what gets opened, so the file that was checked is the file that is read.
     private fun containedRegularFile(candidate: Path): Path? {
         val real = candidate.toRealPath()
         if (!real.startsWith(realProblemsDirectory())) return refused(candidate, LEADS_OUT)
         if (!Files.isRegularFile(real)) return refused(candidate, NOT_A_REGULAR_FILE)
         return real
     }
+
+    // What is opened is the real path that was checked, without following a link at its last name. A file
+    // swapped for a link between the check and the open — by a pull while the server runs — then fails
+    // rather than being followed. Not closed: a directory on the way swapped for a link in that window, as
+    // NOFOLLOW_LINKS governs the last name only, nor the file swapped for a FIFO, which the open would wait
+    // on. Accepted: the server never pulls, and whoever can swap a path here concurrently can already read
+    // the token.
+    private fun bytesOf(real: Path): ByteArray = Files.newInputStream(real, NOFOLLOW_LINKS).use { it.readAllBytes() }
+
+    // A new decoder reports malformed input rather than replacing it, so this throws where Files.readString does.
+    private fun strictUtf8(bytes: ByteArray): String =
+        Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
 
     // Not there — not fetched yet, never run, or a link to nothing — is the normal path, and silent.
     private fun failed(candidate: Path, cause: Throwable): Nothing? {
