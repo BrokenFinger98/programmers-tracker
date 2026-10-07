@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.comparables.shouldBeLessThanOrEqualTo
 import io.kotest.matchers.nulls.shouldBeNull
@@ -131,7 +132,7 @@ class RecordLayoutTest {
     }
 
     @Test
-    fun `a path a record carries resolves inside the repository`() {
+    fun `a path a record carries resolves inside the problems directory`() {
         layout().recordFile("problems/1-a/attempts/001.java") shouldBe
             root.toAbsolutePath().normalize().resolve("problems/1-a/attempts/001.java")
     }
@@ -142,6 +143,29 @@ class RecordLayoutTest {
         layout().recordFile("../escape.txt").shouldBeNull()
         layout().recordFile("problems/../../escape.txt").shouldBeNull()
         layout().recordFile(root.parent.resolve("x").toString()).shouldBeNull()
+    }
+
+    /**
+     * The root holds what a record must never lead to: the push token and the `/watch` token under
+     * `.ps/`, the original frames, the log, git's own config. Bounding at the root let a `codePath`
+     * edited to `.ps/git-credentials` return the token.
+     */
+    @Test
+    fun `a path to anything beside the problems directory resolves to nothing`() {
+        listOf(
+            ".ps/git-credentials",
+            "problems/../.ps/git-credentials",
+            ".ps/watch-token",
+            ".ps/raw/session.jsonl",
+            "log/submissions.jsonl",
+            ".git/config",
+        ).forEach { path -> withClue(path) { layout().recordFile(path).shouldBeNull() } }
+    }
+
+    @Test
+    fun `the problems directory itself and a name that merely starts with it are not inside it`() {
+        layout().recordFile("problems").shouldBeNull()
+        layout().recordFile("problems-old/attempts/001.java").shouldBeNull()
     }
 
     @Test

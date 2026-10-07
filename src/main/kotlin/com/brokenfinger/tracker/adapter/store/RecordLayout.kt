@@ -41,17 +41,24 @@ class RecordLayout(private val root: Path) {
     fun runLog(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve(RUN_LOG)
 
     /**
-     * A path a record carries (`codePath`), resolved inside the repository — or null when it would
-     * leave it, or names nothing usable. The log is ours, but the MCP read path must not follow
-     * `../` out of the repository on the strength of a line someone could have edited.
+     * A path a record carries (`codePath`), resolved inside `problems/` — or null when it would
+     * leave it, names the directory itself, or names nothing usable.
+     *
+     * **Bounded at `problems/`, not at the repository root**, because the root also holds what a
+     * record must never lead to: the push token and the `/watch` token under `.ps/`, the original
+     * frames beside them, `log/`, and git's own config. The log is ours, but the MCP read path must
+     * not follow a line someone could have edited — and a `codePath` edited to
+     * `.ps/git-credentials` would otherwise hand the token to whoever asked. Every path the writer
+     * produces is `problems/<dir>/...`, so nothing legitimate is refused.
      *
      * The check is lexical: it never looks at the filesystem, so a symlink someone placed inside
-     * the repository is outside what it guards.
+     * `problems/` is outside what it guards.
      */
     fun recordFile(relative: String): Path? {
         val base = root.toAbsolutePath().normalize()
+        val problems = base.resolve(PROBLEMS)
         val file = runCatching { base.resolve(relative).normalize() }.getOrNull() ?: return null
-        return file.takeIf { it.startsWith(base) && it != base }
+        return file.takeIf { it.startsWith(problems) && it != problems }
     }
 
     /**

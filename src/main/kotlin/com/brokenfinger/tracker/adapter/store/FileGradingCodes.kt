@@ -22,8 +22,10 @@ class FileGradingCodes(private val layout: RecordLayout) : GradingCodes {
     override fun runs(lessonId: Long, title: String?): Map<String, KeptCode> =
         runCatching { keptIn(layout.runLog(lessonId, title)) }.getOrDefault(emptyMap())
 
+    // A regular file only, as keptIn requires: a FIFO behind a record's path would block the request thread.
     override fun submitted(codePath: String): String? {
         val file = layout.recordFile(codePath) ?: return null
+        if (!Files.isRegularFile(file)) return null
         return runCatching { String(Files.readAllBytes(file), CHARSET) }.getOrNull()
     }
 

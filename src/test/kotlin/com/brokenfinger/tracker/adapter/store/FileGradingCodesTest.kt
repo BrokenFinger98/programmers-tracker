@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.support.fixtures.aSubmit
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -114,9 +115,35 @@ class FileGradingCodesTest {
         codes().submitted(climbing).shouldBeNull()
     }
 
+    /** The repository root holds the push token beside the records; no line of the log may lead to it. */
+    @Test
+    fun `a record's path cannot reach a credential that sits beside the problems`() {
+        val token = root.resolve(".ps/git-credentials")
+        Files.createDirectories(token.parent)
+        Files.writeString(token, "not a real credential")
+
+        codes().submitted(".ps/git-credentials").shouldBeNull()
+        codes().submitted("problems/../.ps/git-credentials").shouldBeNull()
+    }
+
     @Test
     fun `a directory where a file should be is no code, not an error`() {
         Files.createDirectories(root.resolve("problems/1/attempts/001.java"))
+
+        codes().submitted("problems/1/attempts/001.java").shouldBeNull()
+    }
+
+    /**
+     * Only a regular file is read. A FIFO behind a record's path would block the request thread, and
+     * a device reads as an empty string — so the stand-in here is the one that answers instead of hanging.
+     */
+    @Test
+    fun `a file that is not a regular one is no code`() {
+        val device = Path.of("/dev/null")
+        assumeTrue(Files.exists(device), "no /dev/null on this platform")
+        val link = root.resolve("problems/1/attempts/001.java")
+        Files.createDirectories(link.parent)
+        Files.createSymbolicLink(link, device)
 
         codes().submitted("problems/1/attempts/001.java").shouldBeNull()
     }
