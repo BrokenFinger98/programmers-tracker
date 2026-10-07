@@ -206,6 +206,42 @@ class FileGradingCodesTest {
         codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
     }
 
+    /**
+     * The bound must not move with a link at `problems` itself. Resolving that directory too carries the
+     * bound to wherever the link leads, and a clone can bring that link as easily as one below it.
+     */
+    @Test
+    fun `a problems directory that is itself a link to the state directory is not followed`() {
+        assumeTrue(posix(), "this test makes symbolic links")
+        val state = Files.createDirectories(root.resolve(".ps"))
+        Files.writeString(state.resolve("git-credentials"), "not a real credential")
+        Files.createSymbolicLink(root.resolve("problems"), Path.of(".ps"))
+
+        Files.readString(root.resolve("problems/git-credentials")) shouldBe "not a real credential"
+        codes().submitted("problems/git-credentials").shouldBeNull()
+    }
+
+    @Test
+    fun `a problems directory that is itself a link out of the repository is not followed`() {
+        assumeTrue(posix(), "this test makes symbolic links")
+        Files.writeString(Files.createDirectories(outside.resolve("1-x/attempts")).resolve("001.java"), "not ours")
+        Files.createSymbolicLink(root.resolve("problems"), outside)
+
+        Files.readString(root.resolve("problems/1-x/attempts/001.java")) shouldBe "not ours"
+        codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
+    }
+
+    /** What is resolved is the repository root: a records directory that is itself a link (~/ps-records) still reads. */
+    @Test
+    fun `a repository root reached through a link still reads its code`() {
+        assumeTrue(posix(), "this test makes symbolic links")
+        val attempts = Files.createDirectories(root.resolve("problems/1-x/attempts"))
+        Files.writeString(attempts.resolve("001.java"), "select 1\n")
+        val alias = Files.createSymbolicLink(outside.resolve("records"), root)
+
+        FileGradingCodes(RecordLayout(alias)).submitted("problems/1-x/attempts/001.java") shouldBe "select 1\n"
+    }
+
     /** What matters is where a link leads, not that it is one: a link that stays under problems/ reads as its target. */
     @Test
     fun `a link that stays inside the problems directory is followed`() {

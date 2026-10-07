@@ -31,9 +31,9 @@ class FileGradingCodes(private val layout: RecordLayout) : GradingCodes {
      *
      * [RecordLayout.recordFile] bounds the path lexically. This follows the links too, because git
      * stores symbolic links and one can arrive with a clone or a pull as easily as by hand: a
-     * `problems/1-x/attempts/001.java` linked to `.ps/git-credentials`, or a problem directory linked
-     * out of `problems/`, passes the lexical bound and would hand the push token to the model. A link
-     * that stays inside `problems/` is read as the file it names.
+     * `problems/1-x/attempts/001.java` linked to `.ps/git-credentials`, a problem directory linked out
+     * of `problems/`, or `problems` itself linked away, passes the lexical bound and would hand the push
+     * token to the model. A link that stays inside the real `problems/` is read as the file it names.
      *
      * A regular file only, as [keptIn] requires: a FIFO behind a record's path would block the
      * request thread for a writer that never comes. Anything that cannot be resolved or read — a
@@ -45,12 +45,17 @@ class FileGradingCodes(private val layout: RecordLayout) : GradingCodes {
         return runCatching { String(Files.readAllBytes(file), CHARSET) }.getOrNull()
     }
 
-    // Both sides are resolved: the repository itself may sit behind a link (macOS's /var is one).
     private fun realFileUnderProblems(candidate: Path?): Path? {
         if (candidate == null) return null
-        return runCatching {
-            candidate.toRealPath().takeIf { it.startsWith(layout.problemsDirectory().toRealPath()) }
-        }.getOrNull()
+        return runCatching { candidate.toRealPath().takeIf { it.startsWith(realProblemsDirectory()) } }.getOrNull()
+    }
+
+    // The repository root is resolved, because it may sit behind a link (macOS's /var is one), and
+    // `problems` is appended to it by name. It is never resolved itself: it must be the real directory
+    // of that name, since a link at `problems` would carry the bound along to wherever it leads.
+    private fun realProblemsDirectory(): Path {
+        val problems = layout.problemsDirectory()
+        return problems.parent.toRealPath().resolve(problems.fileName)
     }
 
     private fun keptIn(file: Path): Map<String, KeptCode> {
