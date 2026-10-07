@@ -57,6 +57,9 @@ fun aToolCallParams(name: String, arguments: JsonObject = JsonObject(emptyMap())
     put("arguments", arguments)
 }
 
+fun aPromptGetParams(name: String = "exam_prep", arguments: JsonObject = JsonObject(emptyMap())): JsonObject =
+    aToolCallParams(name, arguments)
+
 fun aLegacyCall(method: String, params: JsonObject = JsonObject(emptyMap()), id: Int? = 1): McpCall =
     McpCall.from(aLegacyBody(method, params, id))
 
@@ -69,4 +72,4 @@ fun aModernCall(
 ): McpCall = McpCall.from(aModernBody(method, params, version, withCapabilities, id))
 
 /** The headers a conforming modern client mirrors out of the body it is sending. */
-fun headersFor(call: McpCall): McpHeaders = McpHeaders(call.declaredVersion, call.method, call.toolName())
+fun headersFor(call: McpCall): McpHeaders = McpHeaders(call.declaredVersion, call.method, call.name())

@@ -38,7 +38,7 @@ com.brokenfinger.tracker/
   application/      ← application services · Result DTOs
   adapter/
     web/              HTTP controllers (/watch for the sensor extension)
-    mcp/              MCP tools · resources
+    mcp/              MCP tools · prompts
     store/            file storage (JSONL · directories)
     git/              GitSync
 ```

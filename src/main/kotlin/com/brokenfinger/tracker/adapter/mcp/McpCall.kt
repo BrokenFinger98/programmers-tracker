@@ -20,8 +20,9 @@ data class McpHttpResponse(val status: Int, val body: JsonObject? = null)
  * mismatch is `400` with `-32020`, an unknown method on a modern request is `404` with
  * `-32601` — so carrying the two together is what keeps them from drifting apart.
  *
- * [message] is read by a language model trying to correct itself, so it says what is wrong
- * and never what the caller presented: echoing a credential back is forbidden (CLAUDE.md).
+ * [message] is read by a language model trying to correct itself, so it says what is wrong. It may
+ * quote an argument the caller wrote, because that is how a model finds the one to fix, but it never
+ * echoes a credential or a header value: echoing one back is forbidden (CLAUDE.md).
  */
 class McpFailure(
     val code: Int,
@@ -93,12 +94,27 @@ data class McpCall(
 
     fun isModern(): Boolean = declaredVersion != null
 
-    // Every reader below casts instead of coercing. A member of the wrong JSON type is a
-    // malformed request, and it has to come back as an absent value we can refuse cleanly
-    // rather than as an exception that would surface to the client as an internal error.
-    fun toolName(): String? = (params["name"] as? JsonPrimitive)?.contentOrNull
+    // Every reader below casts instead of coercing, and all but one read a member of the wrong JSON
+    // type as absent: it is a malformed request, which has to come back as an absent value we can
+    // refuse cleanly rather than as an exception that would surface to the client as an internal
+    // error. The one that refuses instead is promptArguments(): for a prompt an absent value is a
+    // whole request, so a malformed one must not be allowed to read as absent.
+
+    /** `params.name` — the tool a `tools/call` runs, or the prompt a `prompts/get` renders. */
+    fun name(): String? = (params["name"] as? JsonPrimitive)?.contentOrNull
 
     fun arguments(): JsonObject = params["arguments"] as? JsonObject ?: JsonObject(emptyMap())
+
+    /**
+     * A prompt's arguments: the object given, none when absent or null, and a refusal for anything else.
+     * Stricter than [arguments]: every argument here is optional, so `{}` is a whole request, and a
+     * malformed `arguments` read as `{}` would silently widen the answer to everything on record and look right.
+     */
+    fun promptArguments(): JsonObject = when (val given = params["arguments"]) {
+        null, JsonNull -> JsonObject(emptyMap())
+        is JsonObject -> given
+        else -> throw McpFailure(McpErrors.INVALID_PARAMS, 400, "arguments must be an object of strings")
+    }
 
     fun stringArgument(name: String): String? = (arguments()[name] as? JsonPrimitive)?.contentOrNull
 

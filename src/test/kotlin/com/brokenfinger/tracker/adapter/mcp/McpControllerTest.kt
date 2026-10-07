@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.support.fixtures.FailingGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
+import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
@@ -16,6 +17,7 @@ import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.fixtures.anInitializeParams
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
@@ -130,6 +132,7 @@ class McpControllerTest {
         val opened = initialize["result"]!!.jsonObject
         opened["protocolVersion"]!!.jsonPrimitive.content shouldBe "2025-11-25"
         opened["capabilities"]!!.jsonObject["tools"].shouldNotBeNull()
+        opened["capabilities"]!!.jsonObject["prompts"].shouldNotBeNull()
         opened["serverInfo"]!!.jsonObject["name"]!!.jsonPrimitive.content shouldBe "programmers-tracker"
 
         post(aLegacyBody("notifications/initialized", id = null)).status shouldBe 202
@@ -171,14 +174,29 @@ class McpControllerTest {
         discovered["resultType"]!!.jsonPrimitive.content shouldBe "complete"
         discovered["supportedVersions"]!!.jsonArray.map { it.jsonPrimitive.content }
             .shouldContainExactly(McpProtocol.MODERN)
+        discovered["capabilities"]!!.jsonObject.keys.shouldContainExactlyInAnyOrder("tools", "prompts")
 
         val listed = json(postModern("tools/list", id = 2))["result"]!!.jsonObject
         listed["tools"]!!.jsonArray.size shouldBe McpToolCatalog.NAMES.size
         listed["cacheScope"]!!.jsonPrimitive.content shouldBe "private"
 
         val params = aToolCallParams("get_problem", buildJsonObject { put("lessonId", 120804) })
-        val called = json(postModern("tools/call", params, toolName = "get_problem", id = 3))["result"]!!.jsonObject
+        val called = json(postModern("tools/call", params, name = "get_problem", id = 3))["result"]!!.jsonObject
         called["structuredContent"]!!.jsonObject["submissionCount"]!!.jsonPrimitive.int shouldBe 1
+    }
+
+    /** prompts/list → prompts/get, with the headers a modern client mirrors, then again with an argument. */
+    @Test
+    fun `serves a modern client the exam_prep prompt`() {
+        val listed = json(postModern("prompts/list", id = 1))["result"]!!.jsonObject
+        listed["prompts"]!!.jsonArray.single().jsonObject["name"]!!.jsonPrimitive.content shouldBe "exam_prep"
+
+        val got = json(postModern("prompts/get", aPromptGetParams(), name = "exam_prep", id = 2))["result"]!!.jsonObject
+        promptText(got) shouldContain "repair_steps()"
+
+        val scoped = aPromptGetParams(arguments = buildJsonObject { put("language", "mysql") })
+        val narrowed = json(postModern("prompts/get", scoped, name = "exam_prep", id = 3))["result"]!!.jsonObject
+        promptText(narrowed) shouldContain "repair_steps(language=\"mysql\")"
     }
 
     @Test
@@ -311,7 +329,7 @@ class McpControllerTest {
         val response = postModern(
             "tools/call",
             aToolCallParams("repair_steps"),
-            toolName = "repair_steps",
+            name = "repair_steps",
         )
 
         response.status shouldBe 500
@@ -331,8 +349,8 @@ class McpControllerTest {
     fun `answers a broken invariant behind a get_problem include as an internal error, a plain call unaffected`() {
         codes.failure = IllegalArgumentException(INVARIANT)
 
-        val asked = postModern("tools/call", aGetProblemParams(include = "runs"), toolName = "get_problem")
-        val plain = postModern("tools/call", aGetProblemParams(include = null), toolName = "get_problem")
+        val asked = postModern("tools/call", aGetProblemParams(include = "runs"), name = "get_problem")
+        val plain = postModern("tools/call", aGetProblemParams(include = null), name = "get_problem")
 
         asked.status shouldBe 500
         errorCode(asked) shouldBe McpErrors.INTERNAL
@@ -346,7 +364,7 @@ class McpControllerTest {
     fun `answers a get_problem include as a tool answer, with the problem's runs in it`() {
         val params = aGetProblemParams(include = "runs")
 
-        val called = json(postModern("tools/call", params, toolName = "get_problem"))["result"]!!.jsonObject
+        val called = json(postModern("tools/call", params, name = "get_problem"))["result"]!!.jsonObject
 
         called["isError"]!!.jsonPrimitive.booleanOrNull!!.shouldBeFalse()
         called["structuredContent"]!!.jsonObject["runCount"]!!.jsonPrimitive.int shouldBe 2
@@ -367,7 +385,7 @@ class McpControllerTest {
     private fun postModern(
         method: String,
         params: JsonObject = JsonObject(emptyMap()),
-        toolName: String? = null,
+        name: String? = null,
         id: Int = 1,
     ): MockHttpServletResponse = mvc.post(McpController.PATH) {
         contentType = MediaType.APPLICATION_JSON
@@ -375,7 +393,7 @@ class McpControllerTest {
         header(McpController.TOKEN_HEADER, GRANTED)
         header("MCP-Protocol-Version", McpProtocol.MODERN)
         header("Mcp-Method", method)
-        toolName?.let { header("Mcp-Name", it) }
+        name?.let { header("Mcp-Name", it) }
     }.andReturn().response
 
     private fun aGetProblemParams(include: String?): JsonObject = aToolCallParams(
@@ -391,6 +409,9 @@ class McpControllerTest {
 
     private fun errorCode(response: MockHttpServletResponse): Int =
         json(response)["error"]!!.jsonObject["code"]!!.jsonPrimitive.int
+
+    private fun promptText(result: JsonObject): String =
+        result["messages"]!!.jsonArray.single().jsonObject["content"]!!.jsonObject["text"]!!.jsonPrimitive.content
 
     private companion object {
         /** Fixture values only — never a real credential. */

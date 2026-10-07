@@ -39,8 +39,8 @@ object McpProtocol {
     const val NAME = "programmers-tracker"
 
     /**
-     * How long a client may cache a list result. The tool set is fixed at compile time, so
-     * this is a statement about the build rather than a guess about the data.
+     * How long a client may cache a list result. The tool and prompt sets are fixed at compile
+     * time, so this is a statement about the build rather than a guess about the data.
      */
     const val LIST_TTL_MS = 3_600_000L
 

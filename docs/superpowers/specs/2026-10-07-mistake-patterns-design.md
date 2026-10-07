@@ -2,7 +2,7 @@
 
 Written: 2026-10-07
 Issue: #346
-Status: approved by the owner; 4.1 implemented (#348, #350), 4.2 (#352), 4.3 (#353, live check pending); 4.4 not implemented
+Status: approved by the owner; 4.1 implemented (#348, #350), 4.2 (#352), 4.3 (#353, live check pending); 4.4 (#364, live check pending)
 
 ---
 
@@ -191,9 +191,9 @@ All of these count or return stored facts. None ranks problems or names a weakne
 
 ### 4.4 The `exam_prep` prompt
 
-The server today exposes tools only. It gains the MCP **prompts** capability with one prompt,
-`exam_prep(language?, since?, part?)`. A prompt is instructions the client hands its model — it is
-where the interpretation the server must not do is *asked for*, in the open:
+Before this part the server exposed tools only. It gains the MCP **prompts** capability with one
+prompt, `exam_prep(language?, since?, part?)`. A prompt is instructions the client hands its model —
+it is where the interpretation the server must not do is *asked for*, in the open:
 
 1. `stats(groupBy=part)` and `(groupBy=level)` — where passing took the most runs and submits.
 2. `repair_steps(...)` — cluster the steps into recurring patterns. Name each pattern by what the

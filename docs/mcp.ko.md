@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@dff8cb65e0c91baa3586c9c9d67a415527ba928e -->
+<!-- translated-from: mcp.md@e22396c1dcbf18056f1feb94182c73fa8889420f -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -7,8 +7,9 @@
 > 서버는 Model Context Protocol로 풀이 이력을 노출해 Claude, Cursor, 로컬 모델이 읽을 수 있게
 > 합니다. **툴 일곱 개, 쓰는 것은 하나도 없습니다.** 다섯은 저장된 기록과 집계, 그 사이의 코드를
 > 그대로 돌려주고, 둘은 일정이나 순위를 계산합니다 — 계산하는 둘이 지키는 경계는 이 문서가
-> 그것들을 보여주기 전에 먼저 말합니다. 만들어지지 않은 것은 맨 아래에 있고, 구현 상태의 authority는
-> [README의 표](../README.ko.md)입니다.
+> 그것들을 보여주기 전에 먼저 말합니다. 프롬프트 하나, `exam_prep` 은 어떤 툴도 말해주지 않는 것,
+> 곧 반복되는 실수를 여러분의 모델에게 드러내 놓고 묻습니다. 만들어지지 않은 것은 맨 아래에 있고,
+> 구현 상태의 authority는 [README의 표](../README.ko.md)입니다.
 
 ---
 
@@ -307,6 +308,66 @@ diff 만 줍니다.
 
 ---
 
+## `exam_prep` 프롬프트
+
+이 서버가 해석을 요청하는 단 한 곳이며, 그 요청은 드러내 놓고 합니다. 프롬프트는 여러분이 요청할 때
+클라이언트가 모델에게 건네는 텍스트이고, 툴은 여전히 세기만 할 뿐 아무것에도 이름을 붙이지 않습니다.
+`exam_prep` 은 코딩 테스트를 앞두고 여러분의 모델에게, 여러분 자신의 repair step 에서 반복되는 실수를
+찾아 달라고 요청합니다:
+
+1. `stats(groupBy=part)` 와 `stats(groupBy=level)` — 통과까지 run 과 submit 이 가장 많이 든 곳;
+2. 주어진 범위로 `repair_steps` 를 부르고(답에 `truncated` 가 있으면 `limit` 을 그 답의 `total` 로
+   두고 다시), 수정들을 diff 가 보여주는 것으로 이름 붙인 패턴으로 묶어 패턴마다 근거가 된 기록 id 와
+   걸친 문제 수를 밝힙니다 — 한 번 본 것은 패턴이 아닙니다;
+3. 패턴마다 다시 풀 문제와, 그 step 들이 나온 part 에서 `list_problems(status=untouched, part=…)` 로
+   찾은 손대지 않은 문제 최대 세 개;
+4. 패턴마다 정확히 그 지점을 겨냥한 연습 두세 개;
+5. 기록이 뒷받침하지 못한 것.
+
+읽을 때 틀리기 쉬운 것들은 프롬프트가 직접 들고 갑니다: step 은 무엇이 틀렸는지가 아니라 무엇이
+바뀌었는지를 보여주고, run 은 시도가 아니며, 없음은 0이 아니고, 실행 코드는 2026-10-07 트래커부터
+보관되며, `codeLate` 가 붙은 코드는 다음 채점의 것일 수 있고, `incompleteHistory` 는 개수에 구멍이
+있다는 뜻입니다. 서버 instructions 도 이것들을 짧게 적고 있지만 더 넣을 자리가 없어서, 시험 전
+세션에 필요한 자세한 문구는 프롬프트가 들고 갑니다. Claude Code 는 instructions 와 툴 description 을
+2,048자에서 자르지만 프롬프트의 텍스트는 자르지 않습니다.
+
+Claude Code 에서는 슬래시 명령이며, 시작할 수 있는 사람은 여러분뿐입니다 — 모델은 프롬프트를 스스로
+실행할 수 없습니다. 서버 이름을 위의 설정처럼 두면 메뉴에는 `/programmers-tracker:exam_prep (MCP)` 로
+나오고, 그것을 고르면 `/mcp__programmers-tracker__exam_prep ` 이 입력되니 인자는 그 뒤에 이어서
+입력하세요:
+
+```text
+/mcp__programmers-tracker__exam_prep                          기록 전체
+/mcp__programmers-tracker__exam_prep java                     언어 하나
+/mcp__programmers-tracker__exam_prep java 2026-09-01          … 어느 날짜 이후 기록된 수정
+/mcp__programmers-tracker__exam_prep mysql 2026-09-01 SELECT  … part 하나에서
+```
+
+인자는 위치로 정해집니다 — `language`, `since`, `part` 순서입니다. Claude Code 는 따옴표 없이 공백으로
+나누므로, `since` 를 주려면 그 앞에 `language` 가, `part` 를 주려면 둘 다 있어야 합니다. 메뉴는
+프롬프트의 제목도 인자 설명도 보여주지 않으니, 이 순서가 안내의 전부입니다. 공백이 든 part 이름은 첫
+단어만 도착합니다 — "GROUP BY" 는 "GROUP" 으로 오고, 카탈로그의 part 이름 49개 중 38개에 공백이
+있습니다. 프롬프트는 모델에게 그 단어를 `stats(groupBy=part)` 가 돌려주는 part 키에 맞춰 보고, 전체
+이름으로 `repair_steps` 를 부르고, 어느 part 를 썼는지 말하라고 합니다.
+
+범위를 받는 것은 `repair_steps` 뿐이고, `stats` 와 `list_problems` 는 기록 전체에 대해 답합니다.
+`language` 와 `part` 는 입력한 그대로 넘어가 툴이 전체 일치로 맞춰 보므로, 조금만 어긋나도 — id 가
+`python3` 인데 `python` 이라고 쓰면 — 아무것도 남지 않습니다. 그래서 인자가 범위를 좁힐 때마다
+프롬프트는 모델에게, 그 범위에서 빈 답은 실수가 없다는 뜻이 아니니 그렇게 말하고 어느 인자가 기록과
+맞지 않을 수 있는지 밝히라고 합니다.
+
+`since` 는 모든 툴이 받는 형식을 받습니다. 다음은 아무것도 실행되기 전에 거부됩니다: 해석되지 않는
+`since`, 날짜로 읽히는 `language`(날짜를 먼저 입력한 경우), 프롬프트가 받지 않는 인자, 텍스트가 아닌
+값, 객체가 아닌 `arguments`. 앞의 셋은 순서(language, since, part)를 말해 주므로 어디서 어긋났는지
+보입니다. 비어 있는 인자는 주지 않은 것으로 칩니다. 프롬프트의 답에는 `isError` 가 없으므로, 이
+거부들은 알 수 없는 프롬프트 이름과 마찬가지로 프로토콜 에러입니다: JSON-RPC `-32602` 이고, 현대 시대
+클라이언트에는 HTTP 400, 핸드셰이크 시대 클라이언트에는 200 으로 실립니다 — 알 수 없는 툴일 때와
+같습니다. 인자가 왜 이렇게 동작하는지는
+[`decisions/2026-10-07-exam-prep-asks-in-the-open`](llm-wiki/wiki/decisions/2026-10-07-exam-prep-asks-in-the-open.md)
+에 있습니다.
+
+---
+
 ## 프로토콜 개정
 
 MCP에는 날짜가 붙은 버전이 있고, 형태가 바뀌었습니다: 개정 `2026-07-28` 은 `initialize` 핸드셰이크,
@@ -372,7 +433,7 @@ MCP에는 날짜가 붙은 버전이 있고, 형태가 바뀌었습니다: 개�
 범위 밖이기 때문입니다. `mark_hint` — #136에서 `hintLevel` 과 함께. 한 번도 측정된 적 없는데
 측정값으로 제공되던 필드였습니다. `tag_problem` · `untagged` — 카탈로그가 분류된 채로 실립니다.
 
-**정말로 없음.** MCP **resources**(`ps://…`)와 **prompts**. 서버는 `tools` 능력만 선언합니다.
+**정말로 없음.** MCP **resources**(`ps://…`). 서버는 `tools` 와 `prompts` 능력을 선언합니다.
 `get_problem(include=returned)` — 실패한 SQL run 이 돌려준 표를 `.ps/raw/` 에서 읽는 것 — 은
 설계(§4.3)에 있으나 별도 계획으로 미뤘습니다. 읽는 쪽에서 프로토콜 파싱이 필요하기 때문입니다.
 

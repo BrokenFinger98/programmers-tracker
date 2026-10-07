@@ -5,8 +5,9 @@
 > The server exposes your solving history over the Model Context Protocol so Claude, Cursor
 > or a local model can read it. **Seven tools, none of which write.** Five hand back stored
 > records, counts and the code between them; two compute a schedule or a ranking, under a
-> boundary this page states before it shows them. What is not built is listed at the bottom,
-> and the [README's table](../README.md) stays the authority on build status.
+> boundary this page states before it shows them. One prompt, `exam_prep`, asks your own model
+> in the open for what no tool says: your recurring mistakes. What is not built is listed at
+> the bottom, and the [README's table](../README.md) stays the authority on build status.
 
 ---
 
@@ -315,6 +316,65 @@ gradings sit in it end to end with nothing between them.
 
 ---
 
+## The `exam_prep` prompt
+
+The one place this server asks for interpretation — and it asks in the open. A prompt is text your
+client hands its model when you ask for it; the tools still count and name nothing. `exam_prep`
+asks your model to find your recurring mistakes in your own repair steps before a coding test:
+
+1. `stats(groupBy=part)` and `stats(groupBy=level)` — where passing took the most runs and submits;
+2. `repair_steps` over the scope you gave, called again with `limit` set to the answer's `total`
+   when it says `truncated` — the corrections grouped into patterns named by what their diffs show,
+   each citing the record ids behind it and the number of problems it spans (a pattern seen once
+   is not a pattern);
+3. per pattern, the problems to re-solve, and up to three untouched ones from
+   `list_problems(status=untouched, part=…)` in a part its steps come from;
+4. per pattern, two or three drills aimed at exactly that point;
+5. what the records could not support.
+
+It carries its own readings: a step shows what changed, not what was wrong; a run is not an
+attempt; absent is not zero; run code is kept from the 2026-10-07 tracker on; code marked
+`codeLate` may belong to the next grading; and `incompleteHistory` means the counts have holes.
+The server instructions state these in brief and have no room for more, so the prompt carries the
+fuller wording a pre-exam session needs. Claude Code cuts instructions and tool descriptions at
+2,048 characters, but not a prompt's text.
+
+In Claude Code it is a slash command, and only you can start it — the model cannot run a prompt on
+its own. With the server named as in the configuration above, the menu shows
+`/programmers-tracker:exam_prep (MCP)`, and choosing it inserts
+`/mcp__programmers-tracker__exam_prep `; type the arguments after it:
+
+```text
+/mcp__programmers-tracker__exam_prep                          everything on record
+/mcp__programmers-tracker__exam_prep java                     one language
+/mcp__programmers-tracker__exam_prep java 2026-09-01          … corrections recorded since a date
+/mcp__programmers-tracker__exam_prep mysql 2026-09-01 SELECT  … in one part
+```
+
+The arguments are positional — `language`, `since`, `part` — and Claude Code splits them on spaces
+without quoting, so a `since` needs a `language` before it and a `part` needs both. Its menu shows
+neither the prompt's title nor its argument descriptions, so this order is the whole guide. A part
+name with a space arrives as its first word — "GROUP" for "GROUP BY", and 38 of the catalog's 49
+part names have a space. The prompt tells the model to match it against the part keys
+`stats(groupBy=part)` returns, call `repair_steps` with the full name, and say which part it used.
+
+Only `repair_steps` takes the scope; `stats` and `list_problems` answer over everything on record.
+`language` and `part` are passed as typed and matched by the tool in full, so a near miss —
+`python`, where the id is `python3` — narrows to nothing. Whenever an argument narrows, the prompt
+tells the model that an empty answer under it is not an absence of mistakes, and to say which
+argument may not match.
+
+`since` takes the format every tool takes. Refused before anything runs: a `since` that does not
+parse; a `language` that reads as a date — the date typed first; an argument the prompt does not
+take; a value that is not text; an `arguments` that is not an object. The first three name the
+order — language, since, part — so the slip shows. A blank argument counts as not given. A prompt's
+answer has no `isError`, so each refusal, like an unknown prompt name, is a protocol error: JSON-RPC
+`-32602`, on HTTP 400 to a modern client and 200 to a handshake one, as for an unknown tool. Why the
+arguments work this way:
+[`decisions/2026-10-07-exam-prep-asks-in-the-open`](llm-wiki/wiki/decisions/2026-10-07-exam-prep-asks-in-the-open.md).
+
+---
+
 ## Protocol revisions
 
 MCP is dated and versioned, and it changed shape: revision `2026-07-28` removed the
@@ -384,8 +444,8 @@ problems are out of scope. `mark_hint` — with `hintLevel` in #136, which remov
 was being served as a measurement nobody had taken. `tag_problem` · `untagged` — the catalog
 ships classified.
 
-**Genuinely absent.** MCP **resources** (`ps://…`) and **prompts**; the server declares only
-the `tools` capability. `get_problem(include=returned)` — the table a failed SQL run returned,
+**Genuinely absent.** MCP **resources** (`ps://…`); the server declares the `tools` and
+`prompts` capabilities. `get_problem(include=returned)` — the table a failed SQL run returned,
 read from `.ps/raw/` — is designed (spec §4.3) and deferred to its own plan: it needs protocol
 parsing on the read path.
 
