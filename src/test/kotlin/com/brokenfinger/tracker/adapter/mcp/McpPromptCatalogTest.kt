@@ -2,12 +2,15 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.calc.Since
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -53,6 +56,13 @@ class McpPromptCatalogTest {
         val text = textOf(McpPromptCatalog.get(ExamPrepPrompt.NAME, arguments))
 
         text shouldContain "repair_steps(language=\"java\", since=\"2026-09-01\")"
+    }
+
+    /** "String, Date" is a real part name: through the catalog too, a part is one value in the call. */
+    @Test
+    fun `a part reaches the call as one quoted value`() {
+        textWithPart("GROUP") shouldContain "repair_steps(part=\"GROUP\")"
+        textWithPart("String, Date") shouldContain "repair_steps(part=\"String, Date\")"
     }
 
     /** Read as given, then trimmed — the tools' own parser trims too, so the call names the date itself. */
@@ -120,6 +130,27 @@ class McpPromptCatalogTest {
 
         refused.message shouldBe "language must be text"
     }
+
+    /** Not a primitive at all: an exception here would reach the client as an internal error, not a refusal. */
+    @Test
+    fun `an argument that is an array or an object is refused under its name, not answered as a fault`() {
+        val array = JsonArray(listOf(JsonPrimitive("java")))
+        val nested = buildJsonObject { put("name", "java") }
+
+        listOf(array, nested).forEach { value ->
+            withClue("language = $value") {
+                val refused = shouldThrow<McpFailure> {
+                    McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put("language", value) })
+                }
+
+                refused.code shouldBe McpErrors.INVALID_PARAMS
+                refused.message shouldBe "language must be text"
+            }
+        }
+    }
+
+    private fun textWithPart(part: String): String =
+        textOf(McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put("part", part) }))
 
     private fun textOf(answer: JsonObject): String =
         answer["messages"]!!.jsonArray.single().jsonObject["content"]!!.jsonObject["text"]!!.jsonPrimitive.content
