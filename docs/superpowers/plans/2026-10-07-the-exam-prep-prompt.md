@@ -676,6 +676,54 @@ Replace every `toolName()` with `name()`:
 
 Run: `./gradlew test --tests 'com.brokenfinger.tracker.adapter.mcp.*'` — expected PASS, unchanged counts.
 
+- [ ] **Step 1b: A prompt's `arguments` must be an object (review of Task 3, Minor 1)**
+
+`McpCall.arguments()` reads anything that is not an object as `{}`. That suits a tool, whose arguments are checked one by one. For a prompt, though, `"arguments": "java"` would widen the session to everything on record in silence, the failure D3 refuses for `since`. Add a strict accessor and use it on both `PROMPTS_GET` routes.
+
+Test first, in `McpCallTest`:
+
+```kotlin
+    @Test
+    fun `prompt arguments are the object given, or none when absent`() {
+        McpCall.from(aLegacyBody("prompts/get", aPromptGetParams())).promptArguments() shouldBe JsonObject(emptyMap())
+        val params = aPromptGetParams(arguments = buildJsonObject { put("language", "java") })
+        McpCall.from(aLegacyBody("prompts/get", params)).promptArguments().keys shouldBe setOf("language")
+    }
+
+    /** A tool reads a malformed `arguments` as none; a prompt would widen to everything on record. */
+    @Test
+    fun `prompt arguments that are not an object are refused as invalid params`() {
+        val params = buildJsonObject {
+            put("name", "exam_prep")
+            put("arguments", "java")
+        }
+
+        val refused = shouldThrow<McpFailure> { McpCall.from(aLegacyBody("prompts/get", params)).promptArguments() }
+
+        refused.code shouldBe McpErrors.INVALID_PARAMS
+    }
+```
+
+Then in `McpCall.kt`:
+
+```kotlin
+    /**
+     * A prompt's arguments: the object given, none when absent, and a refusal for anything else. Stricter
+     * than [arguments] because a prompt has no per-argument check to catch it — `"arguments": "java"`
+     * would otherwise prepare a session over everything on record and look right.
+     */
+    fun promptArguments(): JsonObject {
+        val given = params["arguments"]
+        if (given == null || given is JsonNull) return JsonObject(emptyMap())
+        return given as? JsonObject
+            ?: throw McpFailure(McpErrors.INVALID_PARAMS, 400, "arguments must be an object of strings")
+    }
+```
+
+Both `PROMPTS_GET` branches in Step 5 call `McpPromptCatalog.get(call.name(), call.promptArguments())`.
+
+Correct `McpFailure`'s KDoc while in the file. It says the message "never [says] what the caller presented", but prompt refusals name the argument a user typed, quoted. The rule's reason is credentials, so say exactly that: the message never echoes a credential or a header value.
+
 - [ ] **Step 2: Add the fixture**
 
 In `McpFixtures.kt`, under `aToolCallParams`:
@@ -777,6 +825,18 @@ Add to `McpDispatcherTest` (import `aPromptGetParams`):
     }
 
     @Test
+    fun `prompt arguments that are not an object are refused, 400 modern and 200 handshake`() {
+        val params = buildJsonObject {
+            put("name", "exam_prep")
+            put("arguments", "java")
+        }
+        val modern = aModernCall("prompts/get", params)
+
+        dispatcher.dispatch(modern, headersFor(modern)).status shouldBe 400
+        dispatcher.dispatch(aLegacyCall("prompts/get", params), McpHeaders()).status shouldBe 200
+    }
+
+    @Test
     fun `accepts a prompt name a conservative client sent Base64-wrapped`() {
         val call = aModernCall("prompts/get", aPromptGetParams())
         val wrapped = "=?base64?" + java.util.Base64.getEncoder().encodeToString("exam_prep".toByteArray()) + "?="
@@ -807,7 +867,7 @@ In `McpDispatcher.kt`:
         TOOLS_LIST -> cacheable(toolList())
         TOOLS_CALL -> tools.call(call.name(), call.arguments())
         PROMPTS_LIST -> cacheable(promptList())
-        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.arguments())
+        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.promptArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -817,7 +877,7 @@ In `McpDispatcher.kt`:
         TOOLS_LIST -> toolList()
         TOOLS_CALL -> tools.call(call.name(), call.arguments())
         PROMPTS_LIST -> promptList()
-        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.arguments())
+        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.promptArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -954,6 +1014,8 @@ Accepted costs:
 - A part given in Claude Code arrives cut at its first space. The model, not the server, reconciles it.
 - In Claude Code a `since` needs a `language` before it, and a `part` needs both. The order is the whole interface its menu offers.
 - A blank argument counts as not given here, where a tool refuses a blank, because a form-style client sends an empty field as `""`.
+- JSON quoting escapes quotes, backslashes and C0 controls, but not Unicode line separators (U+2028/2029, U+0085) or invisible format characters (ZWSP, RLO). A value can therefore still look odd in the text. Only the user types these arguments, and the model cannot run a prompt, so the only one misled is the user's own session.
+- No length bound on an argument: the endpoint is loopback-only behind the token and Origin checks.
 - `language` and `part` are unchecked, so a typo answers empty rather than refused; the text tells the model to say so.
 - Claude Code reads neither `title` nor the argument descriptions. The argument order is all the help its menu gives.
 - The text is English; the client's model chooses the answer's language.
@@ -964,7 +1026,15 @@ Register it in `docs/llm-wiki/index.md` under Decisions, in date order.
 
 - [ ] **Step 6: progress, guards, commit**
 
-Add the progress entry. Run `./scripts/guards.sh` and the three gates. Commit:
+Add the progress entry. Run `./scripts/guards.sh` and the three gates. Then check every `[[decisions/…]]` slug the new code links. `guards.sh` deliberately does not, and two KDocs link this ADR ahead of its creation:
+
+```bash
+git grep -ohE '\[\[decisions/[^]|]+' -- src/main/kotlin/com/brokenfinger/tracker/adapter/mcp \
+  | sort -u | sed 's/\[\[decisions\///' \
+  | while read -r slug; do test -f "docs/llm-wiki/wiki/decisions/$slug.md" || echo "dangling: $slug"; done
+```
+
+Expected: no output. Commit:
 
 ```bash
 git commit -m "docs: the exam_prep prompt — how to run it, what it asks, why its arguments are positional
