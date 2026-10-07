@@ -10,8 +10,16 @@ import org.slf4j.LoggerFactory
  * The log is append-only, because that is what lets it be the attempt authority: a number
  * once allocated is never rewritten ([[decisions/2026-08-05-write-serialization]] decision 2).
  * A record that changes after it was written — today only stage 3 clearing `codePending` —
- * is therefore appended again rather than edited, and **the newest line for a capture key is
- * the record**. Every reader that wants record state rather than raw lines comes through here.
+ * is therefore appended again rather than edited, and **the newest line for a `(ts, captureKey)`
+ * pair is the record**. The correction is `record.copy(...)`, so it repeats both.
+ *
+ * ⚠️ This used to be the capture key alone, and the key is derived from the grading's bytes.
+ * Gradings with no per-case timing — all of SQL, every failed compile — are byte-identical
+ * whenever their output is, so distinct gradings folded into one for every reader: lesson
+ * 131537 recorded 3 submits and 10 runs, `get_problem` answered 1 and 5 (#343). #159 had
+ * already stopped the *writer* trusting the key as an identity; the readers still did.
+ *
+ * Every reader that wants record state rather than raw lines comes through here.
  *
  * The superseding line takes the position of the one it replaces, so a correction appended an
  * hour later cannot reorder a problem's attempt history in its README.
@@ -21,9 +29,9 @@ import org.slf4j.LoggerFactory
  * final line, and losing the whole history to it would cost far more than one record.
  */
 object RecordHistory {
-    /** Every record the log still holds, oldest first, each capture key at its latest state. */
+    /** Every record the log still holds, oldest first, each grading at its latest state. */
     fun of(records: List<RecordedSubmission>): List<SubmissionRecord> =
-        records.mapNotNull { decoded(it.line) }.associateBy { it.captureKey }.values.toList()
+        records.mapNotNull { decoded(it.line) }.associateBy { it.ts to it.captureKey }.values.toList()
 
     private fun decoded(line: String): SubmissionRecord? =
         runCatching { SubmissionRecordJson.decode(line) }.getOrElse { skipped() }

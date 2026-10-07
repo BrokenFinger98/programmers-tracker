@@ -5473,3 +5473,9 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   [[decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored]].
 - Next: implementation plan; build order 4.1 (#343 + two verdict gaps) → 4.2 runs.jsonl → 4.3
   repair_steps → 4.4 exam_prep.
+
+## 2026-10-07 — #343 the history keeps every grading (branch fix/343-history-folds-identical-gradings)
+- `RecordHistory` resolves per `(ts, captureKey)`; unit tests (three) + a store-level test + a production-path pin in `CodeAttachmentTest`; the history tests seen failing with the old key. Spec review ✅, quality review approved after one round (added the correction-after-a-later-identical-grading case and the production-path pin).
+- ADR [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]].
+- Measured for Part B (plan Part B0), 2026-10-07 09:28:19 KST, lesson 59034 attempt 2: an SQL submit MySQL rejects says `실패 (런타임 에러)`, not bare `실패` → Part B proceeds as written.
+- Pending: live — `get_problem 131537` answers 3 submits / 10 runs after rebuild.

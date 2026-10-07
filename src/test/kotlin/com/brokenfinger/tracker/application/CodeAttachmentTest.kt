@@ -166,6 +166,18 @@ class CodeAttachmentTest {
     }
 
     @Test
+    fun `the correction repeats the original's ts and capture key, the identity the history resolves on`() =
+        runBlocking<Unit> {
+            val record = stored(aPending(attempt = 2))
+
+            attachment(fetches(CODE_V2)).attach(record)
+
+            val correction = SubmissionRecordJson.decode(store().read().last().line)
+            correction.ts shouldBe record.ts
+            correction.captureKey shouldBe record.captureKey
+        }
+
+    @Test
     fun `a replay is still dropped after the correction, so the dedup index is intact`() = runBlocking<Unit> {
         val capture = aSettledCapture()
         val record = writer().write(capture).shouldNotBeNull()
