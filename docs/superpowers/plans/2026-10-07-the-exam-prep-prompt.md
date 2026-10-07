@@ -1119,7 +1119,7 @@ Tasks 1–2 passed the spec review byte-identical to this plan. The quality revi
   - only the three positional-slip refusals name the order.
 - **The final whole-branch review:**
   - One ordered `ExamPrepScope.ARGUMENTS` now feeds the listing, the unknown-argument message and the positional refusal.
-  - The documents name the command `/mcp__programmers-tracker__exam_prep`. Claude Code's menu shows `/programmers-tracker:exam_prep (MCP)`, a display name that will not run with arguments typed after it.
+  - The documents name the command `/mcp__programmers-tracker__exam_prep`. Claude Code's menu shows `/programmers-tracker:exam_prep (MCP)`, a display name: typed without its `(MCP)` token it matches no command, typed in full it runs.
   - The live check reconnects with `/mcp` rather than opening a new session, because discovery is cached.
   - The readings sentence now says the instructions hold them in brief.
   - The form-client claim is labelled an assumption.
