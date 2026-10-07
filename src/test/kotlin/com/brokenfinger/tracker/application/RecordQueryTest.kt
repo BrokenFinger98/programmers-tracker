@@ -1,24 +1,38 @@
 package com.brokenfinger.tracker.application
 
+import com.brokenfinger.tracker.adapter.store.FileGradingCodes
+import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
+import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.CaptureKey
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.KeptCode
+import com.brokenfinger.tracker.domain.calc.LabelledStep
+import com.brokenfinger.tracker.domain.calc.NoDiff
+import com.brokenfinger.tracker.domain.calc.ProblemLabel
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import com.brokenfinger.tracker.support.fixtures.aPartialRecordLine
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
+import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.aSubmit
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
+import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
+import java.time.Clock
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -294,5 +308,182 @@ class RecordQueryTest {
         val query = aRecordRepository(root).containing(aSubmissionRecord(lessonId = 120804)).query()
 
         query.lastRecordOf(999999).shouldBeNull()
+    }
+
+    // repairSteps and codedProblem — spec 2026-10-07 §4.3 -----------------------------------------
+
+    /** Spec §6, 4.3 acceptance in miniature: a failure, the run that corrected it, and the change. */
+    @Test
+    fun `a failed run and the run that followed it are a repair step with the diff of their kept code`() {
+        val failed = aRun(at = "2026-10-07T10:51:49+09:00")
+        val passed = aRun(at = "2026-10-07T10:51:51+09:00", verdict = Verdict.PASS)
+        val query = aRecordRepository(root).containing(failed, passed)
+            .withRunCode(failed, "select a").withRunCode(passed, "select b").query()
+
+        val labelled = query.allRepairSteps().single()
+
+        labelled.step.from.record.recordId() shouldBe failed.recordId()
+        labelled.step.diff.shouldNotBeNull() shouldContain "+select b"
+        labelled.problem.title shouldBe "두 수의 곱 구하기"
+    }
+
+    @Test
+    fun `a run recorded before code was kept is a step that says its code is unknown`() {
+        val failed = aRun(at = "2026-10-06T10:00:00+09:00")
+        val passed = aRun(at = "2026-10-07T10:00:00+09:00", verdict = Verdict.PASS)
+        val query = aRecordRepository(root).containing(failed, passed).withRunCode(passed, "b").query()
+
+        query.allRepairSteps().single().step.noDiff shouldBe NoDiff.FROM_CODE_UNKNOWN
+    }
+
+    @Test
+    fun `a submit's code is read from its attempt file`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:01:00+09:00")
+        val query = aRecordRepository(root).containing(run, submit)
+            .withSubmitCode(submit, "fixed\n").withRunCode(run, "broken").query()
+
+        query.allRepairSteps().single().step.diff.shouldNotBeNull() shouldContain "+fixed"
+    }
+
+    /** The code is attached after the record is durable (design §5.2); until then there is none to read. */
+    @Test
+    fun `a submit whose code is still pending has no code`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val pending = aSubmit(at = "2026-10-07T10:01:00+09:00").copy(codePending = true, codePath = null)
+        val query = aRecordRepository(root).containing(run, pending).withRunCode(run, "broken").query()
+
+        query.allRepairSteps().single().step.noDiff shouldBe NoDiff.TO_CODE_UNKNOWN
+    }
+
+    @Test
+    fun `code attached after the next grading was recorded is marked late`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:02+09:00", verdict = Verdict.PASS)
+        val query = aRecordRepository(root).containing(first, second)
+            .withRunCode(first, "b", attachedAt = second.ts.plusSeconds(1))
+            .withRunCode(second, "b").query()
+
+        query.allRepairSteps().single().step.from.late shouldBe true
+    }
+
+    /** A run and the submit after it can land in the same second; the log's order says which came first. */
+    @Test
+    fun `gradings that share a timestamp are paired in the order the log was written`() {
+        val same = "2026-10-07T10:00:00+09:00"
+        val run = aRun(at = same)
+        val submit = aSubmit(at = same)
+        val query = aRecordRepository(root).containing(run, submit)
+            .withRunCode(run, "a").withSubmitCode(submit, "b").query()
+
+        query.allRepairSteps().single().step.from.record.recordId() shouldBe run.recordId()
+    }
+
+    @Test
+    fun `narrows to one lesson before reading any code`() {
+        val repository = aRecordRepository(root).containing(
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 2),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2),
+        )
+        val codes = AskedCodes(FileGradingCodes(RecordLayout(root)))
+        val query = RecordQuery(repository.store(), anEmptyCatalog(), Clock.systemUTC(), raw(), codes = codes)
+
+        val steps = query.repairSteps(since = null, language = null, part = null, lessonId = 2, limit = null)
+
+        steps.map { it.problem.lessonId }.shouldContainExactly(2L)
+        codes.askedLessons.shouldContainExactly(2L)
+    }
+
+    /** Language and part are both optional strings, so a swapped pair would compile and answer nothing. */
+    @Test
+    fun `hands language and part to the filter, each to its own place`() {
+        val query = aRecordRepository(root).containing(
+            *pairOf(lessonId = 1, part = "SELECT", language = "java"),
+            *pairOf(lessonId = 2, part = "JOIN", language = "java"),
+            *pairOf(lessonId = 3, part = "SELECT", language = "kotlin"),
+        ).query()
+
+        query.repairSteps(since = null, language = "java", part = "SELECT", lessonId = null, limit = null)
+            .map { it.problem.lessonId }.shouldContainExactly(1L)
+    }
+
+    @Test
+    fun `hands since and limit to the filter, keeping the newest corrections`() {
+        val query = aRecordRepository(root).containing(
+            *pairOf(lessonId = 1, part = "SELECT", language = "java"),
+            *pairOf(lessonId = 2, part = "SELECT", language = "java"),
+            *pairOf(lessonId = 3, part = "SELECT", language = "java"),
+        ).query()
+        val since = Since.Instant(OffsetDateTime.parse("2026-10-07T10:01:30+09:00"))
+
+        query.repairSteps(since, language = null, part = null, lessonId = null, limit = null)
+            .map { it.problem.lessonId }.shouldContainExactly(3L, 2L)
+        query.repairSteps(since, language = null, part = null, lessonId = null, limit = 1)
+            .map { it.problem.lessonId }.shouldContainExactly(3L)
+    }
+
+    /**
+     * The label is the one `get_problem` shows: each field from the newest record that carries it,
+     * and of two records that share a timestamp the one written later.
+     */
+    @Test
+    fun `a step's label is what get_problem shows for the problem, timestamp ties included`() {
+        val same = "2026-10-07T10:00:00+09:00"
+        val query = aRecordRepository(root).containing(
+            aRun(at = same).copy(title = "first written"),
+            aRun(at = same).copy(title = "second written"),
+            aRun(at = "2026-10-07T10:00:05+09:00").copy(title = "", part = null, level = null),
+        ).query()
+
+        query.allRepairSteps().map { it.problem }.distinct() shouldBe
+            listOf(ProblemLabel(lessonId = 120804, title = "second written", level = 0, part = "코딩테스트 입문"))
+        query.problem(120804).title shouldBe "second written"
+    }
+
+    @Test
+    fun `one problem's coded timeline carries each grading's code and the transition into it`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:05+09:00", verdict = Verdict.PASS)
+        val coded = aRecordRepository(root).containing(first, second)
+            .withRunCode(first, "a").withRunCode(second, "b").query()
+            .codedProblem(120804)
+
+        coded.codeOf(first)?.code?.text shouldBe "a"
+        coded.transitionInto(second).shouldNotBeNull().diff.shouldNotBeNull() shouldContain "+b"
+        coded.transitionInto(first).shouldBeNull()
+    }
+
+    /** The default port: a deployment without kept code still answers, with every code unknown. */
+    @Test
+    fun `a query with no code store answers every step without a diff`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:01:00+09:00")
+        val store = aRecordRepository(root).containing(run, submit).store()
+        val query = RecordQuery(store, anEmptyCatalog(), Clock.systemUTC(), raw())
+
+        query.allRepairSteps().single().step.noDiff shouldBe NoDiff.CODE_UNKNOWN
+    }
+
+    private fun RecordQuery.allRepairSteps(): List<LabelledStep> =
+        repairSteps(since = null, language = null, part = null, lessonId = null, limit = null)
+
+    private fun raw() = FileRawSessionLog.under(root)
+
+    // Two failed runs of one problem, ten seconds apart, in the minute its lesson id names.
+    private fun pairOf(lessonId: Long, part: String, language: String): Array<SubmissionRecord> = arrayOf(
+        aRun(at = "2026-10-07T10:0$lessonId:00+09:00", lessonId = lessonId, language = language).copy(part = part),
+        aRun(at = "2026-10-07T10:0$lessonId:10+09:00", lessonId = lessonId, language = language).copy(part = part),
+    )
+
+    /** Remembers which problems' run code was asked for; everything else is the real adapter's. */
+    private class AskedCodes(private val real: GradingCodes) : GradingCodes by real {
+        val askedLessons = mutableListOf<Long>()
+
+        override fun runs(lessonId: Long, title: String?): Map<String, KeptCode> {
+            askedLessons += lessonId
+            return real.runs(lessonId, title)
+        }
     }
 }

@@ -31,10 +31,11 @@ data class CodedGrading(val record: SubmissionRecord, val code: KeptCode?, val l
  * ([[decisions/2026-10-07-every-run-keeps-its-code]]).
  *
  * The sort is stable, so gradings that share a timestamp keep the order they were handed in —
- * **the caller must pass them in log order** (oldest first; `RecordQuery` merges runs and submits
- * from the log, which is that order). A tie also makes the tied partner the "next" grading, so a
- * run whose code was fetched ~0.3 s after its own record is reported late when another record
- * shares its `ts`: a conservative false positive, never a missed one.
+ * **the caller must pass them in log order**, oldest first. `RecordQuery.history()` is newest
+ * first, with ties in reverse log order, so `RecordQuery` reverses it (`asReversed()`) before
+ * calling this. A tie also makes the tied partner the "next" grading, so a run whose code was
+ * fetched ~0.3 s after its own record is reported late when another record shares its `ts`: a
+ * conservative false positive, never a missed one.
  */
 object CodeTimeline {
     fun of(records: List<SubmissionRecord>, codes: Map<String, KeptCode>): List<CodedGrading> {

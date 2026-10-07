@@ -31,6 +31,19 @@ class ProblemLabelTest {
         ProblemLabel.of(listOf(only)) shouldBe ProblemLabel(120804, null, null, null)
     }
 
+    /**
+     * `RecordQuery.history()` is newest first, ties in reverse log order, so of two records that
+     * share a timestamp the one handed in first is the later one — and it is the one `get_problem` shows.
+     */
+    @Test
+    fun `of two records that share a timestamp, the one handed in first wins`() {
+        val first = record(at = T0, title = "first")
+        val second = record(at = T0, title = "second")
+
+        ProblemLabel.of(listOf(first, second)).title shouldBe "first"
+        ProblemLabel.of(listOf(second, first)).title shouldBe "second"
+    }
+
     @Test
     fun `no records is refused`() {
         shouldThrow<IllegalArgumentException> { ProblemLabel.of(emptyList()) }
