@@ -3,12 +3,14 @@ package com.brokenfinger.tracker.adapter.mcp
 import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.ProblemProgress
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -134,6 +136,16 @@ class McpToolInvoker(private val query: RecordQuery) {
         bucket.key?.let { put("key", it) }
         bucket.label?.let { put("label", it) }
         put("count", bucket.count)
+        bucket.progress?.let { progressOf(it) }
+    }
+
+    // Counts of problems beside the submit count, on part and level buckets only (spec 2026-10-07
+    // §4.3). `runsBeforePass` is omitted when nothing in the bucket passed: no median is not zero.
+    private fun JsonObjectBuilder.progressOf(progress: ProblemProgress) {
+        put("attempted", progress.attempted)
+        put("passed", progress.passed)
+        put("passedFirstSubmit", progress.passedFirstSubmit)
+        progress.runsBeforePass?.let { put("runsBeforePass", it) }
     }
 
     // Lenient about the JSON type, strict about the value: models quote numbers routinely,

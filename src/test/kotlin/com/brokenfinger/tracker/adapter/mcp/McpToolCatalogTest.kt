@@ -147,6 +147,20 @@ class McpToolCatalogTest {
     }
 
     /**
+     * `part` and `level` buckets count problems beside submits, and the reading of
+     * `runsBeforePass` that misleads is a zero: it can mean no run was recorded, not that none was
+     * pressed. The description is the only place a client learns either.
+     */
+    @Test
+    fun `stats explains the problem counts on part and level buckets, and when a zero is not a zero`() {
+        val description = tool(McpToolCatalog.STATS)["description"]!!.jsonPrimitive.content
+
+        listOf("attempted", "passedFirstSubmit", "runsBeforePass", "median").forEach { description shouldContain it }
+        description shouldContain "can mean no run was recorded"
+        description shouldContain "2026-08-07"
+    }
+
+    /**
      * The tools that hand back whole records must explain `elapsedSec`, because the name reads as
      * time on task and the value is wall clock — a measured record carries 77251 beside a
      * `focusedSec` of 37 (#205). The ones that return counts or a schedule never show the field,

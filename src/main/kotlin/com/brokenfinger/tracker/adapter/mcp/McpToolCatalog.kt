@@ -178,7 +178,15 @@ object McpToolCatalog {
             "solved in Java and again in Kotlin is one bucket here and two items in `review_queue` and " +
             "`slow_passes`, which key on the pair. Neither is wrong — a submission count per problem is the " +
             "question `problem` answers — but reading the two side by side without knowing it looks like a " +
-            "disagreement. Group by `language` for the other axis.",
+            "disagreement. Group by `language` for the other axis. `part` and `level` buckets also count the " +
+            "**problems** in them: `attempted` (submitted at least once), `passed` (has a passing submit), " +
+            "`passedFirstSubmit` (the first submit resolved PASS; an unresolved first submit is not counted) " +
+            "and `runsBeforePass` — the median, over the bucket's passed problems, of the runs in any " +
+            "language before a problem's first passing submit, absent when nothing in the bucket passed. " +
+            "These count problems, not (problem, language) pairs, while `count` stays the number of " +
+            "submits. **A `runsBeforePass` of 0 can mean no run was recorded** — a pass from before runs " +
+            "were captured (2026-08-07), or in a history with `incompleteHistory` — not that none was " +
+            "pressed.",
     ) {
         putJsonObject("properties") {
             putJsonObject("groupBy") {

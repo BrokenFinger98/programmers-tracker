@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.support.fixtures.aCaptureKey
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
+import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
@@ -140,11 +141,81 @@ class McpToolInvokerTest {
             aSubmissionRecord(verdict = Verdict.WRONG, language = "java"),
         )
 
-        listOf("verdict", "language", "problem").forEach { group ->
+        listOf("verdict", "language", "problem", "part", "level").forEach { group ->
             val payload = structured(invoker.call("stats", arguments("groupBy" to group)))
 
             payload["groupBy"]!!.jsonPrimitive.content shouldBe group
             payload["total"]!!.jsonPrimitive.int shouldBe 2
+        }
+    }
+
+    @Test
+    fun `stats by part also counts the problems in each part`() {
+        val invoker = invokerOver(
+            aSubmissionRecord(
+                lessonId = 1,
+                part = "SELECT",
+                verdict = Verdict.WRONG,
+                ts = OffsetDateTime.parse("2026-10-01T10:00:00+09:00"),
+            ),
+            aSubmissionRecord(
+                lessonId = 1,
+                part = "SELECT",
+                verdict = Verdict.PASS,
+                ts = OffsetDateTime.parse("2026-10-01T10:05:00+09:00"),
+            ),
+        )
+
+        val entry = structured(invoker.call("stats", arguments("groupBy" to "part")))["entries"]!!
+            .jsonArray.single().jsonObject
+
+        entry["count"]!!.jsonPrimitive.int shouldBe 2
+        entry["attempted"]!!.jsonPrimitive.int shouldBe 1
+        entry["passed"]!!.jsonPrimitive.int shouldBe 1
+        entry["passedFirstSubmit"]!!.jsonPrimitive.int shouldBe 0
+        entry["runsBeforePass"]!!.jsonPrimitive.double shouldBe 0.0
+    }
+
+    /** A median is a number on the wire, not a string a reader has to parse. */
+    @Test
+    fun `stats by part reports the median of the runs before the first pass`() {
+        val invoker = invokerOver(
+            aRun(at = "2026-10-01T09:58:00+09:00"),
+            aRun(at = "2026-10-01T09:59:00+09:00"),
+            aSubmissionRecord(verdict = Verdict.PASS, ts = OffsetDateTime.parse("2026-10-01T10:00:00+09:00")),
+        )
+
+        val runs = structured(invoker.call("stats", arguments("groupBy" to "part")))["entries"]!!
+            .jsonArray.single().jsonObject["runsBeforePass"]!!.jsonPrimitive
+
+        runs.double shouldBe 2.0
+        runs.isString.shouldBeFalse()
+    }
+
+    /** Absent, not zero: nothing in the bucket passed, so there is no median to report. */
+    @Test
+    fun `stats by level leaves out runs-before-pass when nothing passed`() {
+        val invoker = invokerOver(aSubmissionRecord(level = 2, verdict = Verdict.WRONG))
+
+        val entry = structured(invoker.call("stats", arguments("groupBy" to "level")))["entries"]!!
+            .jsonArray.single().jsonObject
+
+        entry["key"]!!.jsonPrimitive.content shouldBe "2"
+        entry["attempted"]!!.jsonPrimitive.int shouldBe 1
+        entry["passed"]!!.jsonPrimitive.int shouldBe 0
+        entry.shouldNotContainKey("runsBeforePass")
+    }
+
+    /** On these groupings a problem "passed" inside the bucket would mean nothing, so they carry counts only. */
+    @Test
+    fun `stats by verdict, language or problem carries counts only`() {
+        val invoker = invokerOver(aSubmissionRecord())
+
+        listOf("verdict", "language", "problem").forEach { group ->
+            val entry = structured(invoker.call("stats", arguments("groupBy" to group)))["entries"]!!
+                .jsonArray.single().jsonObject
+
+            entry.keys.none { it in PROGRESS_FIELDS }.shouldBeTrue()
         }
     }
 
@@ -523,4 +594,8 @@ class McpToolInvokerTest {
 
     private fun message(result: JsonObject): String =
         result["content"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content
+
+    private companion object {
+        val PROGRESS_FIELDS = setOf("attempted", "passed", "passedFirstSubmit", "runsBeforePass")
+    }
 }
