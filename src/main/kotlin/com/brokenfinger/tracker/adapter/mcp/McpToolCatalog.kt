@@ -15,13 +15,13 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * The tools this server exposes, listed in [NAMES] — and deliberately not the twenty of design §7.
+ * The tools this server exposes, listed in [NAMES] — deliberately not every tool design §7 sketches.
  *
  * The rest of §7 is absent rather than stubbed: a tool that answered "not implemented"
  * would be worse than an absent one, because a client discovers it through `tools/list`
- * and plans around it. Exam state and a review schedule do not exist yet. The catalog and
- * the tag vocabulary now do — they ship in the jar — so `list_problems` is merely
- * unexposed (#100), not unsupported.
+ * and plans around it. `docs/mcp.md` ("What is not built") says which are absent and why:
+ * answered already by a tool that exists, written off with the design that wanted them, or a
+ * write — and this surface only reads.
  *
  * Every description says what the tool *counts*, never what it concludes. Interpretation
  * belongs to the AI reading the numbers (CLAUDE.md, design §7).
@@ -46,6 +46,15 @@ object McpToolCatalog {
      */
     const val REPAIR_STEPS_DEFAULT_LIMIT = 20
 
+    /**
+     * What `get_problem(include=…)` can add: one vocabulary for the schema, the invoker's check and the
+     * answer's writer, so none of them can name a value the others do not know. `code` is each submit's
+     * code; `runs` is each run's code with its diff from the grading before it.
+     */
+    const val INCLUDE_CODE = "code"
+    const val INCLUDE_RUNS = "runs"
+    val INCLUDES = listOf(INCLUDE_CODE, INCLUDE_RUNS)
+
     val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES, REPAIR_STEPS)
 
     fun definitions(): JsonArray = buildJsonArray {
@@ -68,9 +77,9 @@ object McpToolCatalog {
             "ids behind any you name. `from` carries the verdict (absent when it was never resolved — " +
             "`outcome` says how it ended), `errorText`, `failedMessage` (the first failing case's own " +
             "message) and the `failedCases` / `totalCases` counts; `to` carries what followed. The case " +
-            "counts are of the cases that arrived, and `casesComplete: false` means some never did — a " +
-            "compile error, for one, reports none. Consecutive gradings with identical code make no step. " +
-            "A step without `diff` says why in `noDiff`: `fromCodeUnknown`, `toCodeUnknown` or " +
+            "counts are of the cases that arrived, and `casesComplete: false` means some never did — an " +
+            "algorithm compile error, for one, reports none. Consecutive gradings with identical code " +
+            "make no step. A step without `diff` says why in `noDiff`: `fromCodeUnknown`, `toCodeUnknown` or " +
             "`codeUnknown` when the code was not kept — run code is kept by tracker versions from " +
             "2026-10-07 on, submit code from the start — `tooLarge` when a side is over " +
             "${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode`, which appears only beside a late side. " +
@@ -217,13 +226,37 @@ object McpToolCatalog {
             "nothing recorded answers with an empty history rather than an error — we report what we " +
             "observed, which may be nothing. `statement` is the problem's own description as Programmers " +
             "worded it, captured once when the problem was first graded and stored locally — it is theirs, " +
-            "not ours, and it is absent for a problem captured before the server began keeping it." +
+            "not ours, and it is absent for a problem captured before the server began keeping it. " +
+            "`include` adds code and changes nothing else; without it no item carries code. `code` puts " +
+            "each submit's code on it. `runs` puts on each run its `code`, `codeFetchedAt` (when that code " +
+            "was attached) and `diffFromPrevGrading` — the unified diff from the grading before it in the " +
+            "same language, run or submit — or `noDiff` saying why there is none; the first grading in a " +
+            "language has neither. `noDiff` is `fromCodeUnknown`, `toCodeUnknown` or `codeUnknown` when the " +
+            "code was not kept — run code is kept by tracker versions from 2026-10-07 on, submit code from " +
+            "the start — `tooLarge` when a side is over ${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode` " +
+            "when both hold the same. `codeLate: true` on a run means its code was attached after the " +
+            "problem's next grading was recorded, so it may be that grading's code; submit code records no " +
+            "fetch time and is never marked. `diffTruncated: true` marks a diff cut at " +
+            "${UnifiedDiff.MAX_LINES} lines, as on a repair step, though the diff is named " +
+            "`diffFromPrevGrading` here." +
             ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
             putJsonObject("lessonId") {
                 put("type", "integer")
                 put("description", "The Programmers lesson id, as it appears in the problem page URL.")
+            }
+            putJsonObject("include") {
+                put("type", "array")
+                put(
+                    "description",
+                    "What code to add: `$INCLUDE_CODE` on each submit; `$INCLUDE_RUNS` on each run, with its " +
+                        "diff from the grading before it. A list, or one value.",
+                )
+                putJsonObject("items") {
+                    put("type", "string")
+                    putJsonArray("enum") { INCLUDES.forEach { add(it) } }
+                }
             }
         }
         putJsonArray("required") { add("lessonId") }

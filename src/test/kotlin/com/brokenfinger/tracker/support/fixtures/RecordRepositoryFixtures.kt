@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.application.GradingCodes
 import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RecordQuery
+import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import java.nio.charset.StandardCharsets.UTF_8
@@ -41,13 +42,17 @@ class RecordRepositoryFixture(val root: Path) {
 
     fun store(): JsonlRecordStore = JsonlRecordStore(logFile())
 
-    /** Catalogue-free by default: most read tests are about records, not about browsing. */
+    /**
+     * Catalogue-free by default: most read tests are about records, not about browsing. [records] is
+     * the log as the query reads it — this repository's own, unless a test wraps it to watch the reads.
+     */
     fun query(
         catalog: ProblemCatalog = anEmptyCatalog(),
         clock: Clock = Clock.systemUTC(),
         raw: RawSessionLog = FileRawSessionLog.under(root),
         codes: GradingCodes = FileGradingCodes(RecordLayout(root)),
-    ): RecordQuery = RecordQuery(store(), catalog, clock, raw, codes = codes)
+        records: RecordStore = store(),
+    ): RecordQuery = RecordQuery(records, catalog, clock, raw, codes = codes)
 
     /** A run's code, kept the way the capture path keeps it — through the real [RunLog]. */
     fun withRunCode(

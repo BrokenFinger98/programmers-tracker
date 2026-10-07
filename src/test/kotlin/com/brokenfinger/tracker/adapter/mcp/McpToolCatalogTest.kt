@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import com.brokenfinger.tracker.domain.calc.UnifiedDiff
 import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
@@ -99,6 +100,23 @@ class McpToolCatalogTest {
     }
 
     @Test
+    fun `get_problem offers code as an optional include`() {
+        val include = property("get_problem", "include")
+
+        properties("get_problem").keys.shouldContainExactly(setOf("lessonId", "include"))
+        include["type"]!!.jsonPrimitive.content shouldBe "array"
+        enumOfItems("get_problem", "include").shouldContainExactly("code", "runs")
+        required("get_problem").shouldContainExactly("lessonId")
+    }
+
+    /** The schema, the invoker's check and the writer's switch read one list, so none of them can drift. */
+    @Test
+    fun `the include schema enumerates the values the server accepts`() {
+        enumOfItems("get_problem", "include").shouldContainExactly(McpToolCatalog.INCLUDES)
+        McpToolCatalog.INCLUDES.shouldContainExactly(McpToolCatalog.INCLUDE_CODE, McpToolCatalog.INCLUDE_RUNS)
+    }
+
+    @Test
     fun `repair_steps narrows by everything and requires nothing`() {
         properties("repair_steps").keys.shouldContainExactly(setOf("since", "language", "part", "lessonId", "limit"))
         required("repair_steps").shouldContainExactly()
@@ -123,6 +141,9 @@ class McpToolCatalogTest {
 
     private fun enumOf(tool: String, field: String): List<String> =
         property(tool, field)["enum"]!!.jsonArray.map { it.jsonPrimitive.content }
+
+    private fun enumOfItems(tool: String, field: String): List<String> =
+        property(tool, field)["items"]!!.jsonObject["enum"]!!.jsonArray.map { it.jsonPrimitive.content }
 
     private fun required(name: String): List<String> =
         tool(name)["inputSchema"]!!.jsonObject["required"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
@@ -210,7 +231,15 @@ class McpToolCatalogTest {
 
         description shouldContain "The case counts are of the cases that arrived"
         description shouldContain "`casesComplete: false` means some never did"
-        description shouldContain "a compile error, for one, reports none"
+        description shouldContain "an algorithm compile error, for one, reports none"
+    }
+
+    /** True of algorithm problems only: an SQL compile error reports its error inside one case, 1 of 1. */
+    @Test
+    fun `repair_steps does not say that every compile error reports no cases`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldNotContain "a compile error, for one, reports none"
     }
 
     /** What the tracker keeps is a fact about its versions; "exists" would read as a fact about the problem. */
@@ -232,6 +261,31 @@ class McpToolCatalogTest {
         description shouldContain "At most 20 steps come back unless `limit` says otherwise"
         description shouldContain "`total`"
         description shouldContain "`truncated: true`"
+    }
+
+    /**
+     * `include` adds code to items a client already knows, so the description is where it learns which
+     * key carries what, which one says why a diff is missing, and which two say not to trust one.
+     */
+    @Test
+    fun `get_problem says what include adds, and the fields that qualify a run's diff`() {
+        val description = tool(McpToolCatalog.GET_PROBLEM)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "`include` adds code and changes nothing else"
+        listOf("code", "runs", "codeFetchedAt", "diffFromPrevGrading", "noDiff").forEach {
+            description shouldContain "`$it`"
+        }
+        description shouldContain "`codeLate: true` on a run"
+        description shouldContain "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines"
+    }
+
+    /** What the tracker keeps is a fact about its versions; "exists" would read as a fact about the problem. */
+    @Test
+    fun `get_problem dates run code by the tracker versions that kept it, and by no other date`() {
+        val description = tool(McpToolCatalog.GET_PROBLEM)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "run code is kept by tracker versions from 2026-10-07 on"
+        description shouldNotContain "2026-08-07"
     }
 
     /**

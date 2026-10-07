@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -60,7 +61,39 @@ class McpToolInvoker(private val query: RecordQuery) {
         }
     }
 
-    private fun problem(arguments: JsonObject): JsonObject = McpRecordJson.problem(query.problem(lessonIdOf(arguments)))
+    // Every argument is read before the log is, so one that is refused costs no read. The log is read
+    // once: `query.problem` holds this problem's records, and the coded timeline is built from those
+    // rather than from a second read of a log that may have grown in between. Without `include` nothing
+    // here touches kept code and the answer is the one every client has always had. With it, the
+    // assembly runs inside `ourFault` as repair_steps' does: past the arguments, an
+    // IllegalArgumentException can only be an invariant of ours breaking.
+    private fun problem(arguments: JsonObject): JsonObject {
+        val lessonId = lessonIdOf(arguments)
+        val include = includeOf(arguments)
+        val history = query.problem(lessonId)
+        if (include.isEmpty()) return McpRecordJson.problem(history)
+        return ourFault { McpRecordJson.problem(history, query.codedProblem(history.submissions), include) }
+    }
+
+    // Lenient about the JSON type — a list, or one bare string — and strict about the values: a misspelt
+    // `runs` is said, not answered as if nothing had been asked for. A JSON null is "not given", as it is
+    // for repair_steps, so the answer is the one a client that never heard of `include` gets.
+    private fun includeOf(arguments: JsonObject): Set<String> {
+        val raw = arguments["include"]
+        if (raw == null || raw is JsonNull) return emptySet()
+        if (raw is JsonArray) return raw.map(::includeValue).toSet()
+        return setOf(includeValue(raw))
+    }
+
+    // Only a JSON string can spell a value that is offered, so a number, a boolean, an object or a
+    // nested list falls out of the same check as a misspelling and is refused under the same name.
+    private fun includeValue(raw: JsonElement): String {
+        val text = (raw as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase()
+        return text?.takeIf { it in McpToolCatalog.INCLUDES }
+            ?: throw IllegalArgumentException(
+                "include takes a list drawn from: ${McpToolCatalog.INCLUDES.joinToString()}",
+            )
+    }
 
     private fun listProblems(arguments: JsonObject): JsonObject {
         val found = query.browse(
@@ -292,7 +325,7 @@ class McpToolInvoker(private val query: RecordQuery) {
 
     private companion object {
         val SUBMISSION_ARGS = setOf("since", "verdict")
-        val PROBLEM_ARGS = setOf("lessonId")
+        val PROBLEM_ARGS = setOf("lessonId", "include")
         val STATS_ARGS = setOf("groupBy")
         val LIST_ARGS = setOf("level", "part", "tag", "status")
         val REVIEW_ARGS = setOf("limit")

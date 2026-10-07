@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.application.CodedProblem
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
@@ -75,7 +76,17 @@ object McpRecordJson {
      * The array keeps every record, because `get_problem` is where the compiler output lives and
      * that only comes from the run path.
      */
-    fun problem(history: ProblemHistory): JsonObject = buildJsonObject {
+    fun problem(history: ProblemHistory): JsonObject = problemOf(history, history.submissions.map(::full))
+
+    /**
+     * One problem in full, with the code [include] asks for (spec 2026-10-07 §4.3). Every key the
+     * default answer has stays where it is, and code is added after them on the items it belongs to —
+     * never in a second array that would repeat every run.
+     */
+    fun problem(history: ProblemHistory, coded: CodedProblem, include: Set<String>): JsonObject =
+        problemOf(history, history.submissions.map { JsonObject(full(it) + codeFor(it, coded, include)) })
+
+    private fun problemOf(history: ProblemHistory, items: List<JsonObject>): JsonObject = buildJsonObject {
         put("lessonId", history.lessonId)
         history.title?.let { put("title", it) }
         history.level?.let { put("level", it) }
@@ -88,7 +99,36 @@ object McpRecordJson {
         history.statement?.let { put("statement", it) }
         put("submissionCount", history.submissions.count { it.isSubmission() })
         put("runCount", history.submissions.count { !it.isSubmission() })
-        put("submissions", JsonArray(history.submissions.map(::full)))
+        put("submissions", JsonArray(items))
+    }
+
+    // Code lands on the items it belongs to, chosen by what was asked: a submit's on `code`, a run's —
+    // with the diff from the grading before it — on `runs`. A record the coded timeline does not hold
+    // gets nothing, as one whose code was not kept does.
+    private fun codeFor(record: SubmissionRecord, coded: CodedProblem, include: Set<String>): JsonObject {
+        val grading = coded.gradingOf(record)
+        if (record.isSubmission() && McpToolCatalog.INCLUDE_CODE in include) return submitCode(grading)
+        if (!record.isSubmission() && McpToolCatalog.INCLUDE_RUNS in include) {
+            return runCode(grading, coded.transitionInto(record))
+        }
+        return JsonObject(emptyMap())
+    }
+
+    // A submit's code only: its attempt file records no fetch time, so there is nothing to check it
+    // against and nothing to mark. Absent when the file is gone — never an empty string, which would
+    // read as a submit of nothing.
+    private fun submitCode(grading: CodedGrading?): JsonObject = buildJsonObject {
+        grading?.code?.let { put("code", it.text) }
+    }
+
+    // `codeLate` only when the check found the code late. A run whose code was not kept has none of the
+    // code keys, and the step into it says why it has no diff; the first grading in its language has no
+    // step into it, so neither `diffFromPrevGrading` nor `noDiff`.
+    private fun runCode(grading: CodedGrading?, transition: Transition?): JsonObject = buildJsonObject {
+        grading?.code?.let { put("code", it.text) }
+        grading?.code?.fetchedAt?.let { put("codeFetchedAt", isoOf(it)) }
+        if (grading?.late == true) put("codeLate", true)
+        transition?.let { diffOf(it, "diffFromPrevGrading") }
     }
 
     /**
@@ -207,7 +247,8 @@ object McpRecordJson {
         record.testcases.sortedBy { it.id }.firstOrNull { it.hasFailed() }?.msg
 
     // `diffTruncated` is decided by the domain and written only when true, so a reader never has to
-    // parse the cap's marker out of the diff text.
+    // parse the cap's marker out of the diff text. The flag keeps its name whatever the diff's key is:
+    // a reader learns one word for one thing.
     private fun JsonObjectBuilder.diffOf(transition: Transition, key: String) {
         transition.diff?.let { put(key, it) }
         if (transition.isDiffTruncated()) put("diffTruncated", true)

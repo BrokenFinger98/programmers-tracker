@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.CountingRecordStore
 import com.brokenfinger.tracker.support.fixtures.aBrokenGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aCaptureKey
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
@@ -12,12 +13,15 @@ import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.aSubmit
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -37,6 +41,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -897,6 +902,383 @@ class McpToolInvokerTest {
         thrown.cause.shouldBeInstanceOf<IllegalArgumentException>()
     }
 
+    // get_problem include ----------------------------------------------------------------------
+
+    @Test
+    fun `get_problem with include code puts each submit's code on it, and nothing on runs`() {
+        val run = aRun(at = "2026-10-07T09:59:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(run, submit)
+                .withSubmitCode(submit, "select 1\n").withRunCode(run, "select 0").query(),
+        )
+
+        val items = itemsOf(invoker.call("get_problem", includeArguments("code")))
+
+        items.single { it.isSubmit() }["code"]!!.jsonPrimitive.content shouldBe "select 1\n"
+        CODE_KEYS.forEach { items.single { !it.isSubmit() }.shouldNotContainKey(it) }
+    }
+
+    @Test
+    fun `get_problem with include runs puts each run's code and its diff from the grading before it`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:05+09:00", verdict = Verdict.PASS)
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(first, second)
+                .withRunCode(first, "a")
+                .withRunCode(second, "b", attachedAt = OffsetDateTime.parse("2026-10-07T10:00:06+09:00")).query(),
+        )
+
+        val items = itemsOf(invoker.call("get_problem", includeArguments("runs")))
+        val newest = items.first()
+
+        newest["code"]!!.jsonPrimitive.content shouldBe "b"
+        newest["codeFetchedAt"]!!.jsonPrimitive.content shouldBe "2026-10-07T10:00:06+09:00"
+        newest["diffFromPrevGrading"]!!.jsonPrimitive.content shouldContain "+b"
+        newest.shouldNotContainKey("noDiff")
+        newest.shouldNotContainKey("codeLate")
+        newest.shouldNotContainKey("diffTruncated")
+    }
+
+    /** The first grading in a language has nothing before it to be compared with: neither key, not even `noDiff`. */
+    @Test
+    fun `get_problem with include runs gives the first grading in a language no diff and no reason for none`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:05+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(first, second).withRunCode(first, "a").withRunCode(second, "b").query(),
+        )
+
+        val oldest = itemsOf(invoker.call("get_problem", includeArguments("runs"))).last()
+
+        oldest["code"]!!.jsonPrimitive.content shouldBe "a"
+        oldest.shouldNotContainKey("diffFromPrevGrading")
+        oldest.shouldNotContainKey("noDiff")
+    }
+
+    /** Absent is not empty: a run whose code was never kept has no `code`, and the step into it says why. */
+    @Test
+    fun `get_problem with include runs says why a run has no diff, and leaves out the code that was not kept`() {
+        val before = aRun(at = "2026-10-06T10:00:00+09:00")
+        val after = aRun(at = "2026-10-07T10:00:00+09:00", verdict = Verdict.PASS)
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(before, after).withRunCode(after, "b").query())
+
+        val items = itemsOf(invoker.call("get_problem", includeArguments("runs")))
+
+        items.first()["noDiff"]!!.jsonPrimitive.content shouldBe "fromCodeUnknown"
+        items.first().shouldNotContainKey("diffFromPrevGrading")
+        CODE_KEYS.forEach { items.last().shouldNotContainKey(it) }
+    }
+
+    /** The same race the steps report: code attached after the next grading was recorded may be that grading's. */
+    @Test
+    fun `get_problem with include runs marks a run whose code was attached after the next grading`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:02+09:00", verdict = Verdict.PASS)
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(first, second)
+                .withRunCode(first, "b", attachedAt = second.ts.plusSeconds(1))
+                .withRunCode(second, "b").query(),
+        )
+
+        val items = itemsOf(invoker.call("get_problem", includeArguments("runs")))
+
+        items.last()["codeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        items.first().shouldNotContainKey("codeLate")
+        items.first()["noDiff"]!!.jsonPrimitive.content shouldBe "sameCode"
+    }
+
+    /** The grading before it in its own language: two languages on one problem do not diff against each other. */
+    @Test
+    fun `get_problem with include runs diffs a run against the grading before it in its own language`() {
+        val javaFirst = aRun(at = "2026-10-07T10:00:00+09:00", language = "java")
+        val kotlinFirst = aRun(at = "2026-10-07T10:00:10+09:00", language = "kotlin")
+        val javaSecond = aRun(at = "2026-10-07T10:00:20+09:00", language = "java")
+        val kotlinSecond = aRun(at = "2026-10-07T10:00:30+09:00", language = "kotlin")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(javaFirst, kotlinFirst, javaSecond, kotlinSecond)
+                .withRunCode(javaFirst, "j1").withRunCode(kotlinFirst, "k1")
+                .withRunCode(javaSecond, "j2").withRunCode(kotlinSecond, "k2").query(),
+        )
+
+        val byCode = itemsOf(invoker.call("get_problem", includeArguments("runs")))
+            .associateBy { it["code"]!!.jsonPrimitive.content }
+
+        byCode["j2"]!!["diffFromPrevGrading"]!!.jsonPrimitive.content shouldContain "-j1"
+        byCode["k2"]!!["diffFromPrevGrading"]!!.jsonPrimitive.content shouldContain "-k1"
+        byCode["j1"]!!.shouldNotContainKey("diffFromPrevGrading")
+        byCode["k1"]!!.shouldNotContainKey("diffFromPrevGrading")
+    }
+
+    /** A grading is a grading whichever way it was pressed: the run after a submit is diffed against its code. */
+    @Test
+    fun `get_problem with include runs diffs a run against the submit before it`() {
+        val submit = aSubmit(at = "2026-10-07T10:00:00+09:00", verdict = Verdict.WRONG)
+        val run = aRun(at = "2026-10-07T10:01:00+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(submit, run)
+                .withSubmitCode(submit, "first try\n").withRunCode(run, "second try").query(),
+        )
+
+        val items = itemsOf(invoker.call("get_problem", includeArguments("runs")))
+
+        val diff = items.single { !it.isSubmit() }["diffFromPrevGrading"]!!.jsonPrimitive.content
+        diff shouldContain "-first try"
+        diff shouldContain "+second try"
+        items.single { it.isSubmit() }.shouldNotContainKey("code")
+    }
+
+    /** The flag keeps the name a repair step gives it, so a reader learns one word for one thing. */
+    @Test
+    fun `get_problem with include runs marks a diff that was cut at the cap`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:01:00+09:00", verdict = Verdict.PASS)
+        val written = (1..500).joinToString("\n") { "n$it" }
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(first, second)
+                .withRunCode(first, "a").withRunCode(second, written).query(),
+        )
+
+        val newest = itemsOf(invoker.call("get_problem", includeArguments("runs"))).first()
+
+        newest["diffTruncated"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        newest["diffFromPrevGrading"]!!.jsonPrimitive.content shouldContain "diff truncated"
+    }
+
+    /** Absent is not empty: an attempt file that is gone leaves no `code`, and nothing says the code was blank. */
+    @Test
+    fun `get_problem with include code leaves out the code of a submit whose file is gone`() {
+        val submit = aSubmit(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(submit).query())
+
+        itemsOf(invoker.call("get_problem", includeArguments("code"))).single().shouldNotContainKey("code")
+    }
+
+    @Test
+    fun `get_problem with both includes puts submit code on submits and run code on runs, in either order`() {
+        val run = aRun(at = "2026-10-07T09:59:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(run, submit)
+                .withSubmitCode(submit, "select 1\n").withRunCode(run, "select 0").query(),
+        )
+
+        val answer = invoker.call("get_problem", includeArguments("code", "runs"))
+
+        val items = itemsOf(answer)
+        items.single { it.isSubmit() }["code"]!!.jsonPrimitive.content shouldBe "select 1\n"
+        items.single { !it.isSubmit() }["code"]!!.jsonPrimitive.content shouldBe "select 0"
+        invoker.call("get_problem", includeArguments("runs", "code")) shouldBe answer
+    }
+
+    /** `include` adds to what a client already reads: no key, value or position of the default answer moves. */
+    @Test
+    fun `get_problem with include keeps every key and value of the answer without it`() {
+        val run = aRun(at = "2026-10-07T09:59:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(run, submit)
+                .withSubmitCode(submit, "select 1\n").withRunCode(run, "select 0").query(),
+        )
+
+        val plain = structured(invoker.call("get_problem", arguments("lessonId" to 120804)))
+        val enriched = structured(invoker.call("get_problem", includeArguments("code", "runs")))
+
+        enriched.keys.toList() shouldBe plain.keys.toList()
+        (enriched - "submissions") shouldBe (plain - "submissions")
+        enriched["submissions"]!!.jsonArray.zip(plain["submissions"]!!.jsonArray).forEach { (with, without) ->
+            with.jsonObject.keys.toList().take(without.jsonObject.size) shouldBe without.jsonObject.keys.toList()
+            with.jsonObject.filterKeys { it in without.jsonObject.keys } shouldBe without.jsonObject
+        }
+    }
+
+    /** The default answer must not change shape for clients that never ask for code. */
+    @Test
+    fun `get_problem without include carries no code`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:01:00+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(run, submit).withRunCode(run, "a").withSubmitCode(submit, "b").query(),
+        )
+
+        itemsOf(invoker.call("get_problem", arguments("lessonId" to 120804))).forEach { item ->
+            CODE_KEYS.forEach { item.shouldNotContainKey(it) }
+        }
+    }
+
+    /** "Not given" has three spellings, and each is answered as a client that never heard of `include` is. */
+    @Test
+    fun `get_problem reads an absent, null or empty include as not asking for anything`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(run).withRunCode(run, "a").query())
+        val plain = invoker.call("get_problem", arguments("lessonId" to 120804))
+
+        invoker.call("get_problem", includeRaw(JsonNull)) shouldBe plain
+        invoker.call("get_problem", includeRaw(buildJsonArray { })) shouldBe plain
+    }
+
+    /** The code store throws if it is asked: an answer coming back shows the default path never reads kept code. */
+    @Test
+    fun `get_problem without include never reads kept code`() {
+        val invoker = invokerOverBrokenCodes()
+
+        failed(invoker.call("get_problem", arguments("lessonId" to 120804))).shouldBeFalse()
+        failed(invoker.call("get_problem", includeRaw(JsonNull))).shouldBeFalse()
+        failed(invoker.call("get_problem", includeRaw(buildJsonArray { }))).shouldBeFalse()
+    }
+
+    /**
+     * `problem()` already holds one problem's records and the coded timeline is built from those, so the
+     * log is read once however much `include` asks to be assembled. Reading it again for the timeline
+     * would be a second picture of a log that may be growing between the two reads.
+     */
+    @Test
+    fun `get_problem reads the record log once, with include or without`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:01:00+09:00")
+        val repository = aRecordRepository(root).containing(run, submit)
+            .withRunCode(run, "a").withSubmitCode(submit, "b")
+
+        listOf(
+            arguments("lessonId" to 120804),
+            includeArguments("code"),
+            includeArguments("runs"),
+            includeArguments("code", "runs"),
+        ).forEach { call ->
+            val log = CountingRecordStore(repository.store())
+
+            McpToolInvoker(repository.query(records = log)).call("get_problem", call)
+
+            withClue("$call") { log.reads shouldBe 1 }
+        }
+    }
+
+    @Test
+    fun `get_problem takes a bare include string as one value`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(run).withRunCode(run, "a").query())
+
+        val items = itemsOf(invoker.call("get_problem", arguments("lessonId" to 120804, "include" to "runs")))
+
+        items.single()["code"]!!.jsonPrimitive.content shouldBe "a"
+    }
+
+    /** Lenient about the spelling a model happens to use, strict about what is asked for. */
+    @Test
+    fun `get_problem reads include whatever its case and surrounding space, and ignores a repeat`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(run).withRunCode(run, "a").query())
+
+        val tidy = invoker.call("get_problem", includeArguments("runs"))
+
+        failed(tidy).shouldBeFalse()
+        invoker.call("get_problem", includeArguments(" RUNS ", "runs", "Runs")) shouldBe tidy
+    }
+
+    @Test
+    fun `get_problem refuses an include it does not offer`() {
+        invokerOver().call("get_problem", includeArguments("returned")).shouldBeAnIncludeRefusal()
+    }
+
+    /** Strict about the values: one it does not offer refuses the call whole, not the other half of it. */
+    @Test
+    fun `get_problem refuses a list with a value it does not offer, and a blank one`() {
+        listOf(arrayOf("code", "returned"), arrayOf(""), arrayOf("  "), arrayOf("code,runs")).forEach { values ->
+            invokerOver().call("get_problem", includeArguments(*values)).shouldBeAnIncludeRefusal()
+        }
+    }
+
+    /** The bare form is held to the same values as the list: leniency about the type is not about the value. */
+    @Test
+    fun `get_problem refuses a bare string it does not offer, and a blank one`() {
+        listOf("returned", "", "  ", "code,runs").forEach { bare ->
+            invokerOver().call("get_problem", includeRaw(JsonPrimitive(bare))).shouldBeAnIncludeRefusal()
+        }
+    }
+
+    /** A number is not the text of its digits, and an object or a nested list is no value at all. */
+    @Test
+    fun `get_problem refuses an include that is not text or a list of text, under its name`() {
+        val notText = listOf<JsonElement>(
+            JsonPrimitive(5),
+            JsonPrimitive(true),
+            buildJsonObject { },
+            buildJsonArray { add(5) },
+            buildJsonArray { add(JsonNull) },
+            buildJsonArray { add(buildJsonArray { add("code") }) },
+        )
+
+        notText.forEach { include ->
+            invokerOver().call("get_problem", includeRaw(include)).shouldBeAnIncludeRefusal()
+        }
+    }
+
+    /** What is refused is refused before the log is read, as for every tool's arguments. */
+    @Test
+    fun `get_problem never reads the log for an include it has refused`() {
+        val repository = aRecordRepository(root).containing(aRun(at = "2026-10-07T10:00:00+09:00"))
+        val log = CountingRecordStore(repository.store())
+        val invoker = McpToolInvoker(repository.query(records = log))
+
+        invoker.call("get_problem", includeArguments("returned")).shouldBeAnIncludeRefusal()
+        invoker.call("get_problem", includeRaw(JsonPrimitive(5))).shouldBeAnIncludeRefusal()
+
+        log.reads shouldBe 0
+    }
+
+    /** A lesson with nothing recorded is an empty history, with `include` as without it. */
+    @Test
+    fun `get_problem with include answers an unrecorded lesson with an empty history, not an error`() {
+        val result = invokerOver(aSubmissionRecord(lessonId = 131528))
+            .call("get_problem", includeArguments("code", "runs"))
+
+        failed(result).shouldBeFalse()
+        itemsOf(result).shouldBeEmpty()
+        structured(result)["submissionCount"]!!.jsonPrimitive.int shouldBe 0
+    }
+
+    /**
+     * Past validation an IllegalArgumentException can only be an invariant of ours breaking, so the
+     * assembly leaves as a state fault, as `repair_steps`' does, and not as advice to correct arguments
+     * that were fine. Both values go through the one assembly, so both are shown.
+     */
+    @Test
+    fun `get_problem with include reports a broken invariant behind valid arguments as a fault of ours`() {
+        listOf("code", "runs").forEach { asked ->
+            val thrown = shouldThrow<IllegalStateException> {
+                invokerOverBrokenCodes().call("get_problem", includeArguments(asked))
+            }
+
+            thrown.message.shouldContain(INVARIANT)
+            thrown.cause.shouldBeInstanceOf<IllegalArgumentException>()
+        }
+    }
+
+    // The refusal teaches: it names the argument and what it takes, so a model that guessed a value can
+    // retry without a second look. Any refusal at all would not do — an argument the tool did not know
+    // is answered "unknown argument(s): include", which names it and teaches nothing.
+    private fun JsonObject.shouldBeAnIncludeRefusal() {
+        failed(this).shouldBeTrue()
+        message(this).shouldContain("include")
+        message(this).shouldContain("code")
+        message(this).shouldContain("runs")
+    }
+
+    private fun includeArguments(vararg values: String): JsonObject = buildJsonObject {
+        put("lessonId", 120804)
+        putJsonArray("include") { values.forEach { add(it) } }
+    }
+
+    private fun includeRaw(include: JsonElement): JsonObject = buildJsonObject {
+        put("lessonId", 120804)
+        put("include", include)
+    }
+
+    private fun itemsOf(result: JsonObject): List<JsonObject> =
+        structured(result)["submissions"]!!.jsonArray.map { it.jsonObject }
+
+    private fun JsonObject.isSubmit(): Boolean = this["action"]!!.jsonPrimitive.content == "submit"
+
     // Two failed runs of one problem, so the query has a step to assemble and reads the problem's code.
     private fun invokerOverBrokenCodes(): McpToolInvoker = McpToolInvoker(
         aRecordRepository(root).containing(*failedRuns(2)).query(codes = aBrokenGradingCodes(INVARIANT)),
@@ -942,6 +1324,9 @@ class McpToolInvokerTest {
 
     private companion object {
         val PROGRESS_FIELDS = setOf("attempted", "passed", "passedFirstSubmit", "runsBeforePass")
+
+        /** Every key `include` can add to an item; the default answer carries none of them. */
+        val CODE_KEYS = listOf("code", "codeFetchedAt", "codeLate", "diffFromPrevGrading", "diffTruncated", "noDiff")
 
         /** What an invariant of ours says when it breaks; nothing a caller sent. */
         const val INVARIANT = "a label is one problem's"
