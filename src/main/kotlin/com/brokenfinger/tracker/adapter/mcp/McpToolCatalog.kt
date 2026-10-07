@@ -26,6 +26,11 @@ import kotlinx.serialization.json.putJsonObject
  * Every description says what the tool *counts*, never what it concludes. Interpretation
  * belongs to the AI reading the numbers (CLAUDE.md, design §7).
  *
+ * **Every description, as sent, stays within the budget `McpToolCatalogTest` pins**: 2,000 characters,
+ * because Claude Code cuts a description at 2,048 and keeps the head. What is cut is the tail, which
+ * here is the last reading and then the shared `incompleteHistory` warning, so the longest
+ * descriptions are the ones to watch and a sentence appended to every tool is paid for seven times.
+ *
  * The order is fixed rather than derived from a map, because the specification asks for a
  * deterministic `tools/list` so clients can cache it.
  */
@@ -73,24 +78,22 @@ object McpToolCatalog {
         description = "Every grading that did not pass, paired with the next grading of the same problem in " +
             "the same language — run or submit — and the unified diff of the code between them, newest first " +
             "by the later grading. **A step is what changed, not a finding about what was wrong**: grouping " +
-            "steps into habits is the reader's job, a pattern seen once is not a pattern, and cite the record " +
-            "ids behind any you name. `from` carries the verdict (absent when it was never resolved — " +
-            "`outcome` says how it ended), `errorText`, `failedMessage` (the first failing case's own " +
-            "message) and the `failedCases` / `totalCases` counts; `to` carries what followed. The case " +
-            "counts are of the cases that arrived, and `casesComplete: false` means some never did — an " +
-            "algorithm compile error, for one, reports none. Consecutive gradings with identical code " +
-            "make no step. A step without `diff` says why in `noDiff`: `fromCodeUnknown`, `toCodeUnknown` or " +
-            "`codeUnknown` when the code was not kept — run code is kept by tracker versions from " +
-            "2026-10-07 on, submit code from the start — `tooLarge` when a side is over " +
-            "${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode`, which appears only beside a late side. " +
-            "`codeLate: true` on a side means its code was attached after the problem's next grading was " +
-            "recorded, so it may be that grading's code; the check cannot catch a second Run pressed within " +
-            "the ~0.3 s fetch, and submit code records no fetch time so it is never marked. " +
-            "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines. `since` bounds when " +
-            "the later grading was recorded. **At most $REPAIR_STEPS_DEFAULT_LIMIT steps come back unless " +
-            "`limit` says otherwise**: `count` is how many were returned, `total` how many matched, and " +
-            "`truncated: true` appears only when `total` is larger than `count` — the oldest steps were " +
-            "left out.",
+            "steps into habits is the reader's job, one occurrence is not a pattern, and cite the record ids " +
+            "behind any you name. `from` carries the verdict (absent when never resolved — `outcome` says how " +
+            "it ended), `errorText`, `failedMessage` (the first failing case's own message) and the " +
+            "`failedCases` / `totalCases` counts; `to` carries what followed. The case counts are of the cases " +
+            "that arrived, and `casesComplete: false` means some never did — an algorithm compile error, for " +
+            "one, reports none. Consecutive gradings with identical code make no step. A step without `diff` " +
+            "says why in `noDiff`: `fromCodeUnknown`, `toCodeUnknown`, `codeUnknown` (code not kept: run code " +
+            "is kept by tracker versions from 2026-10-07 on, submit code from the start), `tooLarge` (a side " +
+            "over ${UnifiedDiff.MAX_INPUT_LINES} lines) or `sameCode` (only beside a late side). `codeLate: " +
+            "true` on a side means its code was attached after the problem's next grading was recorded, so it " +
+            "may be that grading's code; a second Run pressed within the ~0.3 s fetch is not caught, and a " +
+            "submit's code, with no fetch time, is never marked. `diffTruncated: true` marks a diff cut at " +
+            "${UnifiedDiff.MAX_LINES} lines. `since` bounds when the later grading was recorded. **At most " +
+            "$REPAIR_STEPS_DEFAULT_LIMIT steps come back unless `limit` says otherwise**: `count` is how many " +
+            "came back, `total` how many matched, and `truncated: true` appears only when `total` exceeds " +
+            "`count` — the oldest steps were left out.",
     ) {
         putJsonObject("properties") {
             putJsonObject("since") {
@@ -222,23 +225,20 @@ object McpToolCatalog {
         description = "Everything recorded against one Programmers lesson: catalog metadata as captured, and " +
             "every grading in full, including per-testcase results and compiler output. The array holds runs " +
             "as well as submits — a run is where the compiler output comes from — and `submissionCount` and " +
-            "`runCount` split them, because a run is not an attempt at the problem. A lesson with " +
-            "nothing recorded answers with an empty history rather than an error — we report what we " +
-            "observed, which may be nothing. `statement` is the problem's own description as Programmers " +
-            "worded it, captured once when the problem was first graded and stored locally — it is theirs, " +
-            "not ours, and it is absent for a problem captured before the server began keeping it. " +
-            "`include` adds code and changes nothing else; without it no item carries code. `code` puts " +
-            "each submit's code on it. `runs` puts on each run its `code`, `codeFetchedAt` (when that code " +
-            "was attached) and `diffFromPrevGrading` — the unified diff from the grading before it in the " +
-            "same language, run or submit — or `noDiff` saying why there is none; the first grading in a " +
-            "language has neither. `noDiff` is `fromCodeUnknown`, `toCodeUnknown` or `codeUnknown` when the " +
-            "code was not kept — run code is kept by tracker versions from 2026-10-07 on, submit code from " +
-            "the start — `tooLarge` when a side is over ${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode` " +
-            "when both hold the same code. `codeLate: true` on a run means its code was attached after the " +
-            "problem's next grading was recorded, so it may be that grading's code, and a diff that uses it " +
-            "carries the same doubt; submit code records no fetch time and is never marked. " +
-            "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines, as on a repair step, " +
-            "though the diff is named `diffFromPrevGrading` here." +
+            "`runCount` split them: a run is not an attempt. A lesson with nothing recorded answers with an " +
+            "empty history rather than an error — we report what we observed, which may be nothing. " +
+            "`statement` is the problem's own description as Programmers worded it, stored locally when the " +
+            "problem was first graded — theirs, not ours — and absent for a problem captured before the " +
+            "server began keeping it. " +
+            "`include` adds code and changes nothing else: `code` puts each submit's code on it; `runs` puts " +
+            "on each run its `code`, `codeFetchedAt` and `diffFromPrevGrading` — the unified diff from the " +
+            "grading before it in the same language, run or submit — or `noDiff`, why there is none: " +
+            "`fromCodeUnknown`, `toCodeUnknown`, `codeUnknown` (code not kept: run code is kept by tracker " +
+            "versions from 2026-10-07 on, submit code from the start), `tooLarge` (a side over " +
+            "${UnifiedDiff.MAX_INPUT_LINES} lines), `sameCode`. The first grading in a language has neither. " +
+            "`codeLate: true` on a run means its code was attached after the problem's next grading was " +
+            "recorded, so it may be that grading's code, and a diff that uses it carries the same doubt. " +
+            "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines." +
             ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
@@ -251,7 +251,7 @@ object McpToolCatalog {
                 put(
                     "description",
                     "What code to add: `$INCLUDE_CODE` on each submit; `$INCLUDE_RUNS` on each run, with its " +
-                        "diff from the grading before it. A list, or one value.",
+                        "diff from the grading before it.",
                 )
                 putJsonObject("items") {
                     put("type", "string")
@@ -292,32 +292,30 @@ object McpToolCatalog {
         putJsonArray("required") { add("groupBy") }
     }
 
-    // `additionalProperties: false` on every schema: an argument we do not understand is a
-    // client bug or a stale tool list, and silently ignoring it would answer a question
-    // narrower than the one that was asked.
-    /**
-     * Appended to every description rather than repeated in every answer (#187). A client
-     * receives this once from `tools/list`; the results carry counts.
-     */
     /**
      * Appended to the descriptions of the tools that return records. `elapsedSec` reads as time
      * on task and is wall clock; a measured record carries 77251 beside a `focusedSec` of 37
      * (#205), and an answer with no explanation invites exactly the wrong conclusion.
      */
     const val ELAPSED_MEANS: String =
-        " `elapsedSec` is **wall clock since the problem was first opened** — sleep, other work " +
-            "and days between sessions included — not time on task. One measured record carries " +
-            "`elapsedSec: 77251` beside `sensor.focusedSec: 37`: half a minute of work on a tab " +
-            "left open overnight. Use `focusedSec` for effort and treat `elapsedSec` as calendar " +
-            "time from first encounter; they differ by orders of magnitude and neither is wrong."
+        " `elapsedSec` is **wall clock since the problem was first opened** — sleep and days away " +
+            "included — not time on task: one record has `elapsedSec: 77251` beside " +
+            "`sensor.focusedSec: 37`. Use `focusedSec` for effort; neither is wrong."
 
+    /**
+     * Appended to every description rather than repeated in every answer (#187). A client
+     * receives this once from `tools/list`; the results carry counts. It is paid for in every
+     * tool's budget, so a word added here is a word taken from seven descriptions.
+     */
     const val INCOMPLETE_HISTORY: String =
-        " If `incompleteHistory` is present in an answer, gradings were captured that no record " +
-            "represents — every tool here reads that same history, so the answer is drawn over a " +
-            "record with holes and any conclusion from it must say so. They are not recoverable: " +
-            "the missing `start` frame carries the testcase ids and the problem's examples, and " +
-            "pairing them with an attempt would be a guess."
+        " If `incompleteHistory` is present, gradings were captured that no record represents — every tool " +
+            "reads that history, so a conclusion from the answer must say it has holes. They are not " +
+            "recoverable: the missing `start` frame holds the testcase ids and examples, so pairing them " +
+            "with an attempt would be a guess."
 
+    // `additionalProperties: false` on every schema: an argument we do not understand is a
+    // client bug or a stale tool list, and silently ignoring it would answer a question
+    // narrower than the one that was asked.
     private fun tool(name: String, title: String, description: String, schema: JsonObjectBuilderScope): JsonObject =
         buildJsonObject {
             put("name", name)

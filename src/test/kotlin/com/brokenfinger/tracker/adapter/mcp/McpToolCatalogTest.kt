@@ -3,9 +3,11 @@ package com.brokenfinger.tracker.adapter.mcp
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import com.brokenfinger.tracker.domain.calc.UnifiedDiff
+import com.brokenfinger.tracker.support.fixtures.MCP_TEXT_BUDGET
 import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -133,7 +135,12 @@ class McpToolCatalogTest {
         limit["default"]!!.jsonPrimitive.int shouldBe McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT
     }
 
-    private fun tool(name: String): JsonObject = tools.single { it["name"]!!.jsonPrimitive.content == name }
+    private fun tool(name: String): JsonObject = tools.single { it.nameOf() == name }
+
+    private fun JsonObject.nameOf(): String = this["name"]!!.jsonPrimitive.content
+
+    // The description as `tools/list` sends it: the shared sentences are already appended.
+    private fun JsonObject.sentDescription(): String = this["description"]!!.jsonPrimitive.content
 
     private fun properties(name: String): JsonObject = tool(name)["inputSchema"]!!.jsonObject["properties"]!!.jsonObject
 
@@ -287,6 +294,22 @@ class McpToolCatalogTest {
 
         description shouldContain "run code is kept by tracker versions from 2026-10-07 on"
         description shouldNotContain "2026-08-07"
+    }
+
+    /**
+     * Every description, as `tools/list` sends it — the shared sentences appended — fits [MCP_TEXT_BUDGET].
+     * The client cuts a description at 2,048 characters and keeps the head (Claude Code CHANGELOG 2.1.84,
+     * "capped at 2KB"; 2.1.280, `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` "to change the 2,048-character cap on MCP
+     * tool descriptions and server instructions"), so a longer one loses its tail without a word, and the tail is
+     * where the shared `incompleteHistory` warning sits. The failure names each tool that is over and by how much.
+     */
+    @Test
+    fun `every description, as sent, fits the budget under the client's cap`() {
+        val lengths = tools.associate { it.nameOf() to it.sentDescription().length }
+
+        withClue("descriptions over the $MCP_TEXT_BUDGET-character budget, with their lengths") {
+            lengths.filterValues { it > MCP_TEXT_BUDGET }.shouldBeEmpty()
+        }
     }
 
     /**

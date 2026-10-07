@@ -175,6 +175,12 @@ class McpDispatcher(private val tools: McpToolInvoker) {
          * Telling the reader that `elapsedSec` includes sleep is a fact about a field. Telling it
          * the learner is weak at graphs would be a judgement about a person, and belongs nowhere
          * near here ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
+         *
+         * **It stays within 2,000 characters, in the order a cut would cost least.** Claude Code cuts
+         * server instructions at 2,048 and keeps the head, so an overrun loses the end without a word:
+         * at 2,921 characters the `codeLate` reading, the one about `statement` and `kind`, what the
+         * data cannot say and the hand-over were all past the cut. What the server is and the
+         * hand-over come first, the lists after them, and `McpInstructionsTest` pins the budget.
          */
         val INSTRUCTIONS =
             """
@@ -182,48 +188,38 @@ class McpDispatcher(private val tools: McpToolInvoker) {
             Every tool returns stored records and counts; none of them interprets, ranks or
             advises, and a value that was never recorded is absent rather than filled in.
 
+            The server counts and names nothing: which number is a weakness or what to practise
+            next is not withheld for lack of ability — deciding that is the reader's job. Cite
+            numbers; say when records do not support a claim.
+
             WHICH TOOL ANSWERS WHAT
-            - submissions: the whole log, newest first, narrowed by date or verdict.
-            - get_problem: one lesson in full — every grading, per-testcase results, compiler
-              output, and the problem's own statement.
-            - stats: counts per verdict, language, problem, part or level. Counts only.
-            - list_problems: the shipped catalog joined against the records. The only tool that
-              can say "untouched" — records alone cannot tell never-tried from tried-and-failed.
-            - review_queue: passes due for re-solving, most overdue first.
-            - slow_passes: passed problems ranked by their slowest testcase.
-            - repair_steps: each failed grading, the next one in its language, and the code diff.
+            - submissions: the whole log, by date or verdict.
+            - get_problem: one lesson in full — gradings, testcases, compiler output, statement;
+              `include` adds code.
+            - stats: counts per verdict, language, problem, part or level.
+            - list_problems: the catalog joined against the records; the only tool that can say
+              "untouched".
+            - review_queue: passes due for re-solving.
+            - slow_passes: passes ranked by their slowest testcase.
+            - repair_steps: each grading that did not pass, the next one in its language, and the
+              code diff.
 
             READINGS THAT ARE EASY TO GET WRONG
-            - A run is not an attempt. Pressing Run is how code gets written; `stats` counts
-              submits only, and `get_problem` splits them into submissionCount and runCount.
-            - `elapsedSec` is wall clock since the problem was first opened — sleep, other work
-              and days between sessions included. `sensor.focusedSec` is time actually in front
-              of it. One measured record carries elapsedSec 77251 beside focusedSec 37. Use
-              focusedSec for effort; they differ by orders of magnitude and neither is wrong.
-            - Absent is not zero. A field that was never recorded is left out, so a missing
-              `level` means unknown rather than level 0.
-            - `incompleteHistory` in an answer means gradings were captured that no record
-              represents. Every tool reads that same history, so any conclusion drawn from it
-              must say the denominator has holes.
-            - The catalog is a snapshot we do not own. A problem published after it was built is
-              simply missing, which is not the same as never attempted.
+            - A run is not an attempt; `stats` counts submits only.
+            - `elapsedSec` is wall clock since first opening, sleep and days away included;
+              `sensor.focusedSec` is time in front of it. Use focusedSec for effort.
+            - Absent is not zero: a missing `level` is unknown, not 0; an absent `statement` or
+              `kind` says nothing about the problem.
+            - `incompleteHistory` means gradings were captured that no record represents: any
+              conclusion must say the denominator has holes.
+            - The catalog is a snapshot; a newer problem is missing, not untouched.
             - A repair step shows what changed, not what was wrong. Run code is kept by tracker
-              versions from 2026-10-07 on; `noDiff` says why a step has none, and `codeLate` marks
-              code that may belong to the next grading.
-            - `statement` and `kind` are absent for problems recorded before the server began
-              keeping them. Their absence says nothing about the problem.
+              versions from 2026-10-07 on; `noDiff` says why a step has no diff, and `codeLate`
+              marks code that may belong to the next grading.
 
             WHAT THIS DATA CANNOT SAY
-            Nothing about other learners — there is no cohort here, so "slow" only ever means
-            slow against this learner's own other solutions. Nothing about why a submission
-            failed beyond what the judge returned. Nothing about time spent away from the tab.
-
-            THE PART THAT IS YOURS
-            The server counts and names nothing. It will not tell you which of these numbers is
-            a weakness, what to practise next, or whether a pass was lucky — not because it
-            cannot, but because deciding that is the reader's job and yours. Say what the records
-            support, say when they do not support it, and prefer citing a number over asserting
-            a pattern.
+            Nothing about other learners (no cohort, so "slow" means slow against this learner's
+            own passes), why a grading failed beyond the judge's output, or time away from the tab.
             """.trimIndent()
     }
 }

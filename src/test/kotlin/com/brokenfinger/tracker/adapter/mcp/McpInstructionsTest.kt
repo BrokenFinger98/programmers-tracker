@@ -1,7 +1,10 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.calc.TallyGroup
-import io.kotest.matchers.shouldBe
+import com.brokenfinger.tracker.support.fixtures.MCP_TEXT_BUDGET
+import io.kotest.assertions.withClue
+import io.kotest.matchers.comparables.shouldBeLessThanOrEqualTo
+import io.kotest.matchers.ints.shouldBeInRange
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
@@ -61,6 +64,17 @@ class McpInstructionsTest {
     }
 
     /**
+     * An overrun is cut from the tail, so what must not be lost comes before what can be: the hand-over sits
+     * ahead of the lists, not behind them, and a cut would reach the lists first.
+     */
+    @Test
+    fun `it puts the hand-over ahead of the lists, where a cut reaches last`() {
+        val handOver = instructions.indexOf("The server counts and names nothing")
+
+        handOver shouldBeInRange (0 until instructions.indexOf("WHICH TOOL ANSWERS WHAT"))
+    }
+
+    /**
      * The line. Guidance on how to read a field is a fact about the field; a sentence *about the
      * learner* would be the server interpreting through the back door.
      *
@@ -97,9 +111,16 @@ class McpInstructionsTest {
         prose shouldContain "counts per ${groups.dropLast(1).joinToString(", ")} or ${groups.last()}"
     }
 
-    /** A wall of text clients truncate teaches nothing. */
+    /**
+     * The client cuts server instructions at 2,048 characters and keeps the head (Claude Code CHANGELOG 2.1.84,
+     * "capped at 2KB"; 2.1.280, `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` "to change the 2,048-character cap on MCP
+     * tool descriptions and server instructions"). The budget is [MCP_TEXT_BUDGET], 48 under the cap: a text
+     * past it is cut where nobody chose, and the last thing in this one is what the reader most needs not to lose.
+     */
     @Test
-    fun `it stays short enough for a client to show in full`() {
-        (instructions.length < 3000) shouldBe true
+    fun `it fits the budget under the client's cap, so none of it is cut`() {
+        withClue("the instructions are ${instructions.length} characters") {
+            instructions.length shouldBeLessThanOrEqualTo MCP_TEXT_BUDGET
+        }
     }
 }
