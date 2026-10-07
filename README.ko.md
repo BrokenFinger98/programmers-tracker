@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@0afc25a4b7ba722edf82079d764e599bb58034be -->
+<!-- translated-from: README.md@c10ba9b4337a4ecc57a5875c1d8472f5c8cfd242 -->
 
 # programmers-tracker
 
@@ -55,7 +55,7 @@
 | 문제별 페이지, 그리고 시도 간 diff | **구현됨** |
 | 채점기가 준 예제로 만든 문제별 실행기 | **구현됨** — java · python3 · cpp · javascript · kotlin · c · csharp; 나머지는 이유를 대며 거부 |
 | 카탈로그에서 가져온 문제 제목과 태그 | **구현됨** — 689문제, 내장 |
-| MCP 서버 — Claude · Cursor · 로컬 LLM이 기록을 읽음 | **구현됨** — 읽기 툴 6개 ([`mcp.md`](docs/mcp.md)) |
+| MCP 서버 — Claude · Cursor · 로컬 LLM이 기록을 읽음 | **구현됨** — 읽기 툴 7개 ([`mcp.md`](docs/mcp.md)) |
 | 복습 큐 — 내가 통과한 문제에 대한 간격 반복 | **구현됨** — `review_queue`, §6.4 |
 | 통과했지만 느림 — 효율성 테스트라면 떨어졌을 통과 | **구현됨** — `slow_passes`, §6.5 |
 | 태그별 약점 · 시험 모드 · 회사별 프로필 | 설계됨 · §6 |

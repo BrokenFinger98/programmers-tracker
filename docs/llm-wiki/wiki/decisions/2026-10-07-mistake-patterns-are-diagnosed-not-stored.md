@@ -60,6 +60,9 @@ so the step to it stays open.
 - Runs pressed seconds apart can have the next run's code attributed to them, because the code is
   fetched after the grading settles (protocol §15.1); the design marks such runs
   `codeUncertain` instead of preventing it.
+  (Superseded in the build: runs carry `codeFetchedAt` —
+  [[decisions/2026-10-07-every-run-keeps-its-code]] — and steps mark a late side `codeLate` —
+  [[decisions/2026-10-07-repair-steps-are-served-not-judged]].)
 - The records must be correct first: #343 and two verdict gaps measured on 2026-10-03 and
   2026-10-07 come before any of this. #343 needs no schema change — the correction line already
   repeats its original's `ts`, so the identity is `(ts, captureKey)`.

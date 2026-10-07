@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@7cb64827be69c4ed628dc858357da9dc76fef79a -->
+<!-- translated-from: bootstrap.md@55b502aeed6486f11b88902a7d42cfa411a73e84 -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -381,10 +381,10 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
   ([`extension/`](../extension/README.ko.md))이 그 부담을 없애려고 존재하고 2026-08-10에
   브라우저에서 검증되었지만, 로드된 페이지만 알립니다. 배지가 초록이 아니면 아무것도 감시되고 있지
   않습니다 — 6단계의 수동 경로를 손 닿는 곳에 두십시오.
-- **MCP 서버는 설계의 스무 개가 아니라 여섯 개의 툴을 노출합니다.** `submissions`,
-  `get_problem`, `stats`, `list_problems`, `review_queue`, `slow_passes` 가 오늘 만들어져 연결
-  가능합니다 — 클라이언트 설정은 [`mcp.ko.md`](mcp.ko.md) 참고. 아직 없는 것은 분석 절반의
-  나머지입니다: 워밍업 진단, 시험 모드, 회사별 프로필, 그리고 쓰기를 하는 모든 것.
+- **MCP 서버는 설계의 스무 개가 아니라 일곱 개의 툴을 노출합니다.** `submissions`,
+  `get_problem`, `stats`, `list_problems`, `review_queue`, `slow_passes`, `repair_steps` 가 오늘
+  만들어져 연결 가능합니다 — 클라이언트 설정은 [`mcp.ko.md`](mcp.ko.md) 참고. 아직 없는 것은 분석
+  절반의 나머지입니다: 워밍업 진단, 시험 모드, 회사별 프로필, 그리고 쓰기를 하는 모든 것.
 - **푸시는 `GITHUB_TOKEN` 으로 인증합니다** — 서버가 기록 저장소의 gitignore된 `.ps/` 안에
   소유자 전용으로 저장하고 git이 거기서 읽습니다. 마운트할 것이 없습니다. 토큰이 없으면
   커밋은 로컬에 계속 쌓이고 푸시만 빠집니다.

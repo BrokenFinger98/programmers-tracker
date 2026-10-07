@@ -1,13 +1,13 @@
-<!-- translated-from: mcp.md@54e5365ee3f3b6273364d3b798e2a346876e45b2 -->
+<!-- translated-from: mcp.md@a59a81a8c9c0b21df2ed5831a6d917b271035acb -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
 **[English](mcp.md)**
 
 > 서버는 Model Context Protocol로 풀이 이력을 노출해 Claude, Cursor, 로컬 모델이 읽을 수 있게
-> 합니다. **툴 여섯 개, 쓰는 것은 하나도 없습니다.** 넷은 저장된 기록과 집계를 그대로 돌려주고,
-> 둘은 일정이나 순위를 계산합니다 — 계산하는 둘이 지키는 경계는 이 문서가 그것들을 보여주기
-> 전에 먼저 말합니다. 만들어지지 않은 것은 맨 아래에 있고, 구현 상태의 authority는
+> 합니다. **툴 일곱 개, 쓰는 것은 하나도 없습니다.** 다섯은 저장된 기록과 집계, 그 사이의 코드를
+> 그대로 돌려주고, 둘은 일정이나 순위를 계산합니다 — 계산하는 둘이 지키는 경계는 이 문서가
+> 그것들을 보여주기 전에 먼저 말합니다. 만들어지지 않은 것은 맨 아래에 있고, 구현 상태의 authority는
 > [README의 표](../README.ko.md)입니다.
 
 ---
@@ -56,12 +56,16 @@ cat .ps/watch-token
 이 블록을 어디에 넣는지는 클라이언트 문서를 보십시오 — 클라이언트마다 다르고 릴리스마다 바뀌므로
 여기에 옮겨 적지 않았습니다.
 
+모든 툴 description과 서버 instructions는 보내는 그대로 2,000자 안에 머뭅니다. Claude Code가 각각을
+2,048자에서 자르고 앞부분만 남기기 때문입니다(`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` 가 그 한도를
+옮깁니다). 온전히 도착하게 하려고 따로 설정할 것은 없습니다.
+
 ---
 
-## 여섯 개의 툴
+## 일곱 개의 툴
 
-넷은 저장된 기록과 집계만 돌려줍니다. **어느 것도 해석하거나 순위를 매기거나 조언하지
-않습니다** — 그것은 서버가 아니라 AI의 일이고, 빠뜨린 것이 아니라 규칙입니다
+다섯은 저장된 기록과 집계, 그 사이의 코드만 돌려줍니다. **어느 것도 해석하거나 순위를 매기거나
+조언하지 않습니다** — 그것은 서버가 아니라 AI의 일이고, 빠뜨린 것이 아니라 규칙입니다
 ([`CLAUDE.md`](../CLAUDE.md), 설계 §7).
 
 `review_queue` 와 `slow_passes` 는 무언가를 계산하며, 그 답을 읽기 전에 이들이 지키는 경계를
@@ -73,11 +77,12 @@ cat .ps/watch-token
 | 툴 | 인자 | 답하는 것 |
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | 기록된 모든 run·submit, 최신순. 테스트케이스별 상세·컴파일러 출력·diff는 여기서 제외됩니다. |
-| `get_problem` | `lessonId` | 문제 하나와 그에 대한 모든 채점을 전부 — 테스트케이스와 컴파일러 출력 포함. `submissionCount` 와 `runCount` 가 둘을 나눕니다. |
-| `stats` | `groupBy` — `verdict` · `language` · `problem` | 버킷별 개수. 개수만. **제출만 세고 실행은 세지 않습니다.** **`problem` 은 언어를 합쳐서 셉니다.** |
+| `get_problem` | `lessonId` · `include?` | 문제 하나와 그에 대한 모든 채점을 전부 — 테스트케이스와 컴파일러 출력 포함. `submissionCount` 와 `runCount` 가 둘을 나눕니다. `include` 로 제출·실행 코드를 덧붙입니다. |
+| `stats` | `groupBy` — `verdict` · `language` · `problem` · `part` · `level` | 버킷별 개수. 개수만. **제출만 세고 실행은 세지 않습니다.** **`problem` 은 언어를 합쳐서 셉니다.** `part`/`level` 은 문제 수도 셉니다. |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | 내장 카탈로그를 기록과 조인: 문제별 `status`(`untouched` · `attempted` · `passed`)와 제출 횟수. |
 | `review_queue` | `limit?` | 다시 풀 때가 된 문제, 가장 많이 밀린 것부터. 각 항목에 그 날짜를 정한 시도 횟수·도움 신호·통과일이 붙습니다. **언어당 한 항목입니다.** |
 | `slow_passes` | `thresholdMs?` | 통과한 모든 문제를 가장 느린 테스트케이스(밀리초) 기준으로 정렬. 비교에 필요한 레벨·태그·언어가 함께 옵니다. |
+| `repair_steps` | `since?` · `language?` · `part?` · `lessonId?` · `limit?` | 통과하지 못한 채점마다, 같은 언어로 그 문제를 다음에 채점한 기록과 둘 사이의 코드 diff. 최신순이며 `limit` 이 없으면 20개. **무엇이 바뀌었는지이지, 무엇이 틀렸는지가 아닙니다.** |
 
 `since` 는 날짜(`2026-08-01`)를 받으면 기록 자신이 지닌 오프셋으로 읽고, 오프셋이 붙은
 날짜시각(`2026-08-01T09:00:00+09:00`)을 받으면 시점으로 읽습니다.
@@ -152,6 +157,88 @@ Kotlin 통과가 그걸 덮었다는 말을 듣지 않도록.
 에러나 시간 초과는 케이스 단위로 시간을 떨어뜨립니다. 그런 통과는 "즉시"로 순위에 넣는 대신
 순위에서 제외합니다. 없는 측정값을 0으로 정렬하면, 속도를 다루는 목록의 빠른 쪽 끝에 우리가 가장
 모르는 문제들이 몰리기 때문입니다.
+
+### `repair_steps` 가 넘겨주는 것
+
+repair step 은 통과하지 못한 채점과, 같은 문제를 **같은 언어로** 다음에 채점한 기록(run 이든 submit 이든),
+그리고 둘 사이 코드의 unified diff 입니다. 실패 다음에 무엇이 바뀌었는지 — 반복되는 실수가 남기는 증거가
+바로 이것입니다. 인자 순서 실수는 컴파일도 되고 아무것도 출력하지 않는 경우가 많아서, diff 가 유일한
+증인입니다 ([설계](superpowers/specs/2026-10-07-mistake-patterns-design.md)).
+
+무엇이 틀렸는지에 대한 **판정이 아닙니다.** step 들을 습관으로 묶고 이름 붙이고 무엇이 반복되는지 정하는
+일은 읽는 쪽의 몫이고, 그 결론은 어디에도 저장되지 않습니다
+([`decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored`](llm-wiki/wiki/decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored.md)).
+
+step 하나, 줄여서:
+
+```json
+{"lessonId": 273711, "title": "…", "part": "SELECT", "level": 2, "language": "mysql",
+ "from": {"recordId": "…", "ts": "…", "action": "run", "outcome": "JUDGED", "verdict": "COMPILE_ERROR",
+          "failedMessage": "(1054, \"Unknown column …\")", "failedCases": 1, "totalCases": 1},
+ "to":   {"recordId": "…", "ts": "…", "action": "run", "outcome": "JUDGED", "verdict": "WRONG"},
+ "diff": "--- a/from\n+++ b/to\n@@ …"}
+```
+
+- **"통과하지 못함"에는 "판정되지 않음"도 포함됩니다.** 그런 step 의 `from` 에는 `verdict` 가 없고, 어떻게
+  끝났는지는 `outcome` 이 말합니다. 2026-10-07 에 잰 작성자의 기록에서는 후보 step 65개 중 25개가
+  이렇게 시작합니다 — #350 이 분류하기 전에 기록된 SQL 실패들입니다.
+- **코드가 같으면 step 이 아닙니다** — 고친 것이 없으니까요. 단, 한쪽에 `codeLate` 가 붙어 있으면 남습니다.
+  끝에 붙은 줄바꿈은 변경으로 치지 않습니다.
+- **diff 가 없으면 이유가 `noDiff` 에 있습니다**: `fromCodeUnknown` · `toCodeUnknown` · `codeUnknown`
+  (코드가 보관되지 않음), `tooLarge` (한쪽이 2,000줄 초과), `sameCode` (late 인 쪽 옆에서만). 400줄에서
+  잘린 diff 에는 `diffTruncated: true` 가 붙습니다.
+- **2026-10-07 이후 버전의 트래커가 실행 코드를 보관합니다.** submit 코드는 처음부터 `attempts/` 에
+  보관되어 왔으므로, 두 submit 사이의 step 은 언제 일어났든 diff 가 있고, 그 이전 버전이 기록한 run 이
+  낀 step 에는 없습니다.
+- 한쪽의 **`codeLate: true`** 는 그 코드가 문제의 다음 채점이 기록된 뒤에 붙었다는 뜻이고, 따라서 그 다음
+  채점의 코드일 수 있습니다. 코드를 가져오는 약 0.3초 안에 Run 을 다시 누른 경우는 잡지 못하며, submit
+  코드는 가져온 시각이 기록되지 않아 표시되지 않습니다.
+- **무엇이 실패했는지는 `from` 에 있습니다:** `errorText` 는 채점기가 에러 출력을 보냈을 때의 그
+  출력, `failedMessage` 는 처음 실패한 케이스 자신의 메시지 — 거부된 SQL 쿼리의 MySQL 에러는 여기에
+  있습니다 — 그리고 `failedCases` / `totalCases` 입니다. 케이스 수는 도착한 케이스의 수이고, 그 옆의
+  `casesComplete: false` 는 끝내 도착하지 않은 케이스가 있다는 뜻입니다 — 예컨대 알고리즘 컴파일 에러는
+  케이스를 하나도 보고하지 않습니다. 케이스가 모두 도착한 채점에는 이 표시가 없습니다.
+- **`since` 는 뒤쪽 채점이 기록된 시각을 제한하고**, 목록은 그 시각 기준 최신순입니다. step 은 무엇으로든
+  좁히기 전에 전체 이력 위에서 짝지어지므로, `since` 이후 첫 step 도 그 앞의 실패에서 시작합니다.
+  `language` 와 `part` 는 대소문자를 가리지 않고 전체가 일치해야 하며, `part` 를 주면 part 가 기록된 적
+  없는 문제는 빠집니다.
+- **`limit` 이 없으면 step 은 최대 20개만 옵니다.** `count` 는 돌아온 개수, `total` 은 조건에 맞은
+  개수이고, `truncated: true` 는 `total` 이 `count` 보다 클 때만 나타납니다 — 가장 오래된 것들이 빠졌다는
+  뜻입니다.
+
+이 툴이 쓸 수 없는 인자 — 양의 정수가 아닌 `limit` 이나 `lessonId`, 비어 있거나 텍스트가 아닌 `language`
+나 `part`, 날짜가 아닌 `since`, 받지 않는 이름 — 는 무엇이 틀렸는지 말하는 툴 에러(`isError: true`)로
+돌아오므로 모델이 고칠 수 있습니다. JSON `null` 은 "주지 않음" 입니다. 올바른 인자 뒤에서 우리 쪽이 고장 난
+경우는 예외 내용을 하나도 담지 않은 내부 에러(JSON-RPC `-32603`)로 답하며, 멀쩡한 인자를 고치라는 조언으로
+답하지 않습니다. 각 규칙이 왜 이런지는
+[`decisions/2026-10-07-repair-steps-are-served-not-judged`](llm-wiki/wiki/decisions/2026-10-07-repair-steps-are-served-not-judged.md)
+에 있습니다.
+
+`get_problem` 은 `include` 로 한 문제의 코드를 줍니다: `code` 와 `runs` 중에서 고른 목록, 또는 둘 중
+하나를 문자열 하나로. `code` 는 submit 마다 보관된 코드를 붙입니다. `runs` 는 run 마다 `code`·
+`codeFetchedAt`·`codeLate`, 그리고 `diffFromPrevGrading` — 같은 언어에서 바로 앞 채점(run 이든 submit
+이든)과의 diff — 또는 그것이 없는 이유인 `noDiff` 를 붙이고, `diffTruncated` 는 위와 같습니다. run 의
+`fromCodeLate: true` 는 그 diff 를 뽑아낸 쪽의 코드가 late 였다는 뜻입니다. 이것이 없으면 앞 항목 자신의
+`codeLate` 만이 그 사실을 보여줍니다. 어떤 언어의 첫 채점에는 diff 도 이유도 없습니다. 보관되지 않은
+코드는 빈 문자열이 아니라 아예 빠집니다. **`include` 가 없으면 응답은 `include` 가 생기기 전과
+똑같고**, 보관된 코드를 읽지도 않습니다.
+
+**`include=runs` 에는 한도가 없습니다.** 한 문제를 파고드는 용도라 run 이력 전체를 한 번에 돌려주고,
+이력이 길면 응답도 큽니다. 리뷰에서 run 마다 한두 줄씩 고친 90줄짜리 Java 코드로 잰 결과: run 하나에 약
+4.6 KB, run 10개면 약 53,000자, 50개면 약 260,000자입니다. Claude Code는 10,000토큰을 넘는 툴 결과에
+경고하고, 기본값으로 25,000토큰에서 자르며, 50,000자를 넘는 결과는 인라인으로 보여주는 대신 파일로
+씁니다 — 그래서 run 이 열 개쯤을 넘은 Java 문제는 인라인으로 도착하지 않습니다.
+`repair_steps(lessonId=…)` 는 한도가 있지만 같은 답이 아닙니다: 실패 뒤의 step 만, 그리고 코드가 아니라
+diff 만 줍니다.
+
+`stats` 를 `part` 나 `level` 로 묶으면 버킷마다 **문제** 수도 셉니다: `attempted`(한 번 이상 제출 — run
+만 해 본 문제는 시도한 것이 아닙니다), `passed`(통과한 제출이 있음), `passedFirstSubmit`(첫 제출이 PASS
+로 판정됨; 판정되지 않은 첫 제출은 세지 않습니다), 그리고 `runsBeforePass` — 버킷의 통과한 문제들에
+대해, 문제마다 첫 통과 제출 전에 어느 언어로든 누른 run 횟수의 중앙값이며, 버킷에 통과한 문제가 없으면
+빠집니다. (문제, 언어) 쌍이 아니라 문제를 세고, 각 문제는 가장 최근에 알려진 part 나 level 의 버킷에
+들어가며, `count` 는 여전히 제출 수입니다. **`runsBeforePass` 가 0이면 run 이 기록되지 않았다는 뜻일 수
+있습니다** — 트래커가 run 을 기록하기 전의 통과이거나 `incompleteHistory` 가 있는 이력이어서이지, 한
+번도 누르지 않았다는 뜻은 아닙니다. 다른 그룹핑에는 `count` 만 있습니다.
 
 ### `elapsedSec` 은 실제로 쓴 시간이 아닙니다
 
@@ -243,6 +330,12 @@ MCP에는 날짜가 붙은 버전이 있고, 형태가 바뀌었습니다: 개�
   `TRACKER_MCP_ALLOWED_ORIGINS` 로 의도적으로 하나를 허용할 수 있습니다.
 - **읽기 전용.** 툴들은 append도 move도 commit도 할 수 없는 쿼리를 통해 기록 저장소에 닿으므로,
   프롬프트에 주입된 "내 실패 기록을 지워라" 는 실행할 경로 자체가 없습니다.
+- **보관된 코드는 `problems/` 에서만 읽고, 다른 어디에서도 읽지 않습니다.** submit 코드는 실제 경로가
+  기록 저장소 자신의 `problems/` 디렉터리 아래에 있는 일반 파일에서만 읽습니다. 그래서 기록에 적힌
+  경로도, 심볼릭 링크도 — git은 링크를 저장하므로 clone 이나 pull 로 들어올 수 있습니다 — `.ps/` 아래의
+  푸시 토큰과 `/watch` 토큰으로 이끌 수 없습니다. `problems` 디렉터리 자체가 링크이면 따라가지 않으므로,
+  일부러 다른 곳에 링크해 둔 경우에는 코드가 나오지 않습니다. 문제 본문과 run 로그를 읽는 쪽도 #354에서
+  같은 경계를 갖게 됩니다.
 - **프로그래머스 세션 쿠키는 어떤 로그 레벨에서도 이 경로에 오르지 않습니다.**
 - 정상 경로에서는 아무것도 로그하지 않습니다 — 요청도, 응답도. 모든 응답이 풀이 이력의 조각이기
   때문입니다.
@@ -279,6 +372,9 @@ MCP에는 날짜가 붙은 버전이 있고, 형태가 바뀌었습니다: 개�
 측정값으로 제공되던 필드였습니다. `tag_problem` · `untagged` — 카탈로그가 분류된 채로 실립니다.
 
 **정말로 없음.** MCP **resources**(`ps://…`)와 **prompts**. 서버는 `tools` 능력만 선언합니다.
+`get_problem(include=returned)` — 실패한 SQL run 이 돌려준 표를 `.ps/raw/` 에서 읽는 것 — 은
+설계(§4.3)에 있으나 별도 계획으로 미뤘습니다. 읽는 쪽에서 프로토콜 파싱이 필요하기 때문입니다.
 
 페이지네이션도 없습니다: 인자 없는 `submissions` 는 로그 전체를 돌려줍니다. 한 사람의 오늘치
-이력에는 괜찮고, 괜찮지 않게 되기 전에 한도가 필요할 것입니다.
+이력에는 괜찮고, 괜찮지 않게 되기 전에 한도가 필요할 것입니다. `repair_steps` 에는 한도가 있고 — 기본
+20개이며, 잘랐을 때는 그렇다고 말합니다 — `get_problem(include=runs)` 에는 없습니다(위 참고).
