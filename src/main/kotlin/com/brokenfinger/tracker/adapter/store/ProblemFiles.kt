@@ -13,8 +13,9 @@ import java.nio.file.Path
  * at all.
  *
  * **The threat.** The repository root holds, beside `problems/`, what must never leave: the push token
- * in `.ps/git-credentials` (`https://x-access-token:<token>@github.com`), the `/watch` token and the
- * original frames. What is read under `problems/` does leave — a statement and kept code through MCP, a
+ * in `.ps/git-credentials` (`https://x-access-token:<token>@github.com`) and the original frames. The
+ * `/watch` token and the session cookie are not among them: they stay in the tool's own `.ps/`, outside
+ * the records. What is read under `problems/` does leave — a statement and kept code through MCP, a
  * diff into `log/submissions.jsonl`, which MCP serves and git pushes, the statement into the problem
  * page and example values into a runner, both committed and pushed. Git stores symbolic links, so a
  * link under `problems/` can arrive with a clone or a pull of the records repository, not only from

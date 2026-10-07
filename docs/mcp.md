@@ -344,8 +344,8 @@ You do not have to configure this. The server decides from how your client opens
   and the examples a runner is generated from are read only from a regular file whose real path
   lies under the record repository's own `problems/` directory. So neither a record's path nor a
   symbolic link — git stores links, so one can arrive with a clone or a pull — can lead one of these
-  reads to the push token and the `/watch` token under `.ps/`. A `problems` directory that is itself
-  a link is not followed, so one linked elsewhere on purpose yields no statement and no code. A file
+  reads to the push token under the repository's `.ps/`. A `problems` directory that is itself a
+  link is not followed, so one linked elsewhere on purpose yields no statement and no code. A file
   refused this way is logged with its path and the reason, never with its content.
 - **No Programmers session cookie is ever on this path**, at any log level.
 - Nothing is logged on the normal path — not the request and not the answer — because every

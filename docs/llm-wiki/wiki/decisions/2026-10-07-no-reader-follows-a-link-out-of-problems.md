@@ -13,10 +13,11 @@ sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
 ## Context
 
 The records repository root holds, beside `problems/`, what must never leave the machine:
-`.ps/git-credentials` — the push token, as `https://x-access-token:<token>@github.com` — the
-`/watch` token and the raw frames. Git stores symbolic links, so a link under `problems/` can
-arrive with a clone or a pull of the records repository, not only from someone with a shell on
-the machine.
+`.ps/git-credentials` — the push token, as `https://x-access-token:<token>@github.com` — and the
+raw frames. (The `/watch` token and the session cookie are not there; they stay in the tool's own
+`.ps/`, outside the records, per `compose.yaml:78-87`.) Git stores symbolic links, so a link under
+`problems/` can arrive with a clone or a pull of the records repository, not only from someone
+with a shell on the machine.
 
 #353 bounded one reader, kept submit code, after three review rounds
 ([[decisions/2026-10-07-repair-steps-are-served-not-judged]], option 10). The same review
@@ -73,19 +74,20 @@ Within option 5, how the bytes become text:
 
 ## Decision
 
-`adapter/store/ProblemFiles(layout)`, internal to the store adapter, offers `readAllBytes(candidate)`
-and `readString(candidate)`. A candidate is resolved to its real path and read only when that path
-lies under the real repository root with `problems` appended by name, and is a regular file; the
-real path is what gets opened, without following its last name. Anything else, and any exception,
-answers `null`. A missing file or a dangling link (`NoSuchFileException`) is the normal path and says
-nothing. Every other refusal logs one warning naming the candidate and the reason — `leads out of
-problems/`, `not a regular file`, or the exception's simple class name — and never the content, an
-exception's message or where a link leads, since each of those can name the file being kept out.
-`readString` decodes with a new UTF-8 decoder, which reports malformed input rather than replacing
-it, so it is exactly as strict as `Files.readString`; `readAllBytes` leaves lenient decoding to the
-readers that did it before. Only the root is resolved, because it may sit behind a link (macOS's
-`/var`, a `~/ps-records` link); `problems` never is, because resolving a linked `problems` carries
-the bound to wherever the link leads.
+`adapter/store/ProblemFiles(layout)` — module-internal, since Kotlin has no package-private, and
+used only by `adapter/store` — offers `readAllBytes(candidate)` and `readString(candidate)`. A
+candidate is resolved to its real path and read only when that path lies under the real repository
+root with `problems` appended by name, and is a regular file; the real path is what gets opened,
+without following its last name. Anything else, and any exception, answers `null`. A missing file or
+a dangling link (`NoSuchFileException`) is the normal path and says nothing. Every other refusal
+logs one warning naming the candidate and the reason — `leads out of problems/`,
+`not a regular file`, or the exception's simple class name — and never the content, an exception's
+message or where a link leads, since each of those can name the file being kept out. `readString`
+decodes with a new UTF-8 decoder, which reports malformed input rather than replacing it, so it is
+exactly as strict as `Files.readString`; `readAllBytes` leaves lenient decoding to the readers that
+did it before. Only the root is resolved, because it may sit behind a link (macOS's `/var`, a
+`~/ps-records` link); `problems` never is, because resolving a linked `problems` carries the bound
+to wherever the link leads.
 
 Every reader in the table goes through it:
 
@@ -130,9 +132,11 @@ all. The review round's mutations are under Outcome.
 ## Accepted costs
 
 The refusals among these fail safe: something legitimate reads as absent, and since the review round
-each says so in a warning naming the path. Two are reads the bound cannot stop — a directory swapped
-mid-read and a hard link — accepted because each needs something acting on this machine at the
-time, and a shell there can read the token directly.
+each says so in a warning naming the path — with one exception: under a root configured as
+`<link>/..`, `submitted` resolves a lexical path that does not exist and ends, silently, as a
+missing file (measured). Two are reads the bound cannot stop — a directory swapped mid-read and a
+hard link — accepted because each needs something acting on this machine at the time, and a shell
+there can read the token directly.
 
 - **A deliberately linked `problems/`, problem directory or file yields nothing.** No statement,
   no code, no diff, no examples, and a warning for each. The bound cannot tell a deliberate link
@@ -199,6 +203,17 @@ reduction, reverting any of the six readers to a direct `Files.read*` still does
 `NOFOLLOW_LINKS` survives, as it can only matter inside the race. Gates green: 1,879 tests (8
 skipped), ktlint, the build, branch coverage (`adapter/store` 85%, 408 of 480) and the guards.
 
+**Re-review.** One Important: the test log capture read only each event's formatted message, so a
+throwable passed as the last argument escaped every "never the message" assertion — the
+re-reviewer's mutant, `failed()` logging `cause` too, passed all of `ProblemFilesTest` while the
+written log carried the link target's path. `d04ec97` captures what a layout writes, message then
+throwable text, and refuses to listen at a level the logger is not enabled for; the same mutant now
+fails. `af55d58` words the statement backfill's work list as problems "with none readable" rather
+than "recorded before it was kept", which a refused file was not. This page, the `ProblemFiles` and
+`RecordLayout.recordFile` KDocs and the MCP note no longer place the `/watch` token in the records
+repository. Gates green again: 1,879 tests (8 skipped), ktlint, the build, branch coverage and the
+guards.
+
 Not verified live. The bound changes nothing a normal records repository can see, so after a
 rebuild `get_problem`, `repair_steps` and the problem pages should come out byte-identical, and a
 normal boot should log no `Treating ... as absent` line.
@@ -207,9 +222,10 @@ Found in the audit and left for their own issues:
 
 - **Writers follow links (#361)** — the accepted cost above.
 - **A `.gitignore` that is a link ignores nothing (#360).** Git does not read it: in a scratch
-  repository on git 2.48.1, `git add --all` warned `unable to access '.gitignore': Too many levels
-  of symbolic links` and staged `.ps/git-credentials`. Reconciliation is `git add --all`, `.ps/` is
-  excluded by `.gitignore` alone, and `RecordRepositoryIgnores` reads and rewrites the rules through
-  the link without noticing. A linked `.gitignore` arriving with a clone would have the next
-  reconcile commit the push token, and the next pass push it. It sits at the root, outside
-  `problems/`, so outside this decision — and it is the more serious of the two.
+  repository on git 2.48.1, `git add --all` warned
+  `unable to access '.gitignore': Too many levels of symbolic links` and staged
+  `.ps/git-credentials`. Reconciliation is `git add --all`, `.ps/` is excluded by `.gitignore`
+  alone, and `RecordRepositoryIgnores` reads and rewrites the rules through the link without
+  noticing. A linked `.gitignore` arriving with a clone would have the next reconcile commit the
+  push token, and the next pass push it. It sits at the root, outside `problems/`, so outside this
+  decision — and it is the more serious of the two.
