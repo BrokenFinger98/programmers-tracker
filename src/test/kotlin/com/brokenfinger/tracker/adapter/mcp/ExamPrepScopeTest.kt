@@ -91,8 +91,10 @@ class ExamPrepScopeTest {
     @Test
     fun `whenever something narrows, an empty answer is said not to be clean`() {
         val sentence = "An empty answer under this scope is not an absence of mistakes"
+        val paragraph = ExamPrepScope(language = "python").paragraph()
 
-        ExamPrepScope(language = "python").paragraph() shouldContain sentence
+        paragraph shouldContain sentence
+        paragraph shouldContain "say which argument may not match what the records hold"
         ExamPrepScope().paragraph() shouldNotContain sentence
     }
 

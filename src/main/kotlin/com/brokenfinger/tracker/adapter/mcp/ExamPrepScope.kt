@@ -23,7 +23,9 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 data class ExamPrepScope(val language: String? = null, val since: String? = null, val part: String? = null) {
     init {
-        if (language != null) require(!readsAsDate(language)) { positional("language \"$language\" reads as a date") }
+        if (language != null) {
+            require(!readsAsDate(language)) { positional("language ${quoted(language)} reads as a date") }
+        }
         if (since != null) require(readsAsDate(since)) { positional(Since.FORMAT) }
     }
 
@@ -43,8 +45,8 @@ data class ExamPrepScope(val language: String? = null, val since: String? = null
     private fun rendered(separator: String): String =
         given().joinToString(", ") { (name, value) -> "$name$separator${quoted(value)}" }
 
-    private fun partWarning(given: String): String =
-        "Some clients split arguments on spaces, so ${quoted(given)} may be the start of a longer part name " +
+    private fun partWarning(typed: String): String =
+        "Some clients split arguments on spaces, so ${quoted(typed)} may be the start of a longer part name " +
             "(\"GROUP\" for \"GROUP BY\"). Match it against the part keys stats(groupBy=part) returns, call " +
             "repair_steps with the full name, and say which part you used."
 
