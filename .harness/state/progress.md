@@ -5485,3 +5485,9 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - Bare `실패` (wrong SQL submit) → WRONG; MySQL error tuple on a run finish (returnedResult=false) → COMPILE_ERROR; a rejected SQL submit (`실패 (런타임 에러)`, measured on purpose on 59034) stays RUNTIME_ERROR — pinned.
 - Fixtures sql-submit-wrong / sql-run-error / sql-submit-error; protocol §6, §7, §15 #18–20; ADR [[decisions/2026-10-07-database-failures-that-said-something]]. Spec ✅, quality approved after one round (fixture for the B0 measurement, tuple rule narrowed to the run path).
 - Pending: live — a wrong SQL submit → WRONG, a syntax-error SQL run → COMPILE_ERROR on the rebuilt container.
+
+## 2026-10-07 — #351 every run keeps its code (branch feat/351-every-run-keeps-its-code)
+- #349 verified live on 59035 (10:06:17 run → COMPILE_ERROR, 10:06:55 submit → WRONG). ✅
+- Measured the fetch race first: four fastest-possible alternating runs all got their own code (fetch 0.24–0.53 s after the record, fastest human gap 1.6 s).
+- `problems/<id>/runs.jsonl`: recordId, language, codeFetchedAt, code; idempotent on complete lines. Review round: slimmed (verdicts stay in the log), codeFetchedAt for late attachments, torn-line retry fixed.
+- Pending: live — several runs on one problem leave one line each.

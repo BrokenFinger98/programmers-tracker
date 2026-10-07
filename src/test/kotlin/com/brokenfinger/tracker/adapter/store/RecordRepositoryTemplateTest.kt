@@ -57,6 +57,8 @@ class RecordRepositoryTemplateTest {
         // user's own notes, so naming it is correct.
         "notes.md",
         "examples.json",
+        // One line per code run, written when the run's code is attached (#351).
+        "runs.jsonl",
         "log/submissions.jsonl",
         "attempts/",
         // Seeded once if absent, then the reader's (#254). Named here for the same reason the

@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@d3bb7feb135e7e61111a270293225165eef87fe7 -->
+<!-- translated-from: README.md@9a48fe7801372ee75471b24c69f6c1501c267dcc -->
 
 # ps-records
 
@@ -15,6 +15,7 @@ problems/<lessonId>-<title>/
 ├── README.md          프론트매터 + 시도 이력. 매번 덮어쓰기됨
 ├── notes.md           내 오답 노트. 서버가 절대 건드리지 않음
 ├── Solution.<ext>     최신 코드, 언어당 한 파일
+├── runs.jsonl         코드 실행 기록 — 시각과 실행한 코드 (판정은 로그에)
 ├── examples.json      채점기가 준 예제 입력과 기대 출력
 ├── runner_test.<ext>  그 예제로 만든 실행기 — 아래 참고
 └── attempts/          제출별 코드(NNN.<ext>)와 원본 프레임(NNN.raw.jsonl)

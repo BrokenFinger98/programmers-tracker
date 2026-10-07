@@ -61,5 +61,4 @@ stays unknown, and a test pins each of those.
 ## Outcome
 
 #349. Tests in three layers on the three fixtures; the resolver tests seen failing without the
-rules. Live acceptance pending: a wrong SQL submit and a syntax-error run on the rebuilt container
-show WRONG and COMPILE_ERROR.
+rules. Verified live 2026-10-07 on lesson 59035 after rebuilding from f89960c (PR #350): a run of a query naming a missing column at 10:06:17 was recorded COMPILE_ERROR with the 1054 tuple, and a submit with the wrong order at 10:06:55 was recorded WRONG.

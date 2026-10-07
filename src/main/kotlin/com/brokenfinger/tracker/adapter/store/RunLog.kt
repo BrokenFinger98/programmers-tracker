@@ -27,8 +27,10 @@ import java.time.format.DateTimeFormatter
  * [Line.codeFetchedAt] is the instant the code was attached. A run attached late — the startup
  * retry after an expired session or a rate limit, or a second Run pressed within the ~0.3 s fetch
  * window — gets whatever code the page holds at fetch time, which may be a *later* run's. A reader
- * compares it with the start of the next grading on the same problem: fetched after that grading
- * began, the code may belong to it. The server records the fact; the reader decides.
+ * compares it with the next record's `ts` on the same problem (when that grading was recorded,
+ * after it finished): fetched later than that, the code may belong to the next run. This catches a
+ * late attachment; it can miss a second Run pressed within the fetch window. The server records
+ * the fact; the reader decides.
  *
  * Full code on every line, since a late attachment arrives out of order and "same as the previous"
  * would name the wrong neighbour. Append-only and idempotent by [SubmissionRecord.recordId]: the
