@@ -7,10 +7,10 @@ package com.brokenfinger.tracker.adapter.mcp
  * name nothing ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]). This is the text the
  * learner sends their own model through a slash command, asking it to do the naming.
  *
- * **It carries its own readings.** The server instructions are nearly full (#353), so what a pre-exam
- * session must not misread travels here. Claude Code cuts instructions and tool descriptions at 2,048
- * characters but not a prompt's text (2.1.285, read from the client), so this has no budget test. It
- * stays short because it is pasted into a conversation every time it runs.
+ * **It carries its own readings.** The server instructions state them in brief and are nearly full
+ * (#353), so the fuller wording a pre-exam session needs travels here. Claude Code cuts instructions and
+ * tool descriptions at 2,048 characters but not a prompt's text (2.1.285, read from the client), so this
+ * has no budget test. It stays short because it is pasted into a conversation every time it runs.
  */
 object ExamPrepPrompt {
     const val NAME = "exam_prep"

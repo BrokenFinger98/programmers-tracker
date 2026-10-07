@@ -14,7 +14,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * The only text in which this server asks for interpretation. These pin what it asks for and the
- * readings it must carry, because the server instructions have no room left for them (#353).
+ * readings it must carry in full: the server instructions state them only in brief and have no room
+ * for more (#353).
  */
 class ExamPrepPromptTest {
     private val text = ExamPrepPrompt.text(ExamPrepScope())

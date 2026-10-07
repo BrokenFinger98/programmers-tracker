@@ -332,11 +332,12 @@ asks your model to find your recurring mistakes in your own repair steps before 
 4. per pattern, two or three drills aimed at exactly that point;
 5. what the records could not support.
 
-It carries its own readings, because the server instructions have no room left for them: a step
-shows what changed, not what was wrong; a run is not an attempt; absent is not zero; run code is
-kept from the 2026-10-07 tracker on; code marked `codeLate` may belong to the next grading; and
-`incompleteHistory` means the counts have holes. Claude Code cuts instructions and tool
-descriptions at 2,048 characters, but not a prompt's text.
+It carries its own readings: a step shows what changed, not what was wrong; a run is not an
+attempt; absent is not zero; run code is kept from the 2026-10-07 tracker on; code marked
+`codeLate` may belong to the next grading; and `incompleteHistory` means the counts have holes.
+The server instructions state these in brief and have no room for more, so the prompt carries the
+fuller wording a pre-exam session needs. Claude Code cuts instructions and tool descriptions at
+2,048 characters, but not a prompt's text.
 
 In Claude Code it is a slash command, and only you can start it — the model cannot run a prompt on
 its own. With the server named as in the configuration above, the menu shows
