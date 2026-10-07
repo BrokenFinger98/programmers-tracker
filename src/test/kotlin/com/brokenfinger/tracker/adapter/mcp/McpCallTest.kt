@@ -9,6 +9,8 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
@@ -69,6 +71,31 @@ class McpCallTest {
 
         call.arguments().shouldBeEmpty()
         call.stringArgument("groupBy").shouldBeNull()
+    }
+
+    /** `arguments` is optional in the specification: absent and null are none, not a refusal. */
+    @Test
+    fun `prompt arguments are none when absent or null, and the object when given`() {
+        val absent = buildJsonObject { put("name", "exam_prep") }
+        val nulled = JsonObject(absent + ("arguments" to JsonNull))
+        val given = aToolCallParams("exam_prep", buildJsonObject { put("language", "java") })
+
+        McpCall.from(aLegacyBody("prompts/get", absent)).promptArguments() shouldBe JsonObject(emptyMap())
+        McpCall.from(aLegacyBody("prompts/get", nulled)).promptArguments() shouldBe JsonObject(emptyMap())
+        McpCall.from(aLegacyBody("prompts/get", given)).promptArguments().keys shouldBe setOf("language")
+    }
+
+    /** A tool reads a malformed `arguments` as none; for a prompt that would widen to everything on record. */
+    @Test
+    fun `prompt arguments that are not an object are refused as invalid params`() {
+        val params = buildJsonObject {
+            put("name", "exam_prep")
+            put("arguments", "java")
+        }
+
+        val refused = shouldThrow<McpFailure> { McpCall.from(aLegacyBody("prompts/get", params)).promptArguments() }
+
+        refused.code shouldBe McpErrors.INVALID_PARAMS
     }
 
     @Test
