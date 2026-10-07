@@ -29,6 +29,10 @@ enum class NoDiff(private val wire: String) {
 
 /** One grading and the next grading of the same problem in the same language, with what changed. */
 data class Transition(val from: CodedGrading, val to: CodedGrading, val diff: String?, val noDiff: NoDiff?) {
+    init {
+        require((diff == null) != (noDiff == null)) { "exactly one of diff and noDiff" }
+    }
+
     /**
      * A repair step: the earlier grading did not pass — an unresolved verdict included, since
      * unresolved is not passed — and something may have changed. Identical code makes no step,
@@ -56,11 +60,17 @@ object RepairSteps {
     /** The steps a reader studies: failures followed by a change, or by code that cannot be trusted. */
     fun of(timeline: List<CodedGrading>): List<Transition> = transitions(timeline).filter(Transition::isRepairStep)
 
-    /** Every consecutive pair per language, of the timeline [CodeTimeline.of] built. */
+    /**
+     * Every consecutive pair per language, of the timeline [CodeTimeline.of] built, in the time
+     * order of each pair's later grading — not grouped by language, since a reader shown them as
+     * they are expects a timeline. The sort is stable, so pairs ending at the same instant keep
+     * the order of their languages' first gradings.
+     */
     fun transitions(timeline: List<CodedGrading>): List<Transition> = timeline
         .groupBy { it.record.language.lowercase() }
         .values
         .flatMap { it.zipWithNext(::between) }
+        .sortedBy { it.to.record.ts }
 
     private fun between(from: CodedGrading, to: CodedGrading): Transition {
         val old = from.code?.text
@@ -71,12 +81,16 @@ object RepairSteps {
 
     private fun compared(from: CodedGrading, to: CodedGrading, old: List<String>, new: List<String>): Transition {
         if (old == new) return Transition(from, to, null, NoDiff.SAME_CODE)
-        val diff = UnifiedDiff.of(old, new, FROM, TO) ?: return Transition(from, to, null, NoDiff.TOO_LARGE)
-        return Transition(from, to, diff, null)
+        if (!UnifiedDiff.fits(old, new)) return Transition(from, to, null, NoDiff.TOO_LARGE)
+        return Transition(from, to, UnifiedDiff.of(old, new, FROM, TO), null)
     }
 
     // runs.jsonl keeps code as fetched; an attempt file has exactly one trailing newline. Compared
     // raw, the same code read from the two places would differ.
+    //
+    // Every trailing newline is trimmed here (D4), where CodeArtifacts removes only one: a change
+    // that only adds trailing blank lines is SAME_CODE here but a diff in an attempt's
+    // diffFromPrev. `\r\n` is not normalized - both sides come from the same fetch path.
     private fun linesOf(text: String): List<String> {
         val body = text.trimEnd('\n')
         if (body.isEmpty()) return emptyList()

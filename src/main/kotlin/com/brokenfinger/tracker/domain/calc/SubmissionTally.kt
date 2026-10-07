@@ -56,8 +56,7 @@ enum class TallyGroup {
         return { keys[it.lessonId] }
     }
 
-    private fun newestKey(grouped: List<SubmissionRecord>): String? =
-        grouped.sortedByDescending { it.ts }.firstNotNullOfOrNull(::keyOf)
+    private fun newestKey(grouped: List<SubmissionRecord>): String? = ProblemLabel.newestCarrying(grouped, ::keyOf)
 
     /** The spelling used on the wire, which is also what the tool schema enumerates. */
     fun wireName(): String = name.lowercase()

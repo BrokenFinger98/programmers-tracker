@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.domain.calc
 
 import com.brokenfinger.tracker.support.fixtures.aCodedGrading
 import com.brokenfinger.tracker.support.fixtures.aRun
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
@@ -59,6 +60,23 @@ class RepairStepFilterTest {
         val steps = listOf(stepOf(unlabelled, toAt = "2026-10-02T10:00:00+09:00"))
 
         filter().applied(steps) shouldContainExactly steps
+    }
+
+    /** Dev rules §4: a filter is a value we create, so an argument it cannot honour is refused. */
+    @Test
+    fun `a limit that is not positive is refused`() {
+        shouldThrow<IllegalArgumentException> { filter(limit = 0) }
+        shouldThrow<IllegalArgumentException> { filter(limit = -1) }
+    }
+
+    @Test
+    fun `a blank language is refused`() {
+        shouldThrow<IllegalArgumentException> { filter(language = " ") }
+    }
+
+    @Test
+    fun `a blank part is refused`() {
+        shouldThrow<IllegalArgumentException> { filter(part = "") }
     }
 
     private fun filter(since: Since? = null, language: String? = null, part: String? = null, limit: Int? = null) =

@@ -53,6 +53,26 @@ class CodeTimelineTest {
         CodeTimeline.of(listOf(java, kotlin), codes).first().late shouldBe true
     }
 
+    /** Strictly after: a fetch at the very instant the next grading was recorded is not late. */
+    @Test
+    fun `code fetched at exactly the next grading's record time is not late`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:02+09:00")
+        val codes = mapOf(first.recordId() to aKeptCode("a", fetchedAt = "2026-10-07T10:00:02+09:00"))
+
+        CodeTimeline.of(listOf(first, second), codes).first().late shouldBe false
+    }
+
+    /** The caller hands records over in log order; a tie must not reorder them. */
+    @Test
+    fun `gradings that share a timestamp keep the order they were handed in`() {
+        val one = aRun(at = "2026-10-07T10:00:00+09:00")
+        val other = aRun(at = "2026-10-07T10:00:00+09:00")
+
+        CodeTimeline.of(listOf(one, other), emptyMap()).map { it.record } shouldContainExactly listOf(one, other)
+        CodeTimeline.of(listOf(other, one), emptyMap()).map { it.record } shouldContainExactly listOf(other, one)
+    }
+
     @Test
     fun `the last grading has nothing after it and is never late`() {
         val only = aRun(at = "2026-10-07T10:00:00+09:00")

@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aCodedGrading
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmit
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -204,6 +205,67 @@ class RepairStepsTest {
         RepairSteps.transitions(timeline).single().noDiff shouldBe NoDiff.SAME_CODE
     }
 
+    /** D4: either side being late is enough — the later grading's code may sit on both. */
+    @Test
+    fun `identical code beside a late later side is still a step`() {
+        val timeline = listOf(
+            aCodedGrading(aRun(at = T0, verdict = Verdict.WRONG), code = "b"),
+            aCodedGrading(aRun(at = T1, verdict = Verdict.PASS), code = "b", late = true),
+        )
+
+        RepairSteps.of(timeline).single().noDiff shouldBe NoDiff.SAME_CODE
+    }
+
+    @Test
+    fun `code too large on the later side alone says so`() {
+        val huge = (0..UnifiedDiff.MAX_INPUT_LINES).joinToString("\n") { "x$it" }
+        val step = RepairSteps.of(
+            listOf(
+                aCodedGrading(aRun(at = T0, verdict = Verdict.WRONG), code = "a"),
+                aCodedGrading(aRun(at = T1, verdict = Verdict.PASS), code = huge),
+            ),
+        ).single()
+
+        step.noDiff shouldBe NoDiff.TOO_LARGE
+    }
+
+    @Test
+    fun `a language spelled in another case is the same language`() {
+        val timeline = listOf(
+            aCodedGrading(aRun(at = T0, verdict = Verdict.WRONG, language = "Java"), code = "a"),
+            aCodedGrading(aRun(at = T1, verdict = Verdict.PASS, language = "java"), code = "b"),
+        )
+
+        RepairSteps.of(timeline).single().from shouldBe timeline[0]
+    }
+
+    /** `get_problem(include=runs)` shows transitions as they are; a reader expects time order. */
+    @Test
+    fun `transitions of two interleaved languages come back in time order`() {
+        val timeline = listOf(
+            aCodedGrading(aRun(at = T0, language = "java"), code = "a"),
+            aCodedGrading(aRun(at = T1, language = "kotlin"), code = "k"),
+            aCodedGrading(aRun(at = T2, language = "kotlin"), code = "l"),
+            aCodedGrading(aRun(at = T3, language = "java"), code = "b"),
+        )
+
+        RepairSteps.transitions(timeline).map { it.to } shouldContainExactly listOf(timeline[2], timeline[3])
+    }
+
+    @Test
+    fun `a transition holding both a diff and a reason is refused`() {
+        val side = aCodedGrading(aRun(at = T0))
+
+        shouldThrow<IllegalArgumentException> { Transition(side, side, diff = "d", noDiff = NoDiff.SAME_CODE) }
+    }
+
+    @Test
+    fun `a transition holding neither a diff nor a reason is refused`() {
+        val side = aCodedGrading(aRun(at = T0))
+
+        shouldThrow<IllegalArgumentException> { Transition(side, side, diff = null, noDiff = null) }
+    }
+
     @Test
     fun `no-diff reasons have wire names`() {
         NoDiff.entries.map { it.wireName() } shouldContainExactly
@@ -214,5 +276,6 @@ class RepairStepsTest {
         const val T0 = "2026-10-07T10:00:00+09:00"
         const val T1 = "2026-10-07T10:00:05+09:00"
         const val T2 = "2026-10-07T10:00:10+09:00"
+        const val T3 = "2026-10-07T10:00:15+09:00"
     }
 }
