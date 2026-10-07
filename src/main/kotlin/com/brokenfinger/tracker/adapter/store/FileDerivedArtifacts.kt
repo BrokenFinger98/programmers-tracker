@@ -33,6 +33,7 @@ import java.nio.file.Path
 class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) : DerivedArtifacts {
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
+    private val runs = RunLog(layout)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
     private val tagNotes = TagNotes(layout)
@@ -44,11 +45,14 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
      *
      * The diff is taken before the attempt copy is written for readability only — it compares
      * against the *previous* attempt, so the order does not matter to the result.
+     *
+     * A run also appends its code to `runs.jsonl`, the only place a run's code outlives the next run.
      */
     override fun writeCode(record: SubmissionRecord, code: String): AttachedCode {
         val diff = artifacts.diffFromPrev(record, code)
         val latest = artifacts.writeLatest(record, code)
         val attempt = artifacts.writeAttempt(record, code)
+        runs.append(record, code)
         return AttachedCode(relativeOf(attempt ?: latest), diff)
     }
 

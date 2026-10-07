@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import java.time.OffsetDateTime
 
 /**
  * Unit tests for the record's value objects — 0 mocks (dev rules §6.1).
@@ -90,5 +91,23 @@ class SubmissionRecordTest {
         val pending = aSubmissionRecord(codePath = null, codePending = true)
 
         pending.isCodeAttached() shouldBe false
+    }
+
+    /** #343: a grading is its write time and its bytes; this is the one string that says so. */
+    @Test
+    fun `a record names itself by its time and its capture key`() {
+        val record = aSubmissionRecord(
+            ts = OffsetDateTime.parse("2026-10-03T15:23:52.318205458+09:00"),
+            captureKey = CaptureKey("39e412c5dde20f36"),
+        )
+
+        record.recordId() shouldBe "2026-10-03T15:23:52.318205458+09:00#39e412c5dde20f36"
+    }
+
+    @Test
+    fun `a correction carries the name of the record it corrects`() {
+        val pending = aSubmissionRecord(codePending = true, codePath = null)
+
+        pending.copy(codePending = false, codePath = "x").recordId() shouldBe pending.recordId()
     }
 }

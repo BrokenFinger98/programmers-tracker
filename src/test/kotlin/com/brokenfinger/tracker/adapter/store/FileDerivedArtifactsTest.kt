@@ -46,6 +46,23 @@ class FileDerivedArtifactsTest {
     }
 
     @Test
+    fun `a run also leaves its code in the run log`() {
+        val record = aSubmissionRecord(action = GradingAction.RUN, attempt = 0)
+
+        artifacts().writeCode(record, CODE_V1)
+
+        val log = root.resolve("problems/120804-두-수의-곱-구하기/runs.jsonl")
+        Files.readAllLines(log).single() shouldContain record.recordId()
+    }
+
+    @Test
+    fun `a submit leaves no run log`() {
+        artifacts().writeCode(aSubmissionRecord(action = GradingAction.SUBMIT, attempt = 2), CODE_V1)
+
+        Files.exists(root.resolve("problems/120804-두-수의-곱-구하기/runs.jsonl")) shouldBe false
+    }
+
+    @Test
     fun `a path never leaves here absolute, whatever the host separator is`() {
         val written = artifacts().writeCode(aSubmissionRecord(attempt = 1), CODE_V1)
 
