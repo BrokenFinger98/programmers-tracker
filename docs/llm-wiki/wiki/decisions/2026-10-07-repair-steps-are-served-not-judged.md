@@ -202,6 +202,23 @@ truncation rule; and no step of 4.4's prompt depends on it.
 
 ## Outcome
 
+**Verified live 2026-10-07** — the one-correction case — after rebuilding from main `193179d` (PR #357):
+
+- `tools/list` answers seven tools; the descriptions arrive at the as-built lengths (`get_problem`
+  1,983, `repair_steps` 1,983, `stats` 1,788 …), all within the 2,000 budget.
+- `repair_steps(lessonId=59036)` answers one step: the 10:51:49 WRONG run → the 10:51:51 PASS run,
+  with the diff of exactly the edit made (`SELECT ANIMAL_ID FROM ANIMAL_INS` → `… WHERE
+  INTAKE_CONDITION = 'Sick'`); the following PASS → PASS pair is correctly no step.
+- `repair_steps` with no arguments answers 20 of 65 with `truncated: true` in 12 KB; 17 of the 20
+  say `codeUnknown` (runs from before run code was kept), one each `fromCodeUnknown` and
+  `toCodeUnknown`, one carries a diff — the history before 2026-10-07 is mostly diff-less, as the
+  accepted costs say.
+- `get_problem(59036, include=["code","runs"])` puts the code on the submit, and on the first run
+  of 2026-10-07 a `diffFromPrevGrading` against the 2026-10-03 submit (the previous grading in the
+  language); an older run without kept code carries neither key.
+- `stats(groupBy=part)`: SELECT — 34 submits over 23 problems attempted, 23 passed, 21 on the
+  first submit, median 1.0 runs before a pass.
+
 #353, in 22 commits on `feat/353-repair-steps-over-mcp`, reviewed for spec compliance and quality
 in rounds. The design's `codeUncertain` became `codeFetchedAt` on the run line and `codeLate`
 on a step; the older ADR carries a note.
@@ -217,7 +234,9 @@ Found in review and filed rather than fixed on this branch:
 - **#356** — `incompleteHistory` is appended after the payload, so a client that cuts a large
   answer cuts the warning first.
 
-**Live acceptance pending** (plan Task 12): one problem solved with at least two failing runs that
+**The plan's acceptance case** (plan Task 12) asks more than the live data above holds: one problem solved with at least two failing runs that
 change the code, then a pass; `repair_steps(lessonId=…)` shows one step per correction, each with
 a diff and none `codeLate`; `get_problem(include=["code","runs"])` carries every run's code and all
-but the first `diffFromPrevGrading`; `stats(groupBy="part")` carries `attempted` and `passed`.
+but the first `diffFromPrevGrading`; `stats(groupBy="part")` carries `attempted` and `passed`. The live check above covers **one** correction (lesson 59036 has a single failing run); the
+two-correction case is pinned by `RecordQueryTest` and `McpToolInvokerTest` and is confirmed live on
+the first solve that has two failing runs.
