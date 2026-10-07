@@ -243,7 +243,10 @@ data class AttachReport(val attached: Int = 0, val deferred: Int = 0, val blocke
  * `FileDerivedArtifacts`.
  */
 interface DerivedArtifacts {
-    /** Writes `Solution.<ext>`, plus the attempt copy when the record owns one, and reports both. */
+    /**
+     * Writes `Solution.<ext>`, plus the attempt copy when the record owns one, and reports both.
+     * A run also appends its code to the problem's run log, the only place it outlives the next run.
+     */
     fun writeCode(record: SubmissionRecord, code: String): AttachedCode
 
     /**

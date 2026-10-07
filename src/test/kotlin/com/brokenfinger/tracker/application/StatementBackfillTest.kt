@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * The repair pass for problems solved before the server kept statements (#280).
@@ -156,7 +157,7 @@ class StatementBackfillTest {
                 runCatching { Files.readString(RecordLayout(root).statementFile(lessonId, title)) }.getOrNull()
             },
             source = source,
-            artifacts = FileDerivedArtifacts(root, store),
+            artifacts = FileDerivedArtifacts(root, store, Clock.systemDefaultZone()),
             perBoot = perBoot,
             pause = pause,
         )

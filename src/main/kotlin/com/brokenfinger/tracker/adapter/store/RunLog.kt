@@ -5,72 +5,76 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.time.Clock
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 
 /**
- * `problems/<id>/runs.jsonl` — one line per run, with the code it ran
+ * `problems/<id>/runs.jsonl` — one line per run, holding the code it ran
  * (`docs/superpowers/specs/2026-10-07-mistake-patterns-design.md` §4.2).
  *
  * A run owns no attempt file and `Solution.<ext>` is overwritten by the next one, so before
- * this the code of every run but the last was lost — and the correction between a failed run
- * and the next is the evidence a recurring mistake leaves. Full code on every line: a few KB at
- * most, and a pending run attached late by the startup retry arrives out of order, so a line
- * that said "same as the previous" would name the wrong neighbour.
+ * this the code of every run but the last was lost. **Verdicts and messages live in
+ * `log/submissions.jsonl`; this file holds only what the log cannot — the code — joined to its
+ * record by `recordId`.** A second copy of the verdict would disagree with the log the day a
+ * classification rule changes, as #350 just did.
  *
- * Append-only and idempotent by [SubmissionRecord.recordId]: the retry may attach a run twice.
- * Not read on the capture path beyond that check.
+ * [Line.codeFetchedAt] is the instant the code was attached. A run attached late — the startup
+ * retry after an expired session or a rate limit, or a second Run pressed within the ~0.3 s fetch
+ * window — gets whatever code the page holds at fetch time, which may be a *later* run's. A reader
+ * compares it with the start of the next grading on the same problem: fetched after that grading
+ * began, the code may belong to it. The server records the fact; the reader decides.
+ *
+ * Full code on every line, since a late attachment arrives out of order and "same as the previous"
+ * would name the wrong neighbour. Append-only and idempotent by [SubmissionRecord.recordId]: the
+ * retry may attach a run twice. Only complete (newline-terminated) lines count as already written,
+ * because a crash can leave a torn prefix of this very run's line.
  */
-class RunLog(private val layout: RecordLayout) {
+class RunLog(private val layout: RecordLayout, private val clock: Clock) {
     fun append(record: SubmissionRecord, code: String) {
         if (record.action != GradingAction.RUN) return
         val file = layout.runLog(record.lessonId, record.title)
-        if (alreadyHolds(file, record.recordId())) return
+        val id = record.recordId()
+        if (alreadyHolds(file, id)) return
         Files.createDirectories(file.parent)
-        val line = format.encodeToString(lineOf(record, code))
+        val line = format.encodeToString(Line(id, record.language, fetchedNow(), code))
         Files.writeString(file, heal(file) + line + "\n", CHARSET, *APPEND)
     }
 
-    private fun lineOf(record: SubmissionRecord, code: String) = RunLine(
-        recordId = record.recordId(),
-        ts = record.recordId().substringBefore('#'),
-        language = record.language,
-        outcome = record.outcome.name,
-        verdict = record.verdict?.name,
-        failedMessage = record.testcases.sortedBy { it.id }.firstOrNull { it.hasFailed() }?.msg,
-        errorText = record.errorText,
-        code = code,
-    )
+    private fun fetchedNow(): String = OffsetDateTime.now(clock).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     private fun alreadyHolds(file: Path, recordId: String): Boolean {
         if (!Files.isRegularFile(file)) return false
         val needle = "\"recordId\":${format.encodeToString(recordId)}"
-        return String(Files.readAllBytes(file), CHARSET).lineSequence().any { it.contains(needle) }
+        val complete = String(Files.readAllBytes(file), CHARSET).split('\n').dropLast(1)
+        return complete.any { it.contains(needle) }
     }
 
     /** A last line cut short by a crash must not have the next one glued onto it. */
     private fun heal(file: Path): String {
-        if (!Files.isRegularFile(file) || Files.size(file) == 0L) return ""
-        return if (Files.readAllBytes(file).last() == '\n'.code.toByte()) "" else "\n"
+        val size = if (Files.isRegularFile(file)) Files.size(file) else 0L
+        if (size == 0L) return ""
+        return if (lastByte(file, size) == NEWLINE) "" else "\n"
+    }
+
+    private fun lastByte(file: Path, size: Long): Byte = Files.newByteChannel(file).use { channel ->
+        val buffer = ByteBuffer.allocate(1)
+        channel.position(size - 1).read(buffer)
+        buffer.get(0)
     }
 
     @Serializable
-    private data class RunLine(
-        val recordId: String,
-        val ts: String,
-        val language: String,
-        val outcome: String,
-        val verdict: String?,
-        val failedMessage: String?,
-        val errorText: String?,
-        val code: String,
-    )
+    private data class Line(val recordId: String, val language: String, val codeFetchedAt: String, val code: String)
 
     private companion object {
         val CHARSET = StandardCharsets.UTF_8
         val APPEND = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
-        val format = Json { explicitNulls = false }
+        const val NEWLINE = '\n'.code.toByte()
+        val format = Json
     }
 }

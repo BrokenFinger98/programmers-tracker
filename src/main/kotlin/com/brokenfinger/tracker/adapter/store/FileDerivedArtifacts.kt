@@ -18,6 +18,7 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * The store's [DerivedArtifacts] — [CodeArtifacts] for the code files and [ProblemReadme] for
@@ -30,10 +31,10 @@ import java.nio.file.Path
  * Thread confinement is the caller's: every method here is called from inside stage 3's
  * confined section ([[decisions/2026-08-05-write-serialization]] decision 1).
  */
-class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) : DerivedArtifacts {
+class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, clock: Clock) : DerivedArtifacts {
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
-    private val runs = RunLog(layout)
+    private val runs = RunLog(layout, clock)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
     private val tagNotes = TagNotes(layout)

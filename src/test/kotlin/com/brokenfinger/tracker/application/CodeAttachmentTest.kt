@@ -265,8 +265,13 @@ class CodeAttachmentTest {
 
     private fun keysInLog(): List<CaptureKey> = store().read().map { SubmissionRecordJson.decode(it.line).captureKey }
 
-    private fun attachment(fetcher: CodeFetcher) =
-        CodeAttachment(fetcher, store(), FileDerivedArtifacts(root, store()), anEmptyCatalog(), Dispatchers.Unconfined)
+    private fun attachment(fetcher: CodeFetcher) = CodeAttachment(
+        fetcher,
+        store(),
+        FileDerivedArtifacts(root, store(), Clock.systemDefaultZone()),
+        anEmptyCatalog(),
+        Dispatchers.Unconfined,
+    )
 
     private fun fetches(code: String) = CodeFetcher { _, _ -> CodeFetch.Fetched(code) }
 

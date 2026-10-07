@@ -1,20 +1,22 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.GradingAction
-import com.brokenfinger.tracker.domain.TestcaseResult
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
-import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 /**
  * Layer test over a real directory (dev rules §6.1). A run's code is the evidence part 4.3 pairs
@@ -25,28 +27,30 @@ class RunLogTest {
     lateinit var root: Path
 
     @Test
-    fun `a run leaves one line with its name, verdict and full code`() {
-        val run = aRun(verdict = Verdict.WRONG)
+    fun `a run leaves one line with its name, language and full code`() {
+        val run = aRun()
 
         log().append(run, "select 1\n")
 
         val line = lines().single()
         line["recordId"] shouldBe run.recordId()
-        line["verdict"] shouldBe "WRONG"
+        line["language"] shouldBe "java"
         line["code"] shouldBe "select 1\n"
     }
 
+    /** Verdicts and messages live in the submission log; a second copy would disagree with it. */
     @Test
-    fun `the failing case's message is kept, which is where a database error lives`() {
-        val tuple = "(1054, \"Unknown column 'USER_ID' in 'field list'\")"
-        val run = aRun(
-            verdict = Verdict.COMPILE_ERROR,
-            testcases = listOf(aTestcaseResult(passed = false, msg = tuple, runTime = null, returnedResult = false)),
-        )
+    fun `the line holds exactly the four keys the submission log cannot supply`() {
+        log().append(aRun(), "a")
 
-        log().append(run, "select USER_ID from x")
+        rawLines().single().keys shouldBe setOf("recordId", "language", "codeFetchedAt", "code")
+    }
 
-        lines().single()["failedMessage"] shouldBe tuple
+    @Test
+    fun `the instant the code was fetched is recorded from the clock`() {
+        log().append(aRun(), "a")
+
+        lines().single()["codeFetchedAt"] shouldBe "2026-10-03T15:21:02.5+09:00"
     }
 
     /** The startup retry re-attaches a record whose correction never landed; it must not double. */
@@ -86,34 +90,47 @@ class RunLogTest {
 
         log().append(aRun(), "a")
 
-        Files.readAllLines(file).last().startsWith("{\"recordId\":\"2026") shouldBe true
+        val written = Files.readAllLines(file)
+        written.first() shouldBe "{\"recordId\":\"torn"
+        written.last().startsWith("{\"recordId\":\"2026") shouldBe true
     }
 
-    private fun aRun(
-        ts: String = "2026-10-03T15:21:02+09:00",
-        verdict: Verdict = Verdict.WRONG,
-        testcases: List<TestcaseResult> =
-            listOf(aTestcaseResult(passed = false, msg = null, runTime = null, returnedResult = true)),
-    ) = aSubmissionRecord(
+    /** A crash can cut this very run's line short; the retry must still write it, whole. */
+    @Test
+    fun `a torn prefix of the same run does not count as already written`() {
+        val run = aRun()
+        val file = layout().runLog(120804, TITLE)
+        Files.createDirectories(file.parent)
+        Files.writeString(file, "{\"recordId\":\"${run.recordId()}\",\"language\":\"ja")
+
+        log().append(run, "a")
+
+        Files.readAllLines(file) shouldHaveSize 2
+        lines().single()["code"] shouldBe "a"
+    }
+
+    private fun aRun(ts: String = "2026-10-03T15:21:02+09:00", verdict: Verdict = Verdict.WRONG) = aSubmissionRecord(
         ts = OffsetDateTime.parse(ts),
         action = GradingAction.RUN,
         attempt = 0,
         verdict = verdict,
-        testcases = testcases,
     )
 
     private fun layout() = RecordLayout(root)
 
-    private fun log() = RunLog(layout())
+    private fun log() = RunLog(layout(), CLOCK)
 
-    private fun lines(): List<Map<String, String?>> =
-        Files.readAllLines(layout().runLog(120804, TITLE)).filter { it.isNotBlank() }.map { line ->
-            Json.parseToJsonElement(line).jsonObject.mapValues { (_, v) ->
-                runCatching { v.jsonPrimitive.content }.getOrNull()
-            }
+    private fun lines(): List<Map<String, String?>> = rawLines().map { line ->
+        line.mapValues { (_, v) -> v.jsonPrimitive.content }
+    }
+
+    private fun rawLines(): List<JsonObject> =
+        Files.readAllLines(layout().runLog(120804, TITLE)).filter { it.isNotBlank() }.mapNotNull { line ->
+            runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull()
         }
 
     private companion object {
         const val TITLE = "두 수의 곱 구하기"
+        val CLOCK: Clock = Clock.fixed(Instant.parse("2026-10-03T06:21:02.500Z"), ZoneOffset.ofHours(9))
     }
 }

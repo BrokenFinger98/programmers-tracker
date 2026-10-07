@@ -214,8 +214,11 @@ class CaptureConfiguration {
     ): CodeFetcher = CodeFetcher { lessonId, language -> fetched(sessions, pages, pageBase, lessonId, language) }
 
     @Bean
-    fun derivedArtifacts(store: RecordStore, @Value("\${tracker.record-repo}") recordRepo: String): DerivedArtifacts =
-        FileDerivedArtifacts(recordRoot(recordRepo), store)
+    fun derivedArtifacts(
+        store: RecordStore,
+        clock: Clock,
+        @Value("\${tracker.record-repo}") recordRepo: String,
+    ): DerivedArtifacts = FileDerivedArtifacts(recordRoot(recordRepo), store, clock)
 
     @Bean
     fun codeAttachment(
