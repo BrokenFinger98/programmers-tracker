@@ -7,11 +7,10 @@ package com.brokenfinger.tracker.adapter.mcp
  * name nothing ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]). This is the text the
  * learner sends their own model through a slash command, asking it to do the naming.
  *
- * **It carries its own readings.** The server instructions are at 1,973 of the 2,000 characters a client
- * receives whole, so what a pre-exam session must not misread travels here (#353). Claude Code cuts
- * instructions and tool descriptions at 2,048 characters but not a prompt's text (2.1.285, read from the
- * client), so this has no budget test. It stays short because it is pasted into a conversation every
- * time it runs.
+ * **It carries its own readings.** The server instructions are nearly full (#353), so what a pre-exam
+ * session must not misread travels here. Claude Code cuts instructions and tool descriptions at 2,048
+ * characters but not a prompt's text (2.1.285, read from the client), so this has no budget test. It
+ * stays short because it is pasted into a conversation every time it runs.
  */
 object ExamPrepPrompt {
     const val NAME = "exam_prep"
@@ -28,18 +27,18 @@ object ExamPrepPrompt {
     private const val ASKED = "The tools count and name nothing. Here the naming is asked for: find my " +
         "recurring mistakes, and show the records behind each one."
 
-    private const val STATS_STEP = "1. Call stats with groupBy=part, then with groupBy=level. Note where " +
-        "passing took the most runs and submits."
+    private const val STATS_STEP = "1. Call stats(groupBy=part), then stats(groupBy=level). Note where passing " +
+        "took the most runs and submits."
 
     private const val REPAIR_STEP = "When an answer says `truncated`, call again with `limit` set to its " +
         "`total`; if that is too many to read, narrow with `since` and say so. Group the steps into recurring " +
-        "patterns — an argument order, a method name, an off-by-one bound, a syntax slip. Name each pattern by " +
-        "what its diffs show, cite the record ids behind it, and say how many problems it spans. A pattern " +
-        "seen once is not a pattern."
+        "patterns — an argument order, a method name, an off-by-one bound, a missing table alias, a syntax " +
+        "slip. Name each pattern by what its diffs show, cite the record ids behind it, and say how many " +
+        "problems it spans. A pattern seen once is not a pattern."
 
     private val LATER_STEPS = listOf(
         "3. For each pattern: the problems to re-solve (its steps' lessonId and title), and up to three " +
-            "problems from list_problems(status=untouched, part=<that pattern's part>).",
+            "problems from list_problems(status=untouched, part=<a part its steps come from>).",
         "4. For each pattern: two or three short drills aimed at exactly that point — if the diffs keep " +
             "fixing substring bounds, \"take the 3rd–4th characters with substring\".",
         "5. Last, what the records could not support.",
