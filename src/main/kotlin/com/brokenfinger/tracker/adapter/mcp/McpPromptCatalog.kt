@@ -21,6 +21,9 @@ import kotlinx.serialization.json.putJsonObject
  * order (language, part, since), the "BY" of "GROUP BY" would become `since` and be refused
  * ([[decisions/2026-10-07-exam-prep-asks-in-the-open]]).
  *
+ * The order is kept in [ExamPrepScope.ARGUMENTS] alone. The listing and every refusal that names the
+ * order read it there, so they cannot drift apart.
+ *
  * A refusal is `-32602`, the code the specification gives an unknown prompt and a bad argument.
  */
 object McpPromptCatalog {
@@ -28,16 +31,16 @@ object McpPromptCatalog {
 
     private data class Argument(val name: String, val description: String)
 
-    /** In the order Claude Code fills them, each with what it narrows. */
-    private val EXAM_PREP_ARGUMENTS = listOf(
-        Argument("language", "A Programmers language id (java, python3, mysql, …). Narrows repair_steps."),
-        Argument("since", "${Since.FORMAT}. Narrows repair_steps to corrections recorded from then on."),
-        Argument(
-            "part",
-            "A part name, matched in full and case-insensitively. Narrows repair_steps. Last, because a client " +
-                "that splits on spaces keeps only its first word.",
-        ),
+    /** What each argument narrows, by name. Their order is not kept here: it is [ExamPrepScope.ARGUMENTS]. */
+    private val DESCRIPTIONS = mapOf(
+        "language" to "A Programmers language id (java, python3, mysql, …). Narrows repair_steps.",
+        "since" to "${Since.FORMAT}. Narrows repair_steps to corrections recorded from then on.",
+        "part" to "A part name, matched in full and case-insensitively. Narrows repair_steps. Last, because a " +
+            "client that splits on spaces keeps only its first word.",
     )
+
+    /** In the order Claude Code fills them, each with what it narrows. */
+    private val EXAM_PREP_ARGUMENTS = ExamPrepScope.ARGUMENTS.map { Argument(it, descriptionOf(it)) }
 
     fun definitions(): JsonArray = buildJsonArray { add(examPrep()) }
 
@@ -48,7 +51,7 @@ object McpPromptCatalog {
     }
 
     private fun scopeOf(arguments: JsonObject): ExamPrepScope {
-        val unknown = arguments.keys - EXAM_PREP_ARGUMENTS.map { it.name }.toSet()
+        val unknown = arguments.keys - ExamPrepScope.ARGUMENTS.toSet()
         if (unknown.isNotEmpty()) throw refused(unknownArguments(unknown))
         return try {
             readScope(arguments)
@@ -60,7 +63,7 @@ object McpPromptCatalog {
     // A key is the client's text, so it is quoted: "a, b" stays one item and a newline cannot break the message.
     private fun unknownArguments(unknown: Set<String>): String {
         val received = unknown.sorted().joinToString { JsonPrimitive(it).toString() }
-        val taken = EXAM_PREP_ARGUMENTS.joinToString { it.name }
+        val taken = ExamPrepScope.ARGUMENTS.joinToString()
         return "unknown argument(s): $received; ${ExamPrepPrompt.NAME} takes $taken, in that order"
     }
 
@@ -102,6 +105,10 @@ object McpPromptCatalog {
         put("description", DESCRIPTION)
         put("arguments", JsonArray(EXAM_PREP_ARGUMENTS.map { (name, description) -> argument(name, description) }))
     }
+
+    // Loud on purpose: an argument added to the order without a description must not reach a client bare.
+    private fun descriptionOf(name: String): String =
+        checkNotNull(DESCRIPTIONS[name]) { "the ${ExamPrepPrompt.NAME} argument $name has no description" }
 
     private fun argument(name: String, description: String): JsonObject = buildJsonObject {
         put("name", name)

@@ -52,14 +52,21 @@ data class ExamPrepScope(val language: String? = null, val since: String? = null
 
     private fun readsAsDate(text: String): Boolean = runCatching { Since.from(text) }.isSuccess
 
-    private fun positional(problem: String): String = "$problem; the arguments are positional — language, since, part"
+    private fun positional(problem: String): String =
+        "$problem; the arguments are positional — ${ARGUMENTS.joinToString(", ")}"
 
     private fun quoted(value: String): String = JsonPrimitive(value).toString()
 
-    private companion object {
-        const val ONLY_REPAIR_STEPS =
+    companion object {
+        /**
+         * The arguments in the order a client fills them by position. The order is an interface, kept here
+         * alone: the catalog lists the arguments from it, and a positional refusal names it.
+         */
+        val ARGUMENTS = listOf("language", "since", "part")
+
+        private const val ONLY_REPAIR_STEPS =
             "Only repair_steps takes this scope; stats and list_problems answer over everything on record."
-        const val EMPTY_IS_NOT_CLEAN = "An empty answer under this scope is not an absence of mistakes: say so, " +
-            "and say which argument may not match what the records hold."
+        private const val EMPTY_IS_NOT_CLEAN = "An empty answer under this scope is not an absence of mistakes: " +
+            "say so, and say which argument may not match what the records hold."
     }
 }

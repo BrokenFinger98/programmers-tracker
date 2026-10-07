@@ -38,6 +38,14 @@ class McpPromptCatalogTest {
         arguments.forEach { it.jsonObject["required"]!!.jsonPrimitive.boolean shouldBe false }
     }
 
+    /** The order is an interface kept in one list: the listing reads it there, so it cannot drift from a refusal. */
+    @Test
+    fun `it lists exactly the arguments ExamPrepScope keeps, in their order`() {
+        val arguments = McpPromptCatalog.definitions().single().jsonObject["arguments"]!!.jsonArray
+
+        arguments.map { it.jsonObject["name"]!!.jsonPrimitive.content } shouldContainExactly ExamPrepScope.ARGUMENTS
+    }
+
     @Test
     fun `get answers one user message carrying the text`() {
         val answer = McpPromptCatalog.get(ExamPrepPrompt.NAME, JsonObject(emptyMap()))

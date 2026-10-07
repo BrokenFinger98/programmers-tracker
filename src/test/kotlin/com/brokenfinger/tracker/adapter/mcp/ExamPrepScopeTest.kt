@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.calc.Since
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import org.junit.jupiter.api.Test
@@ -79,6 +80,15 @@ class ExamPrepScopeTest {
         val refused = shouldThrow<IllegalArgumentException> { ExamPrepScope(language = "2026-09-01") }
 
         refused.message shouldContain "positional — language, since, part"
+    }
+
+    /** The order is an interface kept in one list: a refusal reads it there, so it cannot name a stale one. */
+    @Test
+    fun `a positional refusal names exactly the order ARGUMENTS keeps`() {
+        val order = "the arguments are positional — ${ExamPrepScope.ARGUMENTS.joinToString(", ")}"
+
+        shouldThrow<IllegalArgumentException> { ExamPrepScope(since = "yesterday") }.message shouldEndWith order
+        shouldThrow<IllegalArgumentException> { ExamPrepScope(language = "2026-09-01") }.message shouldEndWith order
     }
 
     /** "String, Date" is a real part name: unquoted, a model would read it as two arguments. */
