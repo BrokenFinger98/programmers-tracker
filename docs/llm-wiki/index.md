@@ -68,6 +68,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-10-01 [[decisions/2026-10-01-a-failed-run-that-returned-a-result-is-wrong]] — A database run carries no message either way; a failed one that returned a table is a wrong answer, not a result the server could not classify
 - 2026-10-07 [[decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored]] — Recurring mistakes are the AI's diagnosis over repair steps the server serves; every run's code is kept so the corrections exist, and MCP stays read-only
 - 2026-10-07 [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]] — Readers resolve the log per `(ts, captureKey)`; byte-identical gradings stop folding into one (#343)
+- 2026-10-07 [[decisions/2026-10-07-database-failures-that-said-something]] — A wrong SQL submit (bare 실패) is WRONG and a run MySQL rejects is COMPILE_ERROR; a rejected submit stays RUNTIME_ERROR, measured on purpose
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits

@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [protocol, verdict, measurement, sensor]
 author: BrokenFinger98
 created: 2026-10-01
-updated: 2026-10-06
+updated: 2026-10-07
 sources: [decisions/2026-08-05-failure-taxonomy, concepts/verdict-classification, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md]
 ---
 
@@ -81,3 +81,5 @@ the frames as fixtures, and the shape is not yet in the protocol document.
 The same verification surfaced an unrelated defect in how the history is *read*: several of that
 afternoon's wrong runs, recorded correctly, are invisible to every reader (#343, see
 [[decisions/2026-08-11-a-grading-is-its-whole-session]]).
+
+The SQL-error shape is classified in [[decisions/2026-10-07-database-failures-that-said-something]].

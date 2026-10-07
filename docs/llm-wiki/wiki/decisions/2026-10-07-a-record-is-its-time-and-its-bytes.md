@@ -56,5 +56,5 @@ It needs no schema change and no migration, and it was measured to hold on the w
 #343. Tests: three in `RecordHistoryTest` (identical bytes at different times survive; a
 correction still supersedes; a correction appended after a later identical grading replaces only
 its own), one through the store in `RecordQueryTest`, one on the production correction path in
-`CodeAttachmentTest`; the history tests were seen failing with the old key. Live acceptance:
-`get_problem 131537` answers 3 submits and 10 runs on the rebuilt container.
+`CodeAttachmentTest`; the history tests were seen failing with the old key. Verified live 2026-10-07 after rebuilding the
+container from main `4f1e660` (PR #348): `get_problem 131537` answered `submissionCount: 3` and `runCount: 10`, matching the log.

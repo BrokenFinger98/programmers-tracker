@@ -143,6 +143,15 @@ Every response arrives wrapped as `{"identifier":"…","message":{…}}`.
  "challengeable_type":"database","challengeable_id":2778}
 ```
 
+**A wrong submit reports the bare word** (measured 2026-10-03 on lesson 273711, §15 #18): every
+case `passed:false` with `msg: "실패"` and nothing after it — no timing, which SQL never sends —
+then `result_lesson_challenge` with `userScore: "0.0"`. Fixture `sql-submit-wrong.jsonl`.
+
+**A submit MySQL rejects says something else** (measured 2026-10-07 on lesson 59034, on purpose,
+§15 #20): `msg: "실패 (런타임 에러)"`, the same string the algorithm submit path uses for a runtime
+or compile error. So the bare word is a wrong result and nothing else. Fixture
+`sql-submit-error.jsonl`.
+
 ### run (example execution — leaves no submission history)
 
 ```jsonc
@@ -169,6 +178,21 @@ So the message string that classifies every other failure (§7) is absent on thi
 fail. What distinguishes a wrong query from a result nothing can be said about is that a table
 came back: `passed: false` with `returned_rows` present is a wrong answer. Fixture
 `sql-run-wrong.jsonl`.
+
+**A run MySQL rejects carries the error and no table** (measured 2026-10-03 on lesson 131537,
+two runs, §15 #19): `returned_rows: null`, `passed: false`, and `msg` is the driver's error
+tuple —
+
+```jsonc
+{"action":"run","type":"finish","testcase_id":5453,"returned_rows":null,
+ "msg":"(1054, \"Unknown column 'USER_ID' in 'field list'\")","passed":false, …}
+{"action":"run","type":"finish","testcase_id":5453,"returned_rows":null,
+ "msg":"(1222, 'The used SELECT statements have a different number of columns')","passed":false, …}
+```
+
+The query never ran, which is the compile stage. It arrives on `finish`, not on an `error` frame,
+so — unlike the algorithm run path — nothing binds it to a following submit. Fixture
+`sql-run-error.jsonl`.
 
 ### Differences from algorithm problems
 
@@ -200,9 +224,13 @@ The `msg` of the `testcase` message is the only clue. `exitCode` and `stderr` **
 | Runtime error | `"실패 (런타임 에러)"` | **`null`** |
 | Compile error | `"실패 (런타임 에러)"` | **`null`** |
 | Timeout | `"실패 (시간 초과)"` | **`null`** |
+| Wrong answer (database submit) | `"실패"` — the bare word | absent (SQL sends none) |
+| Query rejected (database submit) | `"실패 (런타임 에러)"` — same as a runtime error | absent |
+| Query rejected (database run) | `"(1054, \"Unknown column …\")"` — MySQL's error tuple, on `finish` | absent |
 
 > **Compile errors and runtime errors cannot be distinguished from the submit response alone.**
 > Both are reported as `"실패 (런타임 에러)"`. Use the `run` action to tell them apart.
+> For SQL the same holds, and a preceding rejected run does not help: its rejection arrives on `finish`, so no error text is bound to the submit (§6).
 
 In all three cases `result_lesson_challenge` arrives with `userScore: "0.0"`, `passed: false`,
 and `finish` arrives normally.
@@ -694,6 +722,9 @@ observation. It never received a broadcast and was never rejected.
 | 15 | **181951** | Algorithm (`main` + stdin) | `run` | **The other problem shape, captured live** — `start` carries `testcases:[{input,output}]` as for `solution(...)`, but the per-case frame is **`testcase`** (not `error`) and carries `stdout` · `stderr` · `exitCode` · `wallTime`. `input` is the stdin text as a **quoted JSON string**; the expected output holds a **raw newline inside quotes**, which strict JSON rejects. `stdout` encodes newlines as `<br/>` while the expected output uses `\n`. Captured 2026-08-06 by hooking `App.cable.connection.webSocket` in the browser. Details in §7.1 |
 | 16 | 181951 | Algorithm | submit | **Cached-result path reproduced** — a submit immediately after an identical `run` returned `submit/error` `"같은 코드로 채점한 결과가 있습니다."` and no verdict, confirming §13.2. Recorded with outcome `UNKNOWN`, which is the intended handling |
 | 17 | 131118 | SQL | `run` | **A failing database run, captured live** — `finish` carries `passed:false`, the `returned_rows` table, and `msg:null`, exactly as a passing one does but for the flag. Three such runs on 2026-10-01 were recorded `UNKNOWN` because the classifier had only ever matched a message (#341). Kept scrubbed as `sql-run-wrong.jsonl` |
+| 18 | 273711 | SQL | `submit` | **A wrong database submit, captured live** — six cases `passed:false`, `msg:"실패"` bare, score 0.0. Recorded `UNKNOWN` until the resolver matched the bare word (#349). Kept scrubbed as `sql-submit-wrong.jsonl` |
+| 19 | 131537 | SQL | `run` | **Two runs MySQL rejected, captured live** — `returned_rows:null`, the error tuple as `msg` (1054, 1222). Recorded `UNKNOWN`; now COMPILE_ERROR (#349). Kept scrubbed as `sql-run-error.jsonl` |
+| 20 | 59034 | SQL | `submit` | **A submit MySQL rejected, triggered on purpose** (`SELECT NO_SUCH_COLUMN …`) — the case says `실패 (런타임 에러)`, not bare `실패`; recorded RUNTIME_ERROR. Settled that bare `실패` is a wrong result only (#349). Kept scrubbed as `sql-submit-error.jsonl` |
 
 Server-side effect confirmed by the solved count rising 90 → 92. Rating 1371 → 1372.
 Entries 9~11 were intentional failing submissions, so those problems remain unsolved.
