@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [protocol, verdict, measurement, sql]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-07-repairs-not-verdicts.md]
 ---
 
 # Database failures that said something
@@ -61,4 +61,14 @@ stays unknown, and a test pins each of those.
 ## Outcome
 
 #349. Tests in three layers on the three fixtures; the resolver tests seen failing without the
-rules. Verified live 2026-10-07 on lesson 59035 after rebuilding from f89960c (PR #350): a run of a query naming a missing column at 10:06:17 was recorded COMPILE_ERROR with the 1054 tuple, and a submit with the wrong order at 10:06:55 was recorded WRONG.
+rules.
+
+The quality review found two problems:
+
+- the 09:28 measurement had not been kept as the fixture the plan required, which became
+  `sql-submit-error.jsonl`;
+- one rejection becomes two verdicts depending on the path, which is the first accepted cost above.
+
+It also narrowed the tuple rule to `returnedResult == false`. The guards stopped the push because
+four KDoc comments quoted the Korean protocol strings; the comments now name the constant or the
+protocol section instead (raw/sessions/2026-10-07-repairs-not-verdicts.md). Verified live 2026-10-07 on lesson 59035 after rebuilding from f89960c (PR #350): a run of a query naming a missing column at 10:06:17 was recorded COMPILE_ERROR with the 1054 tuple, and a submit with the wrong order at 10:06:55 was recorded WRONG.

@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [storage, code, measurement, mcp]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-07-repairs-not-verdicts.md]
 ---
 
 # Every run keeps its code
@@ -14,7 +14,14 @@ sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
 
 [[decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored]] needs the correction between a
 failed grading and the next attempt, and a run kept no code: `Solution.<ext>` is overwritten by
-the next one. Lesson 273711's eleven runs left none.
+the next one. Lesson 273711's eleven runs left none. The gap was first felt on 2026-10-03, when a
+wrong run's SQL was gone and only its raw frame could say why it was wrong
+(raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md).
+
+The design also planned to mark a run whose code might be the next run's (`codeUncertain`). Reading
+the capture showed this cannot be done at attach time: frames are handled in order, so the next
+`start` is not visible while the code is fetched. The race was measured instead (Rationale), and the
+mark was dropped (raw/sessions/2026-10-07-repairs-not-verdicts.md).
 
 ## Options considered
 

@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [mcp, diagnosis, calculator, code, security, interpretation-boundary]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md]
 ---
 
 # Repair steps are served, not judged
@@ -33,7 +33,8 @@ Two things found in review changed the frame.
   description at 2,048 characters and keeps the head — its CHANGELOG 2.1.84: "MCP tool descriptions
   and server instructions are now capped at 2KB…"; 2.1.280: added
   `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` "to change the 2,048-character cap…". Verified on 2.1.285
-  with the variable unset. Our own test allowed 3,000 and passed while the text was being cut: the
+  with the variable unset. (What else the client does with what the server sends is collected in
+  [[entities/claude-code-mcp-client]].) Our own test allowed 3,000 and passed while the text was being cut: the
   instructions have been 2,607 characters since #287, and a session's system prompt on 2026-10-07
   shows them ending "there is no cohort here… [truncated]" — character 2,048 exactly. The branch's
   own additions had grown them to 2,921, with `get_problem` at 2,548 and `repair_steps` at 2,126.
@@ -219,9 +220,9 @@ truncation rule; and no step of 4.4's prompt depends on it.
 - `stats(groupBy=part)`: SELECT — 34 submits over 23 problems attempted, 23 passed, 21 on the
   first submit, median 1.0 runs before a pass.
 
-#353, in 22 commits on `feat/353-repair-steps-over-mcp`, reviewed for spec compliance and quality
-in rounds. The design's `codeUncertain` became `codeFetchedAt` on the run line and `codeLate`
-on a step; the older ADR carries a note.
+#353, in 22 commits on `feat/353-repair-steps-over-mcp` (24 in PR #357 with the docs), reviewed for
+spec compliance and quality in rounds. The design's `codeUncertain` became `codeFetchedAt` on the
+run line and `codeLate` on a step; the older ADR carries a note.
 
 Found in review and filed rather than fixed on this branch:
 
@@ -230,7 +231,8 @@ Found in review and filed rather than fixed on this branch:
   as a shared helper, applied to the run-log reader too. Done in
   [[decisions/2026-10-07-no-reader-follows-a-link-out-of-problems]], whose audit found three more
   readers that feed what git publishes, the worst of them the statement inlined into the problem
-  page.
+  page. Verified live 2026-10-07 23:03 KST from main a3838c0: every MCP read on the real records
+  came out identical to the snapshot taken before the deploy.
 - **#355** — an internal fault answers with `id: null` and HTTP 500 in both eras, where JSON-RPC
   wants the request id echoed and the read-slice ADR keeps handshake-era failures on 200
   (pre-existing; this branch pins the current shape in `McpControllerTest`).

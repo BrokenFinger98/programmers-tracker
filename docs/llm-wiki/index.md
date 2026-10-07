@@ -86,6 +86,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-08-04 [[entities/programmers-actioncable]] — What the Programmers judge actually is
 - 2026-08-04 [[entities/solved-ac]] — Source of the tag vocabulary
 - 2026-08-04 [[entities/baekjoonhub]] — The prior tool this project replaces
+- 2026-10-08 [[entities/claude-code-mcp-client]] — What the client the owner uses does with what the server sends: the 2,048-character cut, positional prompt arguments, a codec with no defaults, a display name that is not the command, and how each was learned
 
 ## Syntheses
 - 2026-08-04 [[syntheses/protocol-reverse-engineering]] — The full protocol-discovery story
@@ -120,3 +121,6 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-10-01 [[sources/2026-10-01-a-wrong-query-and-the-purple-question-mark]] — A failing SQL run carries a table and no message; three false `?` alarms in an afternoon, and the field that fixed them
 - 2026-10-03 [[sources/2026-10-03-the-fix-measured-and-an-sql-error-frame]] — The fix verified live on a wrong run; the first SQL-error frame measured, carrying MySQL's error tuple and staying UNKNOWN
 - 2026-10-06 [[sources/2026-10-06-the-history-that-folded]] — Every reader folds distinct gradings that share a capture key: 10 runs and 3 submits recorded, 5 and 1 visible (#343)
+- 2026-10-07 [[sources/2026-10-07-repairs-not-verdicts]] — The mistake-patterns design and four PRs verified live; a design mark that could never be set, a code-read bound in three rounds, and the 2,048-character cut a 3,000-character test had passed
+- 2026-10-07 [[sources/2026-10-07-the-readers-that-followed-links]] — The #354 audit found the worst reader the issue missed; two review rounds, a four-hour outage, the live check, the client read for #364, and a rule 117 commits broke
+- 2026-10-08 [[sources/2026-10-08-the-prompt-only-the-owner-can-run]] — `exam_prep` built overnight; a command name corrected twice, the second time by running the client's own parser; server side verified live, the owner's run pending

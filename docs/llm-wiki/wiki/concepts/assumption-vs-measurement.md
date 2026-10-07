@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-10-06
-sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -443,6 +443,43 @@ raw/sessions/2026-10-06-the-history-that-folded.md)*
   distinct gradings that share a capture key (#343); the log had all eight. This is "two views of one log disagreed" (above) again, with the
   second view on screen.
 
+## October 7–8: the receiving end, and corrections that overreached
+
+*(raw/sessions/2026-10-07-repairs-not-verdicts.md,
+raw/sessions/2026-10-07-the-readers-that-followed-links.md,
+raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md)*
+
+Six code PRs in under eighteen hours, each reviewed task by task. The claims that fell were not
+about the protocol. They were about our own plans, our own docs and the client on the other end.
+
+- **A length test that pinned our number, not the receiver's.** `McpInstructionsTest` allowed 3,000
+  characters. Claude Code keeps 2,048. The instructions had been 2,607 characters since #287, so
+  every session saw them cut. The evidence was in each session's own system prompt, which ended
+  "…[truncated]". Nobody had read that system prompt as a measurement
+  ([[entities/claude-code-mcp-client]]).
+- **Plans written from memory of a shape.** The `exam_prep` text told the model to match "the part
+  labels `stats` returns". A part bucket has no `label`; the name is in `key`. The same plan said
+  every refusal names the argument order, which three do. A review that read the real answer
+  caught the first; docs written from the code caught the second.
+- **A design mark that could never be set.** `codeUncertain` assumed the next `start` was visible
+  when a run's code is fetched. The capture handles frames in order, so it is not. The race was
+  measured instead: code arrived 0.24–0.53 s after each record, against a fastest human gap of 1.6 s.
+  The mark was dropped before anyone built it.
+- **A wrong fact copied until it was everywhere.** "The `/watch` token is in the records repository"
+  sat in two KDocs, two ADRs, `mcp.md` and its twin, and a test KDoc, across two branches. A
+  re-review flagged it at last, and `compose.yaml` settled it.
+- **An unverifiable date.** A tool description said run capture began 2026-08-07. The earliest run
+  record was 2026-08-28. The date was removed rather than hedged.
+- **A correction that overreached.** Reading the client's code showed that the menu's
+  `/programmers-tracker:exam_prep (MCP)` is a display name, and the docs had used it as the command.
+  The fix then claimed the display name never runs with arguments. Only running the client's own
+  parser, extracted from the binary, showed the true edge: typed with its `(MCP)` token, it runs. The
+  second claim had been reached the same way as the first, by reading. Only the run was a
+  measurement.
+- **The audit beat the issue.** #354 named the readers that return file content over MCP. Listing
+  every reader before fixing found the worst one elsewhere: the statement inlined into the README
+  that git pushes.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -485,3 +522,9 @@ raw/sessions/2026-10-06-the-history-that-folded.md)*
   several call sites, the site that forgot it cannot be seen from inside — every test there
   agrees with the code, because the same author wrote both. Comparing two answers is what made
   `stats` and `list_problems` disagree out loud.
+- **Measure what the receiving end keeps, not what we send.** A bound pinned against our own number
+  passes while the client cuts the text. Look first for evidence the receiver itself produced: its
+  output, its changelog, its code.
+- **A correction is a claim too.** Hold the replacement sentence to the same evidence as the one it
+  replaces. Where a behaviour can be executed, run it — the client's own parser, the real answer —
+  rather than reading it a second time.
