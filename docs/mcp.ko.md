@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@bdacae809ba1e796ab777a5e49385567d499629f -->
+<!-- translated-from: mcp.md@1072b96d402688f5fdc92d65e76e2bd00c7fe42a -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -331,14 +331,15 @@ diff 만 줍니다.
 description 을 2,048자에서 자르지만 프롬프트의 텍스트는 자르지 않습니다.
 
 Claude Code 에서는 슬래시 명령이며, 시작할 수 있는 사람은 여러분뿐입니다 — 모델은 프롬프트를 스스로
-실행할 수 없습니다. 서버 이름을 위의 설정처럼 두면 메뉴에 `/programmers-tracker:exam_prep (MCP)` 로
-나옵니다:
+실행할 수 없습니다. 서버 이름을 위의 설정처럼 두면 메뉴에는 `/programmers-tracker:exam_prep (MCP)` 로
+나오고, 그것을 고르면 `/mcp__programmers-tracker__exam_prep ` 이 입력되니 인자는 그 뒤에 이어서
+입력하세요:
 
 ```text
-/programmers-tracker:exam_prep                          기록 전체
-/programmers-tracker:exam_prep java                     언어 하나
-/programmers-tracker:exam_prep java 2026-09-01          … 어느 날짜 이후 기록된 수정
-/programmers-tracker:exam_prep mysql 2026-09-01 SELECT  … part 하나에서
+/mcp__programmers-tracker__exam_prep                          기록 전체
+/mcp__programmers-tracker__exam_prep java                     언어 하나
+/mcp__programmers-tracker__exam_prep java 2026-09-01          … 어느 날짜 이후 기록된 수정
+/mcp__programmers-tracker__exam_prep mysql 2026-09-01 SELECT  … part 하나에서
 ```
 
 인자는 위치로 정해집니다 — `language`, `since`, `part` 순서입니다. Claude Code 는 따옴표 없이 공백으로
