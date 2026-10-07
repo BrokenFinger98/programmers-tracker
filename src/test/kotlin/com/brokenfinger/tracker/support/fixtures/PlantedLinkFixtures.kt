@@ -29,3 +29,7 @@ fun aLink(link: Path, target: Path): Path {
 
 /** Whether links and FIFOs can be made under [root] at all — a POSIX filesystem, which a Windows runner's is not. */
 fun canPlantLinksIn(root: Path): Boolean = root.fileSystem.supportedFileAttributeViews().contains("posix")
+
+/** [path] made a FIFO, which only `mkfifo` makes; false where there is none to run. Its parent must exist. */
+fun madeFifo(path: Path): Boolean =
+    runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false)

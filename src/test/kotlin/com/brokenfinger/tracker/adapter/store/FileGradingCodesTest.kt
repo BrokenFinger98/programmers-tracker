@@ -1,13 +1,14 @@
 package com.brokenfinger.tracker.adapter.store
 
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.KeptCode
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmit
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -16,9 +17,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
-import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -108,7 +107,7 @@ class FileGradingCodesTest {
             lineOf("r#2", fetchedAt = "2026-10-07T10:00:09+09:00", code = "b"),
         )
 
-        val warnings = warningsWhile {
+        val warnings = warningsWhile(FileGradingCodes::class) {
             codes().runs(120804, "두 수의 곱 구하기").keys shouldBe setOf("r#1", "r#2")
         }
 
@@ -127,7 +126,7 @@ class FileGradingCodesTest {
             """{"recordId":"r#3","language":"java"}""",
         )
 
-        val warnings = warningsWhile {
+        val warnings = warningsWhile(FileGradingCodes::class) {
             codes().runs(120804, "두 수의 곱 구하기").keys shouldBe setOf("r#1")
         }
 
@@ -180,77 +179,17 @@ class FileGradingCodesTest {
         codes().submitted("problems/1/attempts/001.java").shouldBeNull()
     }
 
-    // Links. git stores them, so one under problems/ can arrive with a clone or a pull, not only by
-    // hand — and it passes the lexical bound, because the path it is reached by is `problems/...`.
+    // Links. Git stores them, so one under problems/ can arrive with a clone or a pull, and it passes the
+    // lexical bound above, because the path it is reached by reads `problems/...`. Each case of the bound
+    // itself is pinned once, in ProblemFilesTest; here, that each of the two reads goes through it.
 
     @Test
     fun `a link to a credential beside the problems is not followed`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        val token = root.resolve(".ps/git-credentials")
-        Files.createDirectories(token.parent)
-        Files.writeString(token, "not a real credential")
-        val attempts = Files.createDirectories(root.resolve("problems/1-x/attempts"))
-        Files.createSymbolicLink(attempts.resolve("001.java"), attempts.relativize(token))
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val link = aLink(root.resolve("problems/1-x/attempts/001.java"), aPushTokenIn(root))
 
-        Files.readString(attempts.resolve("001.java")) shouldBe "not a real credential"
+        Files.readString(link) shouldContain A_PUSH_TOKEN_LINE
         codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
-    }
-
-    @Test
-    fun `a problem directory that is a link out of the problems directory is not followed`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        Files.writeString(Files.createDirectories(outside.resolve("attempts")).resolve("001.java"), "not ours")
-        Files.createSymbolicLink(Files.createDirectories(root.resolve("problems")).resolve("1-x"), outside)
-
-        Files.readString(root.resolve("problems/1-x/attempts/001.java")) shouldBe "not ours"
-        codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
-    }
-
-    /**
-     * The bound must not move with a link at `problems` itself. Resolving that directory too carries the
-     * bound to wherever the link leads, and a clone can bring that link as easily as one below it.
-     */
-    @Test
-    fun `a problems directory that is itself a link to the state directory is not followed`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        val state = Files.createDirectories(root.resolve(".ps"))
-        Files.writeString(state.resolve("git-credentials"), "not a real credential")
-        Files.createSymbolicLink(root.resolve("problems"), Path.of(".ps"))
-
-        Files.readString(root.resolve("problems/git-credentials")) shouldBe "not a real credential"
-        codes().submitted("problems/git-credentials").shouldBeNull()
-    }
-
-    @Test
-    fun `a problems directory that is itself a link out of the repository is not followed`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        Files.writeString(Files.createDirectories(outside.resolve("1-x/attempts")).resolve("001.java"), "not ours")
-        Files.createSymbolicLink(root.resolve("problems"), outside)
-
-        Files.readString(root.resolve("problems/1-x/attempts/001.java")) shouldBe "not ours"
-        codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
-    }
-
-    /** What is resolved is the repository root: a records directory that is itself a link (~/ps-records) still reads. */
-    @Test
-    fun `a repository root reached through a link still reads its code`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        val attempts = Files.createDirectories(root.resolve("problems/1-x/attempts"))
-        Files.writeString(attempts.resolve("001.java"), "select 1\n")
-        val alias = Files.createSymbolicLink(outside.resolve("records"), root)
-
-        FileGradingCodes(RecordLayout(alias)).submitted("problems/1-x/attempts/001.java") shouldBe "select 1\n"
-    }
-
-    /** What matters is where a link leads, not that it is one: a link that stays under problems/ reads as its target. */
-    @Test
-    fun `a link that stays inside the problems directory is followed`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        val attempts = Files.createDirectories(root.resolve("problems/1-x/attempts"))
-        Files.writeString(attempts.resolve("001.java"), "select 1\n")
-        Files.createSymbolicLink(attempts.resolve("002.java"), Path.of("001.java"))
-
-        codes().submitted("problems/1-x/attempts/002.java") shouldBe "select 1\n"
     }
 
     /**
@@ -260,40 +199,13 @@ class FileGradingCodesTest {
      */
     @Test
     fun `a run log that is a link out of the problems directory keeps nothing`() {
-        assumeTrue(posix(), "this test makes symbolic links")
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         val elsewhere = outside.resolve("runs.jsonl")
         Files.writeString(elsewhere, lineOf("r#1", fetchedAt = "2026-10-07T10:00:00+09:00", code = "not ours") + "\n")
-        Files.createDirectories(runLog().parent)
-        Files.createSymbolicLink(runLog(), elsewhere)
+        aLink(runLog(), elsewhere)
 
         Files.readString(runLog()) shouldContain "not ours"
         codes().runs(120804, "두 수의 곱 구하기").shouldBeEmpty()
-    }
-
-    @Test
-    fun `a link that leads nowhere is no code, not an error`() {
-        assumeTrue(posix(), "this test makes symbolic links")
-        val attempts = Files.createDirectories(root.resolve("problems/1-x/attempts"))
-        Files.createSymbolicLink(attempts.resolve("001.java"), Path.of("gone.java"))
-
-        codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
-    }
-
-    /**
-     * Only a regular file is read. A FIFO behind a record's path would block the request thread for a
-     * writer that never comes, so what this pins is that the call returns at all. It runs in a thread
-     * of its own because the `open` that blocks cannot be interrupted, and the timeout is what fails it
-     * if the check is ever removed.
-     */
-    @Test
-    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
-    fun `a FIFO behind a record's path is no code, and is not waited on`() {
-        assumeTrue(posix(), "this test makes a FIFO")
-        val fifo = root.resolve("problems/1-x/attempts/001.java")
-        Files.createDirectories(fifo.parent)
-        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
-
-        codes().submitted("problems/1-x/attempts/001.java").shouldBeNull()
     }
 
     private fun writeRun(run: SubmissionRecord, code: String, attachedAt: String) {
@@ -310,20 +222,6 @@ class FileGradingCodesTest {
         """{"recordId":"$recordId","language":"java","codeFetchedAt":"$fetchedAt","code":"$code"$extra}"""
 
     private fun runLog(): Path = RecordLayout(root).runLog(120804, "두 수의 곱 구하기")
-
-    private fun posix(): Boolean = root.fileSystem.supportedFileAttributeViews().contains("posix")
-
-    private fun madeFifo(path: Path): Boolean =
-        runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false)
-
-    /** What the reader said at WARN while [action] ran. Logback is what the application logs through. */
-    private fun warningsWhile(action: () -> Unit): List<String> {
-        val logger = LoggerFactory.getLogger(FileGradingCodes::class.java) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        logger.addAppender(appender)
-        runCatching(action).also { logger.detachAppender(appender) }.getOrThrow()
-        return appender.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
-    }
 
     private fun codes() = FileGradingCodes(RecordLayout(root))
 }

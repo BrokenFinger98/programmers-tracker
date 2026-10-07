@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
@@ -137,6 +138,17 @@ class ProblemFilesTest {
         files().readString(link) shouldBe "select 1\n"
     }
 
+    /** Where a link finally leads is what counts, not where it passes on the way. */
+    @Test
+    fun `a link that leaves the problems directory and comes back in reads as the file it finally names`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val file = written("problems/1-x/statement.md", "the problem\n")
+        val hop = aLink(outside.resolve("hop.md"), file)
+        val link = aLink(root.resolve("problems/2-y/statement.md"), hop)
+
+        files().readString(link) shouldBe "the problem\n"
+    }
+
     @Test
     fun `a link to the push token beside the problems directory is not followed`() {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
@@ -245,9 +257,6 @@ class ProblemFilesTest {
         Files.createDirectories(file.parent)
         return Files.writeString(file, text)
     }
-
-    private fun madeFifo(path: Path): Boolean =
-        runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false)
 
     private fun files() = ProblemFiles(RecordLayout(root))
 
