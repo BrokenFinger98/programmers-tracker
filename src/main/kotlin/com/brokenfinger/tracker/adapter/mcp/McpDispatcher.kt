@@ -173,7 +173,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         const val PROMPTS_GET = "prompts/get"
 
         /** The methods whose `params.name` the modern binding mirrors into `Mcp-Name`. */
-        val NAMED = setOf(TOOLS_CALL, PROMPTS_GET)
+        private val NAMED = setOf(TOOLS_CALL, PROMPTS_GET)
 
         const val SENTINEL = "=?base64?"
         const val SENTINEL_END = "?="

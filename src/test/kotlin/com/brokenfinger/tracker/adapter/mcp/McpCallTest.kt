@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
+import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -78,7 +79,7 @@ class McpCallTest {
     fun `prompt arguments are none when absent or null, and the object when given`() {
         val absent = buildJsonObject { put("name", "exam_prep") }
         val nulled = JsonObject(absent + ("arguments" to JsonNull))
-        val given = aToolCallParams("exam_prep", buildJsonObject { put("language", "java") })
+        val given = aPromptGetParams(arguments = buildJsonObject { put("language", "java") })
 
         McpCall.from(aLegacyBody("prompts/get", absent)).promptArguments() shouldBe JsonObject(emptyMap())
         McpCall.from(aLegacyBody("prompts/get", nulled)).promptArguments() shouldBe JsonObject(emptyMap())
