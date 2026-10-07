@@ -181,8 +181,12 @@ short because it is pasted into the conversation every time it runs, not to meet
 ## Outcome
 
 **Implemented on #364; live check pending:** the rebuilt container answers `prompts/list` and
-`prompts/get`, then the owner runs `/programmers-tracker:exam_prep` in Claude Code (the model
-cannot). Spec §6 accepts it when the answer names patterns that cite record ids.
+`prompts/get`; then the owner reconnects the server with `/mcp` → Reconnect and runs
+`/mcp__programmers-tracker__exam_prep` — the name choosing it from the menu inserts — in Claude
+Code (the model cannot). Spec §6 accepts it when the answer names patterns that cite record ids.
+The final review read 2.1.285 again: the menu's `/programmers-tracker:exam_prep (MCP)` is only a
+display name, so typed out with arguments it does not run; and the client caches each server's
+discovery for up to 900 s fresh and 4 h stale, so a new session may still show no prompt.
 
 Built on `feat/364-exam-prep-prompt` from the plan, reviewed task by task for spec compliance and
 quality. Review changed the planned scope and text in four places — quoted values, part keys rather

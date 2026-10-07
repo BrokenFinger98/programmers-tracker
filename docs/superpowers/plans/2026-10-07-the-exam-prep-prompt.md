@@ -1064,7 +1064,7 @@ Closes #364"
 1. Rebuild and recreate the container: `docker compose build && docker compose up -d --force-recreate`.
 2. Modern `prompts/list` with mirrored headers. Expect `prompts[0].name = exam_prep`, `ttlMs`, `cacheScope: private`, `resultType: complete`.
 3. Modern `prompts/get` with `Mcp-Name: exam_prep` and `{language: "mysql"}`. Expect one user message containing `repair_steps(language="mysql")`.
-4. Ask the owner to reconnect the MCP server (`/mcp`) or open a new session, then run `/programmers-tracker:exam_prep mysql`. Spec §6: the answer must name patterns that cite record ids.
+4. Ask the owner to reconnect the MCP server with `/mcp` → Reconnect — 2.1.285 caches each server's discovery for up to 900 s fresh and 4 h stale, so a new session may still show no prompt — then run `/mcp__programmers-tracker__exam_prep mysql`, or choose the prompt from the menu, which inserts that name, and type `mysql` after it. Spec §6: the answer must name patterns that cite record ids.
 5. Record the result in the ADR's Outcome and in progress.
 
 ## Self-review
