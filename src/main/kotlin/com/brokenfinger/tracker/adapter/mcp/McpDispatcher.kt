@@ -186,11 +186,12 @@ class McpDispatcher(private val tools: McpToolInvoker) {
             - submissions: the whole log, newest first, narrowed by date or verdict.
             - get_problem: one lesson in full — every grading, per-testcase results, compiler
               output, and the problem's own statement.
-            - stats: counts per verdict, language or problem. Counts only.
+            - stats: counts per verdict, language, problem, part or level. Counts only.
             - list_problems: the shipped catalog joined against the records. The only tool that
               can say "untouched" — records alone cannot tell never-tried from tried-and-failed.
             - review_queue: passes due for re-solving, most overdue first.
             - slow_passes: passed problems ranked by their slowest testcase.
+            - repair_steps: each failed grading, the next one in its language, and the code diff.
 
             READINGS THAT ARE EASY TO GET WRONG
             - A run is not an attempt. Pressing Run is how code gets written; `stats` counts
@@ -206,6 +207,9 @@ class McpDispatcher(private val tools: McpToolInvoker) {
               must say the denominator has holes.
             - The catalog is a snapshot we do not own. A problem published after it was built is
               simply missing, which is not the same as never attempted.
+            - A repair step shows what changed, not what was wrong. Run code is kept by tracker
+              versions from 2026-10-07 on; `noDiff` says why a step has none, and `codeLate` marks
+              code that may belong to the next grading.
             - `statement` and `kind` are absent for problems recorded before the server began
               keeping them. Their absence says nothing about the problem.
 

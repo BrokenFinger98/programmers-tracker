@@ -276,6 +276,7 @@ class McpToolCatalogTest {
             description shouldContain "`$it`"
         }
         description shouldContain "`codeLate: true` on a run"
+        description shouldContain "a diff that uses it carries the same doubt"
         description shouldContain "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines"
     }
 

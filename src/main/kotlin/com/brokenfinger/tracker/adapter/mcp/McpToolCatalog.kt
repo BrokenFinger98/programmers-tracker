@@ -234,11 +234,11 @@ object McpToolCatalog {
             "language has neither. `noDiff` is `fromCodeUnknown`, `toCodeUnknown` or `codeUnknown` when the " +
             "code was not kept — run code is kept by tracker versions from 2026-10-07 on, submit code from " +
             "the start — `tooLarge` when a side is over ${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode` " +
-            "when both hold the same. `codeLate: true` on a run means its code was attached after the " +
-            "problem's next grading was recorded, so it may be that grading's code; submit code records no " +
-            "fetch time and is never marked. `diffTruncated: true` marks a diff cut at " +
-            "${UnifiedDiff.MAX_LINES} lines, as on a repair step, though the diff is named " +
-            "`diffFromPrevGrading` here." +
+            "when both hold the same code. `codeLate: true` on a run means its code was attached after the " +
+            "problem's next grading was recorded, so it may be that grading's code, and a diff that uses it " +
+            "carries the same doubt; submit code records no fetch time and is never marked. " +
+            "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines, as on a repair step, " +
+            "though the diff is named `diffFromPrevGrading` here." +
             ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {

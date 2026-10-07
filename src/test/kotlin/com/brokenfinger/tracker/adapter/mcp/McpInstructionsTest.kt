@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.domain.calc.TallyGroup
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -71,6 +72,29 @@ class McpInstructionsTest {
         listOf("you are ", "you tend", "the learner is", "this learner is", "you struggle").forEach {
             prose.lowercase() shouldNotContain it
         }
+    }
+
+    /** Spec 2026-10-07 §4.3: a diff is evidence of a change, and two fields say when not to trust it. */
+    @Test
+    fun `it says what a repair step is, and the fields that qualify its diff`() {
+        prose shouldContain "what changed, not what was wrong"
+        instructions shouldContain "noDiff"
+        instructions shouldContain "codeLate"
+    }
+
+    /** What the tracker keeps is a fact about its versions; a guessed date, or "exists", reads as a fact about the problem. */
+    @Test
+    fun `it dates run code by the tracker versions that kept it, and by no other date`() {
+        prose shouldContain "Run code is kept by tracker versions from 2026-10-07 on"
+        prose shouldNotContain "2026-08-07"
+    }
+
+    /** The schema enumerates the groupings; the instructions are what the model reads first, so they list the same. */
+    @Test
+    fun `it names every grouping stats offers`() {
+        val groups = TallyGroup.wireNames()
+
+        prose shouldContain "counts per ${groups.dropLast(1).joinToString(", ")} or ${groups.last()}"
     }
 
     /** A wall of text clients truncate teaches nothing. */
