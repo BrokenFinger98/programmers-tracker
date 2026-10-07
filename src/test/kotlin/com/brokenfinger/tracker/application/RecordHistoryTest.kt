@@ -16,7 +16,7 @@ import java.time.OffsetDateTime
  *
  * The log is append-only, so a correction is a second line rather than an edit
  * ([[decisions/2026-08-05-write-serialization]] decision 2). What is asserted here is the
- * whole of what makes that safe: the newest line for a capture key wins, and it wins *in
+ * whole of what makes that safe: the newest line for a `(ts, captureKey)` pair wins, and it wins *in
  * place*, so appending a correction never reorders a problem's history.
  */
 class RecordHistoryTest {
@@ -99,6 +99,25 @@ class RecordHistoryTest {
 
         history shouldHaveSize 2
         history.last().isCodeAttached() shouldBe true
+    }
+
+    /** Startup retry attaches an older pending run after a newer byte-identical one was recorded. */
+    @Test
+    fun `a correction appended after a later identical grading replaces only its own`() {
+        val key = CaptureKey("cccc000000000003")
+        val first = aSubmissionRecord(
+            ts = OffsetDateTime.parse("2026-10-03T15:21:02+09:00"),
+            captureKey = key,
+            codePending = true,
+            codePath = null,
+        )
+        val second = first.copy(ts = OffsetDateTime.parse("2026-10-03T15:23:52+09:00"))
+        val firstAttached = first.copy(codePending = false, codePath = "problems/131537/Solution.sql")
+
+        val history = RecordHistory.of(stored(first, second, firstAttached))
+
+        history.map { it.ts } shouldContainExactly listOf(first.ts, second.ts)
+        history.map { it.isCodeAttached() } shouldContainExactly listOf(true, false)
     }
 
     private fun stored(vararg records: SubmissionRecord): List<RecordedSubmission> =

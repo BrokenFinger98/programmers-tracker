@@ -24,7 +24,8 @@ import org.slf4j.LoggerFactory
  * ### How `codePending` is cleared
  *
  * By **appending a corrected copy of the record**, not by rewriting its line and not by a
- * sidecar index. Readers resolve a capture key to its newest line through [RecordHistory].
+ * sidecar index. Readers resolve a grading — its `ts` and capture key — to its newest line through
+ * [RecordHistory].
  *
  * - *Rewriting the line in place* means rewriting the whole file, since the corrected JSON is
  *   longer than what it replaces. A crash halfway through would put every verdict in the log
