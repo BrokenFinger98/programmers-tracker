@@ -43,18 +43,25 @@ object McpPromptCatalog {
 
     /** The `prompts/get` answer, or a refusal already shaped for the client. */
     fun get(name: String?, arguments: JsonObject): JsonObject {
-        if (name != ExamPrepPrompt.NAME) throw refused("unknown prompt; this server offers ${NAMES.joinToString()}")
+        if (name != ExamPrepPrompt.NAME) throw refused("unknown prompt; this server exposes ${NAMES.joinToString()}")
         return answer(ExamPrepPrompt.text(scopeOf(arguments)))
     }
 
     private fun scopeOf(arguments: JsonObject): ExamPrepScope {
         val unknown = arguments.keys - EXAM_PREP_ARGUMENTS.map { it.name }.toSet()
-        if (unknown.isNotEmpty()) throw refused("unknown argument(s): ${unknown.sorted().joinToString()}")
+        if (unknown.isNotEmpty()) throw refused(unknownArguments(unknown))
         return try {
             readScope(arguments)
         } catch (invalid: IllegalArgumentException) {
             throw refused(invalid.message ?: "the arguments could not be used")
         }
+    }
+
+    // A key is the client's text, so it is quoted: "a, b" stays one item and a newline cannot break the message.
+    private fun unknownArguments(unknown: Set<String>): String {
+        val received = unknown.sorted().joinToString { JsonPrimitive(it).toString() }
+        val taken = EXAM_PREP_ARGUMENTS.joinToString { it.name }
+        return "unknown argument(s): $received; ${ExamPrepPrompt.NAME} takes $taken, in that order"
     }
 
     // Named, because three String? in a row would compile in any order.

@@ -6,6 +6,7 @@ import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -91,7 +92,7 @@ class McpPromptCatalogTest {
 
         refused.code shouldBe McpErrors.INVALID_PARAMS
         refused.status shouldBe 400
-        refused.message shouldContain ExamPrepPrompt.NAME
+        refused.message shouldBe "unknown prompt; this server exposes ${ExamPrepPrompt.NAME}"
     }
 
     @Test
@@ -109,6 +110,20 @@ class McpPromptCatalogTest {
 
         refused.code shouldBe McpErrors.INVALID_PARAMS
         refused.message shouldContain "level"
+    }
+
+    /** A key is the client's text: quoted, "a, b" stays one item, and a newline cannot break the message. */
+    @Test
+    fun `an unknown argument comes back quoted as one item, with what the prompt takes`() {
+        mapOf("a, b" to "\"a, b\"", "a\nb" to "\"a\\nb\"").forEach { (key, quoted) ->
+            val message = refusedFor(key).message
+
+            withClue("key = $quoted") {
+                message shouldContain "unknown argument(s): $quoted; "
+                message shouldNotContain "\n"
+                message shouldContain "takes language, since, part, in that order"
+            }
+        }
     }
 
     @Test
@@ -149,6 +164,10 @@ class McpPromptCatalogTest {
             refused.code shouldBe McpErrors.INVALID_PARAMS
             refused.message shouldBe "$name must be text"
         }
+    }
+
+    private fun refusedFor(key: String): McpFailure = shouldThrow<McpFailure> {
+        McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put(key, "1") })
     }
 
     private fun textWithPart(part: String): String =
