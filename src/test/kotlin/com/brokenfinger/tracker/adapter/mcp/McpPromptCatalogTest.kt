@@ -8,6 +8,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -121,31 +122,32 @@ class McpPromptCatalogTest {
         refused.message shouldContain "positional"
     }
 
-    /** Prompt arguments are strings by the specification; a number is a mistake to name, in the tools' words. */
+    /**
+     * Prompt arguments are strings by the specification, all three. A number is not the text of its digits,
+     * and a value that is not a primitive at all must be refused, not thrown through as an internal error.
+     */
     @Test
-    fun `an argument that is not a string is refused under its name`() {
-        val refused = shouldThrow<McpFailure> {
-            McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put("language", 5) })
-        }
+    fun `an argument that is not a JSON string is refused under its name, not answered as a fault`() {
+        val notStrings = listOf<JsonElement>(
+            JsonPrimitive(5),
+            JsonPrimitive(true),
+            JsonArray(listOf(JsonPrimitive("java"))),
+            buildJsonObject { put("name", "java") },
+        )
 
-        refused.message shouldBe "language must be text"
+        listOf("language", "since", "part").forEach { name ->
+            notStrings.forEach { notText -> assertRefusedAsText(name, notText) }
+        }
     }
 
-    /** Not a primitive at all: an exception here would reach the client as an internal error, not a refusal. */
-    @Test
-    fun `an argument that is an array or an object is refused under its name, not answered as a fault`() {
-        val array = JsonArray(listOf(JsonPrimitive("java")))
-        val nested = buildJsonObject { put("name", "java") }
-
-        listOf(array, nested).forEach { value ->
-            withClue("language = $value") {
-                val refused = shouldThrow<McpFailure> {
-                    McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put("language", value) })
-                }
-
-                refused.code shouldBe McpErrors.INVALID_PARAMS
-                refused.message shouldBe "language must be text"
+    private fun assertRefusedAsText(name: String, notText: JsonElement) {
+        withClue("$name = $notText") {
+            val refused = shouldThrow<McpFailure> {
+                McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put(name, notText) })
             }
+
+            refused.code shouldBe McpErrors.INVALID_PARAMS
+            refused.message shouldBe "$name must be text"
         }
     }
 

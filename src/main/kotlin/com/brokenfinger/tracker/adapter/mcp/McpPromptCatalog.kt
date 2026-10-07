@@ -15,21 +15,28 @@ import kotlinx.serialization.json.putJsonObject
  *
  * **The argument order is an interface.** Claude Code maps the words after a slash command onto these
  * arguments in the order listed, split on spaces and without quoting (2.1.285, read from the client).
- * So `language` comes first, the one most sessions give, and `part` last, because most part names
- * contain a space and arrive cut short ([[decisions/2026-10-07-exam-prep-asks-in-the-open]]).
+ * So `language` comes first, the one most sessions give, and `part` last. Most part names contain a
+ * space, so a client that splits on spaces hands over only the first word of one. In last place the
+ * words after it fall off the end; in any other place they would land in the next argument. With the
+ * order (language, part, since), the "BY" of "GROUP BY" would become `since` and be refused
+ * ([[decisions/2026-10-07-exam-prep-asks-in-the-open]]).
  *
- * A refusal is `-32602`, the code the specification gives an unknown prompt and a bad argument. The
- * dispatcher carries it on `400` to a modern client and on `200` to a handshake one, as it does an
- * unknown tool.
+ * A refusal is `-32602`, the code the specification gives an unknown prompt and a bad argument.
  */
 object McpPromptCatalog {
     val NAMES = listOf(ExamPrepPrompt.NAME)
 
+    private data class Argument(val name: String, val description: String)
+
     /** In the order Claude Code fills them, each with what it narrows. */
     private val EXAM_PREP_ARGUMENTS = listOf(
-        "language" to "A Programmers language id (java, python3, mysql, …). Narrows repair_steps.",
-        "since" to "${Since.FORMAT}. Narrows repair_steps to corrections recorded from then on.",
-        "part" to "A part name. Listed last, because some clients split arguments on spaces.",
+        Argument("language", "A Programmers language id (java, python3, mysql, …). Narrows repair_steps."),
+        Argument("since", "${Since.FORMAT}. Narrows repair_steps to corrections recorded from then on."),
+        Argument(
+            "part",
+            "A part name, matched in full and case-insensitively. Narrows repair_steps. Last, because a client " +
+                "that splits on spaces keeps only its first word.",
+        ),
     )
 
     fun definitions(): JsonArray = buildJsonArray { add(examPrep()) }
@@ -41,17 +48,17 @@ object McpPromptCatalog {
     }
 
     private fun scopeOf(arguments: JsonObject): ExamPrepScope {
-        val unknown = arguments.keys - EXAM_PREP_ARGUMENTS.map { it.first }.toSet()
+        val unknown = arguments.keys - EXAM_PREP_ARGUMENTS.map { it.name }.toSet()
         if (unknown.isNotEmpty()) throw refused("unknown argument(s): ${unknown.sorted().joinToString()}")
         return try {
-            scopeFrom(arguments)
+            readScope(arguments)
         } catch (invalid: IllegalArgumentException) {
             throw refused(invalid.message ?: "the arguments could not be used")
         }
     }
 
     // Named, because three String? in a row would compile in any order.
-    private fun scopeFrom(arguments: JsonObject): ExamPrepScope = ExamPrepScope(
+    private fun readScope(arguments: JsonObject): ExamPrepScope = ExamPrepScope(
         language = arguments.given("language"),
         since = arguments.given("since"),
         part = arguments.given("part"),
@@ -59,7 +66,7 @@ object McpPromptCatalog {
 
     // Strings, by the specification, refused in the tools' words otherwise. A blank one is not given —
     // where a tool refuses a blank — because a client that shows arguments as a form sends an empty
-    // field as "".
+    // field as "". Values are trimmed as they are read here; the tools trim when they match.
     private fun JsonObject.given(name: String): String? {
         val value = this[name]
         if (value == null || value is JsonNull) return null
@@ -95,6 +102,7 @@ object McpPromptCatalog {
         put("required", false)
     }
 
+    // The dispatcher carries -32602 on 400 to a modern client and on 200 to a handshake one, as for an unknown tool.
     private fun refused(message: String) = McpFailure(McpErrors.INVALID_PARAMS, 400, message)
 
     private const val DESCRIPTION = "Before a coding test: your recurring mistakes, found by your own model in " +
