@@ -247,6 +247,26 @@ class RecordQueryTest {
         query.problem(120804).submissions shouldHaveSize 1
     }
 
+    /** #343 through the real store: identical SQL submits are counted, not folded. */
+    @Test
+    fun `byte-identical submits at different times are each a submission`() {
+        val key = CaptureKey("dddd000000000001")
+        fun submit(attempt: Int, at: String) = aSubmissionRecord(
+            lessonId = 131537,
+            attempt = attempt,
+            ts = OffsetDateTime.parse(at),
+            captureKey = key,
+        )
+        val query = aRecordRepository(root).containing(
+            submit(1, "2026-10-03T15:25:45+09:00"),
+            submit(2, "2026-10-03T15:53:58+09:00"),
+            submit(3, "2026-10-03T15:55:57+09:00"),
+        ).query()
+
+        query.problem(131537).submissions.map { it.attempt } shouldContainExactly listOf(3, 2, 1)
+        query.tally(TallyGroup.PROBLEM).single().count shouldBe 3
+    }
+
     // lastRecordOf — what the badge asks on every heartbeat (#156) -----------------------------
 
     @Test
