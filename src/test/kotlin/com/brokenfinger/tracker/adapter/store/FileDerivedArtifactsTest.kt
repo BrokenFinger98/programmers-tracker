@@ -1,11 +1,14 @@
 package com.brokenfinger.tracker.adapter.store
 
+import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.loggedWhile
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -139,7 +142,7 @@ class FileDerivedArtifactsTest {
         Files.createDirectories(directory)
         staleRunners.forEach { Files.writeString(directory.resolve(it), "stale") }
 
-        // No examples.json stored → the generator refuses (no examples captured).
+        // No examples.json stored → no examples could be read, so no runner.
         artifacts().writeRunner(aSubmissionRecord(language = "cpp"), "int solution(int a) { return a; }")
 
         staleRunners.forEach { Files.exists(directory.resolve(it)) shouldBe false }
@@ -165,6 +168,23 @@ class FileDerivedArtifactsTest {
         )
 
         Files.exists(directory.resolve("runner_test.cpp")) shouldBe false
+    }
+
+    /**
+     * Every generator calls an empty list "never captured", which only this side can judge: an
+     * `examples.json` that was refused (#354) was captured. So the reason logged claims only that none
+     * could be read, and the refusal's own warning says why.
+     */
+    @Test
+    fun `examples that cannot be read are reported as unread, not as never captured`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/120804-두-수의-곱-구하기/examples.json"), aPushTokenIn(root))
+
+        val said = loggedWhile(FileDerivedArtifacts::class, Level.INFO) {
+            artifacts().writeRunner(aSubmissionRecord(language = "cpp"), "int solution(int a) { return a; }")
+        }
+
+        said.single() shouldContain "no examples could be read"
     }
 
     @Test

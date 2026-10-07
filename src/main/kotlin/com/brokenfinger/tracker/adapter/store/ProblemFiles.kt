@@ -1,6 +1,8 @@
 package com.brokenfinger.tracker.adapter.store
 
+import org.slf4j.LoggerFactory
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
 /**
@@ -25,9 +27,12 @@ import java.nio.file.Path
  * `problems` would carry the bound to wherever the link leads. Then a regular file only, because a FIFO
  * would block the calling thread for a writer that never comes.
  *
- * **Never throws.** A dangling link, a missing file, a directory or an unreadable file is absent, the
- * posture every reader here already takes. [RecordLayout] stays lexical; this is the half that looks
- * at the filesystem.
+ * **Never throws, and says why.** Whatever is not read is absent, the posture every reader here already
+ * takes. A missing file or a dangling link is the normal path and says nothing; every other refusal logs
+ * one warning naming the path the reader was handed and the reason — out of bounds, not a regular file,
+ * or the kind of failure. Never the content, never an exception's message and never where a link leads:
+ * each of those can name the very file this keeps out. [RecordLayout] stays lexical; this is the half
+ * that looks at the filesystem.
  */
 class ProblemFiles(private val layout: RecordLayout) {
     /** [Files.readAllBytes], bounded — for a reader that decodes leniently itself. */
@@ -37,17 +42,35 @@ class ProblemFiles(private val layout: RecordLayout) {
     fun readString(candidate: Path): String? = read(candidate) { Files.readString(it) }
 
     private fun <T : Any> read(candidate: Path, reading: (Path) -> T): T? =
-        runCatching { containedRegularFile(candidate)?.let(reading) }.getOrNull()
+        runCatching { containedRegularFile(candidate)?.let(reading) }.getOrElse { failed(candidate, it) }
 
     // The real path is what gets opened, so the file that was checked is the file that is read.
     private fun containedRegularFile(candidate: Path): Path? {
         val real = candidate.toRealPath()
-        if (!real.startsWith(realProblemsDirectory())) return null
-        return real.takeIf { Files.isRegularFile(it) }
+        if (!real.startsWith(realProblemsDirectory())) return refused(candidate, LEADS_OUT)
+        if (!Files.isRegularFile(real)) return refused(candidate, NOT_A_REGULAR_FILE)
+        return real
+    }
+
+    // Not there — not fetched yet, never run, or a link to nothing — is the normal path, and silent.
+    private fun failed(candidate: Path, cause: Throwable): Nothing? {
+        if (cause is NoSuchFileException) return null
+        return refused(candidate, cause.javaClass.simpleName)
+    }
+
+    private fun refused(candidate: Path, reason: String): Nothing? {
+        logger.warn("Treating {} as absent: {}", candidate, reason)
+        return null
     }
 
     private fun realProblemsDirectory(): Path {
         val problems = layout.problemsDirectory()
         return problems.parent.toRealPath().resolve(problems.fileName)
+    }
+
+    private companion object {
+        const val LEADS_OUT = "leads out of problems/"
+        const val NOT_A_REGULAR_FILE = "not a regular file"
+        val logger = LoggerFactory.getLogger(ProblemFiles::class.java)!!
     }
 }

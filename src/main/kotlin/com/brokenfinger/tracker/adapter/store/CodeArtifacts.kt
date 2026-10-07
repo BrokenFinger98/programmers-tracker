@@ -52,9 +52,9 @@ class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
      * would bloat `log/submissions.jsonl` on its own.
      *
      * Null rather than an invented diff whenever there is nothing honest to compare against:
-     * a run, the first attempt in that language, a previous attempt whose file is missing
-     * (diffing against an empty file would report the whole solution as added), unchanged
-     * code, or a file too large to diff cheaply.
+     * a run, the first attempt in that language, a previous attempt whose file is missing or
+     * cannot be read (diffing against an empty file would report the whole solution as added),
+     * unchanged code, or a file too large to diff cheaply.
      *
      * The previous attempt is read through [ProblemFiles], because the diff is inlined into a
      * record line that MCP serves and git pushes: one that is a link out of `problems/` counts as
@@ -91,13 +91,15 @@ class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
         .maxOrNull()
 
     private fun readAttempt(record: SubmissionRecord, attempt: Int): List<String>? {
-        val bytes = files.readAllBytes(attemptFile(record, attempt)) ?: return missing(attempt)
+        val bytes = files.readAllBytes(attemptFile(record, attempt)) ?: return unread(attempt)
         // Decoded with replacement rather than reported: one torn byte must not cost the diff.
         return linesOf(String(bytes, CHARSET))
     }
 
-    private fun missing(attempt: Int): List<String>? {
-        logger.warn("Attempt {} has no stored code; recording no diff rather than inventing one", attempt)
+    // Unread, not missing: a file that is there and was refused (#354) reads as absent too, and its
+    // refusal has already said why.
+    private fun unread(attempt: Int): List<String>? {
+        logger.warn("Attempt {}'s code could not be read; recording no diff rather than inventing one", attempt)
         return null
     }
 

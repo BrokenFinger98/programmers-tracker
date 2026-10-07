@@ -8,8 +8,11 @@ import java.nio.file.Path
 // the push token first of all. Every reader that must refuse one is tested against the same planting,
 // so "refused" means the same thing in each of them.
 
+/** The credential inside [A_PUSH_TOKEN_LINE] — what must never appear in an answer, a page or a log line. */
+const val A_PUSH_CREDENTIAL = "not-a-real-token"
+
 /** A stand-in for the push token, shaped like the line the real file holds and never a real one (dev rules §7.3). */
-const val A_PUSH_TOKEN_LINE = "https://x-access-token:not-a-real-token@github.com"
+const val A_PUSH_TOKEN_LINE = "https://x-access-token:$A_PUSH_CREDENTIAL@github.com"
 
 /** The push token where the records repository really keeps it — `.ps/git-credentials`, beside `problems/`. */
 fun aPushTokenIn(root: Path): Path {

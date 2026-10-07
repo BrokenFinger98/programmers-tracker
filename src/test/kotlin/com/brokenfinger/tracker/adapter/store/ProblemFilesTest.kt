@@ -1,12 +1,17 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -18,7 +23,8 @@ import java.nio.file.Path
  * The one bound every reader of a file under `problems/` goes through (#354), over a real directory.
  *
  * Each refusal first reads the file through the very path the reader is handed, so every case here is
- * shown to be a real exposure before it is shown to be refused.
+ * shown to be a real exposure before it is shown to be refused. A refusal is heard — one warning naming
+ * the path and why — while a file that is simply not there, the normal path, says nothing.
  */
 class ProblemFilesTest {
     @TempDir
@@ -28,11 +34,15 @@ class ProblemFilesTest {
     lateinit var outside: Path
 
     @Test
-    fun `reads a regular file that lies under the problems directory`() {
+    fun `reads a regular file that lies under the problems directory, and says nothing`() {
         val file = written("problems/1-x/statement.md", "the problem\n")
 
-        files().readString(file) shouldBe "the problem\n"
-        files().readAllBytes(file)?.decodeToString() shouldBe "the problem\n"
+        val warnings = warningsWhile(ProblemFiles::class) {
+            files().readString(file) shouldBe "the problem\n"
+            files().readAllBytes(file)?.decodeToString() shouldBe "the problem\n"
+        }
+
+        warnings.shouldBeEmpty()
     }
 
     /** The root holds what no reader may lead to; a path straight at it is refused like a link to it. */
@@ -53,17 +63,30 @@ class ProblemFilesTest {
         files().readString(file).shouldBeNull()
     }
 
+    /** The normal path — a statement not fetched yet, a run log before the first run — so nothing is said. */
     @Test
-    fun `a file that is not there is absent, not an error`() {
-        files().readString(root.resolve("problems/1-x/statement.md")).shouldBeNull()
+    fun `a file that is not there is absent, not an error, and not a warning`() {
+        val warnings = warningsWhile(ProblemFiles::class) {
+            files().readString(root.resolve("problems/1-x/statement.md")).shouldBeNull()
+        }
+
+        warnings.shouldBeEmpty()
     }
 
     @Test
-    fun `a directory where a file should be is absent, not an error`() {
+    fun `a directory where a file should be is absent, with a warning that says so`() {
         val directory = Files.createDirectories(root.resolve("problems/1-x/statement.md"))
 
-        files().readString(directory).shouldBeNull()
-        files().readAllBytes(directory).shouldBeNull()
+        val warnings = warningsWhile(ProblemFiles::class) {
+            files().readString(directory).shouldBeNull()
+            files().readAllBytes(directory).shouldBeNull()
+        }
+
+        warnings shouldHaveSize 2
+        warnings.forEach {
+            it shouldContain directory.toString()
+            it shouldContain "not a regular file"
+        }
     }
 
     /**
@@ -77,7 +100,28 @@ class ProblemFilesTest {
         Files.write(file, CP949_SYLLABLE)
 
         files().readAllBytes(file)?.toList() shouldBe CP949_SYLLABLE.toList()
-        files().readString(file).shouldBeNull()
+        val warnings = warningsWhile(ProblemFiles::class) { files().readString(file).shouldBeNull() }
+
+        warnings.single() shouldContain "MalformedInputException"
+    }
+
+    /**
+     * Any other failure is named by its kind alone. An exception's message carries a path, and the one it
+     * carries can be the path a link resolved to — here the file the link names — so it is never quoted.
+     */
+    @Test
+    fun `a file that cannot be opened is absent, with a warning that names the failure and not its message`() {
+        assumeTrue(canPlantLinksIn(root), "this test changes permissions and makes a symbolic link")
+        val file = written("problems/120804-the-target/attempts/001.java", "select 1\n")
+        val link = aLink(root.resolve("problems/2-y/attempts/001.java"), file)
+        Files.setPosixFilePermissions(file, emptySet())
+        assumeTrue(!Files.isReadable(file), "a superuser reads it anyway")
+
+        val warning = warningsWhile(ProblemFiles::class) { files().readString(link).shouldBeNull() }.single()
+
+        warning shouldContain link.toString()
+        warning shouldContain "AccessDeniedException"
+        warning shouldNotContain "120804-the-target"
     }
 
     // Links. Git stores them, so one under problems/ can arrive with a clone or a pull, not only by hand —
@@ -101,6 +145,23 @@ class ProblemFilesTest {
         Files.readString(link) shouldContain A_PUSH_TOKEN_LINE
         files().readString(link).shouldBeNull()
         files().readAllBytes(link).shouldBeNull()
+    }
+
+    /**
+     * Heard, and still nothing quoted: one warning naming the path the reader was handed and why — never
+     * what lies behind it, and never where the link leads, which here is the token's own file.
+     */
+    @Test
+    fun `a link out is refused with one warning that names the path it was reached by and quotes nothing`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val link = aLink(root.resolve("problems/1-x/statement.md"), aPushTokenIn(root))
+
+        val warning = warningsWhile(ProblemFiles::class) { files().readString(link).shouldBeNull() }.single()
+
+        warning shouldContain link.toString()
+        warning shouldContain "leads out of problems/"
+        warning shouldNotContain A_PUSH_CREDENTIAL
+        warning shouldNotContain "git-credentials"
     }
 
     @Test
@@ -148,13 +209,18 @@ class ProblemFilesTest {
         files.readString(alias.resolve("problems/1-x/statement.md")) shouldBe "the problem\n"
     }
 
+    /** A dangling link reads as a missing file, which is what the filesystem says it is: no warning. */
     @Test
-    fun `a link that leads nowhere is absent, not an error`() {
+    fun `a link that leads nowhere is absent, not an error, and not a warning`() {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         val link = aLink(root.resolve("problems/1-x/statement.md"), root.resolve("problems/1-x/gone.md"))
 
-        files().readString(link).shouldBeNull()
-        files().readAllBytes(link).shouldBeNull()
+        val warnings = warningsWhile(ProblemFiles::class) {
+            files().readString(link).shouldBeNull()
+            files().readAllBytes(link).shouldBeNull()
+        }
+
+        warnings.shouldBeEmpty()
     }
 
     /**
