@@ -51,4 +51,7 @@ can, the code landed 0.24–0.53 s after each record, and every run got its own 
 
 ## Outcome
 
-#351. Live acceptance pending: a problem run several times leaves one line per run with its own code.
+#351 (PR #352). **Verified live 2026-10-07 10:51 KST** on lesson 59036, after rebuilding from main
+`0848dbe`: three runs with three different queries left exactly three lines in `runs.jsonl`, each
+with its own code and exactly the four keys; the code was fetched 0.38 / 0.27 / 0.30 s after each
+record. The same lines later fed the first live repair step (#353).

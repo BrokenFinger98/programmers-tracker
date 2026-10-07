@@ -5490,7 +5490,7 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - #349 verified live on 59035 (10:06:17 run → COMPILE_ERROR, 10:06:55 submit → WRONG). ✅
 - Measured the fetch race first: four fastest-possible alternating runs all got their own code (fetch 0.24–0.53 s after the record, fastest human gap 1.6 s).
 - `problems/<id>/runs.jsonl`: recordId, language, codeFetchedAt, code; idempotent on complete lines. Review round: slimmed (verdicts stay in the log), codeFetchedAt for late attachments, torn-line retry fixed.
-- Pending: live — several runs on one problem leave one line each.
+- ✅ Live 2026-10-07 10:51 on lesson 59036: three runs, three runs.jsonl lines with their own code.
 
 ## 2026-10-07 — #353 repair steps over MCP (branch feat/353-repair-steps-over-mcp)
 - Measured before planning (live log, resolved per `(ts, captureKey)`): 131 gradings, 65 candidate steps, 25 starting at an unresolved grading, none submit→submit; 36 submits, every `codePath` readable; one `runs.jsonl` (lesson 59036, 3 lines) joined by `recordId`, none late.
@@ -5498,4 +5498,7 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - Found in review: Claude Code cuts MCP instructions and each tool description at 2,048 characters (CHANGELOG 2.1.84, 2.1.280; verified on 2.1.285) — the live instructions, 2,607 since #287, arrive cut. Budget now ≤ 2,000 as sent, pinned by tests: instructions 1,973 (27 left), get_problem 1,983, repair_steps 1,983, stats 1,788, others 691–1,356. Part 4.4 puts its guidance in the `exam_prep` prompt.
 - Docs: `mcp.md` + twin (seven tools, reading a step, `include`, part/level counts, the code-read bound, `returned` not built), README and bootstrap tool counts + twins, spec §4.2/§4.3 (As built)/§6/§7, ADR [[decisions/2026-10-07-repair-steps-are-served-not-judged]], `codeLate` note on the mistake-patterns ADR.
 - Filed: #354 (statement and run-log readers follow links out of `problems/`), #355 (internal fault answers id null / HTTP 500 in both eras), #356 (`incompleteHistory` after the payload).
-- Pending: live — repair_steps on a freshly solved problem.
+- ✅ Live 2026-10-07 after rebuild from 193179d (one-correction case): repair_steps(59036) returns the WRONG→PASS run step with its diff; default call 20/65 truncated (12 KB); get_problem(include) and stats(part) as designed. Pending: the two-failing-runs case on the next real solve that has one.
+
+## 2026-10-07 — #358 record the live verification of #351 and #353 (branch docs/358-record-live-verification)
+- Both ADR outcomes now carry the live results; progress pending lines closed.
