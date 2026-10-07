@@ -24,7 +24,7 @@ import java.time.format.DateTimeFormatter
  * record by `recordId`.** A second copy of the verdict would disagree with the log the day a
  * classification rule changes, as #350 just did.
  *
- * [Line.codeFetchedAt] is the instant the code was attached. A run attached late — the startup
+ * [RunLine.codeFetchedAt] is the instant the code was attached. A run attached late — the startup
  * retry after an expired session or a rate limit, or a second Run pressed within the ~0.3 s fetch
  * window — gets whatever code the page holds at fetch time, which may be a *later* run's. A reader
  * compares it with the next record's `ts` on the same problem (when that grading was recorded,
@@ -44,7 +44,7 @@ class RunLog(private val layout: RecordLayout, private val clock: Clock) {
         val id = record.recordId()
         if (alreadyHolds(file, id)) return
         Files.createDirectories(file.parent)
-        val line = format.encodeToString(Line(id, record.language, fetchedNow(), code))
+        val line = format.encodeToString(RunLine(id, record.language, fetchedNow(), code))
         Files.writeString(file, heal(file) + line + "\n", CHARSET, *APPEND)
     }
 
@@ -70,9 +70,6 @@ class RunLog(private val layout: RecordLayout, private val clock: Clock) {
         buffer.get(0)
     }
 
-    @Serializable
-    private data class Line(val recordId: String, val language: String, val codeFetchedAt: String, val code: String)
-
     private companion object {
         val CHARSET = StandardCharsets.UTF_8
         val APPEND = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
@@ -80,3 +77,10 @@ class RunLog(private val layout: RecordLayout, private val clock: Clock) {
         val format = Json
     }
 }
+
+/**
+ * One line of `runs.jsonl` — exactly these four keys (spec 2026-10-07 §4.2). Internal so the read
+ * side, [FileGradingCodes], decodes the shape this file writes rather than a copy of it.
+ */
+@Serializable
+internal data class RunLine(val recordId: String, val language: String, val codeFetchedAt: String, val code: String)

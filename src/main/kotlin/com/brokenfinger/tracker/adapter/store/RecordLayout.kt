@@ -41,6 +41,20 @@ class RecordLayout(private val root: Path) {
     fun runLog(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve(RUN_LOG)
 
     /**
+     * A path a record carries (`codePath`), resolved inside the repository — or null when it would
+     * leave it, or names nothing usable. The log is ours, but the MCP read path must not follow
+     * `../` out of the repository on the strength of a line someone could have edited.
+     *
+     * The check is lexical: it never looks at the filesystem, so a symlink someone placed inside
+     * the repository is outside what it guards.
+     */
+    fun recordFile(relative: String): Path? {
+        val base = root.toAbsolutePath().normalize()
+        val file = runCatching { base.resolve(relative).normalize() }.getOrNull() ?: return null
+        return file.takeIf { it.startsWith(base) && it != base }
+    }
+
+    /**
      * The index of everything under `problems/` (#292).
      *
      * A directory README, because GitHub renders one at the root of any directory — and browsing
