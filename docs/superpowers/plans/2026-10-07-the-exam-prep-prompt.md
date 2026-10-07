@@ -660,6 +660,10 @@ Refs #364"
 - Modify: `src/test/kotlin/com/brokenfinger/tracker/support/fixtures/McpFixtures.kt`
 - Test: `McpDispatcherTest.kt`, `McpControllerTest.kt`, `McpCallTest.kt`
 
+- [ ] **Step 0: One word in Task 3's catalog (review of Task 3)**
+
+In `McpPromptCatalog.kt`, the `given` comment says the tools trim "when they match". `Since.from` trims when it parses, so make it "when they parse or match".
+
 - [ ] **Step 1: Rename the accessor (no behaviour change)**
 
 In `McpCall.kt`:
@@ -678,19 +682,24 @@ Run: `./gradlew test --tests 'com.brokenfinger.tracker.adapter.mcp.*'` — expec
 
 - [ ] **Step 1b: A prompt's `arguments` must be an object (review of Task 3, Minor 1)**
 
-`McpCall.arguments()` reads anything that is not an object as `{}`. That suits a tool, whose arguments are checked one by one. For a prompt, though, `"arguments": "java"` would widen the session to everything on record in silence, the failure D3 refuses for `since`. Add a strict accessor and use it on both `PROMPTS_GET` routes.
+`McpCall.arguments()` reads anything that is not an object as `{}`. Every `exam_prep` argument is optional, so `{}` is a whole request: `"arguments": "java"` would quietly widen the session to everything on record, the failure D3 refuses for `since`. Add a strict accessor and use it on both `PROMPTS_GET` routes. Five of the seven tools have the same widening; that is a follow-up, not this task.
 
 Test first, in `McpCallTest`:
 
 ```kotlin
+    /** `arguments` is optional in the specification: absent and null are none, not a refusal. */
     @Test
-    fun `prompt arguments are the object given, or none when absent`() {
-        McpCall.from(aLegacyBody("prompts/get", aPromptGetParams())).promptArguments() shouldBe JsonObject(emptyMap())
-        val params = aPromptGetParams(arguments = buildJsonObject { put("language", "java") })
-        McpCall.from(aLegacyBody("prompts/get", params)).promptArguments().keys shouldBe setOf("language")
+    fun `prompt arguments are none when absent or null, and the object when given`() {
+        val absent = buildJsonObject { put("name", "exam_prep") }
+        val nulled = JsonObject(absent + ("arguments" to JsonNull))
+        val given = aToolCallParams("exam_prep", buildJsonObject { put("language", "java") })
+
+        McpCall.from(aLegacyBody("prompts/get", absent)).promptArguments() shouldBe JsonObject(emptyMap())
+        McpCall.from(aLegacyBody("prompts/get", nulled)).promptArguments() shouldBe JsonObject(emptyMap())
+        McpCall.from(aLegacyBody("prompts/get", given)).promptArguments().keys shouldBe setOf("language")
     }
 
-    /** A tool reads a malformed `arguments` as none; a prompt would widen to everything on record. */
+    /** A tool reads a malformed `arguments` as none; for a prompt that would widen to everything on record. */
     @Test
     fun `prompt arguments that are not an object are refused as invalid params`() {
         val params = buildJsonObject {
@@ -704,13 +713,17 @@ Test first, in `McpCallTest`:
     }
 ```
 
+Imports needed in `McpCallTest`: `kotlinx.serialization.json.JsonNull`, `kotlinx.serialization.json.JsonObject` (and `aToolCallParams`, `aLegacyBody`, `shouldThrow` if not already there).
+
+Run `./gradlew test --tests 'com.brokenfinger.tracker.adapter.mcp.McpCallTest'` — expected: compilation FAILS, `Unresolved reference 'promptArguments'`.
+
 Then in `McpCall.kt`:
 
 ```kotlin
     /**
-     * A prompt's arguments: the object given, none when absent, and a refusal for anything else. Stricter
-     * than [arguments] because a prompt has no per-argument check to catch it — `"arguments": "java"`
-     * would otherwise prepare a session over everything on record and look right.
+     * A prompt's arguments: the object given, none when absent or null, and a refusal for anything else.
+     * Stricter than [arguments]: every argument here is optional, so `{}` is a whole request, and a
+     * malformed `arguments` read as `{}` would prepare a session over everything on record and look right.
      */
     fun promptArguments(): JsonObject {
         val given = params["arguments"]
@@ -721,6 +734,8 @@ Then in `McpCall.kt`:
 ```
 
 Both `PROMPTS_GET` branches in Step 5 call `McpPromptCatalog.get(call.name(), call.promptArguments())`.
+
+Adjust the comment above the readers ("Every reader below casts instead of coercing … come back as an absent value") so it names `promptArguments()` as the one reader that refuses instead.
 
 Correct `McpFailure`'s KDoc while in the file. It says the message "never [says] what the caller presented", but prompt refusals name the argument a user typed, quoted. The rule's reason is credentials, so say exactly that: the message never echoes a credential or a header value.
 
@@ -833,7 +848,9 @@ Add to `McpDispatcherTest` (import `aPromptGetParams`):
         val modern = aModernCall("prompts/get", params)
 
         dispatcher.dispatch(modern, headersFor(modern)).status shouldBe 400
-        dispatcher.dispatch(aLegacyCall("prompts/get", params), McpHeaders()).status shouldBe 200
+        val legacy = dispatcher.dispatch(aLegacyCall("prompts/get", params), McpHeaders())
+        legacy.status shouldBe 200
+        errorOf(legacy)["code"]!!.jsonPrimitive.int shouldBe McpErrors.INVALID_PARAMS
     }
 
     @Test
@@ -1015,7 +1032,7 @@ Accepted costs:
 - In Claude Code a `since` needs a `language` before it, and a `part` needs both. The order is the whole interface its menu offers.
 - A blank argument counts as not given here, where a tool refuses a blank, because a form-style client sends an empty field as `""`.
 - JSON quoting escapes quotes, backslashes and C0 controls, but not Unicode line separators (U+2028/2029, U+0085) or invisible format characters (ZWSP, RLO). A value can therefore still look odd in the text. Only the user types these arguments, and the model cannot run a prompt, so the only one misled is the user's own session.
-- No length bound on an argument: the endpoint is loopback-only behind the token and Origin checks.
+- No length bound on an argument: the endpoint is loopback-only by default (`TRACKER_BIND_ADDRESS`), behind the token and Origin checks.
 - `language` and `part` are unchecked, so a typo answers empty rather than refused; the text tells the model to say so.
 - Claude Code reads neither `title` nor the argument descriptions. The argument order is all the help its menu gives.
 - The text is English; the client's model chooses the answer's language.
@@ -1084,3 +1101,9 @@ Tasks 1–2 passed the spec review byte-identical to this plan. The quality revi
   - "must be text", the tools' wording;
   - a padded `since` reads trimmed;
   - the expected call is quoted.
+- **Task 3's quality review:**
+  - Unknown argument keys come back JSON-quoted, with the arguments the prompt takes, in order. The unknown-prompt message says "exposes", matching the tools'.
+  - The `part` description says what it narrows and why it is last: in last place, the words after the first fall off the end instead of landing in another argument.
+  - A table test refuses `5`, `true`, an array and an object under each of the three names.
+  - `readScope`, an `Argument` data class, and the 400/200 sentence beside `refused()`.
+  - A non-object `arguments` and McpFailure's credential rule move to Task 4 (Step 1b). The characters JSON quoting leaves alone, and the missing length bound, go to Task 5's accepted costs. The KDoc decision links are checked in Task 5 Step 6.
