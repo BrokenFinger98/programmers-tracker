@@ -339,12 +339,13 @@ You do not have to configure this. The server decides from how your client opens
   requires. Admit one deliberately with `TRACKER_MCP_ALLOWED_ORIGINS` if you need to.
 - **Read-only.** The tools reach the record repository through a query that cannot append,
   move or commit, so a prompt-injected "delete my failures" has no path to act on.
-- **Kept code comes from `problems/` and nowhere else.** A submit's code is read only from a
-  regular file whose real path lies under the record repository's own `problems/` directory, so
-  neither a record's path nor a symbolic link — git stores links, so one can arrive with a clone or
-  a pull — can lead it to the push token and the `/watch` token under `.ps/`. A `problems`
-  directory that is itself a link is not followed, so one linked elsewhere on purpose yields no
-  code. The statement and run-log readers get the same bound in #354.
+- **What is read from a file comes from `problems/` and nowhere else.** The statement, each run's
+  code, a submit's code, and the previous attempt `diffFromPrev` is taken against when a submit is
+  recorded are read only from a regular file whose real path lies under the record repository's
+  own `problems/` directory. So neither a record's path nor a symbolic link — git stores links, so
+  one can arrive with a clone or a pull — can lead a reader to the push token and the `/watch`
+  token under `.ps/`. A `problems` directory that is itself a link is not followed, so one linked
+  elsewhere on purpose yields no statement and no code.
 - **No Programmers session cookie is ever on this path**, at any log level.
 - Nothing is logged on the normal path — not the request and not the answer — because every
   answer is a piece of your solving history.

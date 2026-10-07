@@ -5502,3 +5502,11 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 
 ## 2026-10-07 — #358 record the live verification of #351 and #353 (branch docs/358-record-live-verification)
 - Both ADR outcomes now carry the live results; progress pending lines closed.
+
+## 2026-10-07 — #354 no reader follows a link out of problems/ (branch fix/354-no-link-out-of-problems)
+- Audit of every reader under `problems/` whose content leaves: the statement (`get_problem`) and run log (MCP), named by the issue; the same statement inlined into the pushed README, the previous attempt behind `diffFromPrev` (log, served and pushed) and `examples.json` (runner, pushed), not named. `submitted` was already bounded by #353.
+- `ProblemFiles` (`readAllBytes` / `readString`, mirroring `Files`): real path under the real root + `problems` by name, regular files only, never throws; `readString` strict as `Files.readString`. All six readers go through it; `RecordLayout` stays lexical.
+- Tests: 14 helper unit tests + a planted-link test for each of the five newly bounded readers, each red against the old code (token returned, inlined, diffed; an outside run line; a runner from outside examples). Mutation: unbounding any of the six readers fails its test; dropping any helper check fails a helper test. Gates green (1,881 tests, `adapter/store` 85%).
+- Code b70f242; `mcp.md` + twin; ADR [[decisions/2026-10-07-no-reader-follows-a-link-out-of-problems]].
+- Found, not fixed (need their own issues): writers follow links (a linked README overwrote `.ps/git-credentials` in a scratch copy); a linked `.gitignore` is not read by git, so `git add --all` staged `.ps/git-credentials` (git 2.48.1) — reconcile would commit and push the token.
+- Pending: live — after rebuild, `get_problem`, `repair_steps` and the problem pages unchanged on the real records.

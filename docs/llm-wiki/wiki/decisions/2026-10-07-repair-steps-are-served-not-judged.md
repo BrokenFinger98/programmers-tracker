@@ -227,7 +227,10 @@ Found in review and filed rather than fixed on this branch:
 
 - **#354** — the shipped statement reader follows links out of `problems/`; a linked
   `statement.md` returned the push token in an isolated copy. Its direction: this branch's bound
-  as a shared helper, applied to the run-log reader too.
+  as a shared helper, applied to the run-log reader too. Done in
+  [[decisions/2026-10-07-no-reader-follows-a-link-out-of-problems]], whose audit found three more
+  readers that feed what git publishes, the worst of them the statement inlined into the problem
+  page.
 - **#355** — an internal fault answers with `id: null` and HTTP 500 in both eras, where JSON-RPC
   wants the request id echoed and the read-slice ADR keeps handshake-era failures on 200
   (pre-existing; this branch pins the current shape in `McpControllerTest`).

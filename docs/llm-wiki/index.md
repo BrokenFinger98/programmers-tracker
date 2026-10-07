@@ -71,6 +71,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-10-07 [[decisions/2026-10-07-database-failures-that-said-something]] — A wrong SQL submit (bare 실패) is WRONG and a run MySQL rejects is COMPILE_ERROR; a rejected submit stays RUNTIME_ERROR, measured on purpose
 - 2026-10-07 [[decisions/2026-10-07-every-run-keeps-its-code]] — Each run's code in the problem's runs.jsonl, joined to the log by recordId; codeFetchedAt lets a reader tell a late attachment from the code that ran
 - 2026-10-07 [[decisions/2026-10-07-repair-steps-are-served-not-judged]] — repair_steps pairs each non-pass with the next grading in its language and names every missing diff; get_problem(include), stats by part/level; kept code read only from the real problems/; every MCP text under the client's 2,048-character cut; returned deferred
+- 2026-10-07 [[decisions/2026-10-07-no-reader-follows-a-link-out-of-problems]] — Every reader under problems/ whose content leaves opens files through one bound, ProblemFiles; the audit found the statement inlined into the pushed README, which the issue had missed, and two link exposures outside its scope
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits
