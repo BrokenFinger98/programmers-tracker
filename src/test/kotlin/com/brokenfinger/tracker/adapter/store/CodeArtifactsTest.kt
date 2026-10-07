@@ -3,11 +3,17 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -117,6 +123,43 @@ class CodeArtifactsTest {
         val second = aSubmissionRecord(attempt = 2, language = "java")
 
         artifacts().diffFromPrev(second, CODE_V1) shouldBe null
+    }
+
+    /**
+     * The diff is inlined into the record line, which MCP serves and git pushes. A previous attempt
+     * that is a link to the push token beside `problems/` is no previous attempt we may read — so,
+     * like a missing one, it yields no diff rather than one that quotes the token (#354).
+     */
+    @Test
+    fun `a previous attempt that is a link to the push token yields no diff`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val first = logged(aSubmissionRecord(attempt = 1, language = "java"))
+        val previous = RecordLayout(root).attemptFile(first.lessonId, first.title, first.attempt, first.language)
+        aLink(previous, aPushTokenIn(root))
+        val second = aSubmissionRecord(attempt = 2, language = "java")
+
+        Files.readString(previous) shouldContain A_PUSH_TOKEN_LINE
+        val diff = artifacts().diffFromPrev(second, CODE_V1)
+
+        diff.orEmpty() shouldNotContain A_PUSH_TOKEN_LINE
+        diff shouldBe null
+    }
+
+    /**
+     * Said as far as it is known. A refused previous attempt (#354) is a file that is there, so the warning
+     * claims only that its code could not be read, never that none was stored; the refusal says why.
+     */
+    @Test
+    fun `a previous attempt that cannot be read is reported as unread, not as never stored`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val first = logged(aSubmissionRecord(attempt = 1, language = "java"))
+        val previous = RecordLayout(root).attemptFile(first.lessonId, first.title, first.attempt, first.language)
+        aLink(previous, aPushTokenIn(root))
+        val second = aSubmissionRecord(attempt = 2, language = "java")
+
+        val warnings = warningsWhile(CodeArtifacts::class) { artifacts().diffFromPrev(second, CODE_V1) shouldBe null }
+
+        warnings.single() shouldContain "Attempt 1's code could not be read"
     }
 
     @Test

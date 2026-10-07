@@ -49,15 +49,15 @@ class RecordLayout(private val root: Path) {
      * ever records paths relative to the repository, so an absolute one is not a record's.
      *
      * **Bounded at `problems/`, not at the repository root**, because the root also holds what a
-     * record must never lead to: the push token and the `/watch` token under `.ps/`, the original
-     * frames beside them, `log/`, and git's own config. The log is ours, but the MCP read path must
-     * not follow a line someone could have edited — and a `codePath` edited to
-     * `.ps/git-credentials` would otherwise hand the token to whoever asked. Every path the writer
-     * produces is `problems/<dir>/...`, so nothing legitimate is refused.
+     * record must never lead to: the push token under `.ps/`, the original frames beside it, `log/`,
+     * and git's own config. The log is ours, but the MCP read path must not follow a line someone
+     * could have edited — and a `codePath` edited to `.ps/git-credentials` would otherwise hand the
+     * token to whoever asked. Every path the writer produces is `problems/<dir>/...`, so nothing
+     * legitimate is refused.
      *
      * The check is lexical and never looks at the filesystem, so it cannot see a symbolic link. Whoever
-     * reads the file owns that half: see [FileGradingCodes.submitted], which resolves links and holds
-     * the real path to the same bound.
+     * reads the file owns that half, and every reader does it the same way: through [ProblemFiles],
+     * which resolves links and holds the real path to the same bound.
      */
     fun recordFile(relative: String): Path? {
         val base = repositoryRoot()

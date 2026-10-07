@@ -1,13 +1,19 @@
 package com.brokenfinger.tracker.adapter.store
 
+import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.loggedWhile
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -136,10 +142,49 @@ class FileDerivedArtifactsTest {
         Files.createDirectories(directory)
         staleRunners.forEach { Files.writeString(directory.resolve(it), "stale") }
 
-        // No examples.json stored → the generator refuses (no examples captured).
+        // No examples.json stored → no examples could be read, so no runner.
         artifacts().writeRunner(aSubmissionRecord(language = "cpp"), "int solution(int a) { return a; }")
 
         staleRunners.forEach { Files.exists(directory.resolve(it)) shouldBe false }
+    }
+
+    /**
+     * Example values are written into a runner, which is committed and pushed, so `examples.json` is held
+     * to the bound every reader under `problems/` is (#354). A target that does not decode as examples
+     * leaks nothing anyway; this one does, so only the bound refuses it.
+     */
+    @Test
+    fun `examples that are a link out of the problems directory generate no runner`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val directory = root.resolve("problems/120804-두-수의-곱-구하기")
+        val elsewhere = Files.createDirectories(root.resolve(".ps")).resolve("examples.json")
+        Files.writeString(elsewhere, """[{"input": "6, 7", "expected": "42"}]""")
+        aLink(directory.resolve("examples.json"), elsewhere)
+
+        Files.readString(directory.resolve("examples.json")) shouldContain "6, 7"
+        artifacts().writeRunner(
+            aSubmissionRecord(language = "cpp"),
+            "int solution(int num1, int num2) { return num1 * num2; }",
+        )
+
+        Files.exists(directory.resolve("runner_test.cpp")) shouldBe false
+    }
+
+    /**
+     * Every generator calls an empty list "never captured", which only this side can judge: an
+     * `examples.json` that was refused (#354) was captured. So the reason logged claims only that none
+     * could be read, and the refusal's own warning says why.
+     */
+    @Test
+    fun `examples that cannot be read are reported as unread, not as never captured`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/120804-두-수의-곱-구하기/examples.json"), aPushTokenIn(root))
+
+        val said = loggedWhile(FileDerivedArtifacts::class, Level.INFO) {
+            artifacts().writeRunner(aSubmissionRecord(language = "cpp"), "int solution(int a) { return a; }")
+        }
+
+        said.single() shouldContain "no examples could be read"
     }
 
     @Test

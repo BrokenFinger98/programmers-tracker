@@ -34,6 +34,7 @@ import java.time.Clock
 class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, clock: Clock) : DerivedArtifacts {
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
+    private val files = ProblemFiles(layout)
     private val runs = RunLog(layout, clock)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
@@ -70,28 +71,42 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
      */
     override fun writeRunner(record: SubmissionRecord, code: String) {
         val directory = layout.problemDirectory(record.lessonId, record.title)
-        val generate = GENERATORS[record.language]
-        if (generate == null) {
-            logger.info("Lesson {}: no runner — {} is not yet supported (#37)", record.lessonId, record.language)
-            return
-        }
-        when (val runner = generate(code, examplesOf(directory))) {
-            is Runner.Generated -> runCatching {
-                Files.createDirectories(directory)
-                Files.writeString(directory.resolve(runner.fileName), runner.source)
-                runner.extras.forEach { extra -> Files.writeString(directory.resolve(extra.fileName), extra.source) }
-            }.onFailure { logger.warn("Lesson {}: the runner could not be written", record.lessonId, it) }
-            is Runner.Refused -> {
-                RUNNER_FILES.forEach { stale -> runCatching { Files.deleteIfExists(directory.resolve(stale)) } }
-                logger.info("Lesson {}: no runner — {}", record.lessonId, runner.reason)
-            }
+        val generate = GENERATORS[record.language] ?: return unsupported(record)
+        val examples = examplesOf(directory)
+        if (examples.isEmpty()) return refused(record, directory, NO_EXAMPLES)
+        when (val runner = generate(code, examples)) {
+            is Runner.Generated -> written(record, directory, runner)
+            is Runner.Refused -> refused(record, directory, runner.reason)
         }
     }
 
-    /** The pairs stage 2 stored; an unreadable file means no examples, which refuses cleanly. */
+    private fun unsupported(record: SubmissionRecord) {
+        logger.info("Lesson {}: no runner — {} is not yet supported (#37)", record.lessonId, record.language)
+    }
+
+    private fun written(record: SubmissionRecord, directory: Path, runner: Runner.Generated) {
+        runCatching {
+            Files.createDirectories(directory)
+            Files.writeString(directory.resolve(runner.fileName), runner.source)
+            runner.extras.forEach { extra -> Files.writeString(directory.resolve(extra.fileName), extra.source) }
+        }.onFailure { logger.warn("Lesson {}: the runner could not be written", record.lessonId, it) }
+    }
+
+    private fun refused(record: SubmissionRecord, directory: Path, reason: String) {
+        RUNNER_FILES.forEach { stale -> runCatching { Files.deleteIfExists(directory.resolve(stale)) } }
+        logger.info("Lesson {}: no runner — {}", record.lessonId, reason)
+    }
+
+    /**
+     * The pairs stage 2 stored; an unreadable file means no examples, which refuses cleanly as
+     * [NO_EXAMPLES].
+     *
+     * Read through [ProblemFiles], because their values are written into a runner that is pushed: an
+     * `examples.json` that is a link out of `problems/` is no examples, whatever it leads to (#354).
+     */
     private fun examplesOf(directory: Path): List<ProblemExample> = runCatching {
-        json.decodeFromString<List<ProblemExample>>(Files.readString(directory.resolve("examples.json")))
-    }.getOrDefault(emptyList())
+        files.readString(directory.resolve("examples.json"))?.let { json.decodeFromString<List<ProblemExample>>(it) }
+    }.getOrNull().orEmpty()
 
     /**
      * Written once and never again. A second grading of the same problem finds the file there
@@ -146,6 +161,13 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
             "runner_test.cs",
             "runner_test.csproj",
         )
+
+        /**
+         * Every generator refuses an empty list as "never captured", which only this side can judge: an
+         * `examples.json` that was refused (#354) or did not decode was captured. So this says no more
+         * than is known, and [ProblemFiles] has already said why when it was the one that refused.
+         */
+        const val NO_EXAMPLES = "no examples could be read — press Run Code (코드 실행) once to capture them"
 
         val json = Json { ignoreUnknownKeys = true }
 

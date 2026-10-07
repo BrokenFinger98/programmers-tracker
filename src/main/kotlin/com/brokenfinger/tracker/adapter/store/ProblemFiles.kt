@@ -1,0 +1,95 @@
+package com.brokenfinger.tracker.adapter.store
+
+import org.slf4j.LoggerFactory
+import java.nio.ByteBuffer
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
+
+/**
+ * How a file under `problems/` is read when what it holds can leave this machine (#354): from a
+ * regular file whose real path lies under the records repository's own `problems/` directory, or not
+ * at all.
+ *
+ * **The threat.** The repository root holds, beside `problems/`, what must never leave: the push token
+ * in `.ps/git-credentials` (`https://x-access-token:<token>@github.com`) and the original frames. The
+ * `/watch` token and the session cookie are not among them: they stay in the tool's own `.ps/`, outside
+ * the records. What is read under `problems/` does leave — a statement and kept code through MCP, a
+ * diff into `log/submissions.jsonl`, which MCP serves and git pushes, the statement into the problem
+ * page and example values into a runner, both committed and pushed. Git stores symbolic links, so a
+ * link under `problems/` can arrive with a clone or a pull of the records repository, not only from
+ * someone with a shell here. A `statement.md` linked to `../../.ps/git-credentials` handed the token to
+ * `get_problem` (reproduced in #353's review), and a lexical check cannot see it: the path a reader is
+ * handed still reads `problems/...`.
+ *
+ * **The bound.** The candidate is resolved to its real path, links and all, and accepted only when that
+ * lies under the real root with `problems` appended by name. A link that stays inside reads as the file
+ * it names; one that leads out reads as nothing. Only the root is resolved, because it may sit behind a
+ * link (macOS's `/var` is one, a `~/ps-records` link another). `problems` never is: resolving a linked
+ * `problems` would carry the bound to wherever the link leads. Then a regular file only, because a FIFO
+ * would block the calling thread for a writer that never comes.
+ *
+ * **A hard link passes.** It is the file itself rather than a pointer to one, so a hard link to the token
+ * under `problems/` would be read. Git cannot store or deliver one — a clone writes two separate files —
+ * so making it takes a shell on this machine, which can read the token directly.
+ *
+ * **Never throws, and says why.** Whatever is not read is absent, the posture every reader here already
+ * takes. A missing file or a dangling link is the normal path and says nothing; every other refusal logs
+ * one warning naming the path the reader was handed and the reason — out of bounds, not a regular file,
+ * or the kind of failure. Never the content, never an exception's message and never where a link leads:
+ * each of those can name the very file this keeps out. [RecordLayout] stays lexical; this is the half
+ * that looks at the filesystem.
+ */
+internal class ProblemFiles(private val layout: RecordLayout) {
+    /** [Files.readAllBytes], bounded — for a reader that decodes leniently itself. */
+    fun readAllBytes(candidate: Path): ByteArray? = read(candidate) { it }
+
+    /** [Files.readString], bounded, and as strict as it is: bytes that are not UTF-8 are absent, not replaced. */
+    fun readString(candidate: Path): String? = read(candidate, ::strictUtf8)
+
+    private fun <T : Any> read(candidate: Path, decoding: (ByteArray) -> T): T? =
+        runCatching { containedRegularFile(candidate)?.let(::bytesOf)?.let(decoding) }
+            .getOrElse { failed(candidate, it) }
+
+    private fun containedRegularFile(candidate: Path): Path? {
+        val real = candidate.toRealPath()
+        if (!real.startsWith(realProblemsDirectory())) return refused(candidate, LEADS_OUT)
+        if (!Files.isRegularFile(real)) return refused(candidate, NOT_A_REGULAR_FILE)
+        return real
+    }
+
+    // What is opened is the real path that was checked, without following a link at its last name. A file
+    // swapped for a link between the check and the open — by a pull while the server runs — then fails
+    // rather than being followed. Not closed: a directory on the way swapped for a link in that window, as
+    // NOFOLLOW_LINKS governs the last name only, nor the file swapped for a FIFO, which the open would wait
+    // on. Accepted: the server never pulls, and whoever can swap a path here concurrently can already read
+    // the token.
+    private fun bytesOf(real: Path): ByteArray = Files.newInputStream(real, NOFOLLOW_LINKS).use { it.readAllBytes() }
+
+    // A new decoder reports malformed input rather than replacing it, so this throws where Files.readString does.
+    private fun strictUtf8(bytes: ByteArray): String =
+        Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
+
+    // Not there — not fetched yet, never run, or a link to nothing — is the normal path, and silent.
+    private fun failed(candidate: Path, cause: Throwable): Nothing? {
+        if (cause is NoSuchFileException) return null
+        return refused(candidate, cause.javaClass.simpleName)
+    }
+
+    private fun refused(candidate: Path, reason: String): Nothing? {
+        logger.warn("Treating {} as absent: {}", candidate, reason)
+        return null
+    }
+
+    private fun realProblemsDirectory(): Path {
+        val problems = layout.problemsDirectory()
+        return problems.parent.toRealPath().resolve(problems.fileName)
+    }
+
+    private companion object {
+        const val LEADS_OUT = "leads out of problems/"
+        const val NOT_A_REGULAR_FILE = "not a regular file"
+        val logger = LoggerFactory.getLogger(ProblemFiles::class.java)!!
+    }
+}

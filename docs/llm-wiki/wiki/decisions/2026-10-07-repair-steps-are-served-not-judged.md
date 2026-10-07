@@ -38,9 +38,9 @@ Two things found in review changed the frame.
   shows them ending "there is no cohort here… [truncated]" — character 2,048 exactly. The branch's
   own additions had grown them to 2,921, with `get_problem` at 2,548 and `repair_steps` at 2,126.
 - **A path a log line carries is now followed.** Serving submit code means reading the file a
-  record's `codePath` names, from a root that also holds `.ps/git-credentials` (the push token), the
-  `/watch` token and the raw frames — and git stores symbolic links, so a link can arrive with a
-  clone or a pull, not only by hand.
+  record's `codePath` names, from a root that also holds `.ps/git-credentials` (the push token) and
+  the raw frames — and git stores symbolic links, so a link can arrive with a clone or a pull, not
+  only by hand. (The `/watch` token is not here; it lives in the tool's own `.ps/`.)
 
 ## Options considered
 
@@ -227,7 +227,10 @@ Found in review and filed rather than fixed on this branch:
 
 - **#354** — the shipped statement reader follows links out of `problems/`; a linked
   `statement.md` returned the push token in an isolated copy. Its direction: this branch's bound
-  as a shared helper, applied to the run-log reader too.
+  as a shared helper, applied to the run-log reader too. Done in
+  [[decisions/2026-10-07-no-reader-follows-a-link-out-of-problems]], whose audit found three more
+  readers that feed what git publishes, the worst of them the statement inlined into the problem
+  page.
 - **#355** — an internal fault answers with `id: null` and HTTP 500 in both eras, where JSON-RPC
   wants the request id echoed and the read-slice ADR keeps handshake-era failures on 200
   (pre-existing; this branch pins the current shape in `McpControllerTest`).

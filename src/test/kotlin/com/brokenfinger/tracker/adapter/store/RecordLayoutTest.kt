@@ -152,9 +152,10 @@ class RecordLayoutTest {
     }
 
     /**
-     * The root holds what a record must never lead to: the push token and the `/watch` token under
-     * `.ps/`, the original frames, the log, git's own config. Bounding at the root let a `codePath`
-     * edited to `.ps/git-credentials` return the token.
+     * The root holds what a record must never lead to: the push token under `.ps/`, the original
+     * frames, the log, git's own config. Bounding at the root let a `codePath` edited to
+     * `.ps/git-credentials` return the token. (The `/watch` token lives in the tool's own `.ps/`, not
+     * here; its name stays in the list because nothing under `.ps/` may be reached.)
      */
     @Test
     fun `a path to anything beside the problems directory resolves to nothing`() {

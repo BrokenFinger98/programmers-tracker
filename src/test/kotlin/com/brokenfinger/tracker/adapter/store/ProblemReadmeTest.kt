@@ -6,13 +6,18 @@ import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -318,6 +323,24 @@ class ProblemReadmeTest {
         val text = render(listOf(record))
 
         text shouldContain "## Attempt history"
+        text shouldNotContain "## Problem"
+    }
+
+    /**
+     * This page is committed and pushed, so a statement read through a link would publish whatever the
+     * link leads to — and the root holds the push token beside `problems/` (#354).
+     */
+    @Test
+    fun `a statement that is a link to the push token is not written into the page`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val record = aSubmissionRecord()
+        val statement = RecordLayout(root).statementFile(record.lessonId, record.title)
+        aLink(statement, aPushTokenIn(root))
+
+        Files.readString(statement) shouldContain A_PUSH_TOKEN_LINE
+        val text = render(listOf(record))
+
+        text shouldNotContain A_PUSH_TOKEN_LINE
         text shouldNotContain "## Problem"
     }
 

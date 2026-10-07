@@ -1,7 +1,13 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -44,6 +50,20 @@ class FileProblemStatementsTest {
     fun `a file holding only whitespace is absent too`() {
         write("   \n\n")
 
+        statements().of(120804, "두 수의 곱 구하기").shouldBeNull()
+    }
+
+    /**
+     * The statement goes to `get_problem` as it is read, and the root holds the push token beside
+     * `problems/`. A link that leads there, cloned or pulled in, returned the token (#354).
+     */
+    @Test
+    fun `a statement that is a link to the push token is absent`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val statement = RecordLayout(root).statementFile(120804, "두 수의 곱 구하기")
+        aLink(statement, aPushTokenIn(root))
+
+        Files.readString(statement) shouldContain A_PUSH_TOKEN_LINE
         statements().of(120804, "두 수의 곱 구하기").shouldBeNull()
     }
 

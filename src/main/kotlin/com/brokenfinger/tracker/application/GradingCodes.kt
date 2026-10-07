@@ -15,7 +15,7 @@ interface GradingCodes {
     /** Every kept run of one problem, by `SubmissionRecord.recordId()`. Empty when none was kept. */
     fun runs(lessonId: Long, title: String?): Map<String, KeptCode>
 
-    /** A submit's code, from the path its record carries. Null when gone, unreadable or outside the repository. */
+    /** A submit's code, from the path its record carries. Null when gone, unreadable or outside `problems/`. */
     fun submitted(codePath: String): String?
 
     companion object {
