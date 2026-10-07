@@ -2,7 +2,7 @@
 
 Written: 2026-10-07
 Issue: #346
-Status: approved by the owner; 4.1 implemented (#348, #350), 4.2 (#352), 4.3 (#353, live check pending); 4.4 not implemented
+Status: approved by the owner; 4.1 implemented (#348, #350), 4.2 (#352), 4.3 (#353, live check pending); 4.4 (#364, live check pending)
 
 ---
 

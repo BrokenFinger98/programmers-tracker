@@ -72,6 +72,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-10-07 [[decisions/2026-10-07-every-run-keeps-its-code]] — Each run's code in the problem's runs.jsonl, joined to the log by recordId; codeFetchedAt lets a reader tell a late attachment from the code that ran
 - 2026-10-07 [[decisions/2026-10-07-repair-steps-are-served-not-judged]] — repair_steps pairs each non-pass with the next grading in its language and names every missing diff; get_problem(include), stats by part/level; kept code read only from the real problems/; every MCP text under the client's 2,048-character cut; returned deferred
 - 2026-10-07 [[decisions/2026-10-07-no-reader-follows-a-link-out-of-problems]] — Every reader under problems/ whose content leaves opens files through one bound, ProblemFiles; the audit found the statement inlined into the pushed README, which the issue had missed, and two link exposures outside its scope
+- 2026-10-07 [[decisions/2026-10-07-exam-prep-asks-in-the-open]] — One MCP prompt, `exam_prep`, asks the learner's own model in the open for the naming the tools never do; Claude Code fills its arguments by position, split on spaces, so `language, since, part` is an interface, `since` is checked, a part cut at its first space is left for the model to match against the `stats` part keys, and an empty answer under a scope is said not to be clean
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits

@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [mcp, diagnosis, storage, interpretation-boundary]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
@@ -69,4 +69,5 @@ so the step to it stays open.
 
 ## Outcome
 
-Approved 2026-10-07 (#346). Implementation follows as separate issues, #343 first.
+Approved 2026-10-07 (#346). Implementation follows as separate issues, #343 first. The prompt that
+asks for the diagnosis, part 4.4, is [[decisions/2026-10-07-exam-prep-asks-in-the-open]] (#364).
