@@ -43,7 +43,7 @@ class StatementBackfill(
     suspend fun run(): BackfillReport {
         val missing = missing()
         if (missing.isEmpty()) return BackfillReport()
-        logger.info("Fetching the problem statement of {} problem(s) recorded before it was kept", missing.size)
+        logger.info("Fetching the problem statement of {} problem(s) with none readable", missing.size)
         return passOver(missing)
     }
 
