@@ -44,11 +44,11 @@ object VerdictResolver {
     /**
      * A wrong **database submit** reports the bare word, nothing after it — no timing, because SQL
      * never sends any (protocol §6, §7). Measured 2026-10-03 on lesson 273711: six cases, each
-     * `passed:false` and `"실패"`, filed UNKNOWN until this. Exact match on purpose: every other
+     * `passed:false` and [BARE_FAILURE], filed UNKNOWN until this. Exact match on purpose: every other
      * failure message carries a parenthesised reason, and an unmeasured one must stay unknown.
-     * A submit MySQL rejects says `실패 (런타임 에러)` instead (measured 2026-10-07 on lesson 59034),
-     * so the bare word is a wrong result and nothing else. A rejected SQL submit is recorded
-     * RUNTIME_ERROR, not corrected by a preceding rejected run, because a database run's rejection
+     * A submit MySQL rejects says the submit path's runtime-error message (protocol §7) instead
+     * (measured 2026-10-07 on lesson 59034), so the bare word is a wrong result and nothing else.
+     * A rejected SQL submit is recorded RUNTIME_ERROR, not corrected by a preceding rejected run, because a database run's rejection
      * arrives on a finish frame and never binds error text.
      */
     private const val BARE_FAILURE = "실패"
@@ -58,8 +58,8 @@ object VerdictResolver {
      * `(1054, "Unknown column …")`, and no table (protocol §6, measured 2026-10-03 on lesson
      * 131537). The query never ran — the same stage as a failed compile. The rule applies to a
      * database RUN finish, which says `returnedResult = false`; a submit MySQL rejects says
-     * `실패 (런타임 에러)` instead and is a RUNTIME_ERROR (measured 2026-10-07 on lesson 59034),
-     * so "the same stage as a failed compile" holds for the run path only.
+     * the submit path's runtime-error message (protocol §7) instead and is a RUNTIME_ERROR
+     * (measured 2026-10-07 on lesson 59034), so "the same stage as a failed compile" holds for the run path only.
      */
     private val databaseErrorMessage = Regex("""^\(\d+, ["']""")
 

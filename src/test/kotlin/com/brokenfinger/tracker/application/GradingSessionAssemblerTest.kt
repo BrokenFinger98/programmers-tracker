@@ -185,9 +185,10 @@ class GradingSessionAssemblerTest {
     }
 
     /**
-     * Measured 2026-10-07 on lesson 59034: a submit MySQL rejects says `실패 (런타임 에러)`. A rejected
-     * database run is a finish frame, not an error frame, so no error text is ever bound to a
-     * later submit and the submit stays a runtime error — unlike the algorithm path.
+     * Measured 2026-10-07 on lesson 59034: a submit MySQL rejects says the submit path's
+     * runtime-error message (protocol §7). A rejected database run is a finish frame, not an error
+     * frame, so no error text is ever bound to a later submit and the submit stays a runtime
+     * error — unlike the algorithm path.
      */
     @Test
     fun `a database submit MySQL rejected is a runtime error`() {
