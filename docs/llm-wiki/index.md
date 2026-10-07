@@ -66,6 +66,7 @@ Every new page must be registered here (no orphans). Append entries start with t
 - 2026-09-30 [[decisions/2026-09-30-the-registry-has-one-lock]] — `/watch` became one runBlocking per request, so the registry's single-writer assumption went false; every operation is atomic under one lock now
 - 2026-09-30 [[decisions/2026-09-30-one-probe-in-flight]] — Each tab's heartbeat probed on its own on a cold cache; the first caller owns the probe and the rest take its answer
 - 2026-10-01 [[decisions/2026-10-01-a-failed-run-that-returned-a-result-is-wrong]] — A database run carries no message either way; a failed one that returned a table is a wrong answer, not a result the server could not classify
+- 2026-10-07 [[decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored]] — Recurring mistakes are the AI's diagnosis over repair steps the server serves; every run's code is kept so the corrections exist, and MCP stays read-only
 
 ## Concepts
 - 2026-08-04 [[concepts/actioncable-broadcast-observation]] — Passive broadcast observation: how it works and its limits
