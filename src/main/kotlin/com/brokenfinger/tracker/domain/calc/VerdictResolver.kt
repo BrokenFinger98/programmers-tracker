@@ -42,6 +42,23 @@ object VerdictResolver {
     private val measuredMessage = Regex("""\d+(\.\d+)?ms""")
 
     /**
+     * A wrong **database submit** reports the bare word, nothing after it — no timing, because SQL
+     * never sends any (protocol §6, §7). Measured 2026-10-03 on lesson 273711: six cases, each
+     * `passed:false` and `"실패"`, filed UNKNOWN until this. Exact match on purpose: every other
+     * failure message carries a parenthesised reason, and an unmeasured one must stay unknown.
+     * A submit MySQL rejects says `실패 (런타임 에러)` instead (measured 2026-10-07 on lesson 59034),
+     * so the bare word is a wrong result and nothing else.
+     */
+    private const val BARE_FAILURE = "실패"
+
+    /**
+     * A **database run MySQL rejected** carries the driver's error tuple as its message, e.g.
+     * `(1054, "Unknown column …")`, and no table (protocol §6, measured 2026-10-03 on lesson
+     * 131537). The query never ran — the same stage as a failed compile.
+     */
+    private val databaseErrorMessage = Regex("""^\(\d+, ["']""")
+
+    /**
      * Compile failures, **by the shape each toolchain actually prints**. A submit response
      * reports compile and runtime errors identically; only the run path separates them
      * (protocol doc §7). Matching stays tolerant of HTML escaping, which the run path applies
@@ -132,6 +149,8 @@ object VerdictResolver {
         if (timeoutMessage.containsMatchIn(msg)) return Verdict.TIMEOUT
         if (runtimeFailureMessage.containsMatchIn(msg)) return errorVerdictOf(boundErrorText)
         if (measuredMessage.containsMatchIn(msg)) return Verdict.WRONG
+        if (msg == BARE_FAILURE) return Verdict.WRONG
+        if (databaseErrorMessage.containsMatchIn(msg)) return Verdict.COMPILE_ERROR
         return null
     }
 

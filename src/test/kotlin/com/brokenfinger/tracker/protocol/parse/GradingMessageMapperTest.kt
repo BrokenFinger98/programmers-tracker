@@ -141,6 +141,22 @@ class GradingMessageMapperTest {
             )
     }
 
+    // Protocol §6, measured 2026-10-03: a run MySQL refused — no table, the error tuple as msg.
+    @Test
+    fun `a rejected sql run carries the error tuple and no result`() {
+        val sqlRunError = FixtureLoader.messages("sql-run-error.jsonl")
+
+        GradingMessageMapper.testcaseOf(sqlRunError[1]) shouldBe
+            aTestcaseResult(
+                id = 5437,
+                passed = false,
+                msg = "(1054, \"Unknown column 'USER_ID' in 'field list'\")",
+                runTime = null,
+                memorySize = null,
+                returnedResult = false,
+            )
+    }
+
     @Test
     fun `the algorithm finish frame carries no testcase`() {
         GradingMessageMapper.testcaseOf(algorithmSubmit[5]).shouldBeNull()

@@ -7,11 +7,13 @@ import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.UnknownReason
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aRunErrorText
+import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.aSqlChannel
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.fixtures.anAssembler
 import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -170,6 +172,27 @@ class GradingSessionAssemblerTest {
         session.outcome shouldBe Outcome.JUDGED
         session.verdict shouldBe Verdict.WRONG
         session.testcases.map { it.id } shouldContainExactly listOf(5439L)
+    }
+
+    @Test
+    fun `a wrong database submit is WRONG, not unknown`() {
+        val session = anAssembledSession("sql-submit-wrong.jsonl", channel = aSqlChannel())
+
+        session.action shouldBe GradingAction.SUBMIT
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.WRONG
+        session.testcases shouldHaveSize 6
+    }
+
+    @Test
+    fun `a database run mysql refused is a compile error`() {
+        // facts() keeps broadcast frames only: start · finish · start · finish
+        val firstRun = FixtureLoader.facts("sql-run-error.jsonl").take(2)
+
+        val session = aSessionOf(firstRun, channel = aSqlChannel())
+
+        session.action shouldBe GradingAction.RUN
+        session.verdict shouldBe Verdict.COMPILE_ERROR
     }
 
     // For algorithm submits result_lesson_challenge arrives before finish; the late finish
