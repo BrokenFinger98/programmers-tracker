@@ -5479,3 +5479,9 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - ADR [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]].
 - Measured for Part B (plan Part B0), 2026-10-07 09:28:19 KST, lesson 59034 attempt 2: an SQL submit MySQL rejects says `실패 (런타임 에러)`, not bare `실패` → Part B proceeds as written.
 - Pending: live — `get_problem 131537` answers 3 submits / 10 runs after rebuild.
+
+## 2026-10-07 — #349 database failures that said something (branch fix/349-database-failure-verdicts)
+- #343 verified live: after rebuild from 4f1e660, `get_problem 131537` = 3 submits / 10 runs. ✅
+- Bare `실패` (wrong SQL submit) → WRONG; MySQL error tuple on a run finish (returnedResult=false) → COMPILE_ERROR; a rejected SQL submit (`실패 (런타임 에러)`, measured on purpose on 59034) stays RUNTIME_ERROR — pinned.
+- Fixtures sql-submit-wrong / sql-run-error / sql-submit-error; protocol §6, §7, §15 #18–20; ADR [[decisions/2026-10-07-database-failures-that-said-something]]. Spec ✅, quality approved after one round (fixture for the B0 measurement, tuple rule narrowed to the run path).
+- Pending: live — a wrong SQL submit → WRONG, a syntax-error SQL run → COMPILE_ERROR on the rebuilt container.

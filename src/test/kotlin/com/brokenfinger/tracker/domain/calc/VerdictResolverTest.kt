@@ -114,6 +114,72 @@ class VerdictResolverTest {
         verdict shouldBe Verdict.WRONG
     }
 
+    /** A wrong database submit, measured on lesson 273711 (2026-10-03): the bare word and nothing else. */
+    @Test
+    fun `a bare failure message on a database submit is WRONG`() {
+        val verdict = VerdictResolver.resolve(
+            testcases = listOf(aTestcaseResult(passed = false, msg = "실패", runTime = null, memorySize = null)),
+            boundErrorText = null,
+        )
+
+        verdict shouldBe Verdict.WRONG
+    }
+
+    /** A database run MySQL refused, measured on lesson 131537 (2026-10-03): its error tuple is the message. */
+    @Test
+    fun `a database error tuple is a compile error`() {
+        val messages = listOf(
+            "(1054, \"Unknown column 'USER_ID' in 'field list'\")",
+            "(1222, 'The used SELECT statements have a different number of columns')",
+        )
+
+        messages.forEach { msg ->
+            val verdict = VerdictResolver.resolve(
+                testcases = listOf(
+                    aTestcaseResult(
+                        passed = false,
+                        msg = msg,
+                        runTime = null,
+                        memorySize = null,
+                        returnedResult = false,
+                    ),
+                ),
+                boundErrorText = null,
+            )
+            verdict shouldBe Verdict.COMPILE_ERROR
+        }
+    }
+
+    /** The tuple rule is measured on the run finish only, which reports returnedResult = false. */
+    @Test
+    fun `an error tuple on a case that reports no result flag stays unknown`() {
+        val verdict = VerdictResolver.resolve(
+            testcases = listOf(
+                aTestcaseResult(
+                    passed = false,
+                    msg = "(1054, \"Unknown column 'USER_ID' in 'field list'\")",
+                    runTime = null,
+                    memorySize = null,
+                    returnedResult = null,
+                ),
+            ),
+            boundErrorText = null,
+        )
+
+        verdict shouldBe null
+    }
+
+    /** The bare word only — a failure message carrying anything after it keeps its own rule. */
+    @Test
+    fun `a failure message with an unmeasured suffix stays unknown`() {
+        val verdict = VerdictResolver.resolve(
+            testcases = listOf(aTestcaseResult(passed = false, msg = "실패 (메모리 초과)", runTime = null)),
+            boundErrorText = null,
+        )
+
+        verdict shouldBe null
+    }
+
     /** No message and nothing returned says nothing about why; the honest answer stays unknown. */
     @Test
     fun `a failure with no message and no result stays unknown`() {

@@ -47,7 +47,7 @@ Branch: `fix/343-history-folds-identical-gradings` from a fresh `main`. Issue #3
 **Files:**
 - Test: `src/test/kotlin/com/brokenfinger/tracker/application/RecordHistoryTest.kt`
 
-- [ ] **Step 1: Add two tests before `private fun stored(...)`**
+- [x] **Step 1: Add two tests before `private fun stored(...)`**
 
 ```kotlin
     /**
@@ -88,7 +88,7 @@ Branch: `fix/343-history-folds-identical-gradings` from a fresh `main`. Issue #3
 
 Add `import java.time.OffsetDateTime` if the file does not import it yet.
 
-- [ ] **Step 2: Run and confirm the first test fails for the right reason**
+- [x] **Step 2: Run and confirm the first test fails for the right reason**
 
 Run: `./gradlew test --tests 'com.brokenfinger.tracker.application.RecordHistoryTest'`
 Expected: `two gradings with identical bytes at different times are two records` FAILS — one element instead of two. The second new test fails too (one record instead of two). The five existing tests pass.
@@ -98,7 +98,7 @@ Expected: `two gradings with identical bytes at different times are two records`
 **Files:**
 - Modify: `src/main/kotlin/com/brokenfinger/tracker/application/RecordHistory.kt`
 
-- [ ] **Step 1: Change the KDoc paragraph and the key**
+- [x] **Step 1: Change the KDoc paragraph and the key**
 
 Replace the sentence `A record that changes after it was written — today only stage 3 clearing \`codePending\` — is therefore appended again rather than edited, and **the newest line for a capture key is the record**.` with:
 
@@ -121,7 +121,7 @@ Replace the function body:
         records.mapNotNull { decoded(it.line) }.associateBy { it.ts to it.captureKey }.values.toList()
 ```
 
-- [ ] **Step 2: Run the class**
+- [x] **Step 2: Run the class**
 
 Run: `./gradlew test --tests 'com.brokenfinger.tracker.application.RecordHistoryTest'`
 Expected: all 7 PASS.
@@ -131,7 +131,7 @@ Expected: all 7 PASS.
 **Files:**
 - Test: `src/test/kotlin/com/brokenfinger/tracker/application/RecordQueryTest.kt`
 
-- [ ] **Step 1: Add a layer test after `a problem lists a corrected attempt once`**
+- [x] **Step 1: Add a layer test after `a problem lists a corrected attempt once`**
 
 ```kotlin
     /** #343 through the real store: identical SQL submits are counted, not folded. */
@@ -157,7 +157,7 @@ Expected: all 7 PASS.
 
 `TallyBucket(key, label, count)` and `TallyGroup.PROBLEM` are in `domain/calc/SubmissionTally.kt`. ktlint's `max_line_length` is 120.
 
-- [ ] **Step 2: Run it, then revert Task A2 locally and run again**
+- [x] **Step 2: Run it, then revert Task A2 locally and run again**
 
 Run: `./gradlew test --tests 'com.brokenfinger.tracker.application.RecordQueryTest'`
 Expected: PASS. Then `git stash` only `RecordHistory.kt`, rerun, expect FAIL (`[3]` instead of `[3, 2, 1]`), `git stash pop`. A test must be able to fail before it is allowed to pass.
@@ -168,7 +168,7 @@ Expected: PASS. Then `git stash` only `RecordHistory.kt`, rerun, expect FAIL (`[
 - Create: `docs/llm-wiki/wiki/decisions/2026-10-07-a-record-is-its-time-and-its-bytes.md`
 - Modify: `docs/llm-wiki/index.md`, `docs/llm-wiki/wiki/decisions/2026-08-05-code-pending-correction-append.md`, `docs/llm-wiki/wiki/decisions/2026-08-11-a-grading-is-its-whole-session.md`, `.harness/state/progress.md`
 
-- [ ] **Step 1: Write the ADR**
+- [x] **Step 1: Write the ADR**
 
 ```markdown
 ---
@@ -224,15 +224,15 @@ It needs no schema change and no migration, and it was measured to hold on the w
 container.
 ```
 
-- [ ] **Step 2: Register it in `docs/llm-wiki/index.md`** under Decisions, after the `2026-10-07-mistake-patterns-are-diagnosed-not-stored` line:
+- [x] **Step 2: Register it in `docs/llm-wiki/index.md`** under Decisions, after the `2026-10-07-mistake-patterns-are-diagnosed-not-stored` line:
 
 ```markdown
 - 2026-10-07 [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]] — Readers resolve the log per `(ts, captureKey)`; byte-identical gradings stop folding into one (#343)
 ```
 
-- [ ] **Step 3: Point the two older ADRs at it.** In each, append one line at the end of the ⚠️ paragraph added on 2026-10-06: `Fixed in [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]].` and set `updated: 2026-10-07`.
+- [x] **Step 3: Point the two older ADRs at it.** In each, append one line at the end of the ⚠️ paragraph added on 2026-10-06: `Fixed in [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]].` and set `updated: 2026-10-07`.
 
-- [ ] **Step 4: Append to `.harness/state/progress.md`**
+- [x] **Step 4: Append to `.harness/state/progress.md`**
 
 ```markdown
 
@@ -244,8 +244,8 @@ container.
 
 ### Task A5: Gates, commit, PR, merge, live check
 
-- [ ] **Step 1:** `./scripts/check.sh && ./scripts/test.sh && ./scripts/build.sh` — all exit 0.
-- [ ] **Step 2: Commit**
+- [x] **Step 1:** `./scripts/check.sh && ./scripts/test.sh && ./scripts/build.sh` — all exit 0.
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/main/kotlin/com/brokenfinger/tracker/application/RecordHistory.kt \
@@ -257,8 +257,8 @@ git commit -m "fix(application): resolve the record history per (ts, captureKey)
   -m "Closes #343"
 ```
 
-- [ ] **Step 3:** push, `gh pr create`, watch every check to completion (`gh run watch <id> --exit-status`), squash-merge, delete the branch.
-- [ ] **Step 4: Live.** Rebuild the container; call MCP `get_problem 131537`. Expected: `submissionCount: 3`, `runCount: 10`. Record the time in the ADR's Outcome on the next branch.
+- [x] **Step 3:** push, `gh pr create`, watch every check to completion (`gh run watch <id> --exit-status`), squash-merge, delete the branch.
+- [x] **Step 4: Live.** Rebuild the container; call MCP `get_problem 131537`. Expected: `submissionCount: 3`, `runCount: 10`. Record the time in the ADR's Outcome on the next branch.
 
 ---
 
@@ -271,8 +271,8 @@ git commit -m "fix(application): resolve the record history per (ts, captureKey)
 
 A wrong database submit says `msg: "실패"` (273711 attempt 1, 2026-10-03). Whether a submit whose query **MySQL rejects** says the same is unmeasured. If it does, `실패` cannot be filed as WRONG without filing syntax errors as WRONG too.
 
-- [ ] **Step 1:** Ask the owner to submit `SELECT NO_SUCH_COLUMN FROM ANIMAL_INS` on lesson 59034 (Lv1, already passed — the extra failing attempt is the only cost) with the tracker running.
-- [ ] **Step 2:** Read the frames:
+- [x] **Step 1:** Ask the owner to submit `SELECT NO_SUCH_COLUMN FROM ANIMAL_INS` on lesson 59034 (Lv1, already passed — the extra failing attempt is the only cost) with the tracker running.
+- [x] **Step 2:** Read the frames:
 
 ```bash
 python3 - <<'EOF'
@@ -286,7 +286,7 @@ for line in open(f):
 EOF
 ```
 
-- [ ] **Step 3: Decide which branch Part B takes**
+- [x] **Step 3: Decide which branch Part B takes**
 
 | Measured `msg` on the testcase | Part B |
 |---|---|
@@ -308,7 +308,7 @@ Branch: `fix/<issue#>-database-failure-verdicts` from a fresh `main` after Part 
 - Create: `src/test/resources/fixtures/sql-run-error.jsonl`
 - Modify: `src/test/resources/fixtures/README.md`
 
-- [ ] **Step 1: `sql-submit-wrong.jsonl`** — from `ps-records/problems/273711-업그레이드-된-아이템-구하기/attempts/001.raw.jsonl`, prefixed with the two lines every fixture starts with. Substitutions: `challengeable_id` 366 → 2778, testcase ids 845–849/1056 → 5440–5445, `finishModalLink` lesson → 131528 (dev rules §7.3). Message strings verbatim. Exact content:
+- [x] **Step 1: `sql-submit-wrong.jsonl`** — from `ps-records/problems/273711-업그레이드-된-아이템-구하기/attempts/001.raw.jsonl`, prefixed with the two lines every fixture starts with. Substitutions: `challengeable_id` 366 → 2778, testcase ids 845–849/1056 → 5440–5445, `finishModalLink` lesson → 131528 (dev rules §7.3). Message strings verbatim. Exact content:
 
 ```jsonl
 {"type":"welcome"}
@@ -325,7 +325,7 @@ Branch: `fix/<issue#>-database-failure-verdicts` from a fresh `main` after Part 
 
 Before writing it, print the source file's last line in full and confirm nothing follows `result_lesson_challenge` (the capture above was cut at 420 characters; a database submit has no `finish`, protocol §6). If a frame does follow, add it with the same substitutions.
 
-- [ ] **Step 2: `sql-run-error.jsonl`** — from the two 2026-10-03 run sessions on lesson 131537 (`ps-records/.ps/raw/recorded/20261003T062111182Z-131537.jsonl` and `…T062115911Z-131537.jsonl`), as two gradings in one stream. Substitutions: `challengeable_id` 2786 → 2778, `testcase_id` 5453 → 5437, lesson → 131528. The MySQL messages stay verbatim — they are the measurement.
+- [x] **Step 2: `sql-run-error.jsonl`** — from the two 2026-10-03 run sessions on lesson 131537 (`ps-records/.ps/raw/recorded/20261003T062111182Z-131537.jsonl` and `…T062115911Z-131537.jsonl`), as two gradings in one stream. Substitutions: `challengeable_id` 2786 → 2778, `testcase_id` 5453 → 5437, lesson → 131528. The MySQL messages stay verbatim — they are the measurement.
 
 ```jsonl
 {"type":"welcome"}
@@ -336,7 +336,7 @@ Before writing it, print the source file's last line in full and confirm nothing
 {"identifier":"{\"channel\":\"Challenge::DatabaseChannel\",\"challengeable_type\":\"database\",\"challengeable_id\":2778,\"language\":\"mysql\",\"lesson_id\":131528}","message":{"action":"run","type":"finish","challengeable_type":"database","challengeable_id":2778,"testcase_id":5437,"returned_rows":null,"msg":"(1222, 'The used SELECT statements have a different number of columns')","passed":false}}
 ```
 
-- [ ] **Step 3: Two rows in `src/test/resources/fixtures/README.md`**, after the `sql-run-wrong.jsonl` row:
+- [x] **Step 3: Two rows in `src/test/resources/fixtures/README.md`**, after the `sql-run-wrong.jsonl` row:
 
 ```markdown
 | `sql-submit-wrong.jsonl` | §6, §7, §15 #18 — lesson 273711, 2026-10-03: a **wrong database submit**, every case `passed:false` with the bare message `실패`, score 0.0 | `challengeable_id` 366 → 2778, testcase ids 845–849/1056 → 5440–5445, lesson in `finishModalLink` → 131528 |
@@ -349,7 +349,7 @@ Before writing it, print the source file's last line in full and confirm nothing
 - Test: `src/test/kotlin/com/brokenfinger/tracker/domain/calc/VerdictResolverTest.kt`
 - Modify: `src/main/kotlin/com/brokenfinger/tracker/domain/calc/VerdictResolver.kt`
 
-- [ ] **Step 1: Tests, after `a failure with no message that returned a result is WRONG`**
+- [x] **Step 1: Tests, after `a failure with no message that returned a result is WRONG`**
 
 ```kotlin
     /** A wrong database submit, measured on lesson 273711 (2026-10-03): the bare word and nothing else. */
@@ -400,11 +400,11 @@ Before writing it, print the source file's last line in full and confirm nothing
     }
 ```
 
-- [ ] **Step 2: Run, expect the first two to FAIL (`null`), the third to PASS**
+- [x] **Step 2: Run, expect the first two to FAIL (`null`), the third to PASS**
 
 Run: `./gradlew test --tests 'com.brokenfinger.tracker.domain.calc.VerdictResolverTest'`
 
-- [ ] **Step 3: Implement.** Add after `measuredMessage`:
+- [x] **Step 3: Implement.** Add after `measuredMessage`:
 
 ```kotlin
     /**
@@ -432,14 +432,14 @@ In `verdictOf`, after the `measuredMessage` line:
         if (databaseErrorMessage.containsMatchIn(msg)) return Verdict.COMPILE_ERROR
 ```
 
-- [ ] **Step 4: Run the class — all PASS.**
+- [x] **Step 4: Run the class — all PASS.**
 
 ### Task B3: The mapper carries the error tuple (layer)
 
 **Files:**
 - Test: `src/test/kotlin/com/brokenfinger/tracker/protocol/parse/GradingMessageMapperTest.kt`
 
-- [ ] **Step 1: Add after the `sql-run-wrong.jsonl` test**
+- [x] **Step 1: Add after the `sql-run-wrong.jsonl` test**
 
 ```kotlin
     // Protocol §6, measured 2026-10-03: a run MySQL refused — no table, the error tuple as msg.
@@ -459,14 +459,14 @@ In `verdictOf`, after the `measuredMessage` line:
     }
 ```
 
-- [ ] **Step 2: Run `GradingMessageMapperTest` — expect PASS without production changes** (the mapper already sets `returnedResult = returned_rows != null`). If it fails, read the failure before touching code; a mapper change is out of this plan's scope and needs the protocol doc first.
+- [x] **Step 2: Run `GradingMessageMapperTest` — expect PASS without production changes** (the mapper already sets `returnedResult = returned_rows != null`). If it fails, read the failure before touching code; a mapper change is out of this plan's scope and needs the protocol doc first.
 
 ### Task B4: End to end through the assembler (layer)
 
 **Files:**
 - Test: `src/test/kotlin/com/brokenfinger/tracker/application/GradingSessionAssemblerTest.kt`
 
-- [ ] **Step 1: Add after `a failed database run is WRONG, not unknown`**
+- [x] **Step 1: Add after `a failed database run is WRONG, not unknown`**
 
 ```kotlin
     @Test
@@ -493,14 +493,14 @@ In `verdictOf`, after the `measuredMessage` line:
 
 `FixtureLoader.facts` keeps broadcast frames only (it filters `ActionCableFrame.Broadcast`), so `take(2)` is the first run's `start` and `finish`.
 
-- [ ] **Step 2: Run `GradingSessionAssemblerTest` — PASS.** Then revert `VerdictResolver.kt` locally, rerun, confirm both new tests FAIL, restore.
+- [x] **Step 2: Run `GradingSessionAssemblerTest` — PASS.** Then revert `VerdictResolver.kt` locally, rerun, confirm both new tests FAIL, restore.
 
 ### Task B5: Protocol document
 
 **Files:**
 - Modify: `docs/programmers-protocol.md`
 
-- [ ] **Step 1: §6, under `### submit`, after its code block**
+- [x] **Step 1: §6, under `### submit`, after its code block**
 
 ```markdown
 **A wrong submit reports the bare word** (measured 2026-10-03 on lesson 273711, §15 #18): every
@@ -508,7 +508,7 @@ case `passed:false` with `msg: "실패"` and nothing after it — no timing, whi
 then `result_lesson_challenge` with `userScore: "0.0"`. Fixture `sql-submit-wrong.jsonl`.
 ```
 
-- [ ] **Step 2: §6, under `### run`, after the paragraph ending ``Fixture `sql-run-wrong.jsonl`.``**
+- [x] **Step 2: §6, under `### run`, after the paragraph ending ``Fixture `sql-run-wrong.jsonl`.``**
 
 ```markdown
 **A run MySQL rejects carries the error and no table** (measured 2026-10-03 on lesson 131537,
@@ -524,14 +524,14 @@ two runs, §15 #19): `returned_rows: null`, `passed: false`, and `msg` is the dr
 The query never ran, which is the compile stage. Fixture `sql-run-error.jsonl`.
 ```
 
-- [ ] **Step 3: §7 table** — add two rows under the existing ones:
+- [x] **Step 3: §7 table** — add two rows under the existing ones:
 
 ```markdown
 | Wrong answer (database submit) | `"실패"` — the bare word | absent (SQL sends none) |
 | Query rejected (database run) | `"(1054, \"Unknown column …\")"` — MySQL's error tuple | absent |
 ```
 
-- [ ] **Step 4: §15 verification log** — two rows after #17, following its column order:
+- [x] **Step 4: §15 verification log** — two rows after #17, following its column order:
 
 ```markdown
 | 18 | 273711 | SQL | `submit` | **A wrong database submit, captured live** — six cases `passed:false`, `msg:"실패"` bare, score 0.0. Recorded `UNKNOWN` until the resolver matched the bare word. Kept scrubbed as `sql-submit-wrong.jsonl` |
@@ -542,7 +542,7 @@ Add Part B0's measurement as row 20 with its own result, whichever way it went.
 
 ### Task B6: ADR, wiki, progress, PR
 
-- [ ] **Step 1: ADR** `docs/llm-wiki/wiki/decisions/2026-10-07-database-failures-that-said-something.md`
+- [x] **Step 1: ADR** `docs/llm-wiki/wiki/decisions/2026-10-07-database-failures-that-said-something.md`
 
 ```markdown
 ---
@@ -597,8 +597,8 @@ show WRONG and COMPILE_ERROR.
 
 Fill the Decision with the Part B0 result before the PR.
 
-- [ ] **Step 2:** register it in `docs/llm-wiki/index.md` under Decisions; append to the 2026-10-01 ADR's Outcome: `The SQL-error shape is classified in [[decisions/2026-10-07-database-failures-that-said-something]].`; add the live time to the #343 ADR's Outcome from Task A5 Step 4.
-- [ ] **Step 3:** progress entry in `.harness/state/progress.md` (what shipped, which branch Part B0 chose, the pending live check).
+- [x] **Step 2:** register it in `docs/llm-wiki/index.md` under Decisions; append to the 2026-10-01 ADR's Outcome: `The SQL-error shape is classified in [[decisions/2026-10-07-database-failures-that-said-something]].`; add the live time to the #343 ADR's Outcome from Task A5 Step 4.
+- [x] **Step 3:** progress entry in `.harness/state/progress.md` (what shipped, which branch Part B0 chose, the pending live check).
 - [ ] **Step 4:** gates, commit with protocol evidence in the body (`Verified 2026-10-03 on lessons 273711 and 131537. See docs/programmers-protocol.md §6, §15 #18–19.`), push, PR, watch CI to completion, squash-merge, rebuild the container.
 - [ ] **Step 5: Live.** The owner runs one wrong SQL query and submits one; `get_problem` shows `WRONG` for the submit and `COMPILE_ERROR` for a syntax-error run. Record the times in the ADR's Outcome.
 
