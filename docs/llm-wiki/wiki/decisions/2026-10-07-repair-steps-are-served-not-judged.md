@@ -38,9 +38,9 @@ Two things found in review changed the frame.
   shows them ending "there is no cohort here… [truncated]" — character 2,048 exactly. The branch's
   own additions had grown them to 2,921, with `get_problem` at 2,548 and `repair_steps` at 2,126.
 - **A path a log line carries is now followed.** Serving submit code means reading the file a
-  record's `codePath` names, from a root that also holds `.ps/git-credentials` (the push token), the
-  `/watch` token and the raw frames — and git stores symbolic links, so a link can arrive with a
-  clone or a pull, not only by hand.
+  record's `codePath` names, from a root that also holds `.ps/git-credentials` (the push token) and
+  the raw frames — and git stores symbolic links, so a link can arrive with a clone or a pull, not
+  only by hand. (The `/watch` token is not here; it lives in the tool's own `.ps/`.)
 
 ## Options considered
 
