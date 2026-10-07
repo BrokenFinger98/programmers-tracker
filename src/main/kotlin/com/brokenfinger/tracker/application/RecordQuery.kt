@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.domain.calc.LabelledStep
 import com.brokenfinger.tracker.domain.calc.ProblemLabel
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.RepairStepFilter
+import com.brokenfinger.tracker.domain.calc.RepairStepPage
 import com.brokenfinger.tracker.domain.calc.RepairSteps
 import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.ReviewQueue
@@ -52,12 +53,15 @@ data class ProblemHistory(
  * it in its language — what `get_problem(include=…)` adds (spec 2026-10-07 §4.3).
  */
 data class CodedProblem(val gradings: List<CodedGrading>, val transitions: List<Transition>) {
-    fun codeOf(record: SubmissionRecord): CodedGrading? =
-        gradings.firstOrNull { it.record.recordId() == record.recordId() }
+    // Asked once per item of a problem, so indexed once here rather than scanned each time.
+    private val gradingById = gradings.associateBy { it.record.recordId() }
+    private val transitionIntoId = transitions.associateBy { it.to.record.recordId() }
+
+    /** The grading with its kept code, or null for a record that is not on this problem's timeline. */
+    fun gradingOf(record: SubmissionRecord): CodedGrading? = gradingById[record.recordId()]
 
     /** Null for the first grading in its language — there is nothing before it to compare with. */
-    fun transitionInto(record: SubmissionRecord): Transition? =
-        transitions.firstOrNull { it.to.record.recordId() == record.recordId() }
+    fun transitionInto(record: SubmissionRecord): Transition? = transitionIntoId[record.recordId()]
 }
 
 /**
@@ -180,27 +184,29 @@ class RecordQuery(
     }
 
     /**
-     * Every correction after a failed grading, newest first (spec 2026-10-07 §4.3).
+     * Every correction after a failed grading, newest first, with how many matched before [limit]
+     * cut the list (spec 2026-10-07 §4.3).
      *
      * Paired over each problem's **whole** history before any filter applies, so the first step
      * after [since] still starts at the failure before it. [lessonId] narrows first, so asking
-     * about one problem reads one problem's code.
+     * about one problem reads one problem's code. The filter is built first, so an argument it
+     * refuses fails before the log or any code is read.
      */
-    fun repairSteps(
-        since: Since?,
-        language: String?,
-        part: String?,
-        lessonId: Long?,
-        limit: Int?,
-    ): List<LabelledStep> {
+    fun repairSteps(since: Since?, language: String?, part: String?, lessonId: Long?, limit: Int?): RepairStepPage {
+        val filter = RepairStepFilter(since, language, part, limit)
         val problems = history().groupBy { it.lessonId }.filterKeys { lessonId == null || it == lessonId }
-        val steps = problems.values.flatMap(::labelledSteps)
-        return RepairStepFilter(since, language, part, limit).applied(steps)
+        return filter.applied(problems.values.flatMap(::labelledSteps))
     }
 
-    /** One problem's gradings with their code and transitions, for `get_problem(include=…)`. */
-    fun codedProblem(lessonId: Long): CodedProblem {
-        val timeline = timelineOf(SubmissionFilter.ofProblem(history(), lessonId))
+    /**
+     * One problem's gradings with their code and transitions, for `get_problem(include=…)`.
+     *
+     * Takes the records [ProblemHistory.submissions] holds — one problem's, newest first — so a
+     * caller that has just read the problem does not read the log a second time. No records is an
+     * empty answer; records of two problems are refused.
+     */
+    fun codedProblem(submissions: List<SubmissionRecord>): CodedProblem {
+        val timeline = timelineOf(submissions)
         return CodedProblem(timeline, RepairSteps.transitions(timeline))
     }
 
@@ -222,6 +228,7 @@ class RecordQuery(
     }
 
     private fun submittedCode(record: SubmissionRecord): Pair<String, KeptCode>? {
+        // A run's codePath is the Solution file every later grading overwrites, never its own code.
         if (!record.isSubmission() || !record.isCodeAttached()) return null
         val text = record.codePath?.let(codes::submitted) ?: return null
         return record.recordId() to KeptCode(text, fetchedAt = null)

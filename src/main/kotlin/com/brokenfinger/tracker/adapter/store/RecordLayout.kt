@@ -42,7 +42,8 @@ class RecordLayout(private val root: Path) {
 
     /**
      * A path a record carries (`codePath`), resolved inside `problems/` — or null when it would
-     * leave it, names the directory itself, or names nothing usable.
+     * leave it, names the directory itself, is absolute, or names nothing usable. The writer only
+     * ever records paths relative to the repository, so an absolute one is not a record's.
      *
      * **Bounded at `problems/`, not at the repository root**, because the root also holds what a
      * record must never lead to: the push token and the `/watch` token under `.ps/`, the original
@@ -57,7 +58,9 @@ class RecordLayout(private val root: Path) {
     fun recordFile(relative: String): Path? {
         val base = root.toAbsolutePath().normalize()
         val problems = base.resolve(PROBLEMS)
-        val file = runCatching { base.resolve(relative).normalize() }.getOrNull() ?: return null
+        val requested = runCatching { base.fileSystem.getPath(relative) }.getOrNull() ?: return null
+        if (requested.root != null) return null
+        val file = base.resolve(requested).normalize()
         return file.takeIf { it.startsWith(problems) && it != problems }
     }
 

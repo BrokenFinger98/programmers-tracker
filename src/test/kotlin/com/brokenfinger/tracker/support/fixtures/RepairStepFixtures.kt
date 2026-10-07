@@ -12,6 +12,10 @@ import java.time.OffsetDateTime
 // Object mothers for repair steps (dev rules §6.4, spec 2026-10-07 §4.3). A run's code comes from
 // runs.jsonl and a submit's from its attempt file, so the two builders differ in what they own:
 // a run carries no codePath here, a submit carries the path the store would have written.
+//
+// **Production runs do carry a codePath** — `problems/<dir>/Solution.<ext>`, the file every later
+// grading of the problem overwrites, never the run's own code. A test whose result depends on that
+// has to set it (`aRun(...).copy(codePath = ...)`); see the Solution-file case in RecordQueryTest.
 
 fun aRun(
     at: String,

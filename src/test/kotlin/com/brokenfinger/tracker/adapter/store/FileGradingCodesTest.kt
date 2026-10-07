@@ -1,15 +1,23 @@
 package com.brokenfinger.tracker.adapter.store
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.KeptCode
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmit
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -91,6 +99,44 @@ class FileGradingCodesTest {
     }
 
     @Test
+    fun `blank lines are skipped without a word`() {
+        writeLines(
+            lineOf("r#1", fetchedAt = "2026-10-07T10:00:00+09:00", code = "a"),
+            "",
+            "   ",
+            lineOf("r#2", fetchedAt = "2026-10-07T10:00:09+09:00", code = "b"),
+        )
+
+        val warnings = warningsWhile {
+            codes().runs(120804, "두 수의 곱 구하기").keys shouldBe setOf("r#1", "r#2")
+        }
+
+        warnings.shouldBeEmpty()
+    }
+
+    /**
+     * Audible, and still not a record: one warning per file with its path and how many lines were left
+     * out, never a line — a line holds code, and records stay out of logs (dev rules §7).
+     */
+    @Test
+    fun `lines that cannot be read are counted in one warning that names the file and quotes none of them`() {
+        writeLines(
+            lineOf("r#1", fetchedAt = "2026-10-07T10:00:00+09:00", code = "a"),
+            """{"recordId":"r#2","language":"java","code":"select secret_marker""",
+            """{"recordId":"r#3","language":"java"}""",
+        )
+
+        val warnings = warningsWhile {
+            codes().runs(120804, "두 수의 곱 구하기").keys shouldBe setOf("r#1")
+        }
+
+        val warning = warnings.single()
+        warning shouldContain "Left 2 unreadable lines"
+        warning shouldContain runLog().toString()
+        warning shouldNotContain "secret_marker"
+    }
+
+    @Test
     fun `reads a submit's code from the path its record carries`() {
         val path = aSubmit(at = "2026-10-07T11:00:00+09:00").codePath!!
         val file = root.resolve(path)
@@ -162,6 +208,15 @@ class FileGradingCodesTest {
         """{"recordId":"$recordId","language":"java","codeFetchedAt":"$fetchedAt","code":"$code"$extra}"""
 
     private fun runLog(): Path = RecordLayout(root).runLog(120804, "두 수의 곱 구하기")
+
+    /** What the reader said at WARN while [action] ran. Logback is what the application logs through. */
+    private fun warningsWhile(action: () -> Unit): List<String> {
+        val logger = LoggerFactory.getLogger(FileGradingCodes::class.java) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+        runCatching(action).also { logger.detachAppender(appender) }.getOrThrow()
+        return appender.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+    }
 
     private fun codes() = FileGradingCodes(RecordLayout(root))
 }

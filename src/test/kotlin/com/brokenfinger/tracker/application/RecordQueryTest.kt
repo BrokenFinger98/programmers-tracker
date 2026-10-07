@@ -22,6 +22,7 @@ import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmit
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -31,6 +32,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.LocalDate
@@ -346,6 +348,24 @@ class RecordQueryTest {
         query.allRepairSteps().single().step.diff.shouldNotBeNull() shouldContain "+fixed"
     }
 
+    /**
+     * Production-shaped: a run's record carries a codePath too — the Solution file every later grading
+     * of the problem overwrites, never the run's own code, which is only in runs.jsonl. Reading that
+     * path would hand every run the code of the last one, and the step would vanish as identical code.
+     */
+    @Test
+    fun `a run's own code is not read from the solution file its record points at`() {
+        val solution = "problems/120804-두-수의-곱-구하기/Solution.java"
+        val first = aRun(at = "2026-10-07T10:00:00+09:00").copy(codePath = solution)
+        val second = aRun(at = "2026-10-07T10:00:05+09:00").copy(codePath = solution)
+        val repository = aRecordRepository(root).containing(first, second)
+            .withRunCode(first, "select a").withRunCode(second, "select b")
+        Files.createDirectories(root.resolve(solution).parent)
+        Files.writeString(root.resolve(solution), "select b")
+
+        repository.query().allRepairSteps().single().step.diff.shouldNotBeNull() shouldContain "-select a"
+    }
+
     /** The code is attached after the record is durable (design §5.2); until then there is none to read. */
     @Test
     fun `a submit whose code is still pending has no code`() {
@@ -388,12 +408,28 @@ class RecordQueryTest {
             aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2),
         )
         val codes = AskedCodes(FileGradingCodes(RecordLayout(root)))
-        val query = RecordQuery(repository.store(), anEmptyCatalog(), Clock.systemUTC(), raw(), codes = codes)
 
-        val steps = query.repairSteps(since = null, language = null, part = null, lessonId = 2, limit = null)
+        val page = repository.query(codes = codes)
+            .repairSteps(since = null, language = null, part = null, lessonId = 2, limit = null)
 
-        steps.map { it.problem.lessonId }.shouldContainExactly(2L)
+        page.steps.map { it.problem.lessonId }.shouldContainExactly(2L)
         codes.askedLessons.shouldContainExactly(2L)
+    }
+
+    /** Bad arguments fail fast: the filter is built before the log or any code is read. */
+    @Test
+    fun `an argument the filter refuses fails before any code is read`() {
+        val repository = aRecordRepository(root).containing(
+            aRun(at = "2026-10-07T10:00:00+09:00"),
+            aRun(at = "2026-10-07T10:00:01+09:00"),
+        )
+        val codes = AskedCodes(FileGradingCodes(RecordLayout(root)))
+        val query = repository.query(codes = codes)
+
+        shouldThrow<IllegalArgumentException> {
+            query.repairSteps(since = null, language = null, part = null, lessonId = null, limit = 0)
+        }
+        codes.askedLessons.shouldBeEmpty()
     }
 
     /** Language and part are both optional strings, so a swapped pair would compile and answer nothing. */
@@ -406,9 +442,14 @@ class RecordQueryTest {
         ).query()
 
         query.repairSteps(since = null, language = "java", part = "SELECT", lessonId = null, limit = null)
-            .map { it.problem.lessonId }.shouldContainExactly(1L)
+            .steps.map { it.problem.lessonId }.shouldContainExactly(1L)
     }
 
+    /**
+     * D8, in the assembly: pairing runs over the whole history and `since` is applied after. Lesson 2's
+     * pair straddles `since` — its failure is before it, its correction after — so its step exists only
+     * if the failure was still there to be paired when `since` was applied.
+     */
     @Test
     fun `hands since and limit to the filter, keeping the newest corrections`() {
         val query = aRecordRepository(root).containing(
@@ -416,12 +457,27 @@ class RecordQueryTest {
             *pairOf(lessonId = 2, part = "SELECT", language = "java"),
             *pairOf(lessonId = 3, part = "SELECT", language = "java"),
         ).query()
-        val since = Since.Instant(OffsetDateTime.parse("2026-10-07T10:01:30+09:00"))
+        val since = Since.Instant(OffsetDateTime.parse("2026-10-07T10:02:05+09:00"))
 
-        query.repairSteps(since, language = null, part = null, lessonId = null, limit = null)
-            .map { it.problem.lessonId }.shouldContainExactly(3L, 2L)
-        query.repairSteps(since, language = null, part = null, lessonId = null, limit = 1)
-            .map { it.problem.lessonId }.shouldContainExactly(3L)
+        val all = query.repairSteps(since, language = null, part = null, lessonId = null, limit = null)
+        val newest = query.repairSteps(since, language = null, part = null, lessonId = null, limit = 1)
+
+        all.steps.map { it.problem.lessonId }.shouldContainExactly(3L, 2L)
+        newest.steps.map { it.problem.lessonId }.shouldContainExactly(3L)
+        newest.total shouldBe 2
+        newest.isTruncated() shouldBe true
+    }
+
+    @Test
+    fun `a problem graded in two languages assembles both languages' steps`() {
+        val query = aRecordRepository(root).containing(
+            aRun(at = "2026-10-07T10:00:00+09:00", language = "java"),
+            aRun(at = "2026-10-07T10:00:10+09:00", language = "kotlin"),
+            aRun(at = "2026-10-07T10:00:20+09:00", language = "java"),
+            aRun(at = "2026-10-07T10:00:30+09:00", language = "kotlin"),
+        ).query()
+
+        query.allRepairSteps().map { it.step.to.record.language }.shouldContainExactly("kotlin", "java")
     }
 
     /**
@@ -446,13 +502,33 @@ class RecordQueryTest {
     fun `one problem's coded timeline carries each grading's code and the transition into it`() {
         val first = aRun(at = "2026-10-07T10:00:00+09:00")
         val second = aRun(at = "2026-10-07T10:00:05+09:00", verdict = Verdict.PASS)
-        val coded = aRecordRepository(root).containing(first, second)
+        val query = aRecordRepository(root).containing(first, second)
             .withRunCode(first, "a").withRunCode(second, "b").query()
-            .codedProblem(120804)
 
-        coded.codeOf(first)?.code?.text shouldBe "a"
+        val coded = query.codedProblem(query.problem(120804).submissions)
+
+        coded.gradingOf(first)?.code?.text shouldBe "a"
         coded.transitionInto(second).shouldNotBeNull().diff.shouldNotBeNull() shouldContain "+b"
         coded.transitionInto(first).shouldBeNull()
+        coded.gradingOf(aRun(at = "2026-10-07T11:00:00+09:00")).shouldBeNull()
+    }
+
+    @Test
+    fun `a problem with nothing recorded has an empty coded timeline`() {
+        val coded = aRecordRepository(root).query().codedProblem(emptyList())
+
+        coded.gradings.shouldBeEmpty()
+        coded.transitions.shouldBeEmpty()
+    }
+
+    @Test
+    fun `the records of two problems are not one problem's timeline`() {
+        val query = aRecordRepository(root).containing(
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2),
+        ).query()
+
+        shouldThrow<IllegalArgumentException> { query.codedProblem(query.history()) }
     }
 
     /** The default port: a deployment without kept code still answers, with every code unknown. */
@@ -467,7 +543,7 @@ class RecordQueryTest {
     }
 
     private fun RecordQuery.allRepairSteps(): List<LabelledStep> =
-        repairSteps(since = null, language = null, part = null, lessonId = null, limit = null)
+        repairSteps(since = null, language = null, part = null, lessonId = null, limit = null).steps
 
     private fun raw() = FileRawSessionLog.under(root)
 

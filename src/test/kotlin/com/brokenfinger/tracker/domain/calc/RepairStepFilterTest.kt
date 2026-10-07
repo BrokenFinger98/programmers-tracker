@@ -3,7 +3,9 @@ package com.brokenfinger.tracker.domain.calc
 import com.brokenfinger.tracker.support.fixtures.aCodedGrading
 import com.brokenfinger.tracker.support.fixtures.aRun
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
 
@@ -18,7 +20,7 @@ class RepairStepFilterTest {
         val older = stepOf(select, toAt = "2026-10-02T10:00:00+09:00")
         val newer = stepOf(join, toAt = "2026-10-03T10:00:00+09:00")
 
-        filter().applied(listOf(older, newer)) shouldContainExactly listOf(newer, older)
+        filter().applied(listOf(older, newer)).steps shouldContainExactly listOf(newer, older)
     }
 
     @Test
@@ -26,8 +28,8 @@ class RepairStepFilterTest {
         val before = stepOf(select, toAt = "2026-09-30T23:00:00+09:00")
         val after = stepOf(select, toAt = "2026-10-01T09:00:00+09:00")
 
-        filter(since = Since.Day(LocalDate.of(2026, 10, 1))).applied(listOf(before, after)) shouldContainExactly
-            listOf(after)
+        filter(since = Since.Day(LocalDate.of(2026, 10, 1))).applied(listOf(before, after)).steps
+            .shouldContainExactly(after)
     }
 
     @Test
@@ -35,7 +37,7 @@ class RepairStepFilterTest {
         val java = stepOf(select, toAt = "2026-10-02T10:00:00+09:00", language = "java")
         val javascript = stepOf(select, toAt = "2026-10-02T11:00:00+09:00", language = "javascript")
 
-        filter(language = " JAVA ").applied(listOf(java, javascript)) shouldContainExactly listOf(java)
+        filter(language = " JAVA ").applied(listOf(java, javascript)).steps shouldContainExactly listOf(java)
     }
 
     @Test
@@ -45,21 +47,68 @@ class RepairStepFilterTest {
 
         val joined = stepOf(join, toAt = "2026-10-02T12:00:00+09:00")
 
-        filter(part = "select").applied(listOf(selected, none, joined)) shouldContainExactly listOf(selected)
+        filter(part = "select").applied(listOf(selected, none, joined)).steps shouldContainExactly listOf(selected)
     }
 
     @Test
     fun `limit keeps the newest`() {
         val steps = (1..3).map { stepOf(select, toAt = "2026-10-0${it}T10:00:00+09:00") }
 
-        filter(limit = 2).applied(steps) shouldContainExactly listOf(steps[2], steps[1])
+        filter(limit = 2).applied(steps).steps shouldContainExactly listOf(steps[2], steps[1])
     }
 
     @Test
     fun `no argument is the whole list`() {
         val steps = listOf(stepOf(unlabelled, toAt = "2026-10-02T10:00:00+09:00"))
 
-        filter().applied(steps) shouldContainExactly steps
+        filter().applied(steps).steps shouldContainExactly steps
+    }
+
+    // The filter owns the limit, so it owns what the limit cut off: a list that was cut says so.
+
+    @Test
+    fun `total counts what matched before the limit cut the list`() {
+        val steps = (1..3).map { stepOf(select, toAt = "2026-10-0${it}T10:00:00+09:00") }
+
+        val page = filter(limit = 2).applied(steps)
+
+        page.steps shouldContainExactly listOf(steps[2], steps[1])
+        page.total shouldBe 3
+    }
+
+    @Test
+    fun `total leaves out what the filters rejected`() {
+        val java = stepOf(select, toAt = "2026-10-02T10:00:00+09:00", language = "java")
+        val kotlin = stepOf(select, toAt = "2026-10-03T10:00:00+09:00", language = "kotlin")
+
+        filter(language = "java").applied(listOf(java, kotlin)).total shouldBe 1
+    }
+
+    @Test
+    fun `a page is truncated only when the limit cut something off`() {
+        val steps = (1..3).map { stepOf(select, toAt = "2026-10-0${it}T10:00:00+09:00") }
+
+        filter(limit = 2).applied(steps).isTruncated() shouldBe true
+        filter(limit = 3).applied(steps).isTruncated() shouldBe false
+        filter(limit = 10).applied(steps).isTruncated() shouldBe false
+        filter().applied(steps).isTruncated() shouldBe false
+    }
+
+    @Test
+    fun `nothing matching is an empty page that was not cut`() {
+        val page = filter(language = "python3").applied(listOf(stepOf(select, toAt = "2026-10-02T10:00:00+09:00")))
+
+        page.steps.shouldBeEmpty()
+        page.total shouldBe 0
+        page.isTruncated() shouldBe false
+    }
+
+    /** A page that counted fewer matches than it holds would make `isTruncated` read a lie. */
+    @Test
+    fun `a page cannot count fewer matches than it holds`() {
+        val step = stepOf(select, toAt = "2026-10-02T10:00:00+09:00")
+
+        shouldThrow<IllegalArgumentException> { RepairStepPage(listOf(step), total = 0) }
     }
 
     /** Dev rules §4: a filter is a value we create, so an argument it cannot honour is refused. */

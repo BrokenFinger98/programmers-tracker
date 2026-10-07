@@ -162,6 +162,14 @@ class RecordLayoutTest {
         ).forEach { path -> withClue(path) { layout().recordFile(path).shouldBeNull() } }
     }
 
+    /** The writer only ever produces paths relative to the repository; an absolute one is not a record's. */
+    @Test
+    fun `an absolute path is never a record's, even one that points inside the problems directory`() {
+        val inside = root.toAbsolutePath().normalize().resolve("problems/1-a/attempts/001.java")
+
+        layout().recordFile(inside.toString()).shouldBeNull()
+    }
+
     @Test
     fun `the problems directory itself and a name that merely starts with it are not inside it`() {
         layout().recordFile("problems").shouldBeNull()

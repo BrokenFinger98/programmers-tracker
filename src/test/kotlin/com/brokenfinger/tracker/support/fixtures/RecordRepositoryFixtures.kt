@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.adapter.store.RunLog
+import com.brokenfinger.tracker.application.GradingCodes
 import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RecordQuery
@@ -45,7 +46,8 @@ class RecordRepositoryFixture(val root: Path) {
         catalog: ProblemCatalog = anEmptyCatalog(),
         clock: Clock = Clock.systemUTC(),
         raw: RawSessionLog = FileRawSessionLog.under(root),
-    ): RecordQuery = RecordQuery(store(), catalog, clock, raw, codes = FileGradingCodes(RecordLayout(root)))
+        codes: GradingCodes = FileGradingCodes(RecordLayout(root)),
+    ): RecordQuery = RecordQuery(store(), catalog, clock, raw, codes = codes)
 
     /** A run's code, kept the way the capture path keeps it — through the real [RunLog]. */
     fun withRunCode(

@@ -85,7 +85,7 @@ class McpConfigurationTest {
             anEmptyCatalog(),
             Clock.systemUTC(),
             FileRawSessionLog.under(root),
-        ).repairSteps(since = null, language = null, part = null, lessonId = null, limit = null)
+        ).repairSteps(since = null, language = null, part = null, lessonId = null, limit = null).steps
 
         steps.single().step.diff.shouldNotBeNull() shouldContain "+select b"
     }
