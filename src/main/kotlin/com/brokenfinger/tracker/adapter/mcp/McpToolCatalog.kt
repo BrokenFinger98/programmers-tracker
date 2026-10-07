@@ -29,7 +29,7 @@ import kotlinx.serialization.json.putJsonObject
  * **Every description, as sent, stays within the budget `McpToolCatalogTest` pins**: 2,000 characters,
  * because Claude Code cuts a description at 2,048 and keeps the head. What is cut is the tail, which
  * here is the last reading and then the shared `incompleteHistory` warning, so the longest
- * descriptions are the ones to watch and a sentence appended to every tool is paid for seven times.
+ * descriptions are the ones to watch and a sentence appended to every tool is paid for in each.
  *
  * The order is fixed rather than derived from a map, because the specification asks for a
  * deterministic `tools/list` so clients can cache it.
@@ -296,7 +296,7 @@ object McpToolCatalog {
     /**
      * Appended to every description rather than repeated in every answer (#187). A client
      * receives this once from `tools/list`; the results carry counts. It is paid for in every
-     * tool's budget, so a word added here is a word taken from seven descriptions.
+     * tool's budget, so a word added here is a word taken from each description.
      */
     const val INCOMPLETE_HISTORY: String =
         " If `incompleteHistory` is present, gradings were captured that no record represents — every tool " +
