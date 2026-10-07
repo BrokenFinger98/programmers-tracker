@@ -189,7 +189,7 @@ class RecordQueryTest {
 
         query.history() shouldHaveSize 2
         query.submissions(since = null, verdict = null) shouldHaveSize 2
-        query.tally(TallyGroup.VERDICT).shouldContainExactly(TallyBucket("PASS", null, 1))
+        query.tally(TallyGroup.VERDICT).shouldContainExactly(TallyBucket("PASS", null, 1, null))
     }
 
     // Corrections ------------------------------------------------------------------------

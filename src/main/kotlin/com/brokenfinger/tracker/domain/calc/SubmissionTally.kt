@@ -44,6 +44,21 @@ enum class TallyGroup {
      */
     open fun countsProblems(): Boolean = false
 
+    /**
+     * The bucket key of each record of [records]. For a grouping that counts problems the key is a
+     * property of the problem, not of the record: the newest record carrying a value wins (the rule
+     * `RecordQuery.problem()` uses), so a problem whose early records were captured before the
+     * catalog knew it is still one bucket. A problem with no value anywhere has a null key.
+     */
+    fun bucketKeyOf(records: List<SubmissionRecord>): (SubmissionRecord) -> String? {
+        if (!countsProblems()) return ::keyOf
+        val keys = records.groupBy { it.lessonId }.mapValues { (_, grouped) -> newestKey(grouped) }
+        return { keys[it.lessonId] }
+    }
+
+    private fun newestKey(grouped: List<SubmissionRecord>): String? =
+        grouped.sortedByDescending { it.ts }.firstNotNullOfOrNull(::keyOf)
+
     /** The spelling used on the wire, which is also what the tool schema enumerates. */
     fun wireName(): String = name.lowercase()
 
@@ -68,7 +83,7 @@ enum class TallyGroup {
  * deliberate: this is what the calculator concluded, not what any transport sends, and the
  * JSON shape the MCP tools answer with is assembled in the adapter that owns it.
  */
-data class TallyBucket(val key: String?, val label: String?, val count: Int, val progress: ProblemProgress? = null)
+data class TallyBucket(val key: String?, val label: String?, val count: Int, val progress: ProblemProgress?)
 
 /**
  * Counts submissions per bucket, and does nothing else (dev rules §3).
@@ -91,22 +106,18 @@ data class TallyBucket(val key: String?, val label: String?, val count: Int, val
  * submit and does.
  */
 object SubmissionTally {
+    /**
+     * Submits only, filtered first (#235). [ProblemProgress] is computed on its own path over all
+     * records, runs included, and joined into the part and level buckets here by key; the other
+     * groupings get no progress.
+     */
     fun of(records: List<SubmissionRecord>, group: TallyGroup): List<TallyBucket> {
-        val buckets = records.groupBy(group::keyOf).mapNotNull { (key, grouped) -> bucketOf(group, key, grouped) }
+        val keyOf = group.bucketKeyOf(records)
+        val progress = ProblemProgress.perBucket(records, group)
+        val buckets = records.filter { it.isSubmission() }
+            .groupBy(keyOf)
+            .map { (key, grouped) -> TallyBucket(key, group.labelOf(grouped.first()), grouped.size, progress[key]) }
         return ordered(buckets)
-    }
-
-    // Grouped with the runs so a problem's progress can count them; `count` stays submits only, and
-    // a key only runs ever produced makes no bucket — the rule #235 set.
-    private fun bucketOf(group: TallyGroup, key: String?, grouped: List<SubmissionRecord>): TallyBucket? {
-        val submits = grouped.filter { it.isSubmission() }
-        if (submits.isEmpty()) return null
-        return TallyBucket(key, group.labelOf(submits.first()), submits.size, progressOf(group, grouped))
-    }
-
-    private fun progressOf(group: TallyGroup, grouped: List<SubmissionRecord>): ProblemProgress? {
-        if (!group.countsProblems()) return null
-        return ProblemProgress.of(grouped)
     }
 
     // Deterministic so a client can cache the answer and diff two of them: biggest bucket

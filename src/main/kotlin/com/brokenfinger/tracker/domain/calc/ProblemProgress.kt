@@ -11,6 +11,8 @@ import com.brokenfinger.tracker.domain.Verdict
  * `stats(groupBy=problem)` already counts across languages. A run in any language before the first
  * passing submit is a run before the pass.
  *
+ * [passedFirstSubmit] counts first submits that resolved PASS; an unresolved first submit is not one.
+ *
  * [runsBeforePass] is a median, so a `Double`, and **absent when no problem in the bucket passed** —
  * there is nothing to take a median of, which is not the same as zero runs.
  */
@@ -21,9 +23,20 @@ data class ProblemProgress(
     val runsBeforePass: Double?,
 ) {
     companion object {
+        /**
+         * Progress per bucket of [group], over every record (runs included), each problem in the
+         * bucket of its newest known value ([TallyGroup.bucketKeyOf]). Empty for a grouping that
+         * does not count problems.
+         */
+        fun perBucket(records: List<SubmissionRecord>, group: TallyGroup): Map<String?, ProblemProgress> {
+            if (!group.countsProblems()) return emptyMap()
+            return records.groupBy(group.bucketKeyOf(records)).mapValues { (_, grouped) -> of(grouped) }
+        }
+
         /** [records] is one bucket's gradings, runs included; only problems with a submit count. */
         fun of(records: List<SubmissionRecord>): ProblemProgress {
-            val problems = records.groupBy { it.lessonId }.values.filter { it.any(SubmissionRecord::isSubmission) }
+            val problems = records.groupBy { it.lessonId }.values
+                .filter { it.any(SubmissionRecord::isSubmission) }
             return ProblemProgress(
                 attempted = problems.size,
                 passed = problems.count { firstPass(it) != null },
