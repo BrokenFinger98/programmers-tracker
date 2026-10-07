@@ -25,11 +25,32 @@ class FileGradingCodes(private val layout: RecordLayout) : GradingCodes {
     override fun runs(lessonId: Long, title: String?): Map<String, KeptCode> =
         runCatching { keptIn(layout.runLog(lessonId, title)) }.getOrDefault(emptyMap())
 
-    // A regular file only, as keptIn requires: a FIFO behind a record's path would block the request thread.
+    /**
+     * A submit's code, from the path its record carries — and only from a regular file that really
+     * lives under `problems/`.
+     *
+     * [RecordLayout.recordFile] bounds the path lexically. This follows the links too, because git
+     * stores symbolic links and one can arrive with a clone or a pull as easily as by hand: a
+     * `problems/1-x/attempts/001.java` linked to `.ps/git-credentials`, or a problem directory linked
+     * out of `problems/`, passes the lexical bound and would hand the push token to the model. A link
+     * that stays inside `problems/` is read as the file it names.
+     *
+     * A regular file only, as [keptIn] requires: a FIFO behind a record's path would block the
+     * request thread for a writer that never comes. Anything that cannot be resolved or read — a
+     * dangling link, a directory that is not there — is no code, never an exception.
+     */
     override fun submitted(codePath: String): String? {
-        val file = layout.recordFile(codePath) ?: return null
+        val file = realFileUnderProblems(layout.recordFile(codePath)) ?: return null
         if (!Files.isRegularFile(file)) return null
         return runCatching { String(Files.readAllBytes(file), CHARSET) }.getOrNull()
+    }
+
+    // Both sides are resolved: the repository itself may sit behind a link (macOS's /var is one).
+    private fun realFileUnderProblems(candidate: Path?): Path? {
+        if (candidate == null) return null
+        return runCatching {
+            candidate.toRealPath().takeIf { it.startsWith(layout.problemsDirectory().toRealPath()) }
+        }.getOrNull()
     }
 
     private fun keptIn(file: Path): Map<String, KeptCode> {

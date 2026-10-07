@@ -132,6 +132,12 @@ class RecordLayoutTest {
     }
 
     @Test
+    fun `the problems directory is where every problem's directory is made`() {
+        layout().problemsDirectory() shouldBe root.toAbsolutePath().normalize().resolve("problems")
+        layout().problemDirectory(120804, "곱").parent shouldBe layout().problemsDirectory()
+    }
+
+    @Test
     fun `a path a record carries resolves inside the problems directory`() {
         layout().recordFile("problems/1-a/attempts/001.java") shouldBe
             root.toAbsolutePath().normalize().resolve("problems/1-a/attempts/001.java")
