@@ -64,6 +64,29 @@ class McpInstructionsTest {
     }
 
     /**
+     * "Is not withheld for lack of ability" read two ways, and one of them is "not hidden". The hand-over
+     * says what the server does not do — no weakness, no next step — and that the reason is not
+     * incapacity, in words that have one reading.
+     */
+    @Test
+    fun `it says plainly that the server names no weakness, and that this is not for lack of ability`() {
+        prose shouldContain "names nothing — no weakness, no next step — and not for lack of ability"
+        prose shouldNotContain "withheld"
+    }
+
+    /** The quotes mark `untouched` as the status name `list_problems` answers with, not as a word for a gap. */
+    @Test
+    fun `it quotes untouched as the status name where it says what a newer problem is`() {
+        prose shouldContain "a newer problem is missing, not \"untouched\""
+    }
+
+    /** "By date or verdict" alone reads as grouped by them; the tool narrows the whole log. */
+    @Test
+    fun `it says submissions narrows the whole log`() {
+        prose shouldContain "the whole log, narrowed by date or verdict"
+    }
+
+    /**
      * An overrun is cut from the tail, so what must not be lost comes before what can be: the hand-over sits
      * ahead of the lists, not behind them, and a cut would reach the lists first.
      */

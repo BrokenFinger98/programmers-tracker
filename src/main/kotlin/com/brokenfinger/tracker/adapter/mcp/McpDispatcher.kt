@@ -188,12 +188,12 @@ class McpDispatcher(private val tools: McpToolInvoker) {
             Every tool returns stored records and counts; none of them interprets, ranks or
             advises, and a value that was never recorded is absent rather than filled in.
 
-            The server counts and names nothing: which number is a weakness or what to practise
-            next is not withheld for lack of ability — deciding that is the reader's job. Cite
-            numbers; say when records do not support a claim.
+            The server counts and names nothing — no weakness, no next step — and not for lack of
+            ability: deciding that is the reader's job. Cite numbers; say when records do not
+            support a claim.
 
             WHICH TOOL ANSWERS WHAT
-            - submissions: the whole log, by date or verdict.
+            - submissions: the whole log, narrowed by date or verdict.
             - get_problem: one lesson in full — gradings, testcases, compiler output, statement;
               `include` adds code.
             - stats: counts per verdict, language, problem, part or level.
@@ -212,7 +212,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
               `kind` says nothing about the problem.
             - `incompleteHistory` means gradings were captured that no record represents: any
               conclusion must say the denominator has holes.
-            - The catalog is a snapshot; a newer problem is missing, not untouched.
+            - The catalog is a snapshot; a newer problem is missing, not "untouched".
             - A repair step shows what changed, not what was wrong. Run code is kept by tracker
               versions from 2026-10-07 on; `noDiff` says why a step has no diff, and `codeLate`
               marks code that may belong to the next grading.
