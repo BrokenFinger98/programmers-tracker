@@ -59,7 +59,7 @@ class McpCallTest {
 
         val call = McpCall.from(aLegacyBody("tools/call", params))
 
-        call.toolName() shouldBe "stats"
+        call.name() shouldBe "stats"
         call.stringArgument("groupBy") shouldBe "verdict"
     }
 
@@ -113,7 +113,7 @@ class McpCallTest {
     fun `reads a tool name of the wrong type as absent rather than throwing`() {
         val call = McpCall.from("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":{"a":1}}}""")
 
-        call.toolName().shouldBeNull()
+        call.name().shouldBeNull()
     }
 
     @Test

@@ -96,7 +96,9 @@ data class McpCall(
     // Every reader below casts instead of coercing. A member of the wrong JSON type is a
     // malformed request, and it has to come back as an absent value we can refuse cleanly
     // rather than as an exception that would surface to the client as an internal error.
-    fun toolName(): String? = (params["name"] as? JsonPrimitive)?.contentOrNull
+
+    /** `params.name` — the tool a `tools/call` runs, or the prompt a `prompts/get` renders. */
+    fun name(): String? = (params["name"] as? JsonPrimitive)?.contentOrNull
 
     fun arguments(): JsonObject = params["arguments"] as? JsonObject ?: JsonObject(emptyMap())
 

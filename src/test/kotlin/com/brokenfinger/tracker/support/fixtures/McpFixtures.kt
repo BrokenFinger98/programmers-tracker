@@ -69,4 +69,4 @@ fun aModernCall(
 ): McpCall = McpCall.from(aModernBody(method, params, version, withCapabilities, id))
 
 /** The headers a conforming modern client mirrors out of the body it is sending. */
-fun headersFor(call: McpCall): McpHeaders = McpHeaders(call.declaredVersion, call.method, call.toolName())
+fun headersFor(call: McpCall): McpHeaders = McpHeaders(call.declaredVersion, call.method, call.name())

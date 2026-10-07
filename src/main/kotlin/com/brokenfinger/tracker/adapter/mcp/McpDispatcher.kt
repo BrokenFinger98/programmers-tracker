@@ -47,7 +47,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
     private fun answerModern(call: McpCall): JsonObject = when (call.method) {
         DISCOVER -> discovery()
         TOOLS_LIST -> cacheable(toolList())
-        TOOLS_CALL -> tools.call(call.toolName(), call.arguments())
+        TOOLS_CALL -> tools.call(call.name(), call.arguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -55,7 +55,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         INITIALIZE -> initialization(call)
         PING -> JsonObject(emptyMap())
         TOOLS_LIST -> toolList()
-        TOOLS_CALL -> tools.call(call.toolName(), call.arguments())
+        TOOLS_CALL -> tools.call(call.name(), call.arguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -101,7 +101,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         mismatchUnless(headers.protocolVersion == call.declaredVersion, "MCP-Protocol-Version")
         mismatchUnless(headers.method == call.method, "Mcp-Method")
         if (call.method != TOOLS_CALL) return
-        mismatchUnless(decoded(headers.name) == call.toolName(), "Mcp-Name")
+        mismatchUnless(decoded(headers.name) == call.name(), "Mcp-Name")
     }
 
     private fun verifyVersion(call: McpCall) {

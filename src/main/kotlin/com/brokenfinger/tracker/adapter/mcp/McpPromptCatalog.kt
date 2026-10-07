@@ -73,7 +73,7 @@ object McpPromptCatalog {
 
     // Strings, by the specification, refused in the tools' words otherwise. A blank one is not given —
     // where a tool refuses a blank — because a client that shows arguments as a form sends an empty
-    // field as "". Values are trimmed as they are read here; the tools trim when they match.
+    // field as "". Values are trimmed as they are read here; the tools trim when they parse or match.
     private fun JsonObject.given(name: String): String? {
         val value = this[name]
         if (value == null || value is JsonNull) return null
