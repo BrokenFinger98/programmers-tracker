@@ -59,12 +59,15 @@ Four parts, in build order. Each is its own issue and PR.
 
 A repair step paired from a folded or mislabelled history is wrong in a way no reader can see.
 
-1. **#343 — record identity.** Every record gets a `recordId` when it is written (a
-   per-grading value, not derived from bytes). A correction line names the `recordId` it
-   supersedes. Lines written before this have no `recordId`; their identity is `(ts, captureKey)`.
+1. **#343 — record identity is `(ts, captureKey)`.** No new field and no migration. The
+   `codePending` correction is `record.copy(codePath, codePending, diffFromPrev)` in
+   `CodeAttachment`, so it carries the original's `ts` and `captureKey` by construction, and the
+   write time is taken inside the single writer section, so two gradings cannot share it.
+   `RecordHistory` resolves *newest line per `(ts, captureKey)`* instead of per `captureKey`.
    Measured on the live log 2026-10-07: 242 lines in 121 `(ts, captureKey)` groups, every group one
-   grading plus its `codePending` correction (two groups differ only by a field a later version
-   added to the correction line). Needs its own ADR, amending
+   grading plus its correction (two groups differ only by a field a later version added to the
+   correction line). Where a reader needs one string — `runs.jsonl`, `repair_steps` — the identity
+   is written `recordId = "<ts>#<captureKey>"`. Needs its own ADR, amending
    [[decisions/2026-08-05-code-pending-correction-append]].
 2. **A wrong database submit is WRONG.** The submit path sends `msg: "실패"` per failing case.
    Fixture from 273711 `attempts/001.raw.jsonl`, scrubbed. Protocol §7 gains the string.
@@ -166,7 +169,7 @@ In Claude Code a prompt appears as a slash command, so the pre-exam session is o
 
 | Part | Tests | Live acceptance |
 |---|---|---|
-| 4.1 | Fixtures from the measured frames; resolver, mapper, assembler (three layers); `RecordHistory` keeps two byte-identical gradings with distinct `recordId`s; old logs resolve unchanged | `get_problem 131537` answers 3 submits and 10 runs |
+| 4.1 | Fixtures from the measured frames; resolver, mapper, assembler (three layers); `RecordHistory` keeps two byte-identical gradings with distinct `ts`; a correction still supersedes its original; old logs resolve unchanged | `get_problem 131537` answers 3 submits and 10 runs |
 | 4.2 | Writer appends a line per run; `sameAsPrevious`; `codeUncertain` when a later grading started before the fetch | One real problem solved with several runs → `runs.jsonl` has one line per run, committed with the submit |
 | 4.3 | `RepairSteps` with zero mocks: failed→passed, failed→failed, unknown code on either side, repeated identical runs, run→submit across actions | `repair_steps(lessonId=…)` on that problem shows every correction |
 | 4.4 | `prompts/list` and `prompts/get` in both protocol eras | `/exam_prep` in Claude Code produces patterns citing record ids |
