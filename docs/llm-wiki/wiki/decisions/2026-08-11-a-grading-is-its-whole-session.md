@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [capture, dedup, protocol, records, measurement]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-10-06
+updated: 2026-10-07
 sources: [decisions/2026-08-05-capture-pipeline-stages, decisions/2026-08-05-write-serialization, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
@@ -155,8 +155,8 @@ and three passing submits of the same query share another
 (raw/sessions/2026-10-06-the-history-that-folded.md). The collision domain
 stated above — every grading with no per-case timing — is exactly the domain the readers fold.
 
-Fix not yet chosen: the correction line needs an identity that is per grading rather than per
-bytes, and old logs must keep resolving.
+Fixed by resolving per `(ts, captureKey)` — the correction already repeats its original's `ts`:
+[[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]].
 
 Recorded rather than quietly edited, because the wrong half is the *estimate*, and an ADR that
 silently improves its own estimates cannot be audited

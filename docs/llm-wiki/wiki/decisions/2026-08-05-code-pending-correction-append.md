@@ -4,7 +4,7 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [storage, jsonl, idempotency, codefetch, append-only]
 created: 2026-08-05
-updated: 2026-10-06
+updated: 2026-10-07
 sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
@@ -108,6 +108,7 @@ bytes, and since #159 (2026-08-11) the live path records two byte-identical grad
 — so the resolution rule folds them back into one on read. Measured on lesson 131537: 3 submits
 and 10 runs recorded, 1 and 5 visible
 ([[decisions/2026-08-11-a-grading-is-its-whole-session]]).
+Fixed in [[decisions/2026-10-07-a-record-is-its-time-and-its-bytes]].
 
 Related: [[decisions/2026-08-05-capture-pipeline-stages]] ·
 [[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-06-mcp-read-slice]].
