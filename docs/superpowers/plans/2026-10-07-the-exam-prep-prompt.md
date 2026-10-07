@@ -29,7 +29,7 @@ From the MCP specification (`modelcontextprotocol/modelcontextprotocol` @ `0a11b
 | D2 | **The argument order is an interface: `language`, `since`, `part`** | Claude Code fills arguments positionally. `language` is the one most sessions give; `part` goes last because its values have spaces |
 | D3 | **`since` is checked strictly with the tools' own `Since` parser; `language` and `part` pass through unchecked — except a `language` that reads as a date, refused as a positional slip** | A bad `since` would prepare the session over the wrong range and look right, so it is refused before anything runs. A `part` check would refuse "GROUP", which is exactly what Claude Code sends for "GROUP BY". Instead the text tells the model three things:
 <ul><li>match a given part against the part **keys** `stats(groupBy=part)` returns (a part bucket has no `label`);</li><li>call `repair_steps` with the full name, and say which part it used;</li><li>whenever something narrows, an empty answer is not an absence of mistakes, and it should name the argument that may not match.</li></ul>
-`/exam_prep 2026-09-01` is the likely slip with positional arguments: it would narrow `repair_steps` to nothing in silence. Every refusal names the order: language, since, part |
+`/exam_prep 2026-09-01` is the likely slip with positional arguments: it would narrow `repair_steps` to nothing in silence. The refusals a positional slip causes — a bad `since`, a language that reads as a date, an unknown argument — name the order: language, since, part |
 | D4 | Unknown prompt, unknown argument, or a non-string argument → `-32602`, carried on `400` modern / `200` handshake. A blank argument is not given | The spec's code. Same carriage as an unknown tool (`McpToolInvoker`). A form-style client sends an empty field as `""` |
 | D5 | Modern `prompts/list` goes through `cacheable(...)` (`ttlMs`, `cacheScope: private`) | Required by the revision, and by Claude Code's codec |
 | D6 | `prompts/get` gets the `Mcp-Name` check; `McpCall.toolName()` becomes `name()` | The binding requires the header for `prompts/get`. The accessor reads `params.name` for both methods, so the old name would mislead |
@@ -1107,3 +1107,13 @@ Tasks 1–2 passed the spec review byte-identical to this plan. The quality revi
   - A table test refuses `5`, `true`, an array and an object under each of the three names.
   - `readScope`, an `Argument` data class, and the 400/200 sentence beside `refused()`.
   - A non-object `arguments` and McpFailure's credential rule move to Task 4 (Step 1b). The characters JSON quoting leaves alone, and the missing length bound, go to Task 5's accepted costs. The KDoc decision links are checked in Task 5 Step 6.
+- **Task 4's quality review:**
+  - `NAMED` is private.
+  - `promptArguments()` is a `when` over absent/null, object, and anything else.
+  - McpCall's reader comment and KDoc stopped speaking exam_prep.
+  - Both controller opening tests pin the `prompts` capability, and a second end-to-end `prompts/get` carries `language`.
+  - The tool path's widening and unquoted keys are #365; the dangling KDoc decision links elsewhere are #366.
+- **Task 5's documents follow the code where the plan's draft differed:**
+  - `list_problems` takes a part its steps come from;
+  - `repair_steps` is called with the full part name;
+  - only the three positional-slip refusals name the order.
