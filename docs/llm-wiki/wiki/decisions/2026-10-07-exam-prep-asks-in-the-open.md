@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [mcp, prompt, interpretation-boundary, client-compatibility]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
 ---
 
@@ -22,8 +22,8 @@ had to be settled was how a server that names nothing hands over a request to na
 client people actually use does with a prompt's arguments.
 
 The instructions were already full. #353 fit them within the 2,000 characters a client receives
-whole, at 1,973 — 27 left ([[decisions/2026-10-07-repair-steps-are-served-not-judged]]) — so the
-readings a pre-exam session must not get wrong could not go there.
+whole, at 1,973 — 27 left ([[decisions/2026-10-07-repair-steps-are-served-not-judged]]). They state
+the readings a pre-exam session must not get wrong, but only in brief, and have no room for more.
 
 Read and measured before planning (plan `docs/superpowers/plans/2026-10-07-the-exam-prep-prompt.md`):
 
@@ -56,9 +56,9 @@ Read and measured before planning (plan `docs/superpowers/plans/2026-10-07-the-e
 The plan's decision table (D1–D8) and the review rounds on #364 are the record; only what was
 weighed there is listed.
 
-1. **Where the readings live.** (a) In the server instructions, beside the others — 27 characters
-   were left, and Claude Code keeps the head of an overrun, so they would be lost without a word.
-   (b) In the prompt's own text — chosen (D8).
+1. **Where the fuller readings live.** The instructions state them in brief. (a) Expand them there,
+   beside the others — 27 characters were left, and Claude Code keeps the head of an overrun, so the
+   expansion would be lost without a word. (b) In the prompt's own text — chosen (D8).
 2. **Checking `part` against the catalog**, refusing a part no problem carries — rejected: Claude
    Code sends "GROUP" for "GROUP BY", so the check would refuse what the main client sends for 38 of
    49 parts. The model reconciles the word instead (D3).
@@ -79,11 +79,13 @@ weighed there is listed.
 
 - **One prompt, `exam_prep`, with every argument optional (D1).** `prompts/get` answers one `user`
   text message: an opening, the scope, the request ("The tools count and name nothing. Here the
-  naming is asked for"), the five steps of spec §4.4, and the readings. The steps: call
-  `stats(groupBy=part)` and `stats(groupBy=level)`; call `repair_steps(...)` over the scope, read
-  past `truncated`, and cluster the steps into patterns named by their diffs, citing record ids and
-  counting the problems each spans — a pattern seen once is not a pattern; for each pattern, the
-  problems to re-solve and up to three untouched ones from
+  naming is asked for"), five numbered steps, and the readings. Steps 1–4 are spec §4.4's; step 5,
+  what the records could not support, is a closing step the spec does not list. The readings are
+  the spec's own step 5, set apart after the steps. The steps: call `stats(groupBy=part)` and
+  `stats(groupBy=level)`; call `repair_steps(...)` over the scope, read past `truncated`, and
+  cluster the steps into patterns named by their diffs, citing record ids and counting the problems
+  each spans — a pattern seen once is not a pattern; for each pattern, the problems to re-solve and
+  up to three untouched ones from
   `list_problems(status=untouched, part=<a part its steps come from>)`; two or three drills for each
   pattern; and what the records could not support.
 - **The argument order is an interface: `language`, `since`, `part` (D2).**
@@ -118,9 +120,8 @@ weighed there is listed.
 
 A prompt keeps the asking visible. The tools' answers stay counts and records. The request to name
 is text the learner chooses to send to their own model, through a command only they can run, and it
-says in its own words that it is asking. Nothing the model
-concludes comes back. Both earlier decisions hold: the server still names nothing, and the
-diagnosis stays on demand.
+says in its own words that it is asking. Nothing the model concludes comes back. Both earlier
+decisions hold: the server still names nothing, and the diagnosis stays on demand.
 
 The order follows from how Claude Code fills arguments — split on whitespace, without quoting, by
 position (read from 2.1.285) — and from the measured part names, 38 of 49 with a space. In last
@@ -142,17 +143,20 @@ reason, and so that a newline in a key cannot break the message. A refusal names
 `-32602` is the specification's code for an unknown prompt and an invalid argument in all three
 revisions, and a prompt's answer has no `isError`, so there is no tool-error channel to use instead.
 The 400/200 carriage is the one [[decisions/2026-08-06-mcp-read-slice]] gave JSON-RPC failures,
-because a handshake-era client reads a non-2xx as a transport fault. A blank is "not given" because
-a client that shows arguments as a form sends an empty field as `""`. `arguments` is strict because
-every argument is optional, so `{}` is a whole request: a malformed `arguments` read as `{}` would
-widen the session to everything on record, the failure `since` is refused to prevent.
+because a handshake-era client reads a non-2xx as a transport fault. A blank is "not given" on an
+assumption: a form-style client may send an empty field as `""`. None was measured, and Claude Code
+never sends one. `arguments` is strict because every argument is optional, so `{}` is a whole
+request: a malformed `arguments` read as `{}` would widen the session to everything on record, the
+failure `since` is refused to prevent.
 
 D5 is required by the revision and by the client in use: Claude Code's modern codec has no default
 for `ttlMs` and `cacheScope` and shows no prompt without them, and all 27 measured connections were
 modern. D6 is the binding's requirement for `prompts/get`. D7: the prompt set is fixed at compile
 time, and Claude Code never asks for completions, so they would serve no client in use. D8: the
-instructions had 27 characters left, and Claude Code does not cut a prompt's text. The text is kept
-short because it is pasted into the conversation every time it runs, not to meet a cap.
+instructions state the readings in brief and, with 27 characters left, have no room for more, so
+the prompt carries the fuller wording a pre-exam session needs; Claude Code does not cut a prompt's
+text. The text is kept short because it is pasted into the conversation every time it runs, not to
+meet a cap.
 
 ## Accepted costs
 
@@ -160,8 +164,9 @@ short because it is pasted into the conversation every time it runs, not to meet
   reconciles it.
 - **In Claude Code a `since` needs a `language` before it, and a `part` needs both.** The order is
   the whole interface its menu offers.
-- **A blank argument counts as not given here, where a tool refuses a blank**, because a form-style
-  client sends an empty field as `""`.
+- **A blank argument counts as not given here, where a tool refuses a blank**, on an assumption: a
+  form-style client may send an empty field as `""`. None was measured, and Claude Code never sends
+  one.
 - **JSON quoting escapes quotes, backslashes and C0 controls, but not Unicode line separators**
   (U+2028, U+2029, U+0085) **or invisible format characters** (ZWSP, RLO) — checked on
   kotlinx-serialization 1.11.0, the version in use. A value can therefore still look odd in the

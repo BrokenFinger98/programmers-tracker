@@ -83,7 +83,7 @@ class McpPromptCatalogTest {
         text shouldContain "since=\"2026-09-01\""
     }
 
-    /** A form-style client sends an empty field as "" — that is "not given", not a value. */
+    /** A form-style client may send an empty field as "" (assumed; none measured): "not given", not a value. */
     @Test
     fun `a blank or null argument is not given`() {
         val arguments = buildJsonObject {
