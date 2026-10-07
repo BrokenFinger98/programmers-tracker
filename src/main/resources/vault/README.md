@@ -13,6 +13,7 @@ problems/<lessonId>-<title>/
 ├── README.md          Frontmatter + attempt history. Overwritten every time
 ├── notes.md           Your mistake notes. The server never touches it
 ├── Solution.<ext>     The latest code, one file per language
+├── runs.jsonl         Every code run: when, and the code it ran (verdicts are in the log)
 ├── examples.json      The judge's own example inputs and expected outputs
 ├── runner_test.<ext>  A runner built from those examples — see below
 └── attempts/          Per-submission code (NNN.<ext>) and raw frames (NNN.raw.jsonl)

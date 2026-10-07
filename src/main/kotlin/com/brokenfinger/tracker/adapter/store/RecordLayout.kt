@@ -34,6 +34,13 @@ class RecordLayout(private val root: Path) {
     fun statementFile(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve("$STATEMENT.md")
 
     /**
+     * One line per run, with its code — `problems/<id>/runs.jsonl`. A run owns no attempt file, so
+     * this is the only place its code outlives the next run
+     * (`docs/superpowers/specs/2026-10-07-mistake-patterns-design.md` §4.2).
+     */
+    fun runLog(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve(RUN_LOG)
+
+    /**
      * The index of everything under `problems/` (#292).
      *
      * A directory README, because GitHub renders one at the root of any directory — and browsing
@@ -126,6 +133,7 @@ class RecordLayout(private val root: Path) {
         const val STATEMENT = "statement"
         private const val ATTEMPTS = "attempts"
         private const val SUBMISSION_LOG = "log/submissions.jsonl"
+        private const val RUN_LOG = "runs.jsonl"
         private const val FALLBACK_EXTENSION = "txt"
         private const val MAX_EXTENSION = 10
 

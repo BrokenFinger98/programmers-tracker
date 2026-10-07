@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * Layer test for the store's side of stage 3 (dev rules §6.1) — real files under a [TempDir],
@@ -43,6 +44,23 @@ class FileDerivedArtifactsTest {
 
         written.codePath shouldBe "problems/120804-두-수의-곱-구하기/Solution.java"
         written.diffFromPrev shouldBe null
+    }
+
+    @Test
+    fun `a run also leaves its code in the run log`() {
+        val record = aSubmissionRecord(action = GradingAction.RUN, attempt = 0)
+
+        artifacts().writeCode(record, CODE_V1)
+
+        val log = RecordLayout(root).runLog(120804, "두 수의 곱 구하기")
+        Files.readAllLines(log).single() shouldContain record.recordId()
+    }
+
+    @Test
+    fun `a submit leaves no run log`() {
+        artifacts().writeCode(aSubmissionRecord(action = GradingAction.SUBMIT, attempt = 2), CODE_V1)
+
+        Files.exists(RecordLayout(root).runLog(120804, "두 수의 곱 구하기")) shouldBe false
     }
 
     @Test
@@ -172,7 +190,7 @@ class FileDerivedArtifactsTest {
     private fun statementFile(): Path =
         RecordLayout(root).statementFile(aSubmissionRecord().lessonId, aSubmissionRecord().title)
 
-    private fun artifacts() = FileDerivedArtifacts(root, JsonlRecordStore.under(root))
+    private fun artifacts() = FileDerivedArtifacts(root, JsonlRecordStore.under(root), Clock.systemDefaultZone())
 
     private companion object {
         val CODE_V1 =

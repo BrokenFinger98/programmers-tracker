@@ -113,7 +113,10 @@ class CodeAttachmentSerializationTest {
     private fun attachment(onFetch: () -> Unit) = CodeAttachment(
         fetcher = { _, _ -> CodeFetch.Fetched(CODE).also { onFetch() } },
         store = ProbedStore(store(), probe),
-        artifacts = ProbedArtifacts(FileDerivedArtifacts(root, ProbedStore(store(), probe)), probe),
+        artifacts = ProbedArtifacts(
+            FileDerivedArtifacts(root, ProbedStore(store(), probe), Clock.systemDefaultZone()),
+            probe,
+        ),
         catalog = anEmptyCatalog(),
         writerDispatcher = writerDispatcher,
     )

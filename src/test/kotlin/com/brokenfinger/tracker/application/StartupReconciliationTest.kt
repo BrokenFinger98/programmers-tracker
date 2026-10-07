@@ -165,7 +165,7 @@ class StartupReconciliationTest {
             store = store,
             statements = { _, _ -> null },
             source = { _, _ -> StatementFetch.Unavailable("no page source in this test") },
-            artifacts = FileDerivedArtifacts(repo.root, store),
+            artifacts = FileDerivedArtifacts(repo.root, store, Clock.systemDefaultZone()),
             pause = {},
         )
     }
@@ -175,7 +175,7 @@ class StartupReconciliationTest {
         return CodeAttachment(
             fetcher = { _, _ -> CodeFetch.Unavailable("no page source in this test") },
             store = store,
-            artifacts = FileDerivedArtifacts(repo.root, store),
+            artifacts = FileDerivedArtifacts(repo.root, store, Clock.systemDefaultZone()),
             catalog = anEmptyCatalog(),
             writerDispatcher = Dispatchers.Unconfined,
         )

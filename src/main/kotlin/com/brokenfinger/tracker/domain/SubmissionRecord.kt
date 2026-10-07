@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.domain
 
 import kotlinx.serialization.Serializable
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * One line of `log/submissions.jsonl` — the schema of design §5.2.
@@ -133,6 +134,13 @@ data class SubmissionRecord(
      * rule written by hand wherever it is needed is a rule that will be forgotten somewhere.
      */
     fun isSubmission(): Boolean = action == GradingAction.SUBMIT
+
+    /**
+     * This grading's name — its write time and its capture key, in the text form the log
+     * stores the time in. The pair is what [com.brokenfinger.tracker.application.RecordHistory]
+     * resolves on (#343): the key alone is the grading's bytes and repeats; the time does not.
+     */
+    fun recordId(): String = "${ts.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}#${captureKey.value}"
 }
 
 /**

@@ -18,6 +18,7 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * The store's [DerivedArtifacts] — [CodeArtifacts] for the code files and [ProblemReadme] for
@@ -30,9 +31,10 @@ import java.nio.file.Path
  * Thread confinement is the caller's: every method here is called from inside stage 3's
  * confined section ([[decisions/2026-08-05-write-serialization]] decision 1).
  */
-class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) : DerivedArtifacts {
+class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, clock: Clock) : DerivedArtifacts {
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
+    private val runs = RunLog(layout, clock)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
     private val tagNotes = TagNotes(layout)
@@ -44,11 +46,14 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore) :
      *
      * The diff is taken before the attempt copy is written for readability only — it compares
      * against the *previous* attempt, so the order does not matter to the result.
+     *
+     * A run also appends its code to `runs.jsonl`, the only place a run's code outlives the next run.
      */
     override fun writeCode(record: SubmissionRecord, code: String): AttachedCode {
         val diff = artifacts.diffFromPrev(record, code)
         val latest = artifacts.writeLatest(record, code)
         val attempt = artifacts.writeAttempt(record, code)
+        runs.append(record, code)
         return AttachedCode(relativeOf(attempt ?: latest), diff)
     }
 

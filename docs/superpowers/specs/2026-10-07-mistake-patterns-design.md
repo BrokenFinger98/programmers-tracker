@@ -82,15 +82,17 @@ A repair step paired from a folded or mislabelled history is wrong in a way no r
 moment `Solution.<ext>` is written today):
 
 ```json
-{"recordId":"…","ts":"2026-10-03T16:57:23+09:00","language":"mysql",
- "verdict":"WRONG","errorText":null,"code":"select …"}
-{"recordId":"…","ts":"2026-10-03T16:58:39+09:00","language":"mysql",
- "verdict":"WRONG","errorText":null,"sameAsPrevious":true}
+{"recordId":"2026-10-03T16:57:23+09:00#<captureKey>","language":"mysql",
+ "codeFetchedAt":"2026-10-03T16:57:23.4+09:00","code":"select …"}
 ```
+
+Exactly four keys. **Verdicts and messages are not in the line**: `log/submissions.jsonl` is their
+only authority (a copy would disagree once a classification rule changes, as #350 just did), and
+readers join it by `recordId` (`<ts>#<captureKey>`). The write is idempotent by `recordId`,
+checking complete lines only, so a crash-torn line cannot block the retry.
 
 - **Full code, not a diff.** Code is small (an SQL run ~200 B; fifty Java runs ~150 KB) and a
   full copy makes every line readable on its own. Diffs are computed on read.
-- `sameAsPrevious` when the code equals the previous run's — pressing Run twice is common.
 - `Solution.<ext>` and `attempts/NNN.*` are unchanged; existing readers keep working.
 - **Committed**, riding the next submit's commit as run log lines already do — no extra commits.
   The owner accepted that every run's code is published with the records (2026-10-07). This
@@ -102,17 +104,26 @@ moment `Solution.<ext>` is written today):
 - Not written for gradings recorded before this ships. Past history has no run code and the
   readers say so (`code` absent), never guess it.
 
-**Open risk — measure first.** Programmers saves the code on `run`, with no time-based autosave
-(protocol §15.1), and the tracker fetches it after the grading settles. If the next Run is pressed
-before that fetch lands, the fetched code is the next run's. Runs 3–4 seconds apart were recorded
-on 2026-10-03. The first task of 4.2 measures the fetch delay against the gap to the next grading;
-a run whose fetch completed after the next grading on the same problem began is written with
-`"codeUncertain": true` rather than silently attributed.
+**Measured (2026-10-07 10:29 KST, lesson 59035).** The owner alternated two queries as fast as
+possible, four runs: the code landed 0.53 / 0.28 / 0.25 / 0.24 s after each record and every run
+got its own query (WRONG, PASS, WRONG, PASS); the fastest human gap was 1.6 s.
+`ChannelCapture` handles frames in order and awaits the attachment, so a `start` pressed during
+the fetch is not visible at attach time.
+
+**`codeFetchedAt`.** The code is fetched from the problem page after the grading is recorded, so a
+run attached late — the startup retry after an expired session or rate limit — gets whatever the
+page holds then, possibly a later run's. Comparing `codeFetchedAt` with the next record's `ts`
+(when that grading finished being recorded, not when it started) catches a late attachment. Its
+limit: it can miss a second Run pressed within the ~0.3 s fetch window and finishing after the
+fetch. If the start of a grading is ever needed, the `start` frame's arrival in `.ps/raw/` is the
+place.
 
 ### 4.3 Repair steps over MCP
 
 **`RepairSteps`** — a pure calculator (development-rules §3). Input: one problem's gradings in one
-language, in time order, each with its code where known. Output: one step per failed grading that
+language, in time order, each with its code where known. Code comes from joining `runs.jsonl` by
+`recordId`; a run's code is treated as unreliable when its `codeFetchedAt` is later than the next
+record's `ts`. Output: one step per failed grading that
 is followed by another attempt at the same problem:
 
 ```json
@@ -126,7 +137,7 @@ is followed by another attempt at the same problem:
 
 - A step whose code is unknown on either side is returned **without** `diff` and says so; it is
   never dropped and never paired across the gap.
-- Consecutive identical code (`sameAsPrevious`) does not make a step — nothing was corrected.
+- Consecutive identical code (compared on read) does not make a step — nothing was corrected.
 - The final step of a problem ends at the passing grading when there is one.
 
 **MCP surface**
@@ -170,7 +181,7 @@ In Claude Code a prompt appears as a slash command, so the pre-exam session is o
 | Part | Tests | Live acceptance |
 |---|---|---|
 | 4.1 | Fixtures from the measured frames; resolver, mapper, assembler (three layers); `RecordHistory` keeps two byte-identical gradings with distinct `ts`; a correction still supersedes its original; old logs resolve unchanged | `get_problem 131537` answers 3 submits and 10 runs |
-| 4.2 | Writer appends a line per run; `sameAsPrevious`; `codeUncertain` when a later grading started before the fetch | One real problem solved with several runs → `runs.jsonl` has one line per run, committed with the submit |
+| 4.2 | Writer appends a four-key line per run; idempotent by `recordId` on complete lines, torn line healed; `codeFetchedAt` from the injected Clock | One real problem solved with several runs → `runs.jsonl` has one line per run, committed with the submit |
 | 4.3 | `RepairSteps` with zero mocks: failed→passed, failed→failed, unknown code on either side, repeated identical runs, run→submit across actions | `repair_steps(lessonId=…)` on that problem shows every correction |
 | 4.4 | `prompts/list` and `prompts/get` in both protocol eras | `/exam_prep` in Claude Code produces patterns citing record ids |
 
@@ -182,5 +193,6 @@ In Claude Code a prompt appears as a slash command, so the pre-exam session is o
   template comment written for raw frames.
 - **History before this ships has no run code**, so the first pre-exam sessions see only what was
   solved after it.
-- **A run's code can be attributed to the wrong run** when runs are seconds apart; 4.2 detects
-  and marks it rather than preventing it.
+- **A late attachment gets the page's newest code**, possibly a later run's. A reader detects it
+  by `codeFetchedAt` later than the next record's `ts`; a second Run pressed within the ~0.3 s
+  fetch window can slip past that check.

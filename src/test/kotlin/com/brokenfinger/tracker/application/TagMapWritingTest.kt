@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * Which notes each caller rewrites, which is the half a unit test of the calculator cannot see.
@@ -99,7 +100,7 @@ class TagMapWritingTest {
         val store = store()
         store.append(SubmissionRecordJson.encode(aSubmissionRecord(lessonId = 120804, tags = listOf("arithmetic"))))
 
-        attachment(FileDerivedArtifacts(root, store)).refreshVault()
+        attachment(FileDerivedArtifacts(root, store, Clock.systemDefaultZone())).refreshVault()
 
         val page = RecordLayout(root).problemDirectory(120804, "두 수의 곱 구하기").resolve("README.md")
         Files.readString(page) shouldContain "[arithmetic](../../tags/arithmetic.md)"
@@ -111,7 +112,7 @@ class TagMapWritingTest {
      * method was called and not what it was called with.
      */
     private inner class RecordingArtifacts(private val seen: MutableList<TagCount>) : DerivedArtifacts {
-        private val delegate = FileDerivedArtifacts(root, store())
+        private val delegate = FileDerivedArtifacts(root, store(), Clock.systemDefaultZone())
 
         override fun writeCode(record: SubmissionRecord, code: String) = delegate.writeCode(record, code)
 
