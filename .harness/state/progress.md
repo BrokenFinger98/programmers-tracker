@@ -5464,3 +5464,12 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   and 2026-08-05 (code-pending correction); concept `assumption-vs-measurement` gains the case.
 - Inbox emptied: 22 sessionend snapshots of 2026-10-06 were handout-writing workers (out of scope).
 - Open: #343 (needs an ADR — per-grading identity for the correction line).
+
+## 2026-10-07 — design: mistake patterns from repair steps (#346, branch docs/346-mistake-pattern-design)
+- Every MCP tool called against the live records; findings in the spec §2 (no run code, wrong SQL
+  submit `실패` → UNKNOWN, SQL tag axis empty, #343 folding).
+- Owner chose option A (diagnose on demand, MCP read-only). Spec
+  `docs/superpowers/specs/2026-10-07-mistake-patterns-design.md`; ADR
+  [[decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored]].
+- Next: implementation plan; build order 4.1 (#343 + two verdict gaps) → 4.2 runs.jsonl → 4.3
+  repair_steps → 4.4 exam_prep.
