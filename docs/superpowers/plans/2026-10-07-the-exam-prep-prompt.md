@@ -401,6 +401,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
@@ -447,7 +448,15 @@ class McpPromptCatalogTest {
 
         val text = textOf(McpPromptCatalog.get(ExamPrepPrompt.NAME, arguments))
 
-        text shouldContain "repair_steps(language=java, since=2026-09-01)"
+        text shouldContain "repair_steps(language=\"java\", since=\"2026-09-01\")"
+    }
+
+    /** Read as given, then trimmed — the tools' own parser trims too, so the call names the date itself. */
+    @Test
+    fun `a since padded with spaces is read as the date it holds`() {
+        val text = textOf(McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put("since", " 2026-09-01 ") }))
+
+        text shouldContain "since=\"2026-09-01\""
     }
 
     /** A form-style client sends an empty field as "" — that is "not given", not a value. */
@@ -494,17 +503,18 @@ class McpPromptCatalogTest {
         }
 
         refused.code shouldBe McpErrors.INVALID_PARAMS
-        refused.message shouldBe Since.FORMAT
+        refused.message shouldStartWith Since.FORMAT
+        refused.message shouldContain "positional"
     }
 
-    /** Prompt arguments are strings by the specification; a number is a mistake to name. */
+    /** Prompt arguments are strings by the specification; a number is a mistake to name, in the tools' words. */
     @Test
     fun `an argument that is not a string is refused under its name`() {
         val refused = shouldThrow<McpFailure> {
             McpPromptCatalog.get(ExamPrepPrompt.NAME, buildJsonObject { put("language", 5) })
         }
 
-        refused.message shouldBe "language must be a string"
+        refused.message shouldBe "language must be text"
     }
 
     private fun textOf(answer: JsonObject): String =
@@ -566,19 +576,27 @@ object McpPromptCatalog {
         val unknown = arguments.keys - EXAM_PREP_ARGUMENTS.map { it.first }.toSet()
         if (unknown.isNotEmpty()) throw refused("unknown argument(s): ${unknown.sorted().joinToString()}")
         return try {
-            ExamPrepScope(arguments.given("language"), arguments.given("since"), arguments.given("part"))
+            scopeFrom(arguments)
         } catch (invalid: IllegalArgumentException) {
             throw refused(invalid.message ?: "the arguments could not be used")
         }
     }
 
-    // Strings, by the specification. A blank one is not given: a client that shows arguments as a form
-    // sends an empty field as "".
+    // Named, because three String? in a row would compile in any order.
+    private fun scopeFrom(arguments: JsonObject): ExamPrepScope = ExamPrepScope(
+        language = arguments.given("language"),
+        since = arguments.given("since"),
+        part = arguments.given("part"),
+    )
+
+    // Strings, by the specification, refused in the tools' words otherwise. A blank one is not given —
+    // where a tool refuses a blank — because a client that shows arguments as a form sends an empty
+    // field as "".
     private fun JsonObject.given(name: String): String? {
         val value = this[name]
         if (value == null || value is JsonNull) return null
         val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
-            ?: throw IllegalArgumentException("$name must be a string")
+            ?: throw IllegalArgumentException("$name must be text")
         return text.trim().takeIf { it.isNotEmpty() }
     }
 
@@ -621,7 +639,7 @@ object McpPromptCatalog {
 - [ ] **Step 4: Run the test and confirm it passes**
 
 Run: `./gradlew test --tests 'com.brokenfinger.tracker.adapter.mcp.McpPromptCatalogTest'`
-Expected: PASS (10 tests).
+Expected: PASS (11 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -905,8 +923,9 @@ its own:
     /programmers-tracker:exam_prep mysql 2026-09-01 SELECT  … in one part
 
 The arguments are positional — `language`, `since`, `part` — and Claude Code splits them on spaces
-without quoting. A part name with a space therefore arrives as its first word ("GROUP" for
-"GROUP BY"); the prompt tells the model to match it against the part labels and say which it used.
+without quoting, so a `since` needs a `language` before it and a `part` needs both. A part name with
+a space arrives as its first word ("GROUP" for "GROUP BY"); the prompt tells the model to match it
+against the part keys `stats` returns and say which it used. A refusal names the order.
 `since` takes the format every tool takes and is refused before anything runs if it does not parse.
 Only `repair_steps` takes the scope; `stats` and `list_problems` answer over everything on record.
 ```
@@ -931,6 +950,8 @@ Create `docs/llm-wiki/wiki/decisions/2026-10-07-exam-prep-asks-in-the-open.md`. 
 
 Accepted costs:
 - A part given in Claude Code arrives cut at its first space. The model, not the server, reconciles it.
+- In Claude Code a `since` needs a `language` before it, and a `part` needs both. The order is the whole interface its menu offers.
+- A blank argument counts as not given here, where a tool refuses a blank, because a form-style client sends an empty field as `""`.
 - `language` and `part` are unchecked, so a typo answers empty rather than refused; the text tells the model to say so.
 - Claude Code reads neither `title` nor the argument descriptions. The argument order is all the help its menu gives.
 - The text is English; the client's model chooses the answer's language.
@@ -953,7 +974,7 @@ Closes #364"
 
 1. Rebuild and recreate the container: `docker compose build && docker compose up -d --force-recreate`.
 2. Modern `prompts/list` with mirrored headers. Expect `prompts[0].name = exam_prep`, `ttlMs`, `cacheScope: private`, `resultType: complete`.
-3. Modern `prompts/get` with `Mcp-Name: exam_prep` and `{language: "mysql"}`. Expect one user message containing `repair_steps(language=mysql)`.
+3. Modern `prompts/get` with `Mcp-Name: exam_prep` and `{language: "mysql"}`. Expect one user message containing `repair_steps(language="mysql")`.
 4. Ask the owner to reconnect the MCP server (`/mcp`) or open a new session, then run `/programmers-tracker:exam_prep mysql`. Spec §6: the answer must name patterns that cite record ids.
 5. Record the result in the ADR's Outcome and in progress.
 
@@ -967,3 +988,27 @@ Closes #364"
   - `McpPromptCatalog.NAMES`, `definitions()`, `get(name, arguments)`
   - `McpCall.name()`
   - `aPromptGetParams(name, arguments)`
+
+## Changed in review
+
+Tasks 1–2 passed the spec review byte-identical to this plan. The quality review then changed these. The code blocks above keep the planned text; the code is what review left.
+
+- **Values are quoted as JSON strings**, in the `repair_steps` call and in the scope paragraph (`JsonPrimitive(value).toString()`). "String, Date" and "SUM, MAX, MIN" are real part names; unquoted, a model would read either as two arguments. One ordered `(name, value)` list feeds both renderings.
+- **The part warning names what `stats` really returns.** A `groupBy=part` bucket carries the part in `key` and has no `label`. The warning now says to match against the part keys `stats(groupBy=part)` returns, call `repair_steps` with the full name, and say which part was used.
+- **An empty answer under a scope is not an absence of mistakes.** `python` (the id is `python3`), or a part typed where `language` goes, narrows `repair_steps` to nothing in silence — the failure D3 refuses for a date. Whenever something narrows, the paragraph tells the model to say so and name the argument that may not match. This makes the Task 5 accepted cost ("the text tells the model to say so") true.
+- **Refusals name the order.** A language that reads as a date is checked first. A `since` that does not parse is refused as `Since.FORMAT` plus "the arguments are positional — language, since, part". `/exam_prep mysql SELECT` is the likely slip.
+- **Text:**
+  - step 1 is spelled as calls (`stats(groupBy=part)`, `stats(groupBy=level)`);
+  - the pattern examples gain "a missing table alias" (spec §1, the live records are mostly SQL);
+  - `list_problems` is asked with `part=<a part its steps come from>`, since a pattern can span parts;
+  - the KDoc says the instructions are "nearly full (#353)" rather than a count that would go stale.
+- **Tests pin function, not prose:**
+  - the spec-derived asks: group, name by diffs, problems to re-solve, most runs and submits, submit code always kept;
+  - each reading's directive;
+  - the part instruction;
+  - every argument and enum value the text passes, checked to exist in the tool schemas `McpToolCatalog` serves.
+- **Task 3 follows:**
+  - named arguments into `ExamPrepScope`;
+  - "must be text", the tools' wording;
+  - a padded `since` reads trimmed;
+  - the expected call is quoted.
