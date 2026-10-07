@@ -24,10 +24,10 @@ import kotlinx.serialization.json.putJsonArray
  * Runs one `tools/call`.
  *
  * The two failure kinds are kept apart on purpose, because MCP treats them differently.
- * An argument a model can fix — a date it spelled wrong, a `groupBy` that is not one of
- * the three — comes back as a **tool execution error** (`isError: true`) carrying the
- * correction, which the client is expected to hand to the model. An unknown tool is a
- * **protocol error**, because no rewording of the arguments will make it exist.
+ * An argument a model can fix — a date it spelled wrong, a `groupBy` it does not offer —
+ * comes back as a **tool execution error** (`isError: true`) carrying the correction,
+ * which the client is expected to hand to the model. An unknown tool is a **protocol
+ * error**, because no rewording of the arguments will make it exist.
  *
  * Nothing here writes. The record repository is opened read-only through [RecordQuery], so
  * a prompt-injected instruction to "delete my failures" has no path to act on.
@@ -109,18 +109,18 @@ class McpToolInvoker(private val query: RecordQuery) {
         return ms
     }
 
-    // Every argument is checked here, before RepairStepFilter would refuse it, so a bad one comes back
-    // under the MCP argument's own name. The default limit is the cap that keeps one argument-less call
-    // from returning every step on record; the answer says when it applied.
+    // Every argument is checked here, before the query runs, so a bad one comes back under the MCP
+    // argument's own name and what RepairStepFilter would refuse can no longer arrive. Past this point
+    // an IllegalArgumentException is not the caller's. The default limit is the cap that keeps one
+    // argument-less call from returning every step on record; the answer says when it applied.
     private fun repairSteps(arguments: JsonObject): JsonObject {
-        val page = query.repairSteps(
-            since = arguments.optionalText("since")?.let(Since::from),
-            language = arguments.optionalText("language"),
-            part = arguments.optionalText("part"),
-            lessonId = optionalLessonId(arguments),
-            limit = limitOf(arguments) ?: McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT,
-        )
-        return answerOf(page)
+        val given = withoutNulls(arguments)
+        val since = given.optionalText("since")?.let(Since::from)
+        val language = given.optionalText("language")
+        val part = given.optionalText("part")
+        val lessonId = optionalLessonId(given)
+        val limit = limitOf(given) ?: McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT
+        return ourFault { answerOf(query.repairSteps(since, language, part, lessonId, limit)) }
     }
 
     // `truncated` is written only when the list was cut: absent says nothing was left out, and a
@@ -207,6 +207,16 @@ class McpToolInvoker(private val query: RecordQuery) {
         failed(invalid.message ?: "the arguments could not be used")
     }
 
+    // For a tool whose arguments have all been checked by the time it works. An IllegalArgumentException
+    // from there is a broken invariant of ours, which `executed` would hand to the model as advice to
+    // correct arguments that were fine. Rethrown as a state fault it passes through `executed` and ends
+    // as the controller's internal error, with the cause kept for the log.
+    private fun <T> ourFault(work: () -> T): T = try {
+        work()
+    } catch (broken: IllegalArgumentException) {
+        throw IllegalStateException("an invariant broke after the arguments were accepted: ${broken.message}", broken)
+    }
+
     // The JSON goes back twice on purpose: `structuredContent` for the client, and the same
     // text for clients on revisions that predate it (spec, Tools — Structured Content).
     private fun succeeded(payload: JsonObject): JsonObject {
@@ -248,15 +258,19 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun JsonObject.text(name: String): String? =
         (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
-    // Absent or JSON null means "do not narrow". Present and blank, or not text at all, is the
-    // client's mistake and is said so: `text()` would read it as absent and widen the question
-    // that was asked, and RepairStepFilter refuses a blank language or part in any case.
+    // Absent means "do not narrow". Present and blank, or not text at all, is the client's mistake
+    // and is said so: `text()` would read it as absent and widen the question that was asked, and
+    // RepairStepFilter refuses a blank language or part in any case.
     private fun JsonObject.optionalText(name: String): String? {
-        val raw = this[name]
-        if (raw == null || raw is JsonNull) return null
+        val raw = this[name] ?: return null
         return (raw as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("$name must be non-blank text")
     }
+
+    // A JSON null is how some clients say "not given", as good as leaving the key out. Dropped before
+    // any argument is read, so every reader below sees one spelling of absent. Only `repair_steps`
+    // reads it this way; the older tools keep refusing a null number.
+    private fun withoutNulls(arguments: JsonObject): JsonObject = JsonObject(arguments.filterValues { it !is JsonNull })
 
     // Absent means "do not narrow"; present but not a number is the client's mistake and is
     // said so, rather than quietly widening the question that was asked.

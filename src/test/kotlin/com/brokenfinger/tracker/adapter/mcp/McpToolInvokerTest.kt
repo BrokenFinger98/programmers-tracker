@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
+import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
@@ -20,6 +21,10 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -742,16 +747,34 @@ class McpToolInvokerTest {
             .jsonPrimitive.content shouldBe straddling.recordId()
     }
 
+    /** A JSON null is how some clients say "not given": for each narrowing argument it is the key left out. */
     @Test
     fun `repair_steps reads a JSON null as no narrowing`() {
-        val invoker = invokerOver(*failedRuns(2))
+        val invoker = invokerOver(
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 2),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2),
+        )
         val nulls = buildJsonObject {
             put("since", JsonNull)
             put("language", JsonNull)
             put("part", JsonNull)
+            put("lessonId", JsonNull)
         }
 
-        structured(invoker.call("repair_steps", nulls))["count"]!!.jsonPrimitive.int shouldBe 1
+        structured(invoker.call("repair_steps", nulls))["count"]!!.jsonPrimitive.int shouldBe 2
+    }
+
+    /** Not a limit of zero and not an error: "not given" means the default applies. */
+    @Test
+    fun `repair_steps reads a JSON null limit as not given, which is the default`() {
+        val nullLimit = buildJsonObject { put("limit", JsonNull) }
+
+        val payload = structured(invokerOver(*failedRuns(26)).call("repair_steps", nullLimit))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 20
+        payload["total"]!!.jsonPrimitive.int shouldBe 25
     }
 
     @Test
@@ -829,6 +852,50 @@ class McpToolInvokerTest {
 
         failed(result).shouldBeTrue()
         message(result).shouldContain("verdict")
+    }
+
+    /**
+     * Every argument is checked in the adapter, so what `RepairStepFilter` would refuse never reaches
+     * the query. A strict double fails the test if it is ever called: the proof is the silence.
+     */
+    @Test
+    fun `repair_steps never hands the query an argument it has refused`() {
+        val query = mockk<RecordQuery>()
+        val invoker = McpToolInvoker(query)
+
+        listOf(
+            arguments("limit" to 0),
+            arguments("limit" to "many"),
+            arguments("language" to " "),
+            arguments("part" to ""),
+            arguments("since" to "last tuesday"),
+            arguments("lessonId" to "the first one"),
+        ).forEach { refused -> failed(invoker.call("repair_steps", refused)).shouldBeTrue() }
+
+        verify(exactly = 0) { query.repairSteps(any(), any(), any(), any(), any()) }
+    }
+
+    /**
+     * Past validation an IllegalArgumentException can only be an invariant of ours breaking, and
+     * `executed` would hand it to the model as advice to correct arguments that were fine. It leaves
+     * as a state fault instead, which `McpController` answers as an internal error.
+     *
+     * The seam is a double of [RecordQuery], the one collaborator that reaches the domain: no record
+     * or code on disk can break those invariants (the query groups by problem before it asks), so the
+     * double fails the way `ProblemLabel.of` does. `WatchControllerTest` already doubles it the same way.
+     */
+    @Test
+    fun `repair_steps reports a broken invariant behind valid arguments as a fault of ours, not as advice`() {
+        val query = mockk<RecordQuery>()
+        every { query.repairSteps(any(), any(), any(), any(), any()) } throws
+            IllegalArgumentException("a label is one problem's")
+
+        val thrown = shouldThrow<IllegalStateException> {
+            McpToolInvoker(query).call("repair_steps", JsonObject(emptyMap()))
+        }
+
+        thrown.message.shouldContain("a label is one problem's")
+        thrown.cause.shouldBeInstanceOf<IllegalArgumentException>()
     }
 
     // Failed runs one minute apart, none with code: each neighbouring pair is a step, so n runs make n - 1.

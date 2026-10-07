@@ -15,7 +15,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * The tools this server exposes — three, and deliberately not the twenty of design §7.
+ * The tools this server exposes, listed in [NAMES] — and deliberately not the twenty of design §7.
  *
  * The rest of §7 is absent rather than stubbed: a tool that answered "not implemented"
  * would be worse than an absent one, because a client discovers it through `tools/list`
@@ -244,9 +244,8 @@ object McpToolCatalog {
             "and `runsBeforePass` — the median, over the bucket's passed problems, of the runs in any " +
             "language before a problem's first passing submit, absent when nothing in the bucket passed. " +
             "These count problems, not (problem, language) pairs, while `count` stays the number of " +
-            "submits. **A `runsBeforePass` of 0 can mean no run was recorded** — a pass from before runs " +
-            "were captured (2026-08-07), or in a history with `incompleteHistory` — not that none was " +
-            "pressed.",
+            "submits. **A `runsBeforePass` of 0 can mean no run was recorded** — a pass recorded before runs " +
+            "were captured, or in a history with `incompleteHistory` — not that none was pressed.",
     ) {
         putJsonObject("properties") {
             putJsonObject("groupBy") {

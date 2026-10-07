@@ -9,6 +9,7 @@ import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.int
@@ -176,7 +177,15 @@ class McpToolCatalogTest {
 
         listOf("attempted", "passedFirstSubmit", "runsBeforePass", "median").forEach { description shouldContain it }
         description shouldContain "can mean no run was recorded"
-        description shouldContain "2026-08-07"
+        description shouldContain "a pass recorded before runs were captured"
+    }
+
+    /** The caveat names no date: the one it once carried was never verified, and a wrong date reads as fact. */
+    @Test
+    fun `stats names no date for when runs began to be captured`() {
+        val description = tool(McpToolCatalog.STATS)["description"]!!.jsonPrimitive.content
+
+        description shouldNotContain "2026-08-07"
     }
 
     /** The description is where a model learns that a step is a fact about a change, not a finding. */
