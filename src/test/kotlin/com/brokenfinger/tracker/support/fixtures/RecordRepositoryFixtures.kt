@@ -1,11 +1,15 @@
 package com.brokenfinger.tracker.support.fixtures
 
+import com.brokenfinger.tracker.adapter.store.FileGradingCodes
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
+import com.brokenfinger.tracker.adapter.store.RunLog
+import com.brokenfinger.tracker.application.GradingCodes
 import com.brokenfinger.tracker.application.ProblemCatalog
 import com.brokenfinger.tracker.application.RawSessionLog
 import com.brokenfinger.tracker.application.RecordQuery
+import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import java.nio.charset.StandardCharsets.UTF_8
@@ -14,6 +18,7 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.StandardOpenOption.CREATE
 import java.time.Clock
+import java.time.OffsetDateTime
 
 /**
  * A real record repository on disk (dev rules §6.4). Records go in through the real store,
@@ -37,14 +42,41 @@ class RecordRepositoryFixture(val root: Path) {
 
     fun store(): JsonlRecordStore = JsonlRecordStore(logFile())
 
-    /** Catalogue-free by default: most read tests are about records, not about browsing. */
+    /**
+     * Catalogue-free by default: most read tests are about records, not about browsing. [records] is
+     * the log as the query reads it — this repository's own, unless a test wraps it to watch the reads.
+     */
     fun query(
         catalog: ProblemCatalog = anEmptyCatalog(),
         clock: Clock = Clock.systemUTC(),
         raw: RawSessionLog = FileRawSessionLog.under(root),
-    ): RecordQuery = RecordQuery(store(), catalog, clock, raw)
+        codes: GradingCodes = FileGradingCodes(RecordLayout(root)),
+        records: RecordStore = store(),
+    ): RecordQuery = RecordQuery(records, catalog, clock, raw, codes = codes)
+
+    /** A run's code, kept the way the capture path keeps it — through the real [RunLog]. */
+    fun withRunCode(
+        record: SubmissionRecord,
+        code: String,
+        attachedAt: OffsetDateTime = record.ts.plusNanos(MEASURED_FETCH_NANOS),
+    ): RecordRepositoryFixture = apply {
+        RunLog(RecordLayout(root), Clock.fixed(attachedAt.toInstant(), attachedAt.offset)).append(record, code)
+    }
+
+    /** A submit's attempt file, at the path its record carries. */
+    fun withSubmitCode(record: SubmissionRecord, code: String): RecordRepositoryFixture = apply {
+        val file = root.resolve(requireNotNull(record.codePath) { "a submit with code carries its path" })
+        Files.createDirectories(file.parent)
+        Files.writeString(file, code)
+    }
 
     fun logFile(): Path = RecordLayout(root).submissionLog()
+
+    private companion object {
+        // Measured on lessons 59035 (0.24-0.53 s) and 59036 (0.27-0.38 s): the code lands this long
+        // after the record, well before any human could press Run again.
+        const val MEASURED_FETCH_NANOS = 300_000_000L
+    }
 }
 
 fun aRecordRepository(root: Path): RecordRepositoryFixture = RecordRepositoryFixture(root)

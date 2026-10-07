@@ -2,15 +2,20 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import com.brokenfinger.tracker.domain.calc.UnifiedDiff
+import com.brokenfinger.tracker.support.fixtures.MCP_TEXT_BUDGET
 import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -20,13 +25,13 @@ class McpToolCatalogTest {
     private val tools = McpToolCatalog.definitions().map { it.jsonObject }
 
     /**
-     * Six, and the absence of the rest is the point. Design §7 lists about twenty; the
+     * Seven, and the absence of the rest is the point. Design §7 lists about twenty; the
      * others need exam state, a company profile or a write path that does not exist. A tool
      * that answered "not implemented" would be worse than an absent one, because a client
      * discovers it through `tools/list` and plans around it.
      */
     @Test
-    fun `exposes exactly the six tools that can be answered from what ships`() {
+    fun `exposes exactly the seven tools that can be answered from what ships`() {
         tools.map { it["name"]!!.jsonPrimitive.content }
             .shouldContainExactly(
                 "submissions",
@@ -35,6 +40,7 @@ class McpToolCatalogTest {
                 "list_problems",
                 "review_queue",
                 "slow_passes",
+                "repair_steps",
             )
     }
 
@@ -95,7 +101,45 @@ class McpToolCatalogTest {
         properties("submissions").keys.shouldContainExactly(setOf("since", "verdict"))
     }
 
-    private fun tool(name: String): JsonObject = tools.single { it["name"]!!.jsonPrimitive.content == name }
+    @Test
+    fun `get_problem offers code as an optional include`() {
+        val include = property("get_problem", "include")
+
+        properties("get_problem").keys.shouldContainExactly(setOf("lessonId", "include"))
+        include["type"]!!.jsonPrimitive.content shouldBe "array"
+        enumOfItems("get_problem", "include").shouldContainExactly("code", "runs")
+        required("get_problem").shouldContainExactly("lessonId")
+    }
+
+    /** The schema is built from the enum the invoker's check and the writer read, so none of them can drift. */
+    @Test
+    fun `the include schema enumerates the values the server accepts`() {
+        enumOfItems("get_problem", "include").shouldContainExactly(ProblemInclude.wireNames())
+    }
+
+    @Test
+    fun `repair_steps narrows by everything and requires nothing`() {
+        properties("repair_steps").keys.shouldContainExactly(setOf("since", "language", "part", "lessonId", "limit"))
+        required("repair_steps").shouldContainExactly()
+        property("repair_steps", "lessonId")["type"]!!.jsonPrimitive.content shouldBe "integer"
+    }
+
+    /** The invoker applies the default, the schema declares it and the description says it: one constant. */
+    @Test
+    fun `repair_steps declares the default limit it applies`() {
+        val limit = property("repair_steps", "limit")
+
+        McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT shouldBe 20
+        limit["minimum"]!!.jsonPrimitive.int shouldBe 1
+        limit["default"]!!.jsonPrimitive.int shouldBe McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT
+    }
+
+    private fun tool(name: String): JsonObject = tools.single { it.nameOf() == name }
+
+    private fun JsonObject.nameOf(): String = this["name"]!!.jsonPrimitive.content
+
+    // The description as `tools/list` sends it: the shared sentences are already appended.
+    private fun JsonObject.sentDescription(): String = this["description"]!!.jsonPrimitive.content
 
     private fun properties(name: String): JsonObject = tool(name)["inputSchema"]!!.jsonObject["properties"]!!.jsonObject
 
@@ -104,11 +148,14 @@ class McpToolCatalogTest {
     private fun enumOf(tool: String, field: String): List<String> =
         property(tool, field)["enum"]!!.jsonArray.map { it.jsonPrimitive.content }
 
+    private fun enumOfItems(tool: String, field: String): List<String> =
+        property(tool, field)["items"]!!.jsonObject["enum"]!!.jsonArray.map { it.jsonPrimitive.content }
+
     private fun required(name: String): List<String> =
         tool(name)["inputSchema"]!!.jsonObject["required"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
 
     /**
-     * Found by reading all six descriptions as a client, after a `curl` check that printed the
+     * Found by reading all seven descriptions as a client, after a `curl` check that printed the
      * last 180 characters of one of them missed it (#203).
      *
      * The mechanism will recur: #187 appended a shared sentence to every description and left the
@@ -144,6 +191,124 @@ class McpToolCatalogTest {
         description shouldContain "counts across languages"
         description shouldContain McpToolCatalog.REVIEW_QUEUE
         description shouldContain McpToolCatalog.SLOW_PASSES
+    }
+
+    /**
+     * `part` and `level` buckets count problems beside submits, and the reading of
+     * `runsBeforePass` that misleads is a zero: it can mean no run was recorded, not that none was
+     * pressed. The description is the only place a client learns either.
+     */
+    @Test
+    fun `stats explains the problem counts on part and level buckets, and when a zero is not a zero`() {
+        val description = tool(McpToolCatalog.STATS)["description"]!!.jsonPrimitive.content
+
+        listOf("attempted", "passedFirstSubmit", "runsBeforePass", "median").forEach { description shouldContain it }
+        description shouldContain "can mean no run was recorded"
+        description shouldContain "a pass recorded before runs were captured"
+    }
+
+    /** The caveat names no date: the one it once carried was never verified, and a wrong date reads as fact. */
+    @Test
+    fun `stats names no date for when runs began to be captured`() {
+        val description = tool(McpToolCatalog.STATS)["description"]!!.jsonPrimitive.content
+
+        description shouldNotContain "2026-08-07"
+    }
+
+    /** The description is where a model learns that a step is a fact about a change, not a finding. */
+    @Test
+    fun `repair_steps says what it is not, and names the fields that qualify a diff`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "not a finding about what was wrong"
+        description shouldContain "failedMessage"
+        description shouldContain "noDiff"
+        description shouldContain "codeLate"
+        description shouldContain "diffTruncated"
+    }
+
+    /**
+     * The counts on a step's failing side are of the cases that arrived. Without this a compile error's
+     * zero reads as "no case failed", and a partly observed grading's total as the whole set.
+     */
+    @Test
+    fun `repair_steps says its case counts are of the cases that arrived`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "The case counts are of the cases that arrived"
+        description shouldContain "`casesComplete: false` means some never did"
+        description shouldContain "an algorithm compile error, for one, reports none"
+    }
+
+    /** True of algorithm problems only: an SQL compile error reports its error inside one case, 1 of 1. */
+    @Test
+    fun `repair_steps does not say that every compile error reports no cases`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldNotContain "a compile error, for one, reports none"
+    }
+
+    /** What the tracker keeps is a fact about its versions; "exists" would read as a fact about the problem. */
+    @Test
+    fun `repair_steps dates run code by the tracker versions that kept it`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "run code is kept by tracker versions from 2026-10-07 on"
+    }
+
+    /**
+     * The cap is the size control, so a reader handed twenty steps must be able to tell a cut list
+     * from a complete one — and the description is the only place a client learns how.
+     */
+    @Test
+    fun `repair_steps says its default cap and what truncated means`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "At most 20 steps come back unless `limit` says otherwise"
+        description shouldContain "`total`"
+        description shouldContain "`truncated: true`"
+    }
+
+    /**
+     * `include` adds code to items a client already knows, so the description is where it learns which
+     * key carries what, which one says why a diff is missing, and which two say not to trust one.
+     */
+    @Test
+    fun `get_problem says what include adds, and the fields that qualify a run's diff`() {
+        val description = tool(McpToolCatalog.GET_PROBLEM)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "`include` adds code and changes nothing else"
+        listOf("code", "runs", "codeFetchedAt", "diffFromPrevGrading", "noDiff").forEach {
+            description shouldContain "`$it`"
+        }
+        description shouldContain "`codeLate: true` on a run"
+        description shouldContain "`fromCodeLate: true` when the earlier side's code was late"
+        description shouldContain "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines"
+    }
+
+    /** What the tracker keeps is a fact about its versions; "exists" would read as a fact about the problem. */
+    @Test
+    fun `get_problem dates run code by the tracker versions that kept it, and by no other date`() {
+        val description = tool(McpToolCatalog.GET_PROBLEM)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "run code is kept by tracker versions from 2026-10-07 on"
+        description shouldNotContain "2026-08-07"
+    }
+
+    /**
+     * Every description, as `tools/list` sends it — the shared sentences appended — fits [MCP_TEXT_BUDGET].
+     * The client cuts a description at 2,048 characters and keeps the head (Claude Code CHANGELOG 2.1.84,
+     * "capped at 2KB"; 2.1.280, `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` "to change the 2,048-character cap on MCP
+     * tool descriptions and server instructions"), so a longer one loses its tail without a word, and the tail is
+     * where the shared `incompleteHistory` warning sits. The failure names each tool that is over and by how much.
+     */
+    @Test
+    fun `every description, as sent, fits the budget under the client's cap`() {
+        val lengths = tools.associate { it.nameOf() to it.sentDescription().length }
+
+        withClue("descriptions over the $MCP_TEXT_BUDGET-character budget, with their lengths") {
+            lengths.filterValues { it > MCP_TEXT_BUDGET }.shouldBeEmpty()
+        }
     }
 
     /**

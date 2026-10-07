@@ -3,10 +3,10 @@
 **[한국어](mcp.ko.md)**
 
 > The server exposes your solving history over the Model Context Protocol so Claude, Cursor
-> or a local model can read it. **Six tools, none of which write.** Four hand back stored
-> records and counts; two compute a schedule or a ranking, under a boundary this page states
-> before it shows them. What is not built is listed at the bottom, and the
-> [README's table](../README.md) stays the authority on build status.
+> or a local model can read it. **Seven tools, none of which write.** Five hand back stored
+> records, counts and the code between them; two compute a schedule or a ranking, under a
+> boundary this page states before it shows them. What is not built is listed at the bottom,
+> and the [README's table](../README.md) stays the authority on build status.
 
 ---
 
@@ -54,13 +54,18 @@ Most clients take a URL and a headers map. The shape is:
 Consult your client's own documentation for where that block goes — it differs per client
 and changes between releases, so it is deliberately not reproduced here.
 
+Every tool description and the server instructions stay within 2,000 characters as sent,
+because Claude Code cuts each of them at 2,048 and keeps only the head
+(`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` moves that cap). Nothing needs setting for them to
+arrive whole.
+
 ---
 
-## The six tools
+## The seven tools
 
-Four return stored records and counts and nothing else. **None of them interprets, ranks or
-advises** — that is the AI's job, not the server's, and it is a rule rather than an omission
-([`CLAUDE.md`](../CLAUDE.md), design §7).
+Five return stored records, counts and the code between them, and nothing else. **None of
+them interprets, ranks or advises** — that is the AI's job, not the server's, and it is a rule
+rather than an omission ([`CLAUDE.md`](../CLAUDE.md), design §7).
 
 `review_queue` and `slow_passes` compute something, and the boundary they respect is worth
 knowing before you read their answers: they schedule and rank, they do not diagnose. Every item carries
@@ -70,11 +75,12 @@ the facts that set its date so you can disagree with the schedule — see
 | Tool | Arguments | Answers |
 |---|---|---|
 | `submissions` | `since?` · `verdict?` | Every recorded run and submit, newest first. Per-testcase detail, compiler output and diffs are omitted here. |
-| `get_problem` | `lessonId` | One lesson and every grading against it, in full — testcases and compiler output included. `submissionCount` and `runCount` split them. |
-| `stats` | `groupBy` — `verdict` · `language` · `problem` | Counts per bucket. Counts only. **Submits, never runs.** **`problem` counts across languages.** |
+| `get_problem` | `lessonId` · `include?` | One lesson and every grading against it, in full — testcases and compiler output included. `submissionCount` and `runCount` split them. `include` adds each submit's or run's code. |
+| `stats` | `groupBy` — `verdict` · `language` · `problem` · `part` · `level` | Counts per bucket. Counts only. **Submits, never runs.** **`problem` counts across languages.** `part`/`level` also count problems. |
 | `list_problems` | `level?` · `part?` · `tag?` · `status?` | The shipped catalog joined against the records: each problem's `status` (`untouched` · `attempted` · `passed`) and its submit count. |
 | `review_queue` | `limit?` | Problems due for re-solving, most overdue first, each with the attempts, help signal and pass date that set its date. **One entry per language.** |
 | `slow_passes` | `thresholdMs?` | Every passed problem ranked by its slowest testcase in milliseconds, with the level, tags and language a comparison needs. |
+| `repair_steps` | `since?` · `language?` · `part?` · `lessonId?` · `limit?` | Each grading that did not pass, the next grading of the problem in its language, and the code diff between them, newest first — 20 unless `limit` says otherwise. **What changed, not what was wrong.** |
 
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
 offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
@@ -151,6 +157,90 @@ is for. The `language` field on every item is there to be used, not merely discl
 runtime error or timeout drops it case by case. Those passes are excluded from the ranking
 rather than ranked as instant, because a missing reading sorted as zero would put the problems
 you know least about at the fast end of a list about speed.
+
+### What `repair_steps` hands over
+
+A repair step is a grading that did not pass and the next grading of the same problem **in the same
+language** — run or submit — with the unified diff of the code between them. It is what changed after a
+failure, which is the evidence a recurring mistake leaves: an argument-order slip often compiles and
+prints nothing, and the diff is its only witness
+([spec](superpowers/specs/2026-10-07-mistake-patterns-design.md)).
+
+It is **not** a finding about what was wrong. Grouping steps into habits, naming them and deciding
+which recur is the reader's work, and nothing concluded is stored
+([`decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored`](llm-wiki/wiki/decisions/2026-10-07-mistake-patterns-are-diagnosed-not-stored.md)).
+
+One step, abridged:
+
+```json
+{"lessonId": 273711, "title": "…", "part": "SELECT", "level": 2, "language": "mysql",
+ "from": {"recordId": "…", "ts": "…", "action": "run", "outcome": "JUDGED", "verdict": "COMPILE_ERROR",
+          "failedMessage": "(1054, \"Unknown column …\")", "failedCases": 1, "totalCases": 1},
+ "to":   {"recordId": "…", "ts": "…", "action": "run", "outcome": "JUDGED", "verdict": "WRONG"},
+ "diff": "--- a/from\n+++ b/to\n@@ …"}
+```
+
+- **"Did not pass" includes "never resolved".** Such a step's `from` has no `verdict` and says how it
+  ended in `outcome`. On the author's log, 25 of 65 candidate steps on 2026-10-07 start that way —
+  SQL failures recorded before #350 classified them.
+- **Identical code makes no step** — nothing was corrected — unless a side is marked `codeLate`.
+  Trailing newlines do not count as a change.
+- **No `diff` comes with a reason** in `noDiff`: `fromCodeUnknown` · `toCodeUnknown` · `codeUnknown`
+  (the code was not kept), `tooLarge` (over 2,000 lines on a side), or `sameCode` (only beside a late
+  side). A diff cut at 400 lines carries `diffTruncated: true`.
+- **Run code is kept by tracker versions from 2026-10-07 on.** Submit code has always been kept in
+  `attempts/`, so a step between two submits has a diff whenever it happened; a step involving a run
+  recorded by an older version does not.
+- **`codeLate: true`** on a side means its code was attached after the problem's next grading was
+  recorded, so it may be that grading's code. It cannot catch a second Run pressed within the ~0.3 s
+  the fetch takes, and submit code records no fetch time, so it is never marked.
+- **What failed is on `from`:** `errorText`, the error output the judge sent when it sent one;
+  `failedMessage`, the first failing case's own message — where a rejected SQL query's MySQL error
+  is; and `failedCases` / `totalCases`. The counts are of the cases that arrived, and
+  `casesComplete: false` beside them means some never did — an algorithm compile error, for one,
+  reports none. A grading whose cases all arrived carries no flag.
+- **`since` bounds when the later grading was recorded**, and the list is newest first by that time.
+  Steps are paired over the whole history before anything narrows them, so the first step after
+  `since` still starts at the failure before it. `language` and `part` match case-insensitively and
+  in full; with `part` given, a problem whose part was never recorded is left out.
+- **At most 20 steps come back unless `limit` says otherwise.** `count` is how many came back and
+  `total` how many matched; `truncated: true` appears only when `total` exceeds `count`, which means
+  the oldest were left out.
+
+An argument the tool cannot use — a `limit` or `lessonId` that is not a positive whole number, a
+blank or non-text `language` or `part`, a `since` that is not a date, a name it does not take —
+comes back as a tool error (`isError: true`) saying what was wrong, so a model can correct it. A
+JSON `null` means "not given". A fault of ours behind valid arguments is answered as an internal
+error (JSON-RPC `-32603`) that carries nothing of the exception, never as advice to change arguments
+that were fine. Why each of these rules is what it is:
+[`decisions/2026-10-07-repair-steps-are-served-not-judged`](llm-wiki/wiki/decisions/2026-10-07-repair-steps-are-served-not-judged.md).
+
+`get_problem` takes `include` for the code of one problem: a list drawn from `code` and `runs`, or
+one of them as a bare string. `code` puts each submit's kept code on it. `runs` puts on each run its
+`code`, `codeFetchedAt`, `codeLate`, and `diffFromPrevGrading` — the diff from the grading before it
+in the same language, run or submit — or `noDiff` saying why there is none, with `diffTruncated` as
+above. `fromCodeLate: true` on a run says the code its diff was taken from was late, which only the
+earlier item's own `codeLate` would otherwise show. The first grading in a language has neither a
+diff nor a reason. Code that was not kept is absent, never an empty string. **Without `include` the
+answer is exactly what it was before `include` existed**, and nothing reads kept code.
+
+**`include=runs` has no limit.** It is the drill-down into one problem, so it returns the whole run
+history at once, and a long one is large. Measured in review on 90-line Java code with one or two
+lines edited per run: about 4.6 KB per run, so ten runs come to ~53,000 characters and fifty to
+~260,000. Claude Code warns about a tool result past 10,000 tokens, caps one at 25,000 by default,
+and writes a result over 50,000 characters to a file instead of showing it inline — so a Java
+problem past about ten runs will not arrive inline. `repair_steps(lessonId=…)` is bounded but is not
+the same answer: only the steps after failures, and diffs rather than code.
+
+`stats` grouped by `part` or `level` also counts the **problems** in each bucket: `attempted`
+(submitted at least once — a problem only ever run is not attempted), `passed` (has a passing
+submit), `passedFirstSubmit` (its first submit resolved PASS; an unresolved one does not count), and
+`runsBeforePass` — the median, over the bucket's passed problems, of the runs in any language before
+each one's first passing submit, absent when nothing in the bucket passed. These count problems, not
+(problem, language) pairs, each in the bucket of its newest known part or level, while `count` stays
+the number of submits. **A `runsBeforePass` of 0 can mean no run was recorded** — a pass from before
+the tracker recorded runs, or in a history with `incompleteHistory` — not that none was pressed. The
+other groupings carry `count` alone.
 
 ### `elapsedSec` is not how long you spent
 
@@ -249,6 +339,12 @@ You do not have to configure this. The server decides from how your client opens
   requires. Admit one deliberately with `TRACKER_MCP_ALLOWED_ORIGINS` if you need to.
 - **Read-only.** The tools reach the record repository through a query that cannot append,
   move or commit, so a prompt-injected "delete my failures" has no path to act on.
+- **Kept code comes from `problems/` and nowhere else.** A submit's code is read only from a
+  regular file whose real path lies under the record repository's own `problems/` directory, so
+  neither a record's path nor a symbolic link — git stores links, so one can arrive with a clone or
+  a pull — can lead it to the push token and the `/watch` token under `.ps/`. A `problems`
+  directory that is itself a link is not followed, so one linked elsewhere on purpose yields no
+  code. The statement and run-log readers get the same bound in #354.
 - **No Programmers session cookie is ever on this path**, at any log level.
 - Nothing is logged on the normal path — not the request and not the answer — because every
   answer is a piece of your solving history.
@@ -287,7 +383,10 @@ was being served as a measurement nobody had taken. `tag_problem` · `untagged` 
 ships classified.
 
 **Genuinely absent.** MCP **resources** (`ps://…`) and **prompts**; the server declares only
-the `tools` capability.
+the `tools` capability. `get_problem(include=returned)` — the table a failed SQL run returned,
+read from `.ps/raw/` — is designed (spec §4.3) and deferred to its own plan: it needs protocol
+parsing on the read path.
 
 There is also no pagination: `submissions` with no arguments returns the whole log. That is
-fine for one person's history today and would need a bound before it is not.
+fine for one person's history today and would need a bound before it is not. `repair_steps` has
+one — 20 by default, and it says when it cut — and `get_problem(include=runs)` has none (above).

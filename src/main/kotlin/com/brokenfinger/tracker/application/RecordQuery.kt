@@ -5,7 +5,15 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
 import com.brokenfinger.tracker.domain.calc.CatalogBrowse
+import com.brokenfinger.tracker.domain.calc.CodeTimeline
+import com.brokenfinger.tracker.domain.calc.CodedGrading
+import com.brokenfinger.tracker.domain.calc.KeptCode
+import com.brokenfinger.tracker.domain.calc.LabelledStep
+import com.brokenfinger.tracker.domain.calc.ProblemLabel
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
+import com.brokenfinger.tracker.domain.calc.RepairStepFilter
+import com.brokenfinger.tracker.domain.calc.RepairStepPage
+import com.brokenfinger.tracker.domain.calc.RepairSteps
 import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.ReviewQueue
 import com.brokenfinger.tracker.domain.calc.Since
@@ -15,6 +23,7 @@ import com.brokenfinger.tracker.domain.calc.SubmissionFilter
 import com.brokenfinger.tracker.domain.calc.SubmissionTally
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import com.brokenfinger.tracker.domain.calc.Transition
 import java.time.Clock
 import java.time.OffsetDateTime
 
@@ -40,6 +49,22 @@ data class ProblemHistory(
 )
 
 /**
+ * One problem's gradings with their kept code, and each one's transition from the grading before
+ * it in its language — what `get_problem(include=…)` adds (spec 2026-10-07 §4.3).
+ */
+data class CodedProblem(val gradings: List<CodedGrading>, val transitions: List<Transition>) {
+    // Asked once per item of a problem, so indexed once here rather than scanned each time.
+    private val gradingById = gradings.associateBy { it.record.recordId() }
+    private val transitionIntoId = transitions.associateBy { it.to.record.recordId() }
+
+    /** The grading with its kept code, or null for a record that is not on this problem's timeline. */
+    fun gradingOf(record: SubmissionRecord): CodedGrading? = gradingById[record.recordId()]
+
+    /** Null for the first grading in its language — there is nothing before it to compare with. */
+    fun transitionInto(record: SubmissionRecord): Transition? = transitionIntoId[record.recordId()]
+}
+
+/**
  * The read side of the record repository — the half design §7 exposes over MCP.
  *
  * It only ever reads. Nothing here appends, moves or commits, so an AI holding the MCP
@@ -55,6 +80,7 @@ class RecordQuery(
     private val clock: Clock,
     private val raw: RawSessionLog,
     private val statements: ProblemStatements = ProblemStatements { _, _ -> null },
+    private val codes: GradingCodes = GradingCodes.NONE,
 ) {
     /**
      * The whole log, newest first, **each capture key at its latest state**.
@@ -155,6 +181,56 @@ class RecordQuery(
             submissions = submissions,
             statement = statements.of(lessonId, newest(submissions) { it.title.takeIf(String::isNotBlank) }),
         )
+    }
+
+    /**
+     * Every correction after a failed grading, newest first, with how many matched before the
+     * [filter]'s limit cut the list (spec 2026-10-07 §4.3).
+     *
+     * Paired over each problem's **whole** history before [filter] applies, so the first step after
+     * its `since` still starts at the failure before it. [lessonId] narrows first, so asking about
+     * one problem reads one problem's code. The filter arrives already built, which is where its
+     * arguments are refused: what it refuses never gets as far as the log or any code.
+     */
+    fun repairSteps(filter: RepairStepFilter, lessonId: Long?): RepairStepPage {
+        val problems = history().groupBy { it.lessonId }.filterKeys { lessonId == null || it == lessonId }
+        return filter.applied(problems.values.flatMap(::labelledSteps))
+    }
+
+    /**
+     * One problem's gradings with their code and transitions, for `get_problem(include=…)`.
+     *
+     * Takes the records [ProblemHistory.submissions] holds — one problem's, newest first — so a
+     * caller that has just read the problem does not read the log a second time. No records is an
+     * empty answer; records of two problems are refused.
+     */
+    fun codedProblem(submissions: List<SubmissionRecord>): CodedProblem {
+        val timeline = timelineOf(submissions)
+        return CodedProblem(timeline, RepairSteps.transitions(timeline))
+    }
+
+    private fun labelledSteps(newestFirst: List<SubmissionRecord>): List<LabelledStep> {
+        val label = ProblemLabel.of(newestFirst)
+        return RepairSteps.of(timelineOf(newestFirst)).map { LabelledStep(label, it) }
+    }
+
+    // history() is newest first, with ties in reverse log order. Reversed, ties are in log order,
+    // which is the order CodeTimeline's stable sort keeps.
+    private fun timelineOf(newestFirst: List<SubmissionRecord>): List<CodedGrading> {
+        val oldestFirst = newestFirst.asReversed()
+        return CodeTimeline.of(oldestFirst, codesOf(oldestFirst))
+    }
+
+    private fun codesOf(records: List<SubmissionRecord>): Map<String, KeptCode> {
+        val first = records.firstOrNull() ?: return emptyMap()
+        return codes.runs(first.lessonId, first.title) + records.mapNotNull(::submittedCode).toMap()
+    }
+
+    private fun submittedCode(record: SubmissionRecord): Pair<String, KeptCode>? {
+        // A run's codePath is the Solution file every later grading overwrites, never its own code.
+        if (!record.isSubmission() || !record.isCodeAttached()) return null
+        val text = record.codePath?.let(codes::submitted) ?: return null
+        return record.recordId() to KeptCode(text, fetchedAt = null)
     }
 
     // Catalog metadata arrives late and unevenly, so the newest record that actually carries

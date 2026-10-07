@@ -2,7 +2,7 @@
 
 Written: 2026-10-07
 Issue: #346
-Status: approved by the owner; not implemented
+Status: approved by the owner; 4.1 implemented (#348, #350), 4.2 (#352), 4.3 (#353, live check pending); 4.4 not implemented
 
 ---
 
@@ -74,7 +74,9 @@ A repair step paired from a folded or mislabelled history is wrong in a way no r
 3. **A database run MySQL rejects is COMPILE_ERROR.** The query is refused before it runs — the
    same stage as a failed compile. Shape: `passed: false`, no `returned_rows`, `msg` an error tuple
    `(<code>, '<text>')`. Fixtures from the two frames of 2026-10-03. Protocol §6 gains the shape.
-   The error text stays in the record as `errorText`, as compile output does.
+   The error text stays in the record as the failing case's `msg` — it arrives on the `finish`
+   frame, not on an `error` frame, so it never becomes `errorText` (served as a step's
+   `failedMessage`; as built in #350).
 
 ### 4.2 Every run keeps its code
 
@@ -100,7 +102,7 @@ checking complete lines only, so a crash-torn line cannot block the retry.
   they "bury the solving history in its own scratch work"; code lines in one file per problem do
   not, and the template comment is updated to say so.
 - Programmers' returned tables (SQL) stay in `.ps/raw/` and are **not** copied here — they are
-  Programmers' data. MCP may read them from there (4.3).
+  Programmers' data. MCP may read them from there; deferred from 4.3 to its own plan.
 - Not written for gradings recorded before this ships. Past history has no run code and the
   readers say so (`code` absent), never guess it.
 
@@ -120,35 +122,72 @@ place.
 
 ### 4.3 Repair steps over MCP
 
-**`RepairSteps`** — a pure calculator (development-rules §3). Input: one problem's gradings in one
-language, in time order, each with its code where known. Code comes from joining `runs.jsonl` by
-`recordId`; a run's code is treated as unreliable when its `codeFetchedAt` is later than the next
-record's `ts`. Output: one step per failed grading that
-is followed by another attempt at the same problem:
+**`RepairSteps`** — a pure calculator (development-rules §3). Input: one problem's gradings in time
+order — every language, paired per language — each with its code where known. Code comes from
+joining `runs.jsonl` by `recordId`, and a submit's from its `attempts/` file; a run's code is marked
+`codeLate` when its `codeFetchedAt` is later than the `ts` of the problem's next record, in any
+language. Output: one step per grading that did not pass and is followed by another grading of the
+same problem in the same language:
 
 ```json
-{"lessonId":273711,"title":"…","language":"mysql","part":"SELECT","level":2,
- "from":{"recordId":"…","ts":"…","action":"run","verdict":"COMPILE_ERROR",
-         "errorText":"(1054, \"Unknown column 'ii1.rarity' in 'where clause'\")",
+{"lessonId":273711,"title":"…","part":"SELECT","level":2,"language":"mysql",
+ "from":{"recordId":"…","ts":"…","action":"run","outcome":"JUDGED","verdict":"COMPILE_ERROR",
+         "failedMessage":"(1054, \"Unknown column 'ii1.rarity' in 'where clause'\")",
          "failedCases":1,"totalCases":1},
- "to":  {"recordId":"…","ts":"…","action":"run","verdict":"WRONG"},
- "diff":"--- a\n+++ b\n@@ …"}
+ "to":  {"recordId":"…","ts":"…","action":"run","outcome":"JUDGED","verdict":"WRONG"},
+ "diff":"--- a/from\n+++ b/to\n@@ …"}
 ```
 
-- A step whose code is unknown on either side is returned **without** `diff` and says so; it is
-  never dropped and never paired across the gap.
-- Consecutive identical code (compared on read) does not make a step — nothing was corrected.
-- The final step of a problem ends at the passing grading when there is one.
+- A step whose code is unknown on either side is returned **without** `diff` and says why in
+  `noDiff`; it is never dropped and never paired across the gap.
+- Consecutive identical code (compared on read) does not make a step — nothing was corrected —
+  unless a side's code was attached late, where identical code is the race's signature rather than
+  a sign that nothing changed.
+- The final step in a language ends at its passing grading when there is one.
 
 **MCP surface**
 
 | Tool | Change |
 |---|---|
-| `repair_steps` (new) | `since`, `language`, `part`, `lessonId`, `limit`. Newest first. The pre-exam call |
-| `get_problem` | `include`: `code` (each submit's code), `runs` (the run timeline with code and per-run diff), `returned` (for failed database runs, the returned table read from `.ps/raw/`, truncated). Default response unchanged |
-| `stats` | `groupBy` gains `part` and `level`. Each bucket adds `attempted`, `passed`, `passedFirstSubmit` and `runsBeforePass` (median) beside the existing count |
+| `repair_steps` (new) | `since`, `language`, `part`, `lessonId`, `limit` (20 when not given). Newest first. The pre-exam call |
+| `get_problem` | `include`: `code` (each submit's code), `runs` (each run's code and its diff from the grading before it, on the existing items), `returned` (for failed database runs, the returned table read from `.ps/raw/`, truncated — **deferred to its own plan**). Default response unchanged |
+| `stats` | `groupBy` gains `part` and `level`. Each `part`/`level` bucket adds `attempted`, `passed`, `passedFirstSubmit` and `runsBeforePass` (median) beside the existing count — counting problems, not (problem, language) pairs |
 
 All of these count or return stored facts. None ranks problems or names a weakness.
+
+**As built** (#353; plan `docs/superpowers/plans/2026-10-07-repair-steps-over-mcp.md`, ADR
+[[decisions/2026-10-07-repair-steps-are-served-not-judged]]):
+
+- Two calculators: `CodeTimeline` attaches each grading's code and marks it late, `RepairSteps`
+  pairs per language and diffs. They take one problem's whole timeline, because the late check
+  compares with the problem's next record in any language. `codeLate: true` marks a side; a late
+  side keeps a step even when its code matches (`noDiff: "sameCode"`). Code is compared with
+  trailing newlines trimmed. The LCS diff moved from the store into `domain/calc`, so attempt
+  diffs and steps share one implementation.
+- "Failed" is "did not pass", unresolved verdicts included — 25 of 65 candidate steps on the live
+  log, measured 2026-10-07 (131 gradings; none of the 65 between two submits). Such a `from` has
+  no `verdict` and carries `outcome`. `from` also carries `failedMessage`, the first failing case's
+  own message: a rejected SQL query's MySQL error is there, not in `errorText`, which only an
+  `error` frame fills (4.1 item 3 expected `errorText`; #350 left the tuple in the case's `msg`).
+- A step without a diff says why in `noDiff` (`fromCodeUnknown` · `toCodeUnknown` · `codeUnknown` ·
+  `sameCode` · `tooLarge`). Submit code is never marked late: nothing records when it was fetched.
+  A diff cut at 400 lines carries `diffTruncated: true`, and the failing side's case counts carry
+  `casesComplete: false` when some cases never arrived.
+- `repair_steps` returns 20 steps unless `limit` says otherwise, with `count`, `total`, and
+  `truncated: true` when the list was cut. A refused argument is a tool error in the filter's own
+  words; an invariant breaking behind valid arguments is an internal error, never advice.
+- `get_problem(include)` adds code to the existing items (`code`; and for runs `codeFetchedAt`,
+  `codeLate`, `diffFromPrevGrading`/`noDiff`, and `fromCodeLate` when the earlier side was late).
+  Without `include` the answer is byte-identical to before; the log is read once either way.
+  `include=runs` has no limit. **`returned` is deferred** to its own plan.
+- The `stats` problem counts appear on `part` and `level` buckets only and count problems, each in
+  the bucket of its newest known part or level; `count` stays the number of submits.
+- Kept submit code is read only from a regular file whose real path lies under the records' real
+  `problems/` directory; a `problems` directory that is itself a link is not followed.
+- Claude Code cuts server instructions and each tool description at 2,048 characters, so every one
+  stays within 2,000 as sent; the instructions are at 1,973. **4.4 must carry its guidance in the
+  `exam_prep` prompt itself**, not in the instructions — and its step 5 should date run code by the
+  tracker versions that keep it (2026-10-07 on), since submit code was always kept.
 
 ### 4.4 The `exam_prep` prompt
 
@@ -164,8 +203,9 @@ where the interpretation the server must not do is *asked for*, in the open:
    same part from `list_problems(status=untouched, part=…)`.
 4. For each pattern: two or three short drills aimed at the exact point — e.g. call `substring`
    for the 3rd–4th characters.
-5. Readings that are easy to get wrong, from the server's `instructions`: runs are not attempts,
-   absent is not zero, records before 2026-10 have no run code.
+5. Readings that are easy to get wrong: runs are not attempts, absent is not zero, run code is
+   kept by tracker versions from 2026-10-07 on. **The prompt itself must carry these** — the
+   server `instructions` are at 1,973 of the 2,000 characters a client receives whole (#353).
 
 In Claude Code a prompt appears as a slash command, so the pre-exam session is one command.
 
@@ -182,7 +222,7 @@ In Claude Code a prompt appears as a slash command, so the pre-exam session is o
 |---|---|---|
 | 4.1 | Fixtures from the measured frames; resolver, mapper, assembler (three layers); `RecordHistory` keeps two byte-identical gradings with distinct `ts`; a correction still supersedes its original; old logs resolve unchanged | `get_problem 131537` answers 3 submits and 10 runs |
 | 4.2 | Writer appends a four-key line per run; idempotent by `recordId` on complete lines, torn line healed; `codeFetchedAt` from the injected Clock | One real problem solved with several runs → `runs.jsonl` has one line per run, committed with the submit |
-| 4.3 | `RepairSteps` with zero mocks: failed→passed, failed→failed, unknown code on either side, repeated identical runs, run→submit across actions | `repair_steps(lessonId=…)` on that problem shows every correction |
+| 4.3 | `RepairSteps` with zero mocks: failed→passed, failed→failed, unknown code on either side, repeated identical runs, run→submit across actions; `CodeTimeline` late rule (any language, never for submits); `RepairStepFilter`; `FileGradingCodes` torn line, path escape and links out of `problems/`; `get_problem(include)` and its unchanged default; `stats` part/level; every tool description and the instructions within 2,000 characters as sent | `repair_steps(lessonId=…)` on that problem shows every correction |
 | 4.4 | `prompts/list` and `prompts/get` in both protocol eras | `/exam_prep` in Claude Code produces patterns citing record ids |
 
 ## 7. Accepted costs
@@ -191,8 +231,13 @@ In Claude Code a prompt appears as a slash command, so the pre-exam session is o
 - **The records grow** by every run's code. Measured scale makes it small; it is not free.
 - **Run code is published with the records.** The owner's decision; it reverses part of a
   template comment written for raw frames.
-- **History before this ships has no run code**, so the first pre-exam sessions see only what was
-  solved after it.
-- **A late attachment gets the page's newest code**, possibly a later run's. A reader detects it
-  by `codeFetchedAt` later than the next record's `ts`; a second Run pressed within the ~0.3 s
-  fetch window can slip past that check.
+- **Runs recorded before this shipped have no code**, so the first pre-exam sessions see diffs
+  mostly for what was solved after it. Submit code was always kept, so a step between two submits
+  has a diff whenever it happened — but none of the 65 candidate steps measured on 2026-10-07 was
+  one.
+- **A late attachment gets the page's newest code**, possibly a later run's. The server marks such
+  a side `codeLate: true` (its `codeFetchedAt` is later than the `ts` of the problem's next
+  record); a second Run pressed within the ~0.3 s fetch window can slip past that check, and
+  submit code, which records no fetch time, is never checked.
+- The costs the 4.3 build added — `include=runs` unbounded, the code-read bound, the instructions
+  budget — are in its ADR (4.3, As built).

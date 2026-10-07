@@ -1,6 +1,10 @@
 package com.brokenfinger.tracker.adapter.mcp
 
-import io.kotest.matchers.shouldBe
+import com.brokenfinger.tracker.domain.calc.TallyGroup
+import com.brokenfinger.tracker.support.fixtures.MCP_TEXT_BUDGET
+import io.kotest.assertions.withClue
+import io.kotest.matchers.comparables.shouldBeLessThanOrEqualTo
+import io.kotest.matchers.ints.shouldBeInRange
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
@@ -60,6 +64,40 @@ class McpInstructionsTest {
     }
 
     /**
+     * "Is not withheld for lack of ability" read two ways, and one of them is "not hidden". The hand-over
+     * says what the server does not do — no weakness, no next step — and that the reason is not
+     * incapacity, in words that have one reading.
+     */
+    @Test
+    fun `it says plainly that the server names no weakness, and that this is not for lack of ability`() {
+        prose shouldContain "names nothing — no weakness, no next step — and not for lack of ability"
+        prose shouldNotContain "withheld"
+    }
+
+    /** The quotes mark `untouched` as the status name `list_problems` answers with, not as a word for a gap. */
+    @Test
+    fun `it quotes untouched as the status name where it says what a newer problem is`() {
+        prose shouldContain "a newer problem is missing, not \"untouched\""
+    }
+
+    /** "By date or verdict" alone reads as grouped by them; the tool narrows the whole log. */
+    @Test
+    fun `it says submissions narrows the whole log`() {
+        prose shouldContain "the whole log, narrowed by date or verdict"
+    }
+
+    /**
+     * An overrun is cut from the tail, so what must not be lost comes before what can be: the hand-over sits
+     * ahead of the lists, not behind them, and a cut would reach the lists first.
+     */
+    @Test
+    fun `it puts the hand-over ahead of the lists, where a cut reaches last`() {
+        val handOver = instructions.indexOf("The server counts and names nothing")
+
+        handOver shouldBeInRange (0 until instructions.indexOf("WHICH TOOL ANSWERS WHAT"))
+    }
+
+    /**
      * The line. Guidance on how to read a field is a fact about the field; a sentence *about the
      * learner* would be the server interpreting through the back door.
      *
@@ -73,9 +111,39 @@ class McpInstructionsTest {
         }
     }
 
-    /** A wall of text clients truncate teaches nothing. */
+    /** Spec 2026-10-07 §4.3: a diff is evidence of a change, and two fields say when not to trust it. */
     @Test
-    fun `it stays short enough for a client to show in full`() {
-        (instructions.length < 3000) shouldBe true
+    fun `it says what a repair step is, and the fields that qualify its diff`() {
+        prose shouldContain "what changed, not what was wrong"
+        instructions shouldContain "noDiff"
+        instructions shouldContain "codeLate"
+    }
+
+    /** What the tracker keeps is a fact about its versions; a guessed date, or "exists", reads as a fact about the problem. */
+    @Test
+    fun `it dates run code by the tracker versions that kept it, and by no other date`() {
+        prose shouldContain "Run code is kept by tracker versions from 2026-10-07 on"
+        prose shouldNotContain "2026-08-07"
+    }
+
+    /** The schema enumerates the groupings; the instructions are what the model reads first, so they list the same. */
+    @Test
+    fun `it names every grouping stats offers`() {
+        val groups = TallyGroup.wireNames()
+
+        prose shouldContain "counts per ${groups.dropLast(1).joinToString(", ")} or ${groups.last()}"
+    }
+
+    /**
+     * The client cuts server instructions at 2,048 characters and keeps the head (Claude Code CHANGELOG 2.1.84,
+     * "capped at 2KB"; 2.1.280, `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` "to change the 2,048-character cap on MCP
+     * tool descriptions and server instructions"). The budget is [MCP_TEXT_BUDGET], 48 under the cap: a text
+     * past it is cut where nobody chose, and the last thing in this one is what the reader most needs not to lose.
+     */
+    @Test
+    fun `it fits the budget under the client's cap, so none of it is cut`() {
+        withClue("the instructions are ${instructions.length} characters") {
+            instructions.length shouldBeLessThanOrEqualTo MCP_TEXT_BUDGET
+        }
     }
 }

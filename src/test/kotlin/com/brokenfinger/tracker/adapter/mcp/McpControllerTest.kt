@@ -6,8 +6,10 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.adapter.web.WatchToken
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.FailingGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
+import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
@@ -21,6 +23,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -28,6 +31,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
@@ -56,14 +61,19 @@ import java.time.Clock
 class McpControllerTest {
     @TestConfiguration
     class Beans {
+        /** Healthy until a test breaks it; the one tool that reads code is the one a broken store reaches. */
         @Bean
-        fun mcpDispatcher(): McpDispatcher = McpDispatcher(
+        fun gradingCodes(): FailingGradingCodes = FailingGradingCodes()
+
+        @Bean
+        fun mcpDispatcher(codes: FailingGradingCodes): McpDispatcher = McpDispatcher(
             McpToolInvoker(
                 RecordQuery(
                     scratchStore(),
                     anEmptyCatalog(),
                     Clock.systemUTC(),
                     FileRawSessionLog.under(Path.of("build/tmp/mcp-controller-test")),
+                    codes = codes,
                 ),
             ),
         )
@@ -78,17 +88,36 @@ class McpControllerTest {
          * A record repository under `build/`, never the user's and never `~/ps-records`.
          * Rebuilt every run, so what these assertions see is what this test wrote and not
          * what a previous run happened to leave behind.
+         *
+         * One submit, and two failed runs of the same problem after it: a failure followed by another
+         * grading is a step to assemble, so the fault tests below reach the code store however the
+         * query comes to skip problems that could not have yielded one.
          */
         private fun scratchStore(): JsonlRecordStore {
             val log = RecordLayout(Path.of("build/tmp/mcp-controller-test")).submissionLog()
             Files.createDirectories(log.parent)
             Files.deleteIfExists(log)
-            return JsonlRecordStore(log).also { it.append(SubmissionRecordJson.encode(aSubmissionRecord())) }
+            val records = listOf(
+                aSubmissionRecord(),
+                aRun(at = "2026-10-07T10:00:00+09:00"),
+                aRun(at = "2026-10-07T10:01:00+09:00"),
+            )
+            return JsonlRecordStore(log).also { store ->
+                records.forEach { store.append(SubmissionRecordJson.encode(it)) }
+            }
         }
     }
 
     @Autowired
     private lateinit var mvc: MockMvc
+
+    @Autowired
+    private lateinit var codes: FailingGradingCodes
+
+    @AfterEach
+    fun repairTheCodeStore() {
+        codes.failure = null
+    }
 
     // ------------------------------------------------------------------ the handshake era
 
@@ -122,7 +151,7 @@ class McpControllerTest {
         val result = json(post(aLegacyBody("tools/call", params)))["result"]!!.jsonObject
 
         result["content"]!!.jsonArray.single().jsonObject["type"]!!.jsonPrimitive.content shouldBe "text"
-        result["structuredContent"]!!.jsonObject["count"]!!.jsonPrimitive.int shouldBe 1
+        result["structuredContent"]!!.jsonObject["count"]!!.jsonPrimitive.int shouldBe SCRATCH_LOG_RECORDS
     }
 
     @Test
@@ -266,6 +295,63 @@ class McpControllerTest {
         }
     }
 
+    /**
+     * A fault of ours behind valid arguments is answered as one: the JSON-RPC internal error with the
+     * status the modern binding gives it, and nothing of the exception on the wire. The fault is a code
+     * store throwing what an invariant of ours would (`repair_steps` is the tool that reads code, and the
+     * scratch log holds a problem for it to read); the tool must not turn it into advice for the model.
+     *
+     * Modern era, where 500 is what the binding assigns an internal error. The handshake era's answer
+     * to the same fault is not pinned here.
+     */
+    @Test
+    fun `answers a broken invariant behind a repair_steps call as an internal error and says nothing of it`() {
+        codes.failure = IllegalArgumentException(INVARIANT)
+
+        val response = postModern(
+            "tools/call",
+            aToolCallParams("repair_steps"),
+            toolName = "repair_steps",
+        )
+
+        response.status shouldBe 500
+        errorCode(response) shouldBe McpErrors.INTERNAL
+        response.contentAsString.shouldNotContain(INVARIANT)
+        response.contentAsString.shouldNotContain("Exception")
+        response.contentAsString.shouldNotContain("at com.brokenfinger")
+    }
+
+    /**
+     * The same fault behind the other call that reads code, `get_problem` with `include`: an internal
+     * error on the wire, with nothing of the exception in it. The same call without `include` never asks
+     * the store for code, so a store that is broken is not a broken `get_problem` — the answer a client
+     * that does not use `include` gets must not depend on it.
+     */
+    @Test
+    fun `answers a broken invariant behind a get_problem include as an internal error, a plain call unaffected`() {
+        codes.failure = IllegalArgumentException(INVARIANT)
+
+        val asked = postModern("tools/call", aGetProblemParams(include = "runs"), toolName = "get_problem")
+        val plain = postModern("tools/call", aGetProblemParams(include = null), toolName = "get_problem")
+
+        asked.status shouldBe 500
+        errorCode(asked) shouldBe McpErrors.INTERNAL
+        asked.contentAsString.shouldNotContain(INVARIANT)
+        asked.contentAsString.shouldNotContain("Exception")
+        asked.contentAsString.shouldNotContain("at com.brokenfinger")
+        plain.status shouldBe 200
+    }
+
+    @Test
+    fun `answers a get_problem include as a tool answer, with the problem's runs in it`() {
+        val params = aGetProblemParams(include = "runs")
+
+        val called = json(postModern("tools/call", params, toolName = "get_problem"))["result"]!!.jsonObject
+
+        called["isError"]!!.jsonPrimitive.booleanOrNull!!.shouldBeFalse()
+        called["structuredContent"]!!.jsonObject["runCount"]!!.jsonPrimitive.int shouldBe 2
+    }
+
     @Test
     fun `answers as JSON`() {
         post(aLegacyBody("tools/list")).contentType.shouldContain(MediaType.APPLICATION_JSON_VALUE)
@@ -292,6 +378,14 @@ class McpControllerTest {
         toolName?.let { header("Mcp-Name", it) }
     }.andReturn().response
 
+    private fun aGetProblemParams(include: String?): JsonObject = aToolCallParams(
+        "get_problem",
+        buildJsonObject {
+            put("lessonId", 120804)
+            include?.let { putJsonArray("include") { add(it) } }
+        },
+    )
+
     private fun json(response: MockHttpServletResponse): JsonObject =
         Json.parseToJsonElement(response.contentAsString).jsonObject
 
@@ -302,5 +396,11 @@ class McpControllerTest {
         /** Fixture values only — never a real credential. */
         const val GRANTED = "fixture-local-value"
         const val REFUSED = "a-different-value"
+
+        /** What an invariant of ours says when it breaks; it must never reach the wire. */
+        const val INVARIANT = "a label is one problem's"
+
+        /** The scratch log: one submit and two runs. `submissions` answers with the whole log. */
+        const val SCRATCH_LOG_RECORDS = 3
     }
 }

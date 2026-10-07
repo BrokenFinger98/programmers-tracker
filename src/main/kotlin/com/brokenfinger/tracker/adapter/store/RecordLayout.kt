@@ -40,6 +40,34 @@ class RecordLayout(private val root: Path) {
      */
     fun runLog(lessonId: Long, title: String?): Path = problemDirectory(lessonId, title).resolve(RUN_LOG)
 
+    /** Where every problem's records live — the directory [recordFile] bounds a path at. */
+    fun problemsDirectory(): Path = repositoryRoot().resolve(PROBLEMS)
+
+    /**
+     * A path a record carries (`codePath`), resolved inside `problems/` — or null when it would
+     * leave it, names the directory itself, is absolute, or names nothing usable. The writer only
+     * ever records paths relative to the repository, so an absolute one is not a record's.
+     *
+     * **Bounded at `problems/`, not at the repository root**, because the root also holds what a
+     * record must never lead to: the push token and the `/watch` token under `.ps/`, the original
+     * frames beside them, `log/`, and git's own config. The log is ours, but the MCP read path must
+     * not follow a line someone could have edited — and a `codePath` edited to
+     * `.ps/git-credentials` would otherwise hand the token to whoever asked. Every path the writer
+     * produces is `problems/<dir>/...`, so nothing legitimate is refused.
+     *
+     * The check is lexical and never looks at the filesystem, so it cannot see a symbolic link. Whoever
+     * reads the file owns that half: see [FileGradingCodes.submitted], which resolves links and holds
+     * the real path to the same bound.
+     */
+    fun recordFile(relative: String): Path? {
+        val base = repositoryRoot()
+        val problems = problemsDirectory()
+        val requested = runCatching { base.fileSystem.getPath(relative) }.getOrNull() ?: return null
+        if (requested.root != null) return null
+        val file = base.resolve(requested).normalize()
+        return file.takeIf { it.startsWith(problems) && it != problems }
+    }
+
     /**
      * The index of everything under `problems/` (#292).
      *
@@ -102,6 +130,8 @@ class RecordLayout(private val root: Path) {
      */
     fun problemNoteLinkFromTag(lessonId: Long, title: String?): String =
         "../$PROBLEMS/${problemDirectory(lessonId, title).fileName}/$PROBLEM_PAGE.md"
+
+    private fun repositoryRoot(): Path = root.toAbsolutePath().normalize()
 
     private fun attemptsOf(lessonId: Long, title: String?, attempt: Int): Path {
         require(attempt >= 1) { "attempt must be at least 1, a run writes no attempt file: $attempt" }

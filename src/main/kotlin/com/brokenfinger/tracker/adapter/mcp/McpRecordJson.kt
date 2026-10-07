@@ -1,19 +1,28 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.application.CodedProblem
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
+import com.brokenfinger.tracker.domain.calc.CodedGrading
+import com.brokenfinger.tracker.domain.calc.LabelledStep
+import com.brokenfinger.tracker.domain.calc.ProblemLabel
 import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.SlowPass
+import com.brokenfinger.tracker.domain.calc.Transition
 import com.brokenfinger.tracker.domain.calc.UnknownReason
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * How a stored record reaches an AI.
@@ -67,7 +76,17 @@ object McpRecordJson {
      * The array keeps every record, because `get_problem` is where the compiler output lives and
      * that only comes from the run path.
      */
-    fun problem(history: ProblemHistory): JsonObject = buildJsonObject {
+    fun problem(history: ProblemHistory): JsonObject = problemOf(history, history.submissions.map(::full))
+
+    /**
+     * One problem in full, with the code [include] asks for (spec 2026-10-07 §4.3). Every key the
+     * default answer has stays where it is, and code is added after them on the items it belongs to —
+     * never in a second array that would repeat every run.
+     */
+    fun problem(history: ProblemHistory, coded: CodedProblem, include: Set<ProblemInclude>): JsonObject =
+        problemOf(history, history.submissions.map { JsonObject(full(it) + codeFor(it, coded, include)) })
+
+    private fun problemOf(history: ProblemHistory, items: List<JsonObject>): JsonObject = buildJsonObject {
         put("lessonId", history.lessonId)
         history.title?.let { put("title", it) }
         history.level?.let { put("level", it) }
@@ -80,7 +99,39 @@ object McpRecordJson {
         history.statement?.let { put("statement", it) }
         put("submissionCount", history.submissions.count { it.isSubmission() })
         put("runCount", history.submissions.count { !it.isSubmission() })
-        put("submissions", JsonArray(history.submissions.map(::full)))
+        put("submissions", JsonArray(items))
+    }
+
+    // Code lands on the items it belongs to, chosen by what was asked: a submit's on `code`, a run's —
+    // with the diff from the grading before it — on `runs`. A record the coded timeline does not hold
+    // gets nothing, as one whose code was not kept does.
+    private fun codeFor(record: SubmissionRecord, coded: CodedProblem, include: Set<ProblemInclude>): JsonObject {
+        val grading = coded.gradingOf(record)
+        if (record.isSubmission() && ProblemInclude.CODE in include) return submitCode(grading)
+        if (!record.isSubmission() && ProblemInclude.RUNS in include) {
+            return runCode(grading, coded.transitionInto(record))
+        }
+        return JsonObject(emptyMap())
+    }
+
+    // A submit's code only: its attempt file records no fetch time, so there is nothing to check it
+    // against and nothing to mark. Absent when the file is gone — never an empty string, which would
+    // read as a submit of nothing.
+    private fun submitCode(grading: CodedGrading?): JsonObject = buildJsonObject {
+        grading?.code?.let { put("code", it.text) }
+    }
+
+    // `codeLate` only when the check found the code late. A run whose code was not kept has none of the
+    // code keys, and the step into it says why it has no diff; the first grading in its language has no
+    // step into it, so neither `diffFromPrevGrading` nor `noDiff`. The diff is this item's but the earlier
+    // side is another item, so a late earlier side is said here too, as `fromCodeLate` (true only, in the
+    // vocabulary of `noDiff`'s `fromCodeUnknown`): a reader of this item would never see it otherwise.
+    private fun runCode(grading: CodedGrading?, transition: Transition?): JsonObject = buildJsonObject {
+        grading?.code?.let { put("code", it.text) }
+        grading?.code?.fetchedAt?.let { put("codeFetchedAt", isoOf(it)) }
+        if (grading?.late == true) put("codeLate", true)
+        transition?.let { diffOf(it, "diffFromPrevGrading") }
+        if (transition?.from?.late == true) put("fromCodeLate", true)
     }
 
     /**
@@ -141,6 +192,73 @@ object McpRecordJson {
             }
         },
     )
+
+    /**
+     * Repair steps (spec 2026-10-07 §4.3): facts on both sides, and the diff or the reason there is
+     * none. Absent stays absent — a problem recorded before the catalog was consulted has no `part`,
+     * an unresolved grading has no `verdict`, and a step with a diff has no `noDiff`.
+     */
+    fun repairSteps(steps: List<LabelledStep>): JsonArray = JsonArray(steps.map(::repairStep))
+
+    private fun repairStep(labelled: LabelledStep): JsonObject = buildJsonObject {
+        labelOf(labelled.problem)
+        put("language", labelled.step.to.record.language)
+        put("from", failedSide(labelled.step.from))
+        put("to", sideOf(labelled.step.to))
+        diffOf(labelled.step, "diff")
+    }
+
+    private fun JsonObjectBuilder.labelOf(problem: ProblemLabel) {
+        put("lessonId", problem.lessonId)
+        problem.title?.let { put("title", it) }
+        problem.part?.let { put("part", it) }
+        problem.level?.let { put("level", it) }
+    }
+
+    // The earlier side also says what failed: the error text in full (it is the step's core
+    // evidence), the first failing case's own message, and how many cases failed.
+    private fun failedSide(grading: CodedGrading): JsonObject {
+        val record = grading.record
+        val failure = buildJsonObject {
+            record.errorText?.let { put("errorText", it) }
+            firstFailedMessage(record)?.let { put("failedMessage", it) }
+            casesOf(record.tcSummary)
+        }
+        return JsonObject(sideOf(grading) + failure)
+    }
+
+    // The counts are of the cases that arrived. `casesComplete: false` is written only when some never
+    // did — a compile error reports none — so a partly observed grading cannot read as the full set
+    // (TestcaseSummary's own invariant), and a whole one carries no flag.
+    private fun JsonObjectBuilder.casesOf(summary: TestcaseSummary) {
+        put("failedCases", summary.failed)
+        put("totalCases", summary.total)
+        if (!summary.complete) put("casesComplete", false)
+    }
+
+    // `codeLate` only when the check found it late; a side with no fetch time was never checked.
+    private fun sideOf(grading: CodedGrading): JsonObject = buildJsonObject {
+        put("recordId", grading.record.recordId())
+        put("ts", isoOf(grading.record.ts))
+        put("action", grading.record.action.name.lowercase())
+        put("outcome", grading.record.outcome.name)
+        grading.record.verdict?.let { put("verdict", it.name) }
+        if (grading.late) put("codeLate", true)
+    }
+
+    private fun firstFailedMessage(record: SubmissionRecord): String? =
+        record.testcases.sortedBy { it.id }.firstOrNull { it.hasFailed() }?.msg
+
+    // `diffTruncated` is decided by the domain and written only when true, so a reader never has to
+    // parse the cap's marker out of the diff text. The flag keeps its name whatever the diff's key is:
+    // a reader learns one word for one thing.
+    private fun JsonObjectBuilder.diffOf(transition: Transition, key: String) {
+        transition.diff?.let { put(key, it) }
+        if (transition.isDiffTruncated()) put("diffTruncated", true)
+        transition.noDiff?.let { put("noDiff", it.wireName()) }
+    }
+
+    private fun isoOf(at: OffsetDateTime): String = at.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     private val HEAVY = setOf("testcases", "errorText", "diffFromPrev")
 }

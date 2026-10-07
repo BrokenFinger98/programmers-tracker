@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import com.brokenfinger.tracker.domain.calc.UnifiedDiff
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -14,16 +15,21 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * The tools this server exposes — three, and deliberately not the twenty of design §7.
+ * The tools this server exposes, listed in [NAMES] — deliberately not every tool design §7 sketches.
  *
  * The rest of §7 is absent rather than stubbed: a tool that answered "not implemented"
  * would be worse than an absent one, because a client discovers it through `tools/list`
- * and plans around it. Exam state and a review schedule do not exist yet. The catalog and
- * the tag vocabulary now do — they ship in the jar — so `list_problems` is merely
- * unexposed (#100), not unsupported.
+ * and plans around it. `docs/mcp.md` ("What is not built") says which are absent and why:
+ * answered already by a tool that exists, written off with the design that wanted them, or a
+ * write — and this surface only reads.
  *
  * Every description says what the tool *counts*, never what it concludes. Interpretation
  * belongs to the AI reading the numbers (CLAUDE.md, design §7).
+ *
+ * **Every description, as sent, stays within the budget `McpToolCatalogTest` pins**: 2,000 characters,
+ * because Claude Code cuts a description at 2,048 and keeps the head. What is cut is the tail, which
+ * here is the last reading and then the shared `incompleteHistory` warning, so the longest
+ * descriptions are the ones to watch and a sentence appended to every tool is paid for in each.
  *
  * The order is fixed rather than derived from a map, because the specification asks for a
  * deterministic `tools/list` so clients can cache it.
@@ -35,8 +41,17 @@ object McpToolCatalog {
     const val LIST_PROBLEMS = "list_problems"
     const val REVIEW_QUEUE = "review_queue"
     const val SLOW_PASSES = "slow_passes"
+    const val REPAIR_STEPS = "repair_steps"
 
-    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES)
+    /**
+     * How many steps `repair_steps` returns when no `limit` is given. It is the size control: one
+     * argument-less call would otherwise return every step on record, which grows without bound.
+     * The answer says when it applied (`truncated`), and the description and the schema state the
+     * number from this constant so none of the three can drift.
+     */
+    const val REPAIR_STEPS_DEFAULT_LIMIT = 20
+
+    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES, REPAIR_STEPS)
 
     fun definitions(): JsonArray = buildJsonArray {
         add(submissions())
@@ -45,6 +60,56 @@ object McpToolCatalog {
         add(listProblems())
         add(reviewQueue())
         add(slowPasses())
+        add(repairSteps())
+    }
+
+    private fun repairSteps(): JsonObject = tool(
+        name = REPAIR_STEPS,
+        title = "Each failed grading and the attempt that followed it",
+        description = "Every grading that did not pass, paired with the next grading of the same problem in " +
+            "the same language — run or submit — and the unified diff of the code between them, newest first " +
+            "by the later grading. **A step is what changed, not a finding about what was wrong**: grouping " +
+            "steps into habits is the reader's job, one occurrence is not a pattern, and cite the record ids " +
+            "behind any you name. `from` carries the verdict (absent when never resolved — `outcome` says how " +
+            "it ended), `errorText`, `failedMessage` (the first failing case's own message) and the " +
+            "`failedCases` / `totalCases` counts; `to` carries what followed. The case counts are of the cases " +
+            "that arrived, and `casesComplete: false` means some never did — an algorithm compile error, for " +
+            "one, reports none. Consecutive gradings with identical code make no step. A step without `diff` " +
+            "says why in `noDiff`: `fromCodeUnknown`, `toCodeUnknown`, `codeUnknown` (code not kept: run code " +
+            "is kept by tracker versions from 2026-10-07 on, submit code from the start), `tooLarge` (a side " +
+            "over ${UnifiedDiff.MAX_INPUT_LINES} lines) or `sameCode` (only beside a late side). `codeLate: " +
+            "true` on a side means its code was attached after the problem's next grading was recorded, so it " +
+            "may be that grading's code; a second Run pressed within the ~0.3 s fetch is not caught, and a " +
+            "submit's code, with no fetch time, is never marked. `diffTruncated: true` marks a diff cut at " +
+            "${UnifiedDiff.MAX_LINES} lines. `since` bounds when the later grading was recorded. **At most " +
+            "$REPAIR_STEPS_DEFAULT_LIMIT steps come back unless `limit` says otherwise**: `count` is how many " +
+            "came back, `total` how many matched, and `truncated: true` appears only when `total` exceeds " +
+            "`count` — the oldest steps were left out.",
+    ) {
+        putJsonObject("properties") {
+            putJsonObject("since") {
+                put("type", "string")
+                put("description", Since.FORMAT + ". Bounds when the later grading of a step was recorded.")
+            }
+            putJsonObject("language") {
+                put("type", "string")
+                put("description", "Keep only steps in this Programmers language id (java, python3, mysql, …).")
+            }
+            putJsonObject("part") {
+                put("type", "string")
+                put("description", "Keep only problems in this part, matched case-insensitively and in full.")
+            }
+            putJsonObject("lessonId") {
+                put("type", "integer")
+                put("description", "Keep only this lesson.")
+            }
+            putJsonObject("limit") {
+                put("type", "integer")
+                put("minimum", 1)
+                put("default", REPAIR_STEPS_DEFAULT_LIMIT)
+                put("description", "Keep only this many, from the newest end. Without it, $REPAIR_STEPS_DEFAULT_LIMIT.")
+            }
+        }
     }
 
     private fun slowPasses(): JsonObject = tool(
@@ -151,17 +216,38 @@ object McpToolCatalog {
         description = "Everything recorded against one Programmers lesson: catalog metadata as captured, and " +
             "every grading in full, including per-testcase results and compiler output. The array holds runs " +
             "as well as submits — a run is where the compiler output comes from — and `submissionCount` and " +
-            "`runCount` split them, because a run is not an attempt at the problem. A lesson with " +
-            "nothing recorded answers with an empty history rather than an error — we report what we " +
-            "observed, which may be nothing. `statement` is the problem's own description as Programmers " +
-            "worded it, captured once when the problem was first graded and stored locally — it is theirs, " +
-            "not ours, and it is absent for a problem captured before the server began keeping it." +
+            "`runCount` split them: a run is not an attempt. A lesson with nothing recorded answers with an " +
+            "empty history rather than an error — we report what we observed, which may be nothing. " +
+            "`statement` is the problem's own description as Programmers worded it, stored locally when the " +
+            "problem was first graded — theirs, not ours — and absent for a problem captured before the " +
+            "server began keeping it. " +
+            "`include` adds code and changes nothing else: `code` puts each submit's code on it; `runs` puts " +
+            "on each run its `code`, `codeFetchedAt` and `diffFromPrevGrading` — the unified diff from the " +
+            "grading before it in the same language, run or submit — or `noDiff`, why there is none: " +
+            "`fromCodeUnknown`, `toCodeUnknown`, `codeUnknown` (code not kept: run code is kept by tracker " +
+            "versions from 2026-10-07 on, submit code from the start), `tooLarge` (a side over " +
+            "${UnifiedDiff.MAX_INPUT_LINES} lines), `sameCode`. The first grading in a language has neither. " +
+            "`codeLate: true` on a run means its code was attached after the problem's next grading was " +
+            "recorded, so it may be that grading's code; `fromCodeLate: true` when the earlier side's code " +
+            "was late. `diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines." +
             ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
             putJsonObject("lessonId") {
                 put("type", "integer")
                 put("description", "The Programmers lesson id, as it appears in the problem page URL.")
+            }
+            putJsonObject("include") {
+                put("type", "array")
+                put(
+                    "description",
+                    "What code to add: `${ProblemInclude.CODE.wireName()}` on each submit; " +
+                        "`${ProblemInclude.RUNS.wireName()}` on each run, with its diff from the grading before it.",
+                )
+                putJsonObject("items") {
+                    put("type", "string")
+                    putJsonArray("enum") { ProblemInclude.wireNames().forEach { add(it) } }
+                }
             }
         }
         putJsonArray("required") { add("lessonId") }
@@ -178,7 +264,14 @@ object McpToolCatalog {
             "solved in Java and again in Kotlin is one bucket here and two items in `review_queue` and " +
             "`slow_passes`, which key on the pair. Neither is wrong — a submission count per problem is the " +
             "question `problem` answers — but reading the two side by side without knowing it looks like a " +
-            "disagreement. Group by `language` for the other axis.",
+            "disagreement. Group by `language` for the other axis. `part` and `level` buckets also count the " +
+            "**problems** in them: `attempted` (submitted at least once), `passed` (has a passing submit), " +
+            "`passedFirstSubmit` (the first submit resolved PASS; an unresolved first submit is not counted) " +
+            "and `runsBeforePass` — the median, over the bucket's passed problems, of the runs in any " +
+            "language before a problem's first passing submit, absent when nothing in the bucket passed. " +
+            "These count problems, not (problem, language) pairs, while `count` stays the number of " +
+            "submits. **A `runsBeforePass` of 0 can mean no run was recorded** — a pass recorded before runs " +
+            "were captured, or in a history with `incompleteHistory` — not that none was pressed.",
     ) {
         putJsonObject("properties") {
             putJsonObject("groupBy") {
@@ -190,32 +283,30 @@ object McpToolCatalog {
         putJsonArray("required") { add("groupBy") }
     }
 
-    // `additionalProperties: false` on every schema: an argument we do not understand is a
-    // client bug or a stale tool list, and silently ignoring it would answer a question
-    // narrower than the one that was asked.
-    /**
-     * Appended to every description rather than repeated in every answer (#187). A client
-     * receives this once from `tools/list`; the results carry counts.
-     */
     /**
      * Appended to the descriptions of the tools that return records. `elapsedSec` reads as time
      * on task and is wall clock; a measured record carries 77251 beside a `focusedSec` of 37
      * (#205), and an answer with no explanation invites exactly the wrong conclusion.
      */
     const val ELAPSED_MEANS: String =
-        " `elapsedSec` is **wall clock since the problem was first opened** — sleep, other work " +
-            "and days between sessions included — not time on task. One measured record carries " +
-            "`elapsedSec: 77251` beside `sensor.focusedSec: 37`: half a minute of work on a tab " +
-            "left open overnight. Use `focusedSec` for effort and treat `elapsedSec` as calendar " +
-            "time from first encounter; they differ by orders of magnitude and neither is wrong."
+        " `elapsedSec` is **wall clock since the problem was first opened** — sleep and days away " +
+            "included — not time on task: one record has `elapsedSec: 77251` beside " +
+            "`sensor.focusedSec: 37`. Use `focusedSec` for effort; neither is wrong."
 
+    /**
+     * Appended to every description rather than repeated in every answer (#187). A client
+     * receives this once from `tools/list`; the results carry counts. It is paid for in every
+     * tool's budget, so a word added here is a word taken from each description.
+     */
     const val INCOMPLETE_HISTORY: String =
-        " If `incompleteHistory` is present in an answer, gradings were captured that no record " +
-            "represents — every tool here reads that same history, so the answer is drawn over a " +
-            "record with holes and any conclusion from it must say so. They are not recoverable: " +
-            "the missing `start` frame carries the testcase ids and the problem's examples, and " +
-            "pairing them with an attempt would be a guess."
+        " If `incompleteHistory` is present, gradings were captured that no record represents — every tool " +
+            "reads that history, so a conclusion from the answer must say it has holes. They are not " +
+            "recoverable: the missing `start` frame holds the testcase ids and examples, so pairing them " +
+            "with an attempt would be a guess."
 
+    // `additionalProperties: false` on every schema: an argument we do not understand is a
+    // client bug or a stale tool list, and silently ignoring it would answer a question
+    // narrower than the one that was asked.
     private fun tool(name: String, title: String, description: String, schema: JsonObjectBuilderScope): JsonObject =
         buildJsonObject {
             put("name", name)

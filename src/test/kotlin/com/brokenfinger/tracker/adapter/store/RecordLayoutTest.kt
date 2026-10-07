@@ -1,8 +1,10 @@
 package com.brokenfinger.tracker.adapter.store
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.comparables.shouldBeLessThanOrEqualTo
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldMatch
 import org.junit.jupiter.api.Test
@@ -127,6 +129,63 @@ class RecordLayoutTest {
     @Test
     fun `the submission log lives under the record repository`() {
         layout().submissionLog() shouldBe root.resolve("log/submissions.jsonl")
+    }
+
+    @Test
+    fun `the problems directory is where every problem's directory is made`() {
+        layout().problemsDirectory() shouldBe root.toAbsolutePath().normalize().resolve("problems")
+        layout().problemDirectory(120804, "곱").parent shouldBe layout().problemsDirectory()
+    }
+
+    @Test
+    fun `a path a record carries resolves inside the problems directory`() {
+        layout().recordFile("problems/1-a/attempts/001.java") shouldBe
+            root.toAbsolutePath().normalize().resolve("problems/1-a/attempts/001.java")
+    }
+
+    /** D15: the MCP read path must not follow a log line out of the repository. */
+    @Test
+    fun `a path that climbs out of the repository resolves to nothing`() {
+        layout().recordFile("../escape.txt").shouldBeNull()
+        layout().recordFile("problems/../../escape.txt").shouldBeNull()
+        layout().recordFile(root.parent.resolve("x").toString()).shouldBeNull()
+    }
+
+    /**
+     * The root holds what a record must never lead to: the push token and the `/watch` token under
+     * `.ps/`, the original frames, the log, git's own config. Bounding at the root let a `codePath`
+     * edited to `.ps/git-credentials` return the token.
+     */
+    @Test
+    fun `a path to anything beside the problems directory resolves to nothing`() {
+        listOf(
+            ".ps/git-credentials",
+            "problems/../.ps/git-credentials",
+            ".ps/watch-token",
+            ".ps/raw/session.jsonl",
+            "log/submissions.jsonl",
+            ".git/config",
+        ).forEach { path -> withClue(path) { layout().recordFile(path).shouldBeNull() } }
+    }
+
+    /** The writer only ever produces paths relative to the repository; an absolute one is not a record's. */
+    @Test
+    fun `an absolute path is never a record's, even one that points inside the problems directory`() {
+        val inside = root.toAbsolutePath().normalize().resolve("problems/1-a/attempts/001.java")
+
+        layout().recordFile(inside.toString()).shouldBeNull()
+    }
+
+    @Test
+    fun `the problems directory itself and a name that merely starts with it are not inside it`() {
+        layout().recordFile("problems").shouldBeNull()
+        layout().recordFile("problems-old/attempts/001.java").shouldBeNull()
+    }
+
+    @Test
+    fun `the repository itself and an unusable path are not files of it`() {
+        layout().recordFile("").shouldBeNull()
+        layout().recordFile("a\u0000b").shouldBeNull()
     }
 
     private fun layout() = RecordLayout(root)
