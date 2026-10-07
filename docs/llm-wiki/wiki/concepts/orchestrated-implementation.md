@@ -1,10 +1,10 @@
 ---
 type: concept
 project: programmers-tracker
-tags: [orchestration, workflow, testing, debugging-pattern]
+tags: [orchestration, workflow, testing, debugging-pattern, subagents]
 created: 2026-08-05
-updated: 2026-08-13
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
 ---
 
 # Building This Project With Supervised Workers
@@ -80,6 +80,48 @@ rules themselves. When workers disagree about *style*, that is noise; when they 
 about *what a rule means*, the rule is what needs attention, not the code. This one became
 issue #24 with both options written out, rather than a silent third convention invented
 during integration.
+
+## 5. Subagents instead of workers, and the instructions they copy
+
+On 2026-10-07 the owner was offered orchestration for the mistake-patterns build. They chose
+in-session subagents instead: "don't orchestrate; try subagents, then." In under eighteen hours
+this produced six code PRs (#348, #350, #352, #357, #363 and #367). Every task went to a fresh
+implementer, then a spec-compliance reviewer, then a code-quality reviewer; each branch ended with a
+whole-branch review (raw/sessions/2026-10-07-repairs-not-verdicts.md).
+
+- **Parallel only where nothing is written.** Reviews ran side by side because they only read.
+  Implementers ran one at a time: every task touched `progress.md`, the plan or the ADR, the files
+  parallel PRs had reverted before.
+- **Review found what the tests could not.** Seven examples:
+  - the client's 2,048-character cut;
+  - three rounds on a code-read bound;
+  - refusals that were silent;
+  - a log capture that could not hear throwables;
+  - a non-object `arguments` that widened the scope;
+  - one SQL rejection filed as two verdicts;
+  - a command name that matched nothing.
+
+  None of these was a failing test. Each was a reviewer reading a real answer, the client's code, or
+  the repository's rules.
+- **Interruption.** A session ended under a running implementer, and its fixes were left written but
+  not committed. Recovery was the August rule: verify the artifact, not the report. The controller
+  ran the gates, then reverted two fixes on purpose to watch the new tests fail. After that, every
+  task committed as it went.
+- **The agent type matters.** A reviewer of a read-only type approved without running tests, so the
+  controller ran them.
+- **The scratchpad is shared.** One implementer's mutation helper restored another agent's leftover
+  `.orig` backup over a source file. It happened to be identical to HEAD. Re-hashing all 601 tracked
+  files proved that, where the agent's report alone could not.
+- **Workers copy the controller's mistakes.** The repository's commit skill forbids AI trailers. The
+  controller's own instructions carried one, so every implementer commit did too. So did 117 of the
+  180 commits on main, going back to the first one. Nobody had checked them against the skill until
+  a spec reviewer read it (raw/sessions/2026-10-07-the-readers-that-followed-links.md). A reviewer
+  that reads the repository's rules, independently of the brief, is the only check on the brief
+  itself.
+- **The overnight stretch kept the same discipline.** It ran from 23:41 to 02:36 while the owner
+  slept. Every merge waited on CI, and every claim waited on a review. The one acceptance step that
+  needs a person, running the `exam_prep` prompt, was left pending rather than worked around
+  (raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md).
 
 ## Tests for things that loop forever
 

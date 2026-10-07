@@ -5,7 +5,7 @@ tags: [mcp, prompt, interpretation-boundary, client-compatibility]
 author: BrokenFinger98
 created: 2026-10-07
 updated: 2026-10-08
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
 ---
 
 # The exam_prep prompt asks in the open
@@ -34,7 +34,7 @@ Read and measured before planning (plan `docs/superpowers/plans/2026-10-07-the-e
   with `ttlMs` and `cacheScope` required, and `prompts/get` mirrors its name into `Mcp-Name` as
   `tools/call` does.
 - **Claude Code 2.1.285** — its docs, its CHANGELOG and the installed client's code, read rather than
-  run end to end. It asks for `prompts/list` only once the capability is declared, and lists the
+  run end to end (each fact, with how it was learned, is in [[entities/claude-code-mcp-client]]). It asks for `prompts/list` only once the capability is declared, and lists the
   prompt as `/programmers-tracker:exam_prep (MCP)`. It **splits the words after the command on
   whitespace, without quoting, and maps them onto the arguments in the order the server lists
   them**; extra words are dropped from `arguments`, though the model still sees the raw line. It
@@ -185,21 +185,63 @@ meet a cap.
 
 ## Outcome
 
-**Implemented on #364; live check pending:** the rebuilt container answers `prompts/list` and
-`prompts/get`; then the owner reconnects the server with `/mcp` → Reconnect and runs
-`/mcp__programmers-tracker__exam_prep` — the name choosing it from the menu inserts — in Claude
-Code (the model cannot). Spec §6 accepts it when the answer names patterns that cite record ids.
-The final review read 2.1.285 again and ran its parser and command lookup. The menu's
+⚠️ (the server half of this check was verified on 2026-10-08; see below) **Implemented on #364;
+live check pending:** the rebuilt container answers `prompts/list` and `prompts/get`; then the
+owner reconnects the server with `/mcp` → Reconnect and runs `/mcp__programmers-tracker__exam_prep`
+— the name choosing it from the menu inserts — in Claude Code (the model cannot). Spec §6 accepts
+it when the answer names patterns that cite record ids. The final review read 2.1.285 again and ran
+its parser and command lookup. The menu's
 `/programmers-tracker:exam_prep (MCP)` is a display name: typed without its `(MCP)` token, as
 `/programmers-tracker:exam_prep java`, it matches no command; typed in full it runs, as does the
 inserted `mcp__` name. The client also caches each server's discovery for up to 900 s fresh and
 4 h stale, so a new session may still show no prompt.
 
+**Server side verified live on 2026-10-08 at 02:33 KST.** PR #367 was squash-merged as main
+`fb8b79b` and the container rebuilt. It came up healthy, with no WARN or ERROR in the log
+(raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md).
+
+The calls used the modern revision `2026-07-28`, with `MCP-Protocol-Version` and `Mcp-Method`
+mirrored on every request and `Mcp-Name` on `prompts/get`:
+
+- `server/discover` declares `[prompts, tools]` with `resultType: complete`.
+- `prompts/list` answers with `resultType: complete`, `ttlMs: 3600000` and `cacheScope: private`.
+  `exam_prep` takes `language`, `since` and `part`, none of them required.
+- `prompts/get` with `{language: "mysql"}` answers with one `user` message of 2,027 characters. It
+  contains `repair_steps(language="mysql")` and the empty-answer line.
+
+| Refusal | Status | Code | Message |
+|---|---|---|---|
+| `Mcp-Name` disagrees with the body | 400 | -32020 | |
+| unknown prompt | 400 | -32602 | "unknown prompt; this server exposes exam_prep" |
+| `since: "SELECT"` | 400 | -32602 | `Since.FORMAT`, then "; the arguments are positional — language, since, part" |
+| `language: "2026-09-01"` | 400 | -32602 | "language \"2026-09-01\" reads as a date; …positional…" |
+| `arguments: "java"` | 400 | -32602 | "arguments must be an object of strings" |
+
+On the legacy revision:
+
+- `initialize` with `2025-11-25` declares `[prompts, tools]`.
+- `prompts/get` answers with no `resultType` and one message. Its scope line reads "Scope: everything
+  on record."
+
+The tools did not change. All 36 snapshot files match the snapshot taken after #354, and the record
+repository stayed at 7e144fa with a clean status.
+
+**Still pending: the owner's run.** The owner runs `/mcp__programmers-tracker__exam_prep` in Claude
+Code after `/mcp` → Reconnect. Spec §6 accepts it when the answer names patterns that cite record
+ids.
+
+The need to reconnect showed up again during the ingest. An agent spawned from this session at
+02:36 received the server instructions as they stood before #353, cut at 2,048 characters. The
+client entity page linked under Context has the details.
+
 Built on `feat/364-exam-prep-prompt` from the plan, reviewed task by task for spec compliance and
 quality. Review changed the planned scope and text in four places — quoted values, part keys rather
 than labels, the empty-answer line, refusals that name the order — and added the strict reader for
 a prompt's `arguments`. A mutation pass over the catalog added two pins: a `part` sent through it,
-and an array or object refused as "must be text" rather than thrown as an internal fault.
+and an array or object refused as "must be text" rather than thrown as an internal fault. The final
+review made one ordered list, `ExamPrepScope.ARGUMENTS`, feed the listing, the unknown-argument
+message and the positional refusal (`fd8a113`). Against a deliberately reordered list, the two new
+tests failed while 25 literal tests still passed.
 
 Found in review and filed rather than fixed on this branch:
 

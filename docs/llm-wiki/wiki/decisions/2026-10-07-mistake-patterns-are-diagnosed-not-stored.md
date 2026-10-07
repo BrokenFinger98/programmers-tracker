@@ -5,7 +5,7 @@ tags: [mcp, diagnosis, storage, interpretation-boundary]
 author: BrokenFinger98
 created: 2026-10-07
 updated: 2026-10-08
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+sources: [raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md]
 ---
 
 # Mistake patterns are diagnosed on demand from repair steps, and not stored
@@ -71,3 +71,17 @@ so the step to it stays open.
 
 Approved 2026-10-07 (#346). Implementation follows as separate issues, #343 first. The prompt that
 asks for the diagnosis, part 4.4, is [[decisions/2026-10-07-exam-prep-asks-in-the-open]] (#364).
+
+By 2026-10-08 all four parts had shipped, and each was checked live on the rebuilt container:
+
+- 4.1: #348 and #350;
+- 4.2: #352;
+- 4.3: #357;
+- 4.4: #367, server side only. The owner's run of the prompt is pending, and only the owner can
+  do it.
+
+The evidence the decision rests on now exists for work from 2026-10-07 on. The first live repair
+step, on lesson 59036, carried exactly the clause the owner had added between a wrong run and a
+passing one. The owner's request, in their own words (translated): argument order, method names,
+syntax slips — "the things I get wrong every time"
+(raw/sessions/2026-10-07-repairs-not-verdicts.md).

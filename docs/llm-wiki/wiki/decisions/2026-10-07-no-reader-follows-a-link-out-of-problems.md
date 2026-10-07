@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [security, storage, mcp, git, links]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md]
 ---
 
 # No reader follows a link out of `problems/`
@@ -214,9 +214,34 @@ than "recorded before it was kept", which a refused file was not. This page, the
 repository. Gates green again: 1,879 tests (8 skipped), ktlint, the build, branch coverage and the
 guards.
 
-Not verified live. The bound changes nothing a normal records repository can see, so after a
-rebuild `get_problem`, `repair_steps` and the problem pages should come out byte-identical, and a
-normal boot should log no `Treating ... as absent` line.
+⚠️ (superseded the same night by the live verification below) Not verified live. The bound changes
+nothing a normal records repository can see, so after a rebuild `get_problem`, `repair_steps` and
+the problem pages should come out byte-identical, and a normal boot should log no
+`Treating ... as absent` line.
+
+**Verified live 2026-10-07 at 23:03 KST.** PR #363 was squash-merged as main `a3838c0` and the
+container rebuilt (raw/sessions/2026-10-07-the-readers-that-followed-links.md).
+
+- **CI.** All seven checks passed. On Windows this was the first time the code that opens the real
+  path with `NOFOLLOW_LINKS` ran.
+- **Boot.** The container was healthy in about 6 s. The boot logged no `Treating … as absent` line
+  and no WARN or ERROR, and startup code attachment reported `attached=0`.
+- **Every MCP read, before and after.** Each read the server offers was saved twice: before the
+  merge (22:57) and after the deploy (23:03). Each answer's `structuredContent` was stored with
+  sorted keys. The reads:
+  - `submissions`;
+  - `stats` grouped by verdict, language, problem, part and level;
+  - `list_problems(status=attempted)`;
+  - `review_queue`;
+  - `slow_passes`;
+  - `repair_steps(limit=1000)`, total 65;
+  - `get_problem(include=["code","runs"])` for all 25 lessons on record.
+
+  The 36 files, 35 answers plus the lesson list, were identical.
+- **The record repository.** It stayed at HEAD 7e144fa with a clean status, so the boot changed
+  nothing the server writes there. No grading arrived between the snapshots, so no problem page was
+  regenerated. The README half of the prediction therefore rests on the tests and on that clean
+  repository.
 
 Found in the audit and left for their own issues:
 

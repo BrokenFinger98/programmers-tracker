@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [storage, jsonl, identity, mcp]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-07
-sources: [raw/sessions/2026-10-06-the-history-that-folded.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md]
 ---
 
 # A record is its time and its bytes
@@ -36,6 +36,10 @@ Option 2. `RecordHistory.of` keys on `ts to captureKey`.
 
 It needs no schema change and no migration, and it was measured to hold on the whole live log:
 242 lines in 121 `(ts, captureKey)` groups, each one grading and its correction.
+
+Option 1 was the design discussion's first proposal for #343. The spec's self-review measured
+option 2 on the live log the same morning, before any plan was written, so no plan ever carried the
+field (raw/sessions/2026-10-07-repairs-not-verdicts.md).
 
 ## Accepted costs
 
