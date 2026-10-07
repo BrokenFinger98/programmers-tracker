@@ -57,8 +57,8 @@ class ExamPrepPromptTest {
     fun `the scope it is given narrows the repair_steps call it asks for`() {
         val scoped = ExamPrepPrompt.text(ExamPrepScope(language = "java", since = "2026-09-01"))
 
-        scoped shouldContain "Scope: language java, since 2026-09-01."
-        scoped shouldContain "2. Call repair_steps(language=java, since=2026-09-01)."
+        scoped shouldContain "Scope: language \"java\", since \"2026-09-01\"."
+        scoped shouldContain "2. Call repair_steps(language=\"java\", since=\"2026-09-01\")."
         scoped shouldNotContain "Scope: everything on record."
     }
 }
