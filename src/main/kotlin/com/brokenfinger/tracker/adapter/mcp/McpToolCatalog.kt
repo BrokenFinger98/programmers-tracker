@@ -51,15 +51,6 @@ object McpToolCatalog {
      */
     const val REPAIR_STEPS_DEFAULT_LIMIT = 20
 
-    /**
-     * What `get_problem(include=…)` can add: one vocabulary for the schema, the invoker's check and the
-     * answer's writer, so none of them can name a value the others do not know. `code` is each submit's
-     * code; `runs` is each run's code with its diff from the grading before it.
-     */
-    const val INCLUDE_CODE = "code"
-    const val INCLUDE_RUNS = "runs"
-    val INCLUDES = listOf(INCLUDE_CODE, INCLUDE_RUNS)
-
     val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES, REPAIR_STEPS)
 
     fun definitions(): JsonArray = buildJsonArray {
@@ -237,8 +228,8 @@ object McpToolCatalog {
             "versions from 2026-10-07 on, submit code from the start), `tooLarge` (a side over " +
             "${UnifiedDiff.MAX_INPUT_LINES} lines), `sameCode`. The first grading in a language has neither. " +
             "`codeLate: true` on a run means its code was attached after the problem's next grading was " +
-            "recorded, so it may be that grading's code, and a diff that uses it carries the same doubt. " +
-            "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines." +
+            "recorded, so it may be that grading's code; `fromCodeLate: true` when the earlier side's code " +
+            "was late. `diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines." +
             ELAPSED_MEANS,
     ) {
         putJsonObject("properties") {
@@ -250,12 +241,12 @@ object McpToolCatalog {
                 put("type", "array")
                 put(
                     "description",
-                    "What code to add: `$INCLUDE_CODE` on each submit; `$INCLUDE_RUNS` on each run, with its " +
-                        "diff from the grading before it.",
+                    "What code to add: `${ProblemInclude.CODE.wireName()}` on each submit; " +
+                        "`${ProblemInclude.RUNS.wireName()}` on each run, with its diff from the grading before it.",
                 )
                 putJsonObject("items") {
                     put("type", "string")
-                    putJsonArray("enum") { INCLUDES.forEach { add(it) } }
+                    putJsonArray("enum") { ProblemInclude.wireNames().forEach { add(it) } }
                 }
             }
         }

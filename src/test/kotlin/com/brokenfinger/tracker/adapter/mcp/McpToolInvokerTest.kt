@@ -937,6 +937,7 @@ class McpToolInvokerTest {
         newest["diffFromPrevGrading"]!!.jsonPrimitive.content shouldContain "+b"
         newest.shouldNotContainKey("noDiff")
         newest.shouldNotContainKey("codeLate")
+        newest.shouldNotContainKey("fromCodeLate")
         newest.shouldNotContainKey("diffTruncated")
     }
 
@@ -970,7 +971,11 @@ class McpToolInvokerTest {
         CODE_KEYS.forEach { items.last().shouldNotContainKey(it) }
     }
 
-    /** The same race the steps report: code attached after the next grading was recorded may be that grading's. */
+    /**
+     * The same race the steps report: code attached after the next grading was recorded may be that grading's.
+     * The late code is the earlier item's and the diff that used it is the later item's, so the later item says
+     * so too: `sameCode` beside it is the signature of the race, not of a solution that was left alone.
+     */
     @Test
     fun `get_problem with include runs marks a run whose code was attached after the next grading`() {
         val first = aRun(at = "2026-10-07T10:00:00+09:00")
@@ -984,8 +989,10 @@ class McpToolInvokerTest {
         val items = itemsOf(invoker.call("get_problem", includeArguments("runs")))
 
         items.last()["codeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        items.last().shouldNotContainKey("fromCodeLate")
         items.first().shouldNotContainKey("codeLate")
         items.first()["noDiff"]!!.jsonPrimitive.content shouldBe "sameCode"
+        items.first()["fromCodeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
     }
 
     /** The grading before it in its own language: two languages on one problem do not diff against each other. */
@@ -1025,6 +1032,7 @@ class McpToolInvokerTest {
         val diff = items.single { !it.isSubmit() }["diffFromPrevGrading"]!!.jsonPrimitive.content
         diff shouldContain "-first try"
         diff shouldContain "+second try"
+        items.single { !it.isSubmit() }.shouldNotContainKey("fromCodeLate")
         items.single { it.isSubmit() }.shouldNotContainKey("code")
     }
 
@@ -1090,6 +1098,36 @@ class McpToolInvokerTest {
             with.jsonObject.keys.toList().take(without.jsonObject.size) shouldBe without.jsonObject.keys.toList()
             with.jsonObject.filterKeys { it in without.jsonObject.keys } shouldBe without.jsonObject
         }
+    }
+
+    /**
+     * The default answer's shape written out, not compared with another answer from the same code: the
+     * include tests above would not notice a key that leaked into both. The problem's keys come in this
+     * order, and each item is exactly its record's own encoding — no code key until `include` asks for one.
+     */
+    @Test
+    fun `get_problem without include has exactly the problem's keys, and each item exactly its record's`() {
+        val run = aRun(at = "2026-10-07T10:00:00+09:00")
+        val submit = aSubmit(at = "2026-10-07T10:01:00+09:00")
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(run, submit).withRunCode(run, "a").withSubmitCode(submit, "b").query(),
+        )
+
+        val result = invoker.call("get_problem", arguments("lessonId" to 120804))
+
+        structured(result).keys.toList() shouldBe listOf(
+            "lessonId",
+            "title",
+            "level",
+            "part",
+            "acceptanceRate",
+            "tags",
+            "submissionCount",
+            "runCount",
+            "submissions",
+        )
+        val records = listOf(submit, run)
+        itemsOf(result).map { it.keys.toList() } shouldBe records.map { McpRecordJson.full(it).keys.toList() }
     }
 
     /** The default answer must not change shape for clients that never ask for code. */
@@ -1326,7 +1364,15 @@ class McpToolInvokerTest {
         val PROGRESS_FIELDS = setOf("attempted", "passed", "passedFirstSubmit", "runsBeforePass")
 
         /** Every key `include` can add to an item; the default answer carries none of them. */
-        val CODE_KEYS = listOf("code", "codeFetchedAt", "codeLate", "diffFromPrevGrading", "diffTruncated", "noDiff")
+        val CODE_KEYS = listOf(
+            "code",
+            "codeFetchedAt",
+            "codeLate",
+            "diffFromPrevGrading",
+            "diffTruncated",
+            "noDiff",
+            "fromCodeLate",
+        )
 
         /** What an invariant of ours says when it breaks; nothing a caller sent. */
         const val INVARIANT = "a label is one problem's"

@@ -78,22 +78,18 @@ class McpToolInvoker(private val query: RecordQuery) {
     // Lenient about the JSON type — a list, or one bare string — and strict about the values: a misspelt
     // `runs` is said, not answered as if nothing had been asked for. A JSON null is "not given", as it is
     // for repair_steps, so the answer is the one a client that never heard of `include` gets.
-    private fun includeOf(arguments: JsonObject): Set<String> {
+    private fun includeOf(arguments: JsonObject): Set<ProblemInclude> {
         val raw = arguments["include"]
         if (raw == null || raw is JsonNull) return emptySet()
         if (raw is JsonArray) return raw.map(::includeValue).toSet()
         return setOf(includeValue(raw))
     }
 
-    // Only a JSON string can spell a value that is offered, so a number, a boolean, an object or a
-    // nested list falls out of the same check as a misspelling and is refused under the same name.
-    private fun includeValue(raw: JsonElement): String {
-        val text = (raw as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase()
-        return text?.takeIf { it in McpToolCatalog.INCLUDES }
-            ?: throw IllegalArgumentException(
-                "include takes a list drawn from: ${McpToolCatalog.INCLUDES.joinToString()}",
-            )
-    }
+    // Only a JSON string can spell a value that is offered, so anything else is refused by `from` like a
+    // misspelling, under the same name and message: an object or a nested list reads as an empty
+    // spelling, a number or a boolean as its digits or its word.
+    private fun includeValue(raw: JsonElement): ProblemInclude =
+        ProblemInclude.from((raw as? JsonPrimitive)?.contentOrNull.orEmpty())
 
     private fun listProblems(arguments: JsonObject): JsonObject {
         val found = query.browse(

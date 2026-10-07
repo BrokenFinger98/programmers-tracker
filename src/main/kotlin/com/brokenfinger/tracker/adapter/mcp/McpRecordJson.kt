@@ -83,7 +83,7 @@ object McpRecordJson {
      * default answer has stays where it is, and code is added after them on the items it belongs to —
      * never in a second array that would repeat every run.
      */
-    fun problem(history: ProblemHistory, coded: CodedProblem, include: Set<String>): JsonObject =
+    fun problem(history: ProblemHistory, coded: CodedProblem, include: Set<ProblemInclude>): JsonObject =
         problemOf(history, history.submissions.map { JsonObject(full(it) + codeFor(it, coded, include)) })
 
     private fun problemOf(history: ProblemHistory, items: List<JsonObject>): JsonObject = buildJsonObject {
@@ -105,10 +105,10 @@ object McpRecordJson {
     // Code lands on the items it belongs to, chosen by what was asked: a submit's on `code`, a run's —
     // with the diff from the grading before it — on `runs`. A record the coded timeline does not hold
     // gets nothing, as one whose code was not kept does.
-    private fun codeFor(record: SubmissionRecord, coded: CodedProblem, include: Set<String>): JsonObject {
+    private fun codeFor(record: SubmissionRecord, coded: CodedProblem, include: Set<ProblemInclude>): JsonObject {
         val grading = coded.gradingOf(record)
-        if (record.isSubmission() && McpToolCatalog.INCLUDE_CODE in include) return submitCode(grading)
-        if (!record.isSubmission() && McpToolCatalog.INCLUDE_RUNS in include) {
+        if (record.isSubmission() && ProblemInclude.CODE in include) return submitCode(grading)
+        if (!record.isSubmission() && ProblemInclude.RUNS in include) {
             return runCode(grading, coded.transitionInto(record))
         }
         return JsonObject(emptyMap())
@@ -123,12 +123,15 @@ object McpRecordJson {
 
     // `codeLate` only when the check found the code late. A run whose code was not kept has none of the
     // code keys, and the step into it says why it has no diff; the first grading in its language has no
-    // step into it, so neither `diffFromPrevGrading` nor `noDiff`.
+    // step into it, so neither `diffFromPrevGrading` nor `noDiff`. The diff is this item's but the earlier
+    // side is another item, so a late earlier side is said here too, as `fromCodeLate` (true only, in the
+    // vocabulary of `noDiff`'s `fromCodeUnknown`): a reader of this item would never see it otherwise.
     private fun runCode(grading: CodedGrading?, transition: Transition?): JsonObject = buildJsonObject {
         grading?.code?.let { put("code", it.text) }
         grading?.code?.fetchedAt?.let { put("codeFetchedAt", isoOf(it)) }
         if (grading?.late == true) put("codeLate", true)
         transition?.let { diffOf(it, "diffFromPrevGrading") }
+        if (transition?.from?.late == true) put("fromCodeLate", true)
     }
 
     /**

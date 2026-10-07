@@ -136,6 +136,25 @@ class McpRecordJsonTest {
         McpRecordJson.problem(history)["statement"]!!.jsonPrimitive.content shouldBe "정수 두 개를 더해 return 하세요."
     }
 
+    /** Written out, so a reordering of the problem's keys is a change a test notices rather than one a client does. */
+    @Test
+    fun `a problem's keys come in this order, the statement between the tags and the counts`() {
+        val keys = McpRecordJson.problem(aProblemHistory(statement = "정수 두 개를 더해 return 하세요.")).keys.toList()
+
+        keys shouldBe listOf(
+            "lessonId",
+            "title",
+            "level",
+            "part",
+            "acceptanceRate",
+            "tags",
+            "statement",
+            "submissionCount",
+            "runCount",
+            "submissions",
+        )
+    }
+
     /** Absent, never `""` — an empty string reads as a problem with no description. */
     @Test
     fun `a problem with no captured statement carries no statement key`() {
@@ -419,6 +438,41 @@ class McpRecordJsonTest {
         items[0].shouldNotContainKey("codeLate")
     }
 
+    /**
+     * The diff is on this item and the late code is on the one before it, so a reader of this item would
+     * never see the doubt: the item that carries the diff says that the earlier side's code was late.
+     */
+    @Test
+    fun `a run's diff says when the code it was taken from was late`() {
+        val before = aRun(at = "2026-10-07T10:00:00+09:00")
+        val after = aRun(at = "2026-10-07T10:00:05+09:00")
+        val late = CodedGrading(before, aKeptCode("a", fetchedAt = "2026-10-07T10:00:06+09:00"), late = true)
+        val onTime = aCodedGrading(after, "b")
+        val coded = CodedProblem(listOf(late, onTime), listOf(Transition(late, onTime, "the diff", null)))
+
+        val items = itemsOf(McpRecordJson.problem(aProblemHistory(submissions = listOf(after, before)), coded, RUNS))
+
+        items[0]["fromCodeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        items[0].shouldNotContainKey("codeLate")
+        items[1]["codeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        items[1].shouldNotContainKey("fromCodeLate")
+    }
+
+    /** Absent, not `false`; and a run's own late code says nothing about the code its diff was taken from. */
+    @Test
+    fun `a run whose earlier side was on time carries no fromCodeLate, however its own code fared`() {
+        val before = aRun(at = "2026-10-07T10:00:00+09:00")
+        val after = aRun(at = "2026-10-07T10:00:05+09:00")
+        val onTime = aCodedGrading(before, "a")
+        val late = CodedGrading(after, aKeptCode("b", fetchedAt = "2026-10-07T10:00:09+09:00"), late = true)
+        val coded = CodedProblem(listOf(onTime, late), listOf(Transition(onTime, late, "the diff", null)))
+
+        val item = itemsOf(McpRecordJson.problem(aProblemHistory(submissions = listOf(after, before)), coded, RUNS))[0]
+
+        item["codeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        item.shouldNotContainKey("fromCodeLate")
+    }
+
     /** A grading whose code was not kept has no `code`, and the step into it says why there is no diff. */
     @Test
     fun `a run with no kept code has no code keys, and keeps the reason its step has no diff`() {
@@ -465,7 +519,7 @@ class McpRecordJsonTest {
             McpRecordJson.problem(
                 aProblemHistory(submissions = listOf(submit, run)),
                 CodedProblem(emptyList(), emptyList()),
-                setOf("code", "runs"),
+                ProblemInclude.entries.toSet(),
             ),
         )
 
@@ -505,10 +559,18 @@ class McpRecordJsonTest {
         McpRecordJson.repairSteps(listOf(aStep(from = record))).single().jsonObject["from"]!!.jsonObject
 
     private companion object {
-        val CODE = setOf(McpToolCatalog.INCLUDE_CODE)
-        val RUNS = setOf(McpToolCatalog.INCLUDE_RUNS)
+        val CODE = setOf(ProblemInclude.CODE)
+        val RUNS = setOf(ProblemInclude.RUNS)
 
         /** Every key `include` can add to an item; the default answer carries none of them. */
-        val CODE_KEYS = listOf("code", "codeFetchedAt", "codeLate", "diffFromPrevGrading", "diffTruncated", "noDiff")
+        val CODE_KEYS = listOf(
+            "code",
+            "codeFetchedAt",
+            "codeLate",
+            "diffFromPrevGrading",
+            "diffTruncated",
+            "noDiff",
+            "fromCodeLate",
+        )
     }
 }

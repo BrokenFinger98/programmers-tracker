@@ -111,11 +111,10 @@ class McpToolCatalogTest {
         required("get_problem").shouldContainExactly("lessonId")
     }
 
-    /** The schema, the invoker's check and the writer's switch read one list, so none of them can drift. */
+    /** The schema is built from the enum the invoker's check and the writer read, so none of them can drift. */
     @Test
     fun `the include schema enumerates the values the server accepts`() {
-        enumOfItems("get_problem", "include").shouldContainExactly(McpToolCatalog.INCLUDES)
-        McpToolCatalog.INCLUDES.shouldContainExactly(McpToolCatalog.INCLUDE_CODE, McpToolCatalog.INCLUDE_RUNS)
+        enumOfItems("get_problem", "include").shouldContainExactly(ProblemInclude.wireNames())
     }
 
     @Test
@@ -283,7 +282,7 @@ class McpToolCatalogTest {
             description shouldContain "`$it`"
         }
         description shouldContain "`codeLate: true` on a run"
-        description shouldContain "a diff that uses it carries the same doubt"
+        description shouldContain "`fromCodeLate: true` when the earlier side's code was late"
         description shouldContain "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines"
     }
 
