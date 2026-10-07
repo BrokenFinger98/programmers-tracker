@@ -5,10 +5,12 @@ import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.ProblemProgress
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
+import com.brokenfinger.tracker.domain.calc.RepairStepPage
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
@@ -38,6 +40,7 @@ class McpToolInvoker(private val query: RecordQuery) {
         McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(arguments, LIST_ARGS)) }
         McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(arguments, REVIEW_ARGS)) }
         McpToolCatalog.SLOW_PASSES -> executed { slowPasses(checked(arguments, SLOW_ARGS)) }
+        McpToolCatalog.REPAIR_STEPS -> executed { repairSteps(checked(arguments, REPAIR_ARGS)) }
         else -> throw McpFailure(
             McpErrors.INVALID_PARAMS,
             400,
@@ -106,6 +109,29 @@ class McpToolInvoker(private val query: RecordQuery) {
         return ms
     }
 
+    // Every argument is checked here, before RepairStepFilter would refuse it, so a bad one comes back
+    // under the MCP argument's own name. The default limit is the cap that keeps one argument-less call
+    // from returning every step on record; the answer says when it applied.
+    private fun repairSteps(arguments: JsonObject): JsonObject {
+        val page = query.repairSteps(
+            since = arguments.optionalText("since")?.let(Since::from),
+            language = arguments.optionalText("language"),
+            part = arguments.optionalText("part"),
+            lessonId = optionalLessonId(arguments),
+            limit = limitOf(arguments) ?: McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT,
+        )
+        return answerOf(page)
+    }
+
+    // `truncated` is written only when the list was cut: absent says nothing was left out, and a
+    // `false` on every answer would read like a measurement.
+    private fun answerOf(page: RepairStepPage): JsonObject = buildJsonObject {
+        put("count", page.steps.size)
+        put("total", page.total)
+        if (page.isTruncated()) put("truncated", true)
+        put("steps", McpRecordJson.repairSteps(page.steps))
+    }
+
     private fun stats(arguments: JsonObject): JsonObject {
         val raw = arguments.text("groupBy") ?: throw IllegalArgumentException("groupBy is required")
         val group = TallyGroup.from(raw)
@@ -148,10 +174,13 @@ class McpToolInvoker(private val query: RecordQuery) {
         progress.runsBeforePass?.let { put("runsBeforePass", it) }
     }
 
+    private fun lessonIdOf(arguments: JsonObject): Long =
+        optionalLessonId(arguments) ?: throw IllegalArgumentException("lessonId is required")
+
     // Lenient about the JSON type, strict about the value: models quote numbers routinely,
     // and refusing "120804" would fail a call that is not actually wrong.
-    private fun lessonIdOf(arguments: JsonObject): Long {
-        val raw = arguments["lessonId"] ?: throw IllegalArgumentException("lessonId is required")
+    private fun optionalLessonId(arguments: JsonObject): Long? {
+        val raw = arguments["lessonId"] ?: return null
         val id = (raw as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
             ?: throw IllegalArgumentException("lessonId must be a whole number")
         require(id > 0) { "lessonId must be positive" }
@@ -219,6 +248,16 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun JsonObject.text(name: String): String? =
         (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
+    // Absent or JSON null means "do not narrow". Present and blank, or not text at all, is the
+    // client's mistake and is said so: `text()` would read it as absent and widen the question
+    // that was asked, and RepairStepFilter refuses a blank language or part in any case.
+    private fun JsonObject.optionalText(name: String): String? {
+        val raw = this[name]
+        if (raw == null || raw is JsonNull) return null
+        return (raw as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("$name must be non-blank text")
+    }
+
     // Absent means "do not narrow"; present but not a number is the client's mistake and is
     // said so, rather than quietly widening the question that was asked.
     private fun JsonObject.wholeNumber(name: String): Int? {
@@ -234,5 +273,6 @@ class McpToolInvoker(private val query: RecordQuery) {
         val LIST_ARGS = setOf("level", "part", "tag", "status")
         val REVIEW_ARGS = setOf("limit")
         val SLOW_ARGS = setOf("thresholdMs")
+        val REPAIR_ARGS = setOf("since", "language", "part", "lessonId", "limit")
     }
 }

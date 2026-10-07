@@ -11,6 +11,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -20,13 +21,13 @@ class McpToolCatalogTest {
     private val tools = McpToolCatalog.definitions().map { it.jsonObject }
 
     /**
-     * Six, and the absence of the rest is the point. Design §7 lists about twenty; the
+     * Seven, and the absence of the rest is the point. Design §7 lists about twenty; the
      * others need exam state, a company profile or a write path that does not exist. A tool
      * that answered "not implemented" would be worse than an absent one, because a client
      * discovers it through `tools/list` and plans around it.
      */
     @Test
-    fun `exposes exactly the six tools that can be answered from what ships`() {
+    fun `exposes exactly the seven tools that can be answered from what ships`() {
         tools.map { it["name"]!!.jsonPrimitive.content }
             .shouldContainExactly(
                 "submissions",
@@ -35,6 +36,7 @@ class McpToolCatalogTest {
                 "list_problems",
                 "review_queue",
                 "slow_passes",
+                "repair_steps",
             )
     }
 
@@ -95,6 +97,23 @@ class McpToolCatalogTest {
         properties("submissions").keys.shouldContainExactly(setOf("since", "verdict"))
     }
 
+    @Test
+    fun `repair_steps narrows by everything and requires nothing`() {
+        properties("repair_steps").keys.shouldContainExactly(setOf("since", "language", "part", "lessonId", "limit"))
+        required("repair_steps").shouldContainExactly()
+        property("repair_steps", "lessonId")["type"]!!.jsonPrimitive.content shouldBe "integer"
+    }
+
+    /** The invoker applies the default, the schema declares it and the description says it: one constant. */
+    @Test
+    fun `repair_steps declares the default limit it applies`() {
+        val limit = property("repair_steps", "limit")
+
+        McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT shouldBe 20
+        limit["minimum"]!!.jsonPrimitive.int shouldBe 1
+        limit["default"]!!.jsonPrimitive.int shouldBe McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT
+    }
+
     private fun tool(name: String): JsonObject = tools.single { it["name"]!!.jsonPrimitive.content == name }
 
     private fun properties(name: String): JsonObject = tool(name)["inputSchema"]!!.jsonObject["properties"]!!.jsonObject
@@ -108,7 +127,7 @@ class McpToolCatalogTest {
         tool(name)["inputSchema"]!!.jsonObject["required"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
 
     /**
-     * Found by reading all six descriptions as a client, after a `curl` check that printed the
+     * Found by reading all seven descriptions as a client, after a `curl` check that printed the
      * last 180 characters of one of them missed it (#203).
      *
      * The mechanism will recur: #187 appended a shared sentence to every description and left the
@@ -158,6 +177,31 @@ class McpToolCatalogTest {
         listOf("attempted", "passedFirstSubmit", "runsBeforePass", "median").forEach { description shouldContain it }
         description shouldContain "can mean no run was recorded"
         description shouldContain "2026-08-07"
+    }
+
+    /** The description is where a model learns that a step is a fact about a change, not a finding. */
+    @Test
+    fun `repair_steps says what it is not, and names the fields that qualify a diff`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "not a finding about what was wrong"
+        description shouldContain "failedMessage"
+        description shouldContain "noDiff"
+        description shouldContain "codeLate"
+        description shouldContain "diffTruncated"
+    }
+
+    /**
+     * The cap is the size control, so a reader handed twenty steps must be able to tell a cut list
+     * from a complete one — and the description is the only place a client learns how.
+     */
+    @Test
+    fun `repair_steps says its default cap and what truncated means`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "At most 20 steps come back unless `limit` says otherwise"
+        description shouldContain "`total`"
+        description shouldContain "`truncated: true`"
     }
 
     /**

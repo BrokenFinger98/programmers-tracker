@@ -3,17 +3,30 @@ package com.brokenfinger.tracker.adapter.mcp
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.domain.calc.LabelledStep
+import com.brokenfinger.tracker.domain.calc.NoDiff
+import com.brokenfinger.tracker.domain.calc.ProblemLabel
+import com.brokenfinger.tracker.domain.calc.Transition
+import com.brokenfinger.tracker.domain.calc.UnifiedDiff
+import com.brokenfinger.tracker.support.fixtures.aCodedGrading
+import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSqlSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.aSubmit
+import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 
@@ -175,4 +188,126 @@ class McpRecordJsonTest {
 
         McpRecordJson.summary(odd).containsKey("unknownReason") shouldBe false
     }
+
+    // repair steps ---------------------------------------------------------------------------
+
+    @Test
+    fun `a repair step carries what failed, what followed, and why there is no diff`() {
+        val tuple = "(1054, \"Unknown column 'x' in 'field list'\")"
+        val failed = aRun(at = "2026-10-07T10:00:00+09:00", verdict = Verdict.COMPILE_ERROR)
+            .copy(errorText = tuple, testcases = listOf(aTestcaseResult(passed = false, msg = tuple)))
+        val followed = aSubmit(at = "2026-10-07T10:00:05+09:00", verdict = Verdict.PASS)
+        val step = LabelledStep(
+            ProblemLabel(lessonId = 120804, title = "t", level = 2, part = "SELECT"),
+            Transition(aCodedGrading(failed, late = true), aCodedGrading(followed), null, NoDiff.SAME_CODE),
+        )
+
+        val json = McpRecordJson.repairSteps(listOf(step)).single().jsonObject
+
+        json["lessonId"]!!.jsonPrimitive.int shouldBe 120804
+        json["title"]!!.jsonPrimitive.content shouldBe "t"
+        json["part"]!!.jsonPrimitive.content shouldBe "SELECT"
+        json["level"]!!.jsonPrimitive.int shouldBe 2
+        json["language"]!!.jsonPrimitive.content shouldBe "java"
+        json["noDiff"]!!.jsonPrimitive.content shouldBe "sameCode"
+        json.shouldNotContainKey("diff")
+        json.shouldNotContainKey("diffTruncated")
+        val from = json["from"]!!.jsonObject
+        from["recordId"]!!.jsonPrimitive.content shouldBe failed.recordId()
+        from["ts"]!!.jsonPrimitive.content shouldBe "2026-10-07T10:00:00+09:00"
+        from["action"]!!.jsonPrimitive.content shouldBe "run"
+        from["outcome"]!!.jsonPrimitive.content shouldBe "JUDGED"
+        from["verdict"]!!.jsonPrimitive.content shouldBe "COMPILE_ERROR"
+        from["errorText"]!!.jsonPrimitive.content shouldBe tuple
+        from["failedMessage"]!!.jsonPrimitive.content shouldBe tuple
+        from["failedCases"]!!.jsonPrimitive.int shouldBe 1
+        from["totalCases"]!!.jsonPrimitive.int shouldBe 1
+        from["codeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        val to = json["to"]!!.jsonObject
+        to["action"]!!.jsonPrimitive.content shouldBe "submit"
+        to["verdict"]!!.jsonPrimitive.content shouldBe "PASS"
+        to.shouldNotContainKey("codeLate")
+        to.shouldNotContainKey("errorText")
+        to.shouldNotContainKey("failedCases")
+    }
+
+    /** Absent is not zero: an unresolved grading has no verdict key, and says how it ended instead. */
+    @Test
+    fun `an unresolved side has no verdict, only its outcome`() {
+        val unresolved = aRun(at = "2026-10-07T10:00:00+09:00", verdict = null, outcome = Outcome.UNKNOWN)
+        val step = aStep(from = unresolved, diff = "d")
+
+        val json = McpRecordJson.repairSteps(listOf(step)).single().jsonObject
+
+        json["from"]!!.jsonObject.shouldNotContainKey("verdict")
+        json["from"]!!.jsonObject["outcome"]!!.jsonPrimitive.content shouldBe "UNKNOWN"
+        json["diff"]!!.jsonPrimitive.content shouldBe "d"
+        json.shouldNotContainKey("noDiff")
+    }
+
+    @Test
+    fun `a problem with no recorded label fields has none of those keys on its steps`() {
+        val step = LabelledStep(ProblemLabel(lessonId = 7, title = null, level = null, part = null), aTransition())
+
+        val json = McpRecordJson.repairSteps(listOf(step)).single().jsonObject
+
+        json["lessonId"]!!.jsonPrimitive.int shouldBe 7
+        json.shouldNotContainKey("title")
+        json.shouldNotContainKey("level")
+        json.shouldNotContainKey("part")
+    }
+
+    /** The case a reader cannot otherwise tell from "the first one": testcases arrive in any order. */
+    @Test
+    fun `the failed message is the lowest failing case's, and absent when that case said nothing`() {
+        val said = aRun(at = "2026-10-07T10:00:00+09:00").copy(
+            testcases = listOf(
+                aTestcaseResult(id = 3, passed = false, msg = "third"),
+                aTestcaseResult(id = 1, passed = true, msg = "ok"),
+                aTestcaseResult(id = 2, passed = false, msg = "second"),
+            ),
+        )
+        val silent = aRun(at = "2026-10-07T10:00:00+09:00").copy(
+            testcases = listOf(aTestcaseResult(id = 1, passed = false, msg = null)),
+        )
+
+        fromSideOf(said)["failedMessage"]!!.jsonPrimitive.content shouldBe "second"
+        fromSideOf(silent).shouldNotContainKey("failedMessage")
+    }
+
+    /** Decided in the domain, so a reader never parses the marker out of the diff text. */
+    @Test
+    fun `a step whose diff was cut at the cap says so`() {
+        val cut = "--- a/from\n+++ b/to\n@@ -0,0 +1,500 @@\n+n1\n${UnifiedDiff.TRUNCATION_MARKER}"
+
+        val json = McpRecordJson.repairSteps(listOf(aStep(diff = cut))).single().jsonObject
+
+        json["diffTruncated"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        json["diff"]!!.jsonPrimitive.content shouldBe cut
+    }
+
+    @Test
+    fun `a step whose diff fits carries no truncation flag, and neither does one with no diff`() {
+        val fits = McpRecordJson.repairSteps(listOf(aStep(diff = "--- a/from\n+++ b/to"))).single().jsonObject
+        val none = McpRecordJson.repairSteps(listOf(aStep(diff = null, noDiff = NoDiff.CODE_UNKNOWN)))
+            .single().jsonObject
+
+        fits.shouldNotContainKey("diffTruncated")
+        none.shouldNotContainKey("diffTruncated")
+        none["noDiff"]!!.jsonPrimitive.content shouldBe "codeUnknown"
+    }
+
+    private fun aStep(
+        from: SubmissionRecord = aRun(at = "2026-10-07T10:00:00+09:00"),
+        diff: String? = "d",
+        noDiff: NoDiff? = null,
+    ): LabelledStep = LabelledStep(
+        ProblemLabel(lessonId = 120804, title = null, level = null, part = null),
+        Transition(aCodedGrading(from), aCodedGrading(aRun(at = "2026-10-07T10:00:05+09:00")), diff, noDiff),
+    )
+
+    private fun aTransition(): Transition = aStep().step
+
+    private fun fromSideOf(record: SubmissionRecord): JsonObject =
+        McpRecordJson.repairSteps(listOf(aStep(from = record))).single().jsonObject["from"]!!.jsonObject
 }

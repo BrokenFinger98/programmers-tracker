@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyGroup
+import com.brokenfinger.tracker.domain.calc.UnifiedDiff
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -35,8 +36,17 @@ object McpToolCatalog {
     const val LIST_PROBLEMS = "list_problems"
     const val REVIEW_QUEUE = "review_queue"
     const val SLOW_PASSES = "slow_passes"
+    const val REPAIR_STEPS = "repair_steps"
 
-    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES)
+    /**
+     * How many steps `repair_steps` returns when no `limit` is given. It is the size control: one
+     * argument-less call would otherwise return every step on record, which grows without bound.
+     * The answer says when it applied (`truncated`), and the description and the schema state the
+     * number from this constant so none of the three can drift.
+     */
+    const val REPAIR_STEPS_DEFAULT_LIMIT = 20
+
+    val NAMES = listOf(SUBMISSIONS, GET_PROBLEM, STATS, LIST_PROBLEMS, REVIEW_QUEUE, SLOW_PASSES, REPAIR_STEPS)
 
     fun definitions(): JsonArray = buildJsonArray {
         add(submissions())
@@ -45,6 +55,56 @@ object McpToolCatalog {
         add(listProblems())
         add(reviewQueue())
         add(slowPasses())
+        add(repairSteps())
+    }
+
+    private fun repairSteps(): JsonObject = tool(
+        name = REPAIR_STEPS,
+        title = "Each failed grading and the attempt that followed it",
+        description = "Every grading that did not pass, paired with the next grading of the same problem in " +
+            "the same language — run or submit — and the unified diff of the code between them, newest first " +
+            "by the later grading. **A step is what changed, not a finding about what was wrong**: grouping " +
+            "steps into habits is the reader's job, a pattern seen once is not a pattern, and cite the record " +
+            "ids behind any you name. `from` carries the verdict (absent when it was never resolved — " +
+            "`outcome` says how it ended), `errorText`, `failedMessage` (the first failing case's own " +
+            "message) and the `failedCases` / `totalCases` counts; `to` carries what followed. Consecutive " +
+            "gradings with identical code make no step. A step without `diff` says why in `noDiff`: " +
+            "`fromCodeUnknown`, `toCodeUnknown` or `codeUnknown` when the code was not kept — run code " +
+            "exists only from 2026-10-07, submit code from the start — `tooLarge` when a side is over " +
+            "${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode`, which appears only beside a late side. " +
+            "`codeLate: true` on a side means its code was attached after the problem's next grading was " +
+            "recorded, so it may be that grading's code; the check cannot catch a second Run pressed within " +
+            "the ~0.3 s fetch, and submit code records no fetch time so it is never marked. " +
+            "`diffTruncated: true` marks a diff cut at ${UnifiedDiff.MAX_LINES} lines. `since` bounds when " +
+            "the later grading was recorded. **At most $REPAIR_STEPS_DEFAULT_LIMIT steps come back unless " +
+            "`limit` says otherwise**: `count` is how many were returned, `total` how many matched, and " +
+            "`truncated: true` appears only when `total` is larger than `count` — the oldest steps were " +
+            "left out.",
+    ) {
+        putJsonObject("properties") {
+            putJsonObject("since") {
+                put("type", "string")
+                put("description", Since.FORMAT + ". Bounds when the later grading of a step was recorded.")
+            }
+            putJsonObject("language") {
+                put("type", "string")
+                put("description", "Keep only steps in this Programmers language id (java, python3, mysql, …).")
+            }
+            putJsonObject("part") {
+                put("type", "string")
+                put("description", "Keep only problems in this part, matched case-insensitively and in full.")
+            }
+            putJsonObject("lessonId") {
+                put("type", "integer")
+                put("description", "Keep only this lesson.")
+            }
+            putJsonObject("limit") {
+                put("type", "integer")
+                put("minimum", 1)
+                put("default", REPAIR_STEPS_DEFAULT_LIMIT)
+                put("description", "Keep only this many, from the newest end. Without it, $REPAIR_STEPS_DEFAULT_LIMIT.")
+            }
+        }
     }
 
     private fun slowPasses(): JsonObject = tool(

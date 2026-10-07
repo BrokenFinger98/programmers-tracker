@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.domain.Outcome
+import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aCaptureKey
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
@@ -19,7 +20,9 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.double
@@ -29,6 +32,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -249,6 +253,7 @@ class McpToolInvokerTest {
             "review_queue" to JsonObject(emptyMap()),
             "slow_passes" to JsonObject(emptyMap()),
             "list_problems" to JsonObject(emptyMap()),
+            "repair_steps" to JsonObject(emptyMap()),
             "get_problem" to arguments("lessonId" to 120804),
             "stats" to arguments("groupBy" to "verdict"),
         ).forEach { (tool, args) ->
@@ -291,6 +296,7 @@ class McpToolInvokerTest {
         failed(invoker.call("submissions", JsonObject(emptyMap()))).shouldBeFalse()
         failed(invoker.call("get_problem", arguments("lessonId" to 120804))).shouldBeFalse()
         failed(invoker.call("stats", arguments("groupBy" to "verdict"))).shouldBeFalse()
+        failed(invoker.call("repair_steps", JsonObject(emptyMap()))).shouldBeFalse()
     }
 
     @Test
@@ -563,6 +569,274 @@ class McpToolInvokerTest {
         failed(result).shouldBeTrue()
         message(result).shouldContain("level")
     }
+
+    // repair_steps -----------------------------------------------------------------------------
+
+    @Test
+    fun `repair_steps answers each failed grading with the attempt that followed it, newest first`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:01:00+09:00")
+        val third = aRun(at = "2026-10-07T10:02:00+09:00", verdict = Verdict.PASS)
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(first, second, third)
+                .withRunCode(first, "a").withRunCode(second, "b").withRunCode(third, "c").query(),
+        )
+
+        val payload = structured(invoker.call("repair_steps", JsonObject(emptyMap())))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 2
+        payload["total"]!!.jsonPrimitive.int shouldBe 2
+        payload.shouldNotContainKey("truncated")
+        val newest = payload["steps"]!!.jsonArray.first().jsonObject
+        newest["from"]!!.jsonObject["recordId"]!!.jsonPrimitive.content shouldBe second.recordId()
+        newest["to"]!!.jsonObject["verdict"]!!.jsonPrimitive.content shouldBe "PASS"
+        newest["diff"]!!.jsonPrimitive.content shouldContain "+c"
+        newest["title"]!!.jsonPrimitive.content shouldBe "두 수의 곱 구하기"
+        newest.shouldNotContainKey("diffTruncated")
+    }
+
+    @Test
+    fun `repair_steps says why a step has no diff`() {
+        val first = aRun(at = "2026-10-06T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:00:00+09:00", verdict = Verdict.PASS)
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(first, second).withRunCode(second, "b").query())
+
+        val step = structured(invoker.call("repair_steps", JsonObject(emptyMap())))["steps"]!!.jsonArray.single()
+
+        step.jsonObject["noDiff"]!!.jsonPrimitive.content shouldBe "fromCodeUnknown"
+        step.jsonObject.shouldNotContainKey("diff")
+    }
+
+    /** A diff cut at the cap is marked on its step, so a reader never has to parse the marker out of the text. */
+    @Test
+    fun `repair_steps marks a diff that was cut at the cap`() {
+        val first = aRun(at = "2026-10-07T10:00:00+09:00")
+        val second = aRun(at = "2026-10-07T10:01:00+09:00", verdict = Verdict.PASS)
+        val written = (1..500).joinToString("\n") { "n$it" }
+        val invoker = McpToolInvoker(
+            aRecordRepository(root).containing(first, second)
+                .withRunCode(first, "a").withRunCode(second, written).query(),
+        )
+
+        val step = structured(invoker.call("repair_steps", JsonObject(emptyMap())))["steps"]!!
+            .jsonArray.single().jsonObject
+
+        step["diffTruncated"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        step["diff"]!!.jsonPrimitive.content shouldContain "diff truncated"
+    }
+
+    @Test
+    fun `repair_steps on an empty record repository answers zero, not an error`() {
+        val result = invokerOver().call("repair_steps", JsonObject(emptyMap()))
+
+        failed(result).shouldBeFalse()
+        val payload = structured(result)
+        payload["count"]!!.jsonPrimitive.int shouldBe 0
+        payload["total"]!!.jsonPrimitive.int shouldBe 0
+        payload["steps"]!!.jsonArray.size shouldBe 0
+        payload.shouldNotContainKey("truncated")
+    }
+
+    /** One argument-less call used to be able to return every step on record, which grows without bound. */
+    @Test
+    fun `repair_steps returns at most 20 steps by default, newest first, and says it cut the list`() {
+        val runs = failedRuns(26)
+
+        val payload = structured(invokerOver(*runs).call("repair_steps", JsonObject(emptyMap())))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 20
+        payload["total"]!!.jsonPrimitive.int shouldBe 25
+        payload["truncated"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        val steps = payload["steps"]!!.jsonArray.map { it.jsonObject }
+        steps.size shouldBe 20
+        steps.first().correctionId() shouldBe runs.last().recordId()
+        steps.last().correctionId() shouldBe runs[6].recordId()
+    }
+
+    @Test
+    fun `repair_steps takes a limit above the default, and a list that holds every step is not truncated`() {
+        val payload = structured(invokerOver(*failedRuns(26)).call("repair_steps", arguments("limit" to 30)))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 25
+        payload["total"]!!.jsonPrimitive.int shouldBe 25
+        payload.shouldNotContainKey("truncated")
+    }
+
+    @Test
+    fun `repair_steps takes a limit below the default`() {
+        val payload = structured(invokerOver(*failedRuns(26)).call("repair_steps", arguments("limit" to 5)))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 5
+        payload["total"]!!.jsonPrimitive.int shouldBe 25
+        payload["truncated"]!!.jsonPrimitive.booleanOrNull shouldBe true
+    }
+
+    /** `truncated` is `total > count`, and a limit that exactly fits is where that flips. */
+    @Test
+    fun `repair_steps with a limit equal to the number of steps is not truncated`() {
+        val payload = structured(invokerOver(*failedRuns(4)).call("repair_steps", arguments("limit" to 3)))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 3
+        payload.shouldNotContainKey("truncated")
+    }
+
+    @Test
+    fun `repair_steps narrows to one lesson, quoted or not`() {
+        val invoker = invokerOver(
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 1),
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 2),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2),
+        )
+
+        val payload = structured(invoker.call("repair_steps", arguments("lessonId" to "2")))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 1
+        payload["steps"]!!.jsonArray.single().jsonObject["lessonId"]!!.jsonPrimitive.int shouldBe 2
+    }
+
+    @Test
+    fun `repair_steps narrows by language`() {
+        val invoker = invokerOver(
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 1, language = "java"),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 1, language = "java"),
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 2, language = "python3"),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2, language = "python3"),
+        )
+
+        val steps = structured(invoker.call("repair_steps", arguments("language" to "python3")))["steps"]!!.jsonArray
+
+        steps.single().jsonObject["language"]!!.jsonPrimitive.content shouldBe "python3"
+    }
+
+    @Test
+    fun `repair_steps narrows by part, whatever its case`() {
+        val invoker = invokerOver(
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 1).copy(part = "SELECT"),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 1).copy(part = "SELECT"),
+            aRun(at = "2026-10-07T10:00:00+09:00", lessonId = 2).copy(part = "JOIN"),
+            aRun(at = "2026-10-07T10:00:01+09:00", lessonId = 2).copy(part = "JOIN"),
+        )
+
+        val steps = structured(invoker.call("repair_steps", arguments("part" to "select")))["steps"]!!.jsonArray
+
+        steps.single().jsonObject["part"]!!.jsonPrimitive.content shouldBe "SELECT"
+    }
+
+    /** `since` bounds the correction, and the failure that started it may be older than `since`. */
+    @Test
+    fun `repair_steps narrows by when the later grading was recorded, not the earlier one`() {
+        val before = aRun(at = "2026-10-06T10:00:00+09:00")
+        val straddling = aRun(at = "2026-10-06T10:01:00+09:00")
+        val invoker = invokerOver(
+            before,
+            straddling,
+            aRun(at = "2026-10-07T10:00:00+09:00"),
+            aRun(at = "2026-10-07T10:01:00+09:00"),
+        )
+
+        val payload = structured(invoker.call("repair_steps", arguments("since" to "2026-10-07")))
+
+        payload["count"]!!.jsonPrimitive.int shouldBe 2
+        payload["steps"]!!.jsonArray.last().jsonObject["from"]!!.jsonObject["recordId"]!!
+            .jsonPrimitive.content shouldBe straddling.recordId()
+    }
+
+    @Test
+    fun `repair_steps reads a JSON null as no narrowing`() {
+        val invoker = invokerOver(*failedRuns(2))
+        val nulls = buildJsonObject {
+            put("since", JsonNull)
+            put("language", JsonNull)
+            put("part", JsonNull)
+        }
+
+        structured(invoker.call("repair_steps", nulls))["count"]!!.jsonPrimitive.int shouldBe 1
+    }
+
+    @Test
+    fun `repair_steps refuses a limit that is not a positive number`() {
+        listOf(0, -3).forEach { limit ->
+            val result = invokerOver().call("repair_steps", arguments("limit" to limit))
+
+            failed(result).shouldBeTrue()
+            message(result).shouldContain("limit")
+        }
+    }
+
+    @Test
+    fun `repair_steps refuses a limit that is not a number`() {
+        val result = invokerOver().call("repair_steps", arguments("limit" to "many"))
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("limit")
+    }
+
+    /** `text()` would read a blank as absent, which widens the question; the filter refuses a blank anyway. */
+    @Test
+    fun `repair_steps refuses a blank language or part rather than reading it as no narrowing`() {
+        listOf("language", "part").forEach { name ->
+            listOf("", "   ").forEach { blank ->
+                val result = invokerOver().call("repair_steps", arguments(name to blank))
+
+                failed(result).shouldBeTrue()
+                message(result).shouldContain(name)
+            }
+        }
+    }
+
+    @Test
+    fun `repair_steps refuses a language that is not text at all`() {
+        val notText = buildJsonObject { putJsonArray("language") { add("java") } }
+
+        val result = invokerOver().call("repair_steps", notText)
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("language")
+    }
+
+    @Test
+    fun `repair_steps refuses a since it cannot read, a blank one included`() {
+        listOf("last tuesday", "", "  ").forEach { since ->
+            val result = invokerOver().call("repair_steps", arguments("since" to since))
+
+            failed(result).shouldBeTrue()
+            message(result).shouldContain("since")
+        }
+    }
+
+    @Test
+    fun `repair_steps tells a model how to spell a since it got wrong`() {
+        val result = invokerOver().call("repair_steps", arguments("since" to "last tuesday"))
+
+        message(result).shouldContain("2026-08-01")
+    }
+
+    @Test
+    fun `repair_steps refuses a lesson id that is not a positive whole number`() {
+        val notNumber = invokerOver().call("repair_steps", arguments("lessonId" to "the first one"))
+        val notPositive = invokerOver().call("repair_steps", arguments("lessonId" to 0))
+
+        failed(notNumber).shouldBeTrue()
+        message(notNumber).shouldContain("whole number")
+        failed(notPositive).shouldBeTrue()
+        message(notPositive).shouldContain("positive")
+    }
+
+    @Test
+    fun `repair_steps refuses an argument it does not have`() {
+        val result = invokerOver().call("repair_steps", arguments("verdict" to "WRONG"))
+
+        failed(result).shouldBeTrue()
+        message(result).shouldContain("verdict")
+    }
+
+    // Failed runs one minute apart, none with code: each neighbouring pair is a step, so n runs make n - 1.
+    private fun failedRuns(count: Int): Array<SubmissionRecord> = Array(count) { index ->
+        aRun(at = "2026-10-07T10:%02d:00+09:00".format(index))
+    }
+
+    private fun JsonObject.correctionId(): String = this["to"]!!.jsonObject["recordId"]!!.jsonPrimitive.content
 
     private fun passWith(lessonId: Long, times: List<String?>) = aSubmissionRecord(
         lessonId = lessonId,

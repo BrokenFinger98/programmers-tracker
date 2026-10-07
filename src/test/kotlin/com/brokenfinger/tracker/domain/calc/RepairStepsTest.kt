@@ -181,6 +181,39 @@ class RepairStepsTest {
         step.noDiff shouldBe NoDiff.TOO_LARGE
     }
 
+    /** The cap is decided in the domain, so a reader of a step never has to parse the marker out of the diff. */
+    @Test
+    fun `a step whose diff hit the cap says so`() {
+        val long = (1..UnifiedDiff.MAX_LINES + 100).joinToString("\n") { "n$it" }
+        val step = RepairSteps.of(
+            listOf(
+                aCodedGrading(aRun(at = T0, verdict = Verdict.WRONG), code = "\n"),
+                aCodedGrading(aRun(at = T1, verdict = Verdict.PASS), code = long),
+            ),
+        ).single()
+
+        step.isDiffTruncated() shouldBe true
+    }
+
+    @Test
+    fun `a step whose diff fits is not truncated, and neither is one with no diff`() {
+        val fits = RepairSteps.of(
+            listOf(
+                aCodedGrading(aRun(at = T0, verdict = Verdict.WRONG), code = "a"),
+                aCodedGrading(aRun(at = T1, verdict = Verdict.PASS), code = "b"),
+            ),
+        ).single()
+        val none = RepairSteps.of(
+            listOf(
+                aCodedGrading(aRun(at = T0, verdict = Verdict.WRONG), code = null),
+                aCodedGrading(aRun(at = T1, verdict = Verdict.PASS), code = "b"),
+            ),
+        ).single()
+
+        fits.isDiffTruncated() shouldBe false
+        none.isDiffTruncated() shouldBe false
+    }
+
     /** An empty editor is no lines, not one blank line, so the diff is only the lines written. */
     @Test
     fun `code written into an empty editor diffs as added lines`() {

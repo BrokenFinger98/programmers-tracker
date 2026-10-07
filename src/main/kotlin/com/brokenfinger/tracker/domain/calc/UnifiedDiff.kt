@@ -18,6 +18,12 @@ object UnifiedDiff {
     /** Past this the LCS table stops being cheap, and such a file yields no diff at all. */
     const val MAX_INPUT_LINES = 2000
 
+    /**
+     * The last line of a diff that hit [MAX_LINES]. Attempt files' `diffFromPrev` already carry
+     * it, so the text does not change; [isTruncated] is the one place that recognises it.
+     */
+    const val TRUNCATION_MARKER = "... diff truncated at $MAX_LINES lines"
+
     private const val CONTEXT = 3
 
     /** Null when nothing changed, or when either side is too large to diff cheaply. */
@@ -33,9 +39,16 @@ object UnifiedDiff {
     /** Whether both sides are small enough for [of] to diff them. */
     fun fits(old: List<String>, new: List<String>): Boolean = maxOf(old.size, new.size) <= MAX_INPUT_LINES
 
+    /**
+     * Whether [diff], as [of] returned it, was cut at [MAX_LINES]. Exact rather than a guess: every
+     * line of the code being compared carries a marker character (' ', '-' or '+') in front of it, so
+     * only the cap's own line can follow a line break bare.
+     */
+    fun isTruncated(diff: String): Boolean = diff.endsWith("\n$TRUNCATION_MARKER")
+
     private fun capped(lines: List<String>): List<String> {
         if (lines.size <= MAX_LINES) return lines
-        return lines.take(MAX_LINES) + "... diff truncated at $MAX_LINES lines"
+        return lines.take(MAX_LINES) + TRUNCATION_MARKER
     }
 
     private fun hunk(ops: List<Op>, range: IntRange): List<String> {

@@ -41,6 +41,9 @@ data class Transition(val from: CodedGrading, val to: CodedGrading, val diff: St
      */
     fun isRepairStep(): Boolean = from.record.verdict != Verdict.PASS && !unchanged()
 
+    /** Whether [diff] was cut at [UnifiedDiff.MAX_LINES]; false when there is no diff to cut. */
+    fun isDiffTruncated(): Boolean = diff != null && UnifiedDiff.isTruncated(diff)
+
     private fun unchanged(): Boolean = noDiff == NoDiff.SAME_CODE && !from.late && !to.late
 }
 

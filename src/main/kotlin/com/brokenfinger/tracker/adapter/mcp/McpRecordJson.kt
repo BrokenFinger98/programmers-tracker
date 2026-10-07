@@ -3,17 +3,24 @@ package com.brokenfinger.tracker.adapter.mcp
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
+import com.brokenfinger.tracker.domain.calc.CodedGrading
+import com.brokenfinger.tracker.domain.calc.LabelledStep
+import com.brokenfinger.tracker.domain.calc.ProblemLabel
 import com.brokenfinger.tracker.domain.calc.ReviewItem
 import com.brokenfinger.tracker.domain.calc.SlowPass
+import com.brokenfinger.tracker.domain.calc.Transition
 import com.brokenfinger.tracker.domain.calc.UnknownReason
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * How a stored record reaches an AI.
@@ -141,6 +148,64 @@ object McpRecordJson {
             }
         },
     )
+
+    /**
+     * Repair steps (spec 2026-10-07 §4.3): facts on both sides, and the diff or the reason there is
+     * none. Absent stays absent — a problem recorded before the catalog was consulted has no `part`,
+     * an unresolved grading has no `verdict`, and a step with a diff has no `noDiff`.
+     */
+    fun repairSteps(steps: List<LabelledStep>): JsonArray = JsonArray(steps.map(::repairStep))
+
+    private fun repairStep(labelled: LabelledStep): JsonObject = buildJsonObject {
+        labelOf(labelled.problem)
+        put("language", labelled.step.to.record.language)
+        put("from", failedSide(labelled.step.from))
+        put("to", sideOf(labelled.step.to))
+        diffOf(labelled.step, "diff")
+    }
+
+    private fun JsonObjectBuilder.labelOf(problem: ProblemLabel) {
+        put("lessonId", problem.lessonId)
+        problem.title?.let { put("title", it) }
+        problem.part?.let { put("part", it) }
+        problem.level?.let { put("level", it) }
+    }
+
+    // The earlier side also says what failed: the error text in full (it is the step's core
+    // evidence), the first failing case's own message, and how many cases failed.
+    private fun failedSide(grading: CodedGrading): JsonObject {
+        val record = grading.record
+        val failure = buildJsonObject {
+            record.errorText?.let { put("errorText", it) }
+            firstFailedMessage(record)?.let { put("failedMessage", it) }
+            put("failedCases", record.tcSummary.failed)
+            put("totalCases", record.tcSummary.total)
+        }
+        return JsonObject(sideOf(grading) + failure)
+    }
+
+    // `codeLate` only when the check found it late; a side with no fetch time was never checked.
+    private fun sideOf(grading: CodedGrading): JsonObject = buildJsonObject {
+        put("recordId", grading.record.recordId())
+        put("ts", isoOf(grading.record.ts))
+        put("action", grading.record.action.name.lowercase())
+        put("outcome", grading.record.outcome.name)
+        grading.record.verdict?.let { put("verdict", it.name) }
+        if (grading.late) put("codeLate", true)
+    }
+
+    private fun firstFailedMessage(record: SubmissionRecord): String? =
+        record.testcases.sortedBy { it.id }.firstOrNull { it.hasFailed() }?.msg
+
+    // `diffTruncated` is decided by the domain and written only when true, so a reader never has to
+    // parse the cap's marker out of the diff text.
+    private fun JsonObjectBuilder.diffOf(transition: Transition, key: String) {
+        transition.diff?.let { put(key, it) }
+        if (transition.isDiffTruncated()) put("diffTruncated", true)
+        transition.noDiff?.let { put("noDiff", it.wireName()) }
+    }
+
+    private fun isoOf(at: OffsetDateTime): String = at.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     private val HEAVY = setOf("testcases", "errorText", "diffFromPrev")
 }
