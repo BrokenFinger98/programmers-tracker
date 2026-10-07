@@ -2,7 +2,7 @@
 
 Written: 2026-10-07
 Issue: #346
-Status: approved by the owner; not implemented
+Status: approved by the owner; 4.1 implemented (#348, #350), 4.2 (#352), 4.3 (#353, live check pending); 4.4 not implemented
 
 ---
 
@@ -74,7 +74,9 @@ A repair step paired from a folded or mislabelled history is wrong in a way no r
 3. **A database run MySQL rejects is COMPILE_ERROR.** The query is refused before it runs — the
    same stage as a failed compile. Shape: `passed: false`, no `returned_rows`, `msg` an error tuple
    `(<code>, '<text>')`. Fixtures from the two frames of 2026-10-03. Protocol §6 gains the shape.
-   The error text stays in the record as `errorText`, as compile output does.
+   The error text stays in the record as the failing case's `msg` — it arrives on the `finish`
+   frame, not on an `error` frame, so it never becomes `errorText` (served as a step's
+   `failedMessage`; as built in #350).
 
 ### 4.2 Every run keeps its code
 
@@ -201,8 +203,9 @@ where the interpretation the server must not do is *asked for*, in the open:
    same part from `list_problems(status=untouched, part=…)`.
 4. For each pattern: two or three short drills aimed at the exact point — e.g. call `substring`
    for the 3rd–4th characters.
-5. Readings that are easy to get wrong, from the server's `instructions`: runs are not attempts,
-   absent is not zero, records before 2026-10 have no run code.
+5. Readings that are easy to get wrong: runs are not attempts, absent is not zero, run code is
+   kept by tracker versions from 2026-10-07 on. **The prompt itself must carry these** — the
+   server `instructions` are at 1,973 of the 2,000 characters a client receives whole (#353).
 
 In Claude Code a prompt appears as a slash command, so the pre-exam session is one command.
 
