@@ -34,6 +34,7 @@ import java.time.Clock
 class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, clock: Clock) : DerivedArtifacts {
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
+    private val files = ProblemFiles(layout)
     private val runs = RunLog(layout, clock)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
@@ -88,10 +89,15 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
         }
     }
 
-    /** The pairs stage 2 stored; an unreadable file means no examples, which refuses cleanly. */
+    /**
+     * The pairs stage 2 stored; an unreadable file means no examples, which refuses cleanly.
+     *
+     * Read through [ProblemFiles], because their values are written into a runner that is pushed: an
+     * `examples.json` that is a link out of `problems/` is no examples, whatever it leads to (#354).
+     */
     private fun examplesOf(directory: Path): List<ProblemExample> = runCatching {
-        json.decodeFromString<List<ProblemExample>>(Files.readString(directory.resolve("examples.json")))
-    }.getOrDefault(emptyList())
+        files.readString(directory.resolve("examples.json"))?.let { json.decodeFromString<List<ProblemExample>>(it) }
+    }.getOrNull().orEmpty()
 
     /**
      * Written once and never again. A second grading of the same problem finds the file there

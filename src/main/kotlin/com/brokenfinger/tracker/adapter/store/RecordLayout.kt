@@ -56,8 +56,8 @@ class RecordLayout(private val root: Path) {
      * produces is `problems/<dir>/...`, so nothing legitimate is refused.
      *
      * The check is lexical and never looks at the filesystem, so it cannot see a symbolic link. Whoever
-     * reads the file owns that half: see [FileGradingCodes.submitted], which resolves links and holds
-     * the real path to the same bound.
+     * reads the file owns that half, and every reader does it the same way: through [ProblemFiles],
+     * which resolves links and holds the real path to the same bound.
      */
     fun recordFile(relative: String): Path? {
         val base = repositoryRoot()

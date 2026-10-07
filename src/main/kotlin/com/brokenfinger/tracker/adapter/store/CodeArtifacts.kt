@@ -6,7 +6,6 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.UnifiedDiff
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -25,6 +24,7 @@ import java.nio.file.Path
  */
 class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
     private val layout = RecordLayout(recordRoot)
+    private val files = ProblemFiles(layout)
 
     /** The latest code per language, refreshed on **both** run and submit (design §5.1). */
     fun writeLatest(record: SubmissionRecord, code: String): Path {
@@ -55,6 +55,10 @@ class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
      * a run, the first attempt in that language, a previous attempt whose file is missing
      * (diffing against an empty file would report the whole solution as added), unchanged
      * code, or a file too large to diff cheaply.
+     *
+     * The previous attempt is read through [ProblemFiles], because the diff is inlined into a
+     * record line that MCP serves and git pushes: one that is a link out of `problems/` counts as
+     * missing, rather than putting whatever it leads to into the log (#354).
      */
     fun diffFromPrev(record: SubmissionRecord, code: String): String? {
         if (!ownsAttemptFile(record)) return null
@@ -87,10 +91,9 @@ class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
         .maxOrNull()
 
     private fun readAttempt(record: SubmissionRecord, attempt: Int): List<String>? {
-        val file = attemptFile(record, attempt)
-        if (!Files.isRegularFile(file)) return missing(attempt)
+        val bytes = files.readAllBytes(attemptFile(record, attempt)) ?: return missing(attempt)
         // Decoded with replacement rather than reported: one torn byte must not cost the diff.
-        return linesOf(String(Files.readAllBytes(file), CHARSET))
+        return linesOf(String(bytes, CHARSET))
     }
 
     private fun missing(attempt: Int): List<String>? {

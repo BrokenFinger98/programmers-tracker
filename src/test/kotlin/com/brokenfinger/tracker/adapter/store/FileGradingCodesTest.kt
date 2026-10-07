@@ -253,6 +253,23 @@ class FileGradingCodesTest {
         codes().submitted("problems/1-x/attempts/002.java") shouldBe "select 1\n"
     }
 
+    /**
+     * The run log is held to the bound a submit's code is (#354). Its target here is shaped like a run log
+     * on purpose: lines that do not decode are dropped anyway, so only a readable one shows the link
+     * itself being refused.
+     */
+    @Test
+    fun `a run log that is a link out of the problems directory keeps nothing`() {
+        assumeTrue(posix(), "this test makes symbolic links")
+        val elsewhere = outside.resolve("runs.jsonl")
+        Files.writeString(elsewhere, lineOf("r#1", fetchedAt = "2026-10-07T10:00:00+09:00", code = "not ours") + "\n")
+        Files.createDirectories(runLog().parent)
+        Files.createSymbolicLink(runLog(), elsewhere)
+
+        Files.readString(runLog()) shouldContain "not ours"
+        codes().runs(120804, "두 수의 곱 구하기").shouldBeEmpty()
+    }
+
     @Test
     fun `a link that leads nowhere is no code, not an error`() {
         assumeTrue(posix(), "this test makes symbolic links")

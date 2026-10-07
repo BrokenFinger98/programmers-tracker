@@ -25,6 +25,8 @@ import java.time.format.DateTimeFormatter
  * bytes and leaves the record repository's git history clean.
  */
 class ProblemReadme(private val layout: RecordLayout) {
+    private val statements = FileProblemStatements(layout)
+
     /** Writes the page for one problem's records, oldest first, and returns the file. */
     fun write(records: List<SubmissionRecord>): Path {
         require(records.isNotEmpty()) { "a README needs at least one record" }
@@ -61,10 +63,13 @@ class ProblemReadme(private val layout: RecordLayout) {
      *
      * Absent when there is no statement — a page that carried none, or a record captured before
      * the server kept them. Nothing is written speculatively.
+     *
+     * Read by [FileProblemStatements], so this page and `get_problem` show the same text under the same
+     * bound: the page is pushed, and a `statement.md` linked out of `problems/` would publish whatever
+     * it leads to (#354).
      */
     private fun statement(records: List<SubmissionRecord>): String {
-        val file = layout.statementFile(records.first().lessonId, titleOf(records))
-        val text = runCatching { Files.readString(file).trim() }.getOrNull()?.ifEmpty { null } ?: return ""
+        val text = statements.of(records.first().lessonId, titleOf(records)) ?: return ""
         return "\n$PROBLEM\n\n$text\n"
     }
 
