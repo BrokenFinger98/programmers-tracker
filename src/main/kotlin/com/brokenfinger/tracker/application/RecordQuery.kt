@@ -184,16 +184,15 @@ class RecordQuery(
     }
 
     /**
-     * Every correction after a failed grading, newest first, with how many matched before [limit]
-     * cut the list (spec 2026-10-07 §4.3).
+     * Every correction after a failed grading, newest first, with how many matched before the
+     * [filter]'s limit cut the list (spec 2026-10-07 §4.3).
      *
-     * Paired over each problem's **whole** history before any filter applies, so the first step
-     * after [since] still starts at the failure before it. [lessonId] narrows first, so asking
-     * about one problem reads one problem's code. The filter is built first, so an argument it
-     * refuses fails before the log or any code is read.
+     * Paired over each problem's **whole** history before [filter] applies, so the first step after
+     * its `since` still starts at the failure before it. [lessonId] narrows first, so asking about
+     * one problem reads one problem's code. The filter arrives already built, which is where its
+     * arguments are refused: what it refuses never gets as far as the log or any code.
      */
-    fun repairSteps(since: Since?, language: String?, part: String?, lessonId: Long?, limit: Int?): RepairStepPage {
-        val filter = RepairStepFilter(since, language, part, limit)
+    fun repairSteps(filter: RepairStepFilter, lessonId: Long?): RepairStepPage {
         val problems = history().groupBy { it.lessonId }.filterKeys { lessonId == null || it == lessonId }
         return filter.applied(problems.values.flatMap(::labelledSteps))
     }

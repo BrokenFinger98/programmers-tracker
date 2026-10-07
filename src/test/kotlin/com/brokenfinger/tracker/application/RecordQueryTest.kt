@@ -17,6 +17,7 @@ import com.brokenfinger.tracker.domain.calc.TallyBucket
 import com.brokenfinger.tracker.domain.calc.TallyGroup
 import com.brokenfinger.tracker.support.fixtures.aPartialRecordLine
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
+import com.brokenfinger.tracker.support.fixtures.aRepairStepFilter
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmit
@@ -409,39 +410,26 @@ class RecordQueryTest {
         )
         val codes = AskedCodes(FileGradingCodes(RecordLayout(root)))
 
-        val page = repository.query(codes = codes)
-            .repairSteps(since = null, language = null, part = null, lessonId = 2, limit = null)
+        val page = repository.query(codes = codes).repairSteps(aRepairStepFilter(), lessonId = 2)
 
         page.steps.map { it.problem.lessonId }.shouldContainExactly(2L)
         codes.askedLessons.shouldContainExactly(2L)
     }
 
-    /** Bad arguments fail fast: the filter is built before the log or any code is read. */
+    /**
+     * The filter arrives already built, so an argument it refuses was refused before the log or any
+     * code was read: there is no query to run with one (`RepairStepFilterTest` pins what it refuses).
+     * What the query owes the filter is to apply it, with each field to the thing it names.
+     */
     @Test
-    fun `an argument the filter refuses fails before any code is read`() {
-        val repository = aRecordRepository(root).containing(
-            aRun(at = "2026-10-07T10:00:00+09:00"),
-            aRun(at = "2026-10-07T10:00:01+09:00"),
-        )
-        val codes = AskedCodes(FileGradingCodes(RecordLayout(root)))
-        val query = repository.query(codes = codes)
-
-        shouldThrow<IllegalArgumentException> {
-            query.repairSteps(since = null, language = null, part = null, lessonId = null, limit = 0)
-        }
-        codes.askedLessons.shouldBeEmpty()
-    }
-
-    /** Language and part are both optional strings, so a swapped pair would compile and answer nothing. */
-    @Test
-    fun `hands language and part to the filter, each to its own place`() {
+    fun `applies the filter's language and part, each to the field it names`() {
         val query = aRecordRepository(root).containing(
             *pairOf(lessonId = 1, part = "SELECT", language = "java"),
             *pairOf(lessonId = 2, part = "JOIN", language = "java"),
             *pairOf(lessonId = 3, part = "SELECT", language = "kotlin"),
         ).query()
 
-        query.repairSteps(since = null, language = "java", part = "SELECT", lessonId = null, limit = null)
+        query.repairSteps(aRepairStepFilter(language = "java", part = "SELECT"), lessonId = null)
             .steps.map { it.problem.lessonId }.shouldContainExactly(1L)
     }
 
@@ -451,7 +439,7 @@ class RecordQueryTest {
      * if the failure was still there to be paired when `since` was applied.
      */
     @Test
-    fun `hands since and limit to the filter, keeping the newest corrections`() {
+    fun `applies the filter's since after pairing, and its limit keeps the newest corrections`() {
         val query = aRecordRepository(root).containing(
             *pairOf(lessonId = 1, part = "SELECT", language = "java"),
             *pairOf(lessonId = 2, part = "SELECT", language = "java"),
@@ -459,8 +447,8 @@ class RecordQueryTest {
         ).query()
         val since = Since.Instant(OffsetDateTime.parse("2026-10-07T10:02:05+09:00"))
 
-        val all = query.repairSteps(since, language = null, part = null, lessonId = null, limit = null)
-        val newest = query.repairSteps(since, language = null, part = null, lessonId = null, limit = 1)
+        val all = query.repairSteps(aRepairStepFilter(since = since), lessonId = null)
+        val newest = query.repairSteps(aRepairStepFilter(since = since, limit = 1), lessonId = null)
 
         all.steps.map { it.problem.lessonId }.shouldContainExactly(3L, 2L)
         newest.steps.map { it.problem.lessonId }.shouldContainExactly(3L)
@@ -543,7 +531,7 @@ class RecordQueryTest {
     }
 
     private fun RecordQuery.allRepairSteps(): List<LabelledStep> =
-        repairSteps(since = null, language = null, part = null, lessonId = null, limit = null).steps
+        repairSteps(aRepairStepFilter(), lessonId = null).steps
 
     private fun raw() = FileRawSessionLog.under(root)
 

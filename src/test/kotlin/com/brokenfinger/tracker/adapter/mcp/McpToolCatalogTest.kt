@@ -201,6 +201,27 @@ class McpToolCatalogTest {
     }
 
     /**
+     * The counts on a step's failing side are of the cases that arrived. Without this a compile error's
+     * zero reads as "no case failed", and a partly observed grading's total as the whole set.
+     */
+    @Test
+    fun `repair_steps says its case counts are of the cases that arrived`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "The case counts are of the cases that arrived"
+        description shouldContain "`casesComplete: false` means some never did"
+        description shouldContain "a compile error, for one, reports none"
+    }
+
+    /** What the tracker keeps is a fact about its versions; "exists" would read as a fact about the problem. */
+    @Test
+    fun `repair_steps dates run code by the tracker versions that kept it`() {
+        val description = tool(McpToolCatalog.REPAIR_STEPS)["description"]!!.jsonPrimitive.content
+
+        description shouldContain "run code is kept by tracker versions from 2026-10-07 on"
+    }
+
+    /**
      * The cap is the size control, so a reader handed twenty steps must be able to tell a cut list
      * from a complete one — and the description is the only place a client learns how.
      */

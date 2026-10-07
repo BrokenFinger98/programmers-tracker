@@ -1,10 +1,10 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
-import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.aBrokenGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aCaptureKey
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
@@ -22,13 +22,13 @@ import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
@@ -37,7 +37,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -795,7 +794,7 @@ class McpToolInvokerTest {
         message(result).shouldContain("limit")
     }
 
-    /** `text()` would read a blank as absent, which widens the question; the filter refuses a blank anyway. */
+    /** `text()` would read a blank as absent and widen the question; the filter refuses it, in its own words. */
     @Test
     fun `repair_steps refuses a blank language or part rather than reading it as no narrowing`() {
         listOf("language", "part").forEach { name ->
@@ -808,31 +807,36 @@ class McpToolInvokerTest {
         }
     }
 
+    /** A JSON number is not the text of its digits: `language: 5` is a mistake to say so, not the language "5". */
     @Test
-    fun `repair_steps refuses a language that is not text at all`() {
-        val notText = buildJsonObject { putJsonArray("language") { add("java") } }
+    fun `repair_steps accepts only a JSON string for a text argument`() {
+        val notStrings = listOf<JsonElement>(
+            JsonPrimitive(5),
+            JsonPrimitive(true),
+            buildJsonObject { },
+            buildJsonArray { add("java") },
+        )
 
-        val result = invokerOver().call("repair_steps", notText)
+        listOf("since", "language", "part").forEach { name ->
+            notStrings.forEach { notText ->
+                val result = invokerOver().call("repair_steps", buildJsonObject { put(name, notText) })
 
-        failed(result).shouldBeTrue()
-        message(result).shouldContain("language")
+                failed(result).shouldBeTrue()
+                message(result).shouldContain(name)
+            }
+        }
     }
 
+    /** A blank `since` is a malformed date like any other, so the answer teaches the spelling. */
     @Test
-    fun `repair_steps refuses a since it cannot read, a blank one included`() {
+    fun `repair_steps tells a model how to spell a since it got wrong, a blank one included`() {
         listOf("last tuesday", "", "  ").forEach { since ->
             val result = invokerOver().call("repair_steps", arguments("since" to since))
 
             failed(result).shouldBeTrue()
             message(result).shouldContain("since")
+            message(result).shouldContain("2026-08-01")
         }
-    }
-
-    @Test
-    fun `repair_steps tells a model how to spell a since it got wrong`() {
-        val result = invokerOver().call("repair_steps", arguments("since" to "last tuesday"))
-
-        message(result).shouldContain("2026-08-01")
     }
 
     @Test
@@ -855,13 +859,13 @@ class McpToolInvokerTest {
     }
 
     /**
-     * Every argument is checked in the adapter, so what `RepairStepFilter` would refuse never reaches
-     * the query. A strict double fails the test if it is ever called: the proof is the silence.
+     * What the adapter or the filter refuses never reaches the query. The code store below throws if
+     * anything asks it for code, and the query asks for every problem it assembles, so a refused
+     * argument that got through would end this test as an IllegalStateException instead of a tool error.
      */
     @Test
     fun `repair_steps never hands the query an argument it has refused`() {
-        val query = mockk<RecordQuery>()
-        val invoker = McpToolInvoker(query)
+        val invoker = invokerOverBrokenCodes()
 
         listOf(
             arguments("limit" to 0),
@@ -871,8 +875,6 @@ class McpToolInvokerTest {
             arguments("since" to "last tuesday"),
             arguments("lessonId" to "the first one"),
         ).forEach { refused -> failed(invoker.call("repair_steps", refused)).shouldBeTrue() }
-
-        verify(exactly = 0) { query.repairSteps(any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -880,23 +882,25 @@ class McpToolInvokerTest {
      * `executed` would hand it to the model as advice to correct arguments that were fine. It leaves
      * as a state fault instead, which `McpController` answers as an internal error.
      *
-     * The seam is a double of [RecordQuery], the one collaborator that reaches the domain: no record
-     * or code on disk can break those invariants (the query groups by problem before it asks), so the
-     * double fails the way `ProblemLabel.of` does. `WatchControllerTest` already doubles it the same way.
+     * The seam is the code port. No record and no file can break the invariants behind repair steps
+     * (the query groups by problem before it asks), but the query reads code for every problem it
+     * assembles, so a store that throws what such an invariant would reaches the wrapper through the
+     * real query over a real repository.
      */
     @Test
     fun `repair_steps reports a broken invariant behind valid arguments as a fault of ours, not as advice`() {
-        val query = mockk<RecordQuery>()
-        every { query.repairSteps(any(), any(), any(), any(), any()) } throws
-            IllegalArgumentException("a label is one problem's")
-
         val thrown = shouldThrow<IllegalStateException> {
-            McpToolInvoker(query).call("repair_steps", JsonObject(emptyMap()))
+            invokerOverBrokenCodes().call("repair_steps", JsonObject(emptyMap()))
         }
 
-        thrown.message.shouldContain("a label is one problem's")
+        thrown.message.shouldContain(INVARIANT)
         thrown.cause.shouldBeInstanceOf<IllegalArgumentException>()
     }
+
+    // Two failed runs of one problem, so the query has a step to assemble and reads the problem's code.
+    private fun invokerOverBrokenCodes(): McpToolInvoker = McpToolInvoker(
+        aRecordRepository(root).containing(*failedRuns(2)).query(codes = aBrokenGradingCodes(INVARIANT)),
+    )
 
     // Failed runs one minute apart, none with code: each neighbouring pair is a step, so n runs make n - 1.
     private fun failedRuns(count: Int): Array<SubmissionRecord> = Array(count) { index ->
@@ -938,5 +942,8 @@ class McpToolInvokerTest {
 
     private companion object {
         val PROGRESS_FIELDS = setOf("attempted", "passed", "passedFirstSubmit", "runsBeforePass")
+
+        /** What an invariant of ours says when it breaks; nothing a caller sent. */
+        const val INVARIANT = "a label is one problem's"
     }
 }

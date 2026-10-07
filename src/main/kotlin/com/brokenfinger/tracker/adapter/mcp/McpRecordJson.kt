@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.calc.BrowsedProblem
 import com.brokenfinger.tracker.domain.calc.CodedGrading
 import com.brokenfinger.tracker.domain.calc.LabelledStep
@@ -178,10 +179,18 @@ object McpRecordJson {
         val failure = buildJsonObject {
             record.errorText?.let { put("errorText", it) }
             firstFailedMessage(record)?.let { put("failedMessage", it) }
-            put("failedCases", record.tcSummary.failed)
-            put("totalCases", record.tcSummary.total)
+            casesOf(record.tcSummary)
         }
         return JsonObject(sideOf(grading) + failure)
+    }
+
+    // The counts are of the cases that arrived. `casesComplete: false` is written only when some never
+    // did — a compile error reports none — so a partly observed grading cannot read as the full set
+    // (TestcaseSummary's own invariant), and a whole one carries no flag.
+    private fun JsonObjectBuilder.casesOf(summary: TestcaseSummary) {
+        put("failedCases", summary.failed)
+        put("totalCases", summary.total)
+        if (!summary.complete) put("casesComplete", false)
     }
 
     // `codeLate` only when the check found it late; a side with no fetch time was never checked.

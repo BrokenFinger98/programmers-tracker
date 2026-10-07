@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.application.ProblemHistory
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
+import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.LabelledStep
 import com.brokenfinger.tracker.domain.calc.NoDiff
@@ -222,6 +223,7 @@ class McpRecordJsonTest {
         from["failedMessage"]!!.jsonPrimitive.content shouldBe tuple
         from["failedCases"]!!.jsonPrimitive.int shouldBe 1
         from["totalCases"]!!.jsonPrimitive.int shouldBe 1
+        from.shouldNotContainKey("casesComplete")
         from["codeLate"]!!.jsonPrimitive.booleanOrNull shouldBe true
         val to = json["to"]!!.jsonObject
         to["action"]!!.jsonPrimitive.content shouldBe "submit"
@@ -297,13 +299,62 @@ class McpRecordJsonTest {
         none["noDiff"]!!.jsonPrimitive.content shouldBe "codeUnknown"
     }
 
+    /**
+     * `failedCases` and `totalCases` count the cases that arrived. A grading whose stream delivered fewer
+     * than it announced must not read as a full set (`TestcaseSummary`'s own invariant), and
+     * `get_problem` already says so through `tcSummary.complete`; here the flag rides beside the counts.
+     */
+    @Test
+    fun `a failing side says when its case counts are of a partly observed grading`() {
+        val partial = aRun(at = "2026-10-07T10:00:00+09:00")
+            .copy(tcSummary = TestcaseSummary(total = 1, passed = 0, failed = 1, complete = false))
+
+        val from = fromSideOf(partial)
+
+        from["failedCases"]!!.jsonPrimitive.int shouldBe 1
+        from["totalCases"]!!.jsonPrimitive.int shouldBe 1
+        from["casesComplete"]!!.jsonPrimitive.booleanOrNull shouldBe false
+    }
+
+    /** Absent, not `true`: the flag exists to say what is missing, and nothing is. */
+    @Test
+    fun `a failing side whose cases all arrived carries no completeness flag`() {
+        fromSideOf(aRun(at = "2026-10-07T10:00:00+09:00")).shouldNotContainKey("casesComplete")
+    }
+
+    /** A compile error reports no cases at all: the clearest counts that are not a full set. */
+    @Test
+    fun `a compile error reports no cases and says that is not the full set`() {
+        val compile = aRun(at = "2026-10-07T10:00:00+09:00", verdict = Verdict.COMPILE_ERROR)
+            .copy(testcases = emptyList(), tcSummary = TestcaseSummary.of(emptyList(), complete = false))
+
+        val from = fromSideOf(compile)
+
+        from["failedCases"]!!.jsonPrimitive.int shouldBe 0
+        from["totalCases"]!!.jsonPrimitive.int shouldBe 0
+        from["casesComplete"]!!.jsonPrimitive.booleanOrNull shouldBe false
+    }
+
+    /** The later side carries no counts, so there is nothing there for the flag to qualify. */
+    @Test
+    fun `the later side carries no case counts and so no completeness flag`() {
+        val partial = aRun(at = "2026-10-07T10:00:05+09:00")
+            .copy(tcSummary = TestcaseSummary(total = 1, passed = 0, failed = 1, complete = false))
+
+        val json = McpRecordJson.repairSteps(listOf(aStep(to = partial))).single().jsonObject
+
+        json["to"]!!.jsonObject.shouldNotContainKey("failedCases")
+        json["to"]!!.jsonObject.shouldNotContainKey("casesComplete")
+    }
+
     private fun aStep(
         from: SubmissionRecord = aRun(at = "2026-10-07T10:00:00+09:00"),
         diff: String? = "d",
         noDiff: NoDiff? = null,
+        to: SubmissionRecord = aRun(at = "2026-10-07T10:00:05+09:00"),
     ): LabelledStep = LabelledStep(
         ProblemLabel(lessonId = 120804, title = null, level = null, part = null),
-        Transition(aCodedGrading(from), aCodedGrading(aRun(at = "2026-10-07T10:00:05+09:00")), diff, noDiff),
+        Transition(aCodedGrading(from), aCodedGrading(to), diff, noDiff),
     )
 
     private fun aTransition(): Transition = aStep().step

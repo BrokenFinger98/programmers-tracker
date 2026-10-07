@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.ProblemProgress
 import com.brokenfinger.tracker.domain.calc.ProblemStatus
+import com.brokenfinger.tracker.domain.calc.RepairStepFilter
 import com.brokenfinger.tracker.domain.calc.RepairStepPage
 import com.brokenfinger.tracker.domain.calc.Since
 import com.brokenfinger.tracker.domain.calc.TallyBucket
@@ -109,18 +110,23 @@ class McpToolInvoker(private val query: RecordQuery) {
         return ms
     }
 
-    // Every argument is checked here, before the query runs, so a bad one comes back under the MCP
-    // argument's own name and what RepairStepFilter would refuse can no longer arrive. Past this point
-    // an IllegalArgumentException is not the caller's. The default limit is the cap that keeps one
-    // argument-less call from returning every step on record; the answer says when it applied.
+    // The arguments are read here, and the filter that holds their rules is built here — outside the
+    // wrapper, so what it refuses is the caller's mistake and comes back in its own words. Reading
+    // checks only the JSON type (a number is not text; a blank is the filter's to refuse), so the rules
+    // live in one place. A JSON null is "not given": the text reader knows it, and the number readers,
+    // which are the older tools', get a copy without nulls. Past this point an IllegalArgumentException
+    // is not the caller's. The default limit is the cap that keeps one argument-less call from returning
+    // every step on record; the answer says when it applied.
     private fun repairSteps(arguments: JsonObject): JsonObject {
-        val given = withoutNulls(arguments)
-        val since = given.optionalText("since")?.let(Since::from)
-        val language = given.optionalText("language")
-        val part = given.optionalText("part")
-        val lessonId = optionalLessonId(given)
-        val limit = limitOf(given) ?: McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT
-        return ourFault { answerOf(query.repairSteps(since, language, part, lessonId, limit)) }
+        val numbers = withoutNulls(arguments)
+        val filter = RepairStepFilter(
+            since = arguments.optionalText("since")?.let(Since::from),
+            language = arguments.optionalText("language"),
+            part = arguments.optionalText("part"),
+            limit = numbers.wholeNumber("limit") ?: McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT,
+        )
+        val lessonId = optionalLessonId(numbers)
+        return ourFault { answerOf(query.repairSteps(filter, lessonId)) }
     }
 
     // `truncated` is written only when the list was cut: absent says nothing was left out, and a
@@ -258,18 +264,22 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun JsonObject.text(name: String): String? =
         (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
-    // Absent means "do not narrow". Present and blank, or not text at all, is the client's mistake
-    // and is said so: `text()` would read it as absent and widen the question that was asked, and
-    // RepairStepFilter refuses a blank language or part in any case.
+    // The JSON-type check and nothing more. Absent or JSON null is "not given". A JSON string is read as
+    // it came, blank included: Since and RepairStepFilter refuse a blank in their own words, where
+    // `text()` would have read it as absent and widened the question that was asked. Anything else is
+    // refused under the argument's name — a number is not the text of its digits, so `language: 5` is a
+    // mistake to say so, not the language "5". Safe on its own: a JSON null is skipped here, never read
+    // as the text "null".
     private fun JsonObject.optionalText(name: String): String? {
-        val raw = this[name] ?: return null
-        return (raw as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
-            ?: throw IllegalArgumentException("$name must be non-blank text")
+        val raw = this[name]
+        if (raw == null || raw is JsonNull) return null
+        return (raw as? JsonPrimitive)?.takeIf { it.isString }?.content
+            ?: throw IllegalArgumentException("$name must be text")
     }
 
-    // A JSON null is how some clients say "not given", as good as leaving the key out. Dropped before
-    // any argument is read, so every reader below sees one spelling of absent. Only `repair_steps`
-    // reads it this way; the older tools keep refusing a null number.
+    // A JSON null is how some clients say "not given", as good as leaving the key out. The number
+    // readers are the older tools', which refuse a null, so `repair_steps` hands them a copy without
+    // its nulls; the text reader above knows a null itself.
     private fun withoutNulls(arguments: JsonObject): JsonObject = JsonObject(arguments.filterValues { it !is JsonNull })
 
     // Absent means "do not narrow"; present but not a number is the client's mistake and is

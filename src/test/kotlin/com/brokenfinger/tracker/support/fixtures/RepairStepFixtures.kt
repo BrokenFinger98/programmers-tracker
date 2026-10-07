@@ -7,6 +7,8 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.CodedGrading
 import com.brokenfinger.tracker.domain.calc.KeptCode
+import com.brokenfinger.tracker.domain.calc.RepairStepFilter
+import com.brokenfinger.tracker.domain.calc.Since
 import java.time.OffsetDateTime
 
 // Object mothers for repair steps (dev rules §6.4, spec 2026-10-07 §4.3). A run's code comes from
@@ -62,3 +64,11 @@ fun aKeptCode(text: String = "select 1", fetchedAt: String? = null): KeptCode =
 
 fun aCodedGrading(record: SubmissionRecord, code: String? = "select 1", late: Boolean = false): CodedGrading =
     CodedGrading(record, code?.let { aKeptCode(it) }, late)
+
+/** No argument is the whole list; each one named narrows it, as the MCP tool's arguments do. */
+fun aRepairStepFilter(
+    since: Since? = null,
+    language: String? = null,
+    part: String? = null,
+    limit: Int? = null,
+): RepairStepFilter = RepairStepFilter(since = since, language = language, part = part, limit = limit)

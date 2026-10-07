@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
+import com.brokenfinger.tracker.support.fixtures.aRepairStepFilter
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
@@ -85,7 +86,7 @@ class McpConfigurationTest {
             anEmptyCatalog(),
             Clock.systemUTC(),
             FileRawSessionLog.under(root),
-        ).repairSteps(since = null, language = null, part = null, lessonId = null, limit = null).steps
+        ).repairSteps(aRepairStepFilter(), lessonId = null).steps
 
         steps.single().step.diff.shouldNotBeNull() shouldContain "+select b"
     }

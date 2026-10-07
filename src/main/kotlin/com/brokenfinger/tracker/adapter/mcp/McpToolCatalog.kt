@@ -67,10 +67,12 @@ object McpToolCatalog {
             "steps into habits is the reader's job, a pattern seen once is not a pattern, and cite the record " +
             "ids behind any you name. `from` carries the verdict (absent when it was never resolved — " +
             "`outcome` says how it ended), `errorText`, `failedMessage` (the first failing case's own " +
-            "message) and the `failedCases` / `totalCases` counts; `to` carries what followed. Consecutive " +
-            "gradings with identical code make no step. A step without `diff` says why in `noDiff`: " +
-            "`fromCodeUnknown`, `toCodeUnknown` or `codeUnknown` when the code was not kept — run code " +
-            "exists only from 2026-10-07, submit code from the start — `tooLarge` when a side is over " +
+            "message) and the `failedCases` / `totalCases` counts; `to` carries what followed. The case " +
+            "counts are of the cases that arrived, and `casesComplete: false` means some never did — a " +
+            "compile error, for one, reports none. Consecutive gradings with identical code make no step. " +
+            "A step without `diff` says why in `noDiff`: `fromCodeUnknown`, `toCodeUnknown` or " +
+            "`codeUnknown` when the code was not kept — run code is kept by tracker versions from " +
+            "2026-10-07 on, submit code from the start — `tooLarge` when a side is over " +
             "${UnifiedDiff.MAX_INPUT_LINES} lines, or `sameCode`, which appears only beside a late side. " +
             "`codeLate: true` on a side means its code was attached after the problem's next grading was " +
             "recorded, so it may be that grading's code; the check cannot catch a second Run pressed within " +

@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.adapter.web.WatchToken
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.FailingGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
@@ -56,14 +58,19 @@ import java.time.Clock
 class McpControllerTest {
     @TestConfiguration
     class Beans {
+        /** Healthy until a test breaks it; the one tool that reads code is the one a broken store reaches. */
         @Bean
-        fun mcpDispatcher(): McpDispatcher = McpDispatcher(
+        fun gradingCodes(): FailingGradingCodes = FailingGradingCodes()
+
+        @Bean
+        fun mcpDispatcher(codes: FailingGradingCodes): McpDispatcher = McpDispatcher(
             McpToolInvoker(
                 RecordQuery(
                     scratchStore(),
                     anEmptyCatalog(),
                     Clock.systemUTC(),
                     FileRawSessionLog.under(Path.of("build/tmp/mcp-controller-test")),
+                    codes = codes,
                 ),
             ),
         )
@@ -89,6 +96,14 @@ class McpControllerTest {
 
     @Autowired
     private lateinit var mvc: MockMvc
+
+    @Autowired
+    private lateinit var codes: FailingGradingCodes
+
+    @AfterEach
+    fun repairTheCodeStore() {
+        codes.failure = null
+    }
 
     // ------------------------------------------------------------------ the handshake era
 
@@ -266,6 +281,32 @@ class McpControllerTest {
         }
     }
 
+    /**
+     * A fault of ours behind valid arguments is answered as one: the JSON-RPC internal error with the
+     * status the modern binding gives it, and nothing of the exception on the wire. The fault is a code
+     * store throwing what an invariant of ours would (`repair_steps` is the tool that reads code, and the
+     * scratch log holds a problem for it to read); the tool must not turn it into advice for the model.
+     *
+     * Modern era, where 500 is what the binding assigns an internal error. The handshake era's answer
+     * to the same fault is not pinned here.
+     */
+    @Test
+    fun `answers a broken invariant behind a repair_steps call as an internal error and says nothing of it`() {
+        codes.failure = IllegalArgumentException(INVARIANT)
+
+        val response = postModern(
+            "tools/call",
+            aToolCallParams("repair_steps"),
+            toolName = "repair_steps",
+        )
+
+        response.status shouldBe 500
+        errorCode(response) shouldBe McpErrors.INTERNAL
+        response.contentAsString.shouldNotContain(INVARIANT)
+        response.contentAsString.shouldNotContain("Exception")
+        response.contentAsString.shouldNotContain("at com.brokenfinger")
+    }
+
     @Test
     fun `answers as JSON`() {
         post(aLegacyBody("tools/list")).contentType.shouldContain(MediaType.APPLICATION_JSON_VALUE)
@@ -302,5 +343,8 @@ class McpControllerTest {
         /** Fixture values only — never a real credential. */
         const val GRANTED = "fixture-local-value"
         const val REFUSED = "a-different-value"
+
+        /** What an invariant of ours says when it breaks; it must never reach the wire. */
+        const val INVARIANT = "a label is one problem's"
     }
 }
