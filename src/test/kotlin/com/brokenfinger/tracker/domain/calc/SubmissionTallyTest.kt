@@ -8,6 +8,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
@@ -175,7 +176,43 @@ class SubmissionTallyTest {
     }
 
     @Test
+    fun `counts by part, and a part bucket also counts the problems in it`() {
+        val records = listOf(
+            aSubmissionRecord(lessonId = 1, part = "SELECT", verdict = Verdict.PASS),
+            aSubmissionRecord(lessonId = 2, part = "SELECT", verdict = Verdict.WRONG),
+        )
+
+        val bucket = SubmissionTally.of(records, TallyGroup.PART).single()
+
+        bucket.key shouldBe "SELECT"
+        bucket.count shouldBe 2
+        bucket.progress.shouldNotBeNull().attempted shouldBe 2
+        bucket.progress.shouldNotBeNull().passed shouldBe 1
+    }
+
+    @Test
+    fun `counts by level, keyed by the level as text`() {
+        val bucket = SubmissionTally.of(listOf(aSubmissionRecord(level = 2)), TallyGroup.LEVEL).single()
+
+        bucket.key shouldBe "2"
+        bucket.progress.shouldNotBeNull().attempted shouldBe 1
+    }
+
+    /** Absent is not level 0 ([[concepts/assumption-vs-measurement]]). */
+    @Test
+    fun `a problem with no recorded level or part is a missing key`() {
+        SubmissionTally.of(listOf(aSubmissionRecord(level = null)), TallyGroup.LEVEL).single().key.shouldBeNull()
+        SubmissionTally.of(listOf(aSubmissionRecord(part = " ")), TallyGroup.PART).single().key.shouldBeNull()
+    }
+
+    /** A problem "passed" inside the WRONG bucket would be noise, so verdict buckets carry counts only. */
+    @Test
+    fun `groupings that are not about problems carry no problem counts`() {
+        SubmissionTally.of(listOf(aSubmissionRecord()), TallyGroup.VERDICT).single().progress.shouldBeNull()
+    }
+
+    @Test
     fun `names every group on the wire in lower case`() {
-        TallyGroup.wireNames().shouldContainExactly("verdict", "language", "problem")
+        TallyGroup.wireNames().shouldContainExactly("verdict", "language", "problem", "part", "level")
     }
 }
