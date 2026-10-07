@@ -339,14 +339,15 @@ kept from the 2026-10-07 tracker on; code marked `codeLate` may belong to the ne
 descriptions at 2,048 characters, but not a prompt's text.
 
 In Claude Code it is a slash command, and only you can start it — the model cannot run a prompt on
-its own. With the server named as in the configuration above, the menu lists it as
-`/programmers-tracker:exam_prep (MCP)`:
+its own. With the server named as in the configuration above, the menu shows
+`/programmers-tracker:exam_prep (MCP)`, and choosing it inserts
+`/mcp__programmers-tracker__exam_prep `; type the arguments after it:
 
 ```text
-/programmers-tracker:exam_prep                          everything on record
-/programmers-tracker:exam_prep java                     one language
-/programmers-tracker:exam_prep java 2026-09-01          … corrections recorded since a date
-/programmers-tracker:exam_prep mysql 2026-09-01 SELECT  … in one part
+/mcp__programmers-tracker__exam_prep                          everything on record
+/mcp__programmers-tracker__exam_prep java                     one language
+/mcp__programmers-tracker__exam_prep java 2026-09-01          … corrections recorded since a date
+/mcp__programmers-tracker__exam_prep mysql 2026-09-01 SELECT  … in one part
 ```
 
 The arguments are positional — `language`, `since`, `part` — and Claude Code splits them on spaces
