@@ -48,6 +48,8 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         DISCOVER -> discovery()
         TOOLS_LIST -> cacheable(toolList())
         TOOLS_CALL -> tools.call(call.name(), call.arguments())
+        PROMPTS_LIST -> cacheable(promptList())
+        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.promptArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -56,6 +58,8 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         PING -> JsonObject(emptyMap())
         TOOLS_LIST -> toolList()
         TOOLS_CALL -> tools.call(call.name(), call.arguments())
+        PROMPTS_LIST -> promptList()
+        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.promptArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -76,7 +80,13 @@ class McpDispatcher(private val tools: McpToolInvoker) {
 
     private fun toolList(): JsonObject = buildJsonObject { put("tools", McpToolCatalog.definitions()) }
 
-    private fun capabilities(): JsonObject = buildJsonObject { putJsonObject("tools") {} }
+    private fun promptList(): JsonObject = buildJsonObject { put("prompts", McpPromptCatalog.definitions()) }
+
+    // Fixed at compile time, so neither list ever changes under a client: no `listChanged`.
+    private fun capabilities(): JsonObject = buildJsonObject {
+        putJsonObject("tools") {}
+        putJsonObject("prompts") {}
+    }
 
     private fun identity(): JsonObject = buildJsonObject {
         put("name", McpProtocol.NAME)
@@ -100,7 +110,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
     private fun verifyHeaders(call: McpCall, headers: McpHeaders) {
         mismatchUnless(headers.protocolVersion == call.declaredVersion, "MCP-Protocol-Version")
         mismatchUnless(headers.method == call.method, "Mcp-Method")
-        if (call.method != TOOLS_CALL) return
+        if (call.method !in NAMED) return
         mismatchUnless(decoded(headers.name) == call.name(), "Mcp-Name")
     }
 
@@ -159,6 +169,11 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         const val DISCOVER = "server/discover"
         const val TOOLS_LIST = "tools/list"
         const val TOOLS_CALL = "tools/call"
+        const val PROMPTS_LIST = "prompts/list"
+        const val PROMPTS_GET = "prompts/get"
+
+        /** The methods whose `params.name` the modern binding mirrors into `Mcp-Name`. */
+        val NAMED = setOf(TOOLS_CALL, PROMPTS_GET)
 
         const val SENTINEL = "=?base64?"
         const val SENTINEL_END = "?="

@@ -2,12 +2,14 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aModernCall
+import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import com.brokenfinger.tracker.support.fixtures.anInitializeParams
 import com.brokenfinger.tracker.support.fixtures.headersFor
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.nulls.shouldBeNull
@@ -132,6 +134,39 @@ class McpDispatcherTest {
         response.body!!["id"]!!.jsonPrimitive.int shouldBe 77
     }
 
+    // ---------------------------------------------------------------- prompts, handshake era
+
+    @Test
+    fun `initialize declares prompts beside tools`() {
+        val result = resultOf(dispatcher.dispatch(aLegacyCall("initialize", anInitializeParams()), McpHeaders()))
+
+        result["capabilities"]!!.jsonObject.keys.shouldContainExactlyInAnyOrder("tools", "prompts")
+    }
+
+    @Test
+    fun `prompts list answers the catalog, with none of the modern-only fields`() {
+        val result = resultOf(dispatcher.dispatch(aLegacyCall("prompts/list"), McpHeaders()))
+
+        result["prompts"]!!.jsonArray.size shouldBe McpPromptCatalog.NAMES.size
+        result.shouldNotContainKey("resultType")
+        result.shouldNotContainKey("ttlMs")
+    }
+
+    @Test
+    fun `prompts get renders exam_prep`() {
+        val result = resultOf(dispatcher.dispatch(aLegacyCall("prompts/get", aPromptGetParams()), McpHeaders()))
+
+        result["messages"]!!.jsonArray.single().jsonObject["role"]!!.jsonPrimitive.content shouldBe "user"
+    }
+
+    @Test
+    fun `an unknown prompt is refused on 200 as invalid params`() {
+        val response = dispatcher.dispatch(aLegacyCall("prompts/get", aPromptGetParams("warmup_plan")), McpHeaders())
+
+        response.status shouldBe 200
+        errorOf(response)["code"]!!.jsonPrimitive.int shouldBe McpErrors.INVALID_PARAMS
+    }
+
     // ---------------------------------------------------------------- modern era
 
     @Test
@@ -148,7 +183,7 @@ class McpDispatcherTest {
 
     @Test
     fun `every modern result is tagged complete and identifies the server`() {
-        listOf("server/discover", "tools/list").forEach { method ->
+        listOf("server/discover", "tools/list", "prompts/list").forEach { method ->
             val call = aModernCall(method)
 
             val result = resultOf(dispatcher.dispatch(call, headersFor(call)))
@@ -279,6 +314,81 @@ class McpDispatcherTest {
     @Test
     fun `never applies the modern header rules to a handshake request`() {
         dispatcher.dispatch(aLegacyCall("tools/list"), McpHeaders()).status shouldBe 200
+    }
+
+    // ---------------------------------------------------------------- prompts, modern era
+
+    @Test
+    fun `server discover declares prompts beside tools`() {
+        val call = aModernCall("server/discover")
+
+        val capabilities = resultOf(dispatcher.dispatch(call, headersFor(call)))["capabilities"]!!.jsonObject
+
+        capabilities.keys.shouldContainExactlyInAnyOrder("tools", "prompts")
+    }
+
+    /** Claude Code's modern codec has no default for these, and without them it shows no prompt at all. */
+    @Test
+    fun `a modern prompts list is complete and carries the caching fields`() {
+        val call = aModernCall("prompts/list")
+
+        val result = resultOf(dispatcher.dispatch(call, headersFor(call)))
+
+        result["resultType"]!!.jsonPrimitive.content shouldBe "complete"
+        result["ttlMs"]!!.jsonPrimitive.content shouldBe McpProtocol.LIST_TTL_MS.toString()
+        result["cacheScope"]!!.jsonPrimitive.content shouldBe "private"
+        result["prompts"]!!.jsonArray.size shouldBe McpPromptCatalog.NAMES.size
+    }
+
+    @Test
+    fun `a modern prompts get renders the prompt and is complete`() {
+        val call = aModernCall("prompts/get", aPromptGetParams())
+
+        val result = resultOf(dispatcher.dispatch(call, headersFor(call)))
+
+        result["resultType"]!!.jsonPrimitive.content shouldBe "complete"
+        result["messages"]!!.jsonArray.size shouldBe 1
+    }
+
+    @Test
+    fun `an unknown modern prompt is a 400 carrying invalid params`() {
+        val call = aModernCall("prompts/get", aPromptGetParams("warmup_plan"))
+
+        val response = dispatcher.dispatch(call, headersFor(call))
+
+        response.status shouldBe 400
+        errorOf(response)["code"]!!.jsonPrimitive.int shouldBe McpErrors.INVALID_PARAMS
+    }
+
+    @Test
+    fun `refuses a prompt get whose name header disagrees with its body or is missing`() {
+        val call = aModernCall("prompts/get", aPromptGetParams())
+
+        errorOf(dispatcher.dispatch(call, headersFor(call).copy(name = "stats")))["code"]!!
+            .jsonPrimitive.int shouldBe McpErrors.HEADER_MISMATCH
+        dispatcher.dispatch(call, headersFor(call).copy(name = null)).status shouldBe 400
+    }
+
+    @Test
+    fun `prompt arguments that are not an object are refused, 400 modern and 200 handshake`() {
+        val params = buildJsonObject {
+            put("name", "exam_prep")
+            put("arguments", "java")
+        }
+        val modern = aModernCall("prompts/get", params)
+
+        dispatcher.dispatch(modern, headersFor(modern)).status shouldBe 400
+        val legacy = dispatcher.dispatch(aLegacyCall("prompts/get", params), McpHeaders())
+        legacy.status shouldBe 200
+        errorOf(legacy)["code"]!!.jsonPrimitive.int shouldBe McpErrors.INVALID_PARAMS
+    }
+
+    @Test
+    fun `accepts a prompt name a conservative client sent Base64-wrapped`() {
+        val call = aModernCall("prompts/get", aPromptGetParams())
+        val wrapped = "=?base64?" + java.util.Base64.getEncoder().encodeToString("exam_prep".toByteArray()) + "?="
+
+        dispatcher.dispatch(call, headersFor(call).copy(name = wrapped)).status shouldBe 200
     }
 
     private fun resultOf(response: McpHttpResponse): JsonObject = response.body!!["result"]!!.jsonObject

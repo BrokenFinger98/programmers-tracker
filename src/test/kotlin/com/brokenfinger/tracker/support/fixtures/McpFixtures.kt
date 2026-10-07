@@ -57,6 +57,9 @@ fun aToolCallParams(name: String, arguments: JsonObject = JsonObject(emptyMap())
     put("arguments", arguments)
 }
 
+fun aPromptGetParams(name: String = "exam_prep", arguments: JsonObject = JsonObject(emptyMap())): JsonObject =
+    aToolCallParams(name, arguments)
+
 fun aLegacyCall(method: String, params: JsonObject = JsonObject(emptyMap()), id: Int? = 1): McpCall =
     McpCall.from(aLegacyBody(method, params, id))
 
