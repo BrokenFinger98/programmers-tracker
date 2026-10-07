@@ -47,14 +47,19 @@ object VerdictResolver {
      * `passed:false` and `"실패"`, filed UNKNOWN until this. Exact match on purpose: every other
      * failure message carries a parenthesised reason, and an unmeasured one must stay unknown.
      * A submit MySQL rejects says `실패 (런타임 에러)` instead (measured 2026-10-07 on lesson 59034),
-     * so the bare word is a wrong result and nothing else.
+     * so the bare word is a wrong result and nothing else. A rejected SQL submit is recorded
+     * RUNTIME_ERROR, not corrected by a preceding rejected run, because a database run's rejection
+     * arrives on a finish frame and never binds error text.
      */
     private const val BARE_FAILURE = "실패"
 
     /**
      * A **database run MySQL rejected** carries the driver's error tuple as its message, e.g.
      * `(1054, "Unknown column …")`, and no table (protocol §6, measured 2026-10-03 on lesson
-     * 131537). The query never ran — the same stage as a failed compile.
+     * 131537). The query never ran — the same stage as a failed compile. The rule applies to a
+     * database RUN finish, which says `returnedResult = false`; a submit MySQL rejects says
+     * `실패 (런타임 에러)` instead and is a RUNTIME_ERROR (measured 2026-10-07 on lesson 59034),
+     * so "the same stage as a failed compile" holds for the run path only.
      */
     private val databaseErrorMessage = Regex("""^\(\d+, ["']""")
 
@@ -150,7 +155,9 @@ object VerdictResolver {
         if (runtimeFailureMessage.containsMatchIn(msg)) return errorVerdictOf(boundErrorText)
         if (measuredMessage.containsMatchIn(msg)) return Verdict.WRONG
         if (msg == BARE_FAILURE) return Verdict.WRONG
-        if (databaseErrorMessage.containsMatchIn(msg)) return Verdict.COMPILE_ERROR
+        if (failed.returnedResult == false && databaseErrorMessage.containsMatchIn(msg)) {
+            return Verdict.COMPILE_ERROR
+        }
         return null
     }
 

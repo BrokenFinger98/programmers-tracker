@@ -184,14 +184,40 @@ class GradingSessionAssemblerTest {
         session.testcases shouldHaveSize 6
     }
 
+    /**
+     * Measured 2026-10-07 on lesson 59034: a submit MySQL rejects says `실패 (런타임 에러)`. A rejected
+     * database run is a finish frame, not an error frame, so no error text is ever bound to a
+     * later submit and the submit stays a runtime error — unlike the algorithm path.
+     */
     @Test
-    fun `a database run mysql refused is a compile error`() {
+    fun `a database submit MySQL rejected is a runtime error`() {
+        val session = anAssembledSession("sql-submit-error.jsonl", channel = aSqlChannel())
+
+        session.action shouldBe GradingAction.SUBMIT
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.RUNTIME_ERROR
+    }
+
+    @Test
+    fun `a database run MySQL refused is a compile error`() {
         // facts() keeps broadcast frames only: start · finish · start · finish
         val firstRun = FixtureLoader.facts("sql-run-error.jsonl").take(2)
 
         val session = aSessionOf(firstRun, channel = aSqlChannel())
 
         session.action shouldBe GradingAction.RUN
+        session.outcome shouldBe Outcome.JUDGED
+        session.verdict shouldBe Verdict.COMPILE_ERROR
+    }
+
+    @Test
+    fun `a second database run MySQL refused, with a single-quoted tuple, is a compile error`() {
+        val secondRun = FixtureLoader.facts("sql-run-error.jsonl").drop(2)
+
+        val session = aSessionOf(secondRun, channel = aSqlChannel())
+
+        session.action shouldBe GradingAction.RUN
+        session.outcome shouldBe Outcome.JUDGED
         session.verdict shouldBe Verdict.COMPILE_ERROR
     }
 

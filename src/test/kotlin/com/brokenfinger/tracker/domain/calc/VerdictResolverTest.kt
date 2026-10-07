@@ -116,7 +116,7 @@ class VerdictResolverTest {
 
     /** A wrong database submit, measured on lesson 273711 (2026-10-03): the bare word and nothing else. */
     @Test
-    fun `a bare failure message is WRONG`() {
+    fun `a bare failure message on a database submit is WRONG`() {
         val verdict = VerdictResolver.resolve(
             testcases = listOf(aTestcaseResult(passed = false, msg = "실패", runTime = null, memorySize = null)),
             boundErrorText = null,
@@ -148,6 +148,25 @@ class VerdictResolverTest {
             )
             verdict shouldBe Verdict.COMPILE_ERROR
         }
+    }
+
+    /** The tuple rule is measured on the run finish only, which reports returnedResult = false. */
+    @Test
+    fun `an error tuple on a case that reports no result flag stays unknown`() {
+        val verdict = VerdictResolver.resolve(
+            testcases = listOf(
+                aTestcaseResult(
+                    passed = false,
+                    msg = "(1054, \"Unknown column 'USER_ID' in 'field list'\")",
+                    runTime = null,
+                    memorySize = null,
+                    returnedResult = null,
+                ),
+            ),
+            boundErrorText = null,
+        )
+
+        verdict shouldBe null
     }
 
     /** The bare word only — a failure message carrying anything after it keeps its own rule. */
