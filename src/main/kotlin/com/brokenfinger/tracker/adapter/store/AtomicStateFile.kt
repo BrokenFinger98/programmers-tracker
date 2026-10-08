@@ -20,23 +20,26 @@ import java.nio.file.attribute.PosixFileAttributes
  * The temporary file is created **in the target's own directory** so the replace stays a
  * rename within one filesystem; a cross-filesystem move degrades to copy-then-delete, which
  * is precisely the window this class removes.
+ *
+ * **A rename replaces whatever stands at the target, a link included, and never writes through
+ * it** — which is why the push credential and the owner's `.gitignore` are written here too
+ * (#360). The temporary file starts owner-only, so a state file is left `rw-------` by every
+ * write. [keepsPermissions] is for a document that is not the server's own: the `.gitignore`
+ * keeps the permissions its owner gave it.
  */
-class AtomicStateFile(private val path: Path) {
+class AtomicStateFile(private val path: Path, private val keepsPermissions: Boolean = false) {
     private val directory: Path = path.toAbsolutePath().parent
 
     /** The current document, or null when it has never been written. */
     fun read(): String? = runCatching { Files.readString(path, CHARSET) }.getOrElse { failed(it) }
 
-    /**
-     * Replaces the document. A reader sees either the whole previous one or the whole new one, and
-     * the document keeps the permissions it had.
-     */
+    /** Replaces the document. A reader sees either the whole previous one or the whole new one. */
     fun write(text: String) {
         Files.createDirectories(directory)
         val temp = Files.createTempFile(directory, path.fileName.toString(), SUFFIX)
         runCatching {
             Files.writeString(temp, text, CHARSET)
-            keepPermissions(temp)
+            if (keepsPermissions) keepPermissions(temp)
             replace(temp)
         }.onFailure {
             Files.deleteIfExists(temp)
@@ -51,17 +54,16 @@ class AtomicStateFile(private val path: Path) {
     fun update(transform: (String?) -> String) = write(transform(read()))
 
     /**
-     * A temporary file starts readable by its owner alone, and the replace would hand that to the
-     * document. A document that is there keeps what it had instead: the owner's `.gitignore` is
-     * written through here (#360), and a replace must not narrow it. Only a regular file's are
-     * kept — a link's own bits say nothing about a document — and a filesystem with no POSIX
-     * permissions has none to keep.
+     * Hands the document's current permissions to the temporary file, so the replace does not narrow
+     * them. Only a regular file's are kept — a link's own bits say nothing about a document — and a
+     * filesystem with no POSIX permissions has none to keep. Best effort: a mode that cannot be set
+     * leaves the replacement owner-only rather than failing the write.
      */
     private fun keepPermissions(temp: Path) {
         val current = runCatching { Files.readAttributes(path, PosixFileAttributes::class.java, NOFOLLOW_LINKS) }
         val attributes = current.getOrNull() ?: return
         if (!attributes.isRegularFile) return
-        Files.setPosixFilePermissions(temp, attributes.permissions())
+        runCatching { Files.setPosixFilePermissions(temp, attributes.permissions()) }
     }
 
     // ATOMIC_MOVE is the guarantee we want; where the filesystem cannot give it, an ordinary

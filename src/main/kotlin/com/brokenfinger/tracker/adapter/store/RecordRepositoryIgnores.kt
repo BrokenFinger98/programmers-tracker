@@ -77,7 +77,7 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
         val text = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { strictly(it.readAllBytes()) }
         val missing = RULES.filterNot { text.alreadyIgnores(it.rule) }
         if (missing.isEmpty()) return
-        AtomicStateFile(file).write(withRules(text, missing))
+        AtomicStateFile(file, keepsPermissions = true).write(withRules(text, missing))
         added(missing, file)
     }
 

@@ -98,13 +98,29 @@ class AtomicStateFileTest {
     }
 
     /**
-     * A temporary file is created readable by its owner alone, and the replace hands that to the
-     * document. A document someone else made — the owner's `.gitignore` (#360) — keeps what it had.
+     * State files are the server's own — the timers, the backup marker, the push credential — and
+     * every write leaves them readable by their owner alone, whatever someone widened them to in
+     * between (#360). The temporary file starts owner-only, and the replace hands that on.
      */
     @Test
-    fun `a replace keeps the permissions of the document it replaces`() {
+    fun `a state file is written owner-only, even after someone widened it`() {
         assumeTrue(canPlantLinksIn(root), "this test reads POSIX permissions")
         val file = timers().also { it.write("""{"a":1}""") }
+        Files.setPosixFilePermissions(path(), PosixFilePermissions.fromString("rw-rw-rw-"))
+
+        file.write("""{"b":2}""")
+
+        permissionsOf(path()) shouldBe "rw-------"
+    }
+
+    /**
+     * A document someone else made — the owner's `.gitignore` (#360) — keeps what it had, when the
+     * writer asks for that. Only `RecordRepositoryIgnores` does.
+     */
+    @Test
+    fun `a replace keeps the permissions of the document it replaces, when asked to`() {
+        assumeTrue(canPlantLinksIn(root), "this test reads POSIX permissions")
+        val file = keeping().also { it.write("""{"a":1}""") }
         Files.setPosixFilePermissions(path(), PosixFilePermissions.fromString("rw-rw-r--"))
 
         file.write("""{"b":2}""")
@@ -119,7 +135,7 @@ class AtomicStateFileTest {
         val elsewhere = Files.writeString(root.resolve("elsewhere.json"), "{}")
         aLink(path(), elsewhere)
 
-        timers().write("""{"a":1}""")
+        keeping().write("""{"a":1}""")
 
         Files.isSymbolicLink(path()) shouldBe false
         permissionsOf(path()) shouldBe "rw-------"
@@ -128,6 +144,8 @@ class AtomicStateFileTest {
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 
     private fun timers() = AtomicStateFile(path())
+
+    private fun keeping() = AtomicStateFile(path(), keepsPermissions = true)
 
     private fun path(): Path = root.resolve("state/timers.json")
 
