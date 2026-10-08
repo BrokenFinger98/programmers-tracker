@@ -249,17 +249,17 @@ Two tests were pins, green before: the owner-only mode of a generated token, and
 
 #387 on `fix/387-reads-never-follow-links`, from `41f713e`:
 
-- `92def1b` the walk out of `RecordWrites` into `RecordBound`, its own tests;
-- `9b2dead` `RecordReads`, and existence asked of the filesystem;
-- `9ca927f` the writer's history read when the first grading needs it;
-- `33cea8d` the attachment pass outlives a log it cannot read;
-- `fec0729` the log read through no link; MCP and boot pins;
-- `ab97557` `RunLog`'s check through `ProblemFiles`;
-- `aa15954` each seed read once, through the bound; the ledger hashes bytes;
-- `4394b5e` the work list listed and replayed through no link;
-- `4541914` the watch token written beside and moved; the adapter edge;
-- `8954d2c` the junction tests;
-- `934d09a` the replay's FIFO pin, from the mutation round;
+- `723b544` the walk out of `RecordWrites` into `RecordBound`, its own tests;
+- `828fd0d` `RecordReads`, and existence asked of the filesystem;
+- `af64882` the writer's history read when the first grading needs it;
+- `8295461` the attachment pass outlives a log it cannot read;
+- `23275fc` the log read through no link; MCP and boot pins;
+- `7098d45` `RunLog`'s check through `ProblemFiles`;
+- `874d731` each seed read once, through the bound; the ledger hashes bytes;
+- `d2bc06c` the work list listed and replayed through no link;
+- `6137b75` the watch token written beside and moved; the adapter edge;
+- `2fe85b7` the junction tests;
+- `3235b97` the replay's FIFO pin, from the mutation round;
 - this page, #354's and #361's notes, `SECURITY.md`, `docs/mcp.md` and its twin, the index and progress,
   in the commit after them.
 
@@ -298,7 +298,7 @@ them only after the FIFO pin. Two survive, both race-only.
 | a writer passing the bound's answer on unsaid | 21 |
 | a read making the directories it walks | 1 |
 
-**Gates**, all exit 0 at `934d09a`:
+**Gates**, all exit 0 at `3235b97`:
 
 - `./scripts/check.sh`;
 - `./scripts/test.sh`: 2,178 JUnit tests, 43 of them new, 0 failures, 11 skipped — the 9 as before,

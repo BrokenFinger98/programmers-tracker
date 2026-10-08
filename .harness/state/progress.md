@@ -5772,20 +5772,20 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   `VaultDashboard`'s own reads of a seed (a FIFO there blocked the boot), and a way of reading wrong
   several shared: `Files.exists`, which read a directory that could not be searched as "nothing there". Every reader under `problems/` already went through
   `ProblemFiles` but `RunLog`'s check.
-- **The bound.** `92def1b` takes the walk out of `RecordWrites` into `RecordBound`, `RecordWritesTest`
-  unchanged; `9b2dead` adds `RecordReads`, which reads through it, and asks existence of the filesystem.
+- **The bound.** `723b544` takes the walk out of `RecordWrites` into `RecordBound`, `RecordWritesTest`
+  unchanged; `828fd0d` adds `RecordReads`, which reads through it, and asks existence of the filesystem.
 - **The refused read.** A refused log is thrown, never answered as empty:
-  - `fec0729`: MCP answers a fault rather than "no submissions";
-  - `9ca927f`: the writer reads its history when the first grading needs it, and records nothing until it
+  - `23275fc`: MCP answers a fault rather than "no submissions";
+  - `af64882`: the writer reads its history when the first grading needs it, and records nothing until it
     can, with no restart;
-  - `33cea8d`: the boot's attachment pass says so and goes on.
-- **The readers.** `ab97557` `RunLog`'s check through `ProblemFiles`; `aa15954` each seed read once
-  through the bound, the ledger hashing bytes; `4394b5e` the work list listed and replayed through no
+  - `8295461`: the boot's attachment pass says so and goes on.
+- **The readers.** `7098d45` `RunLog`'s check through `ProblemFiles`; `874d731` each seed read once
+  through the bound, the ledger hashing bytes; `d2bc06c` the work list listed and replayed through no
   link.
-- **The watch token.** `4541914` written by `AtomicStateFile`, beside and moved, owner-only from
+- **The watch token.** `6137b75` written by `AtomicStateFile`, beside and moved, owner-only from
   creation; a link there is replaced, said. A new adapter edge, `web → store`, in development-rules §1.
-- **Junctions.** `8954d2c` two tests enabled on Windows only, made with `mklink /J`; not yet run.
-- **Mutation.** 29 mutants, 27 killed. `934d09a` pins the replay's FIFO check, whose mutant survived
+- **Junctions.** `2fe85b7` two tests enabled on Windows only, made with `mklink /J`; not yet run.
+- **Mutation.** 29 mutants, 27 killed. `3235b97` pins the replay's FIFO check, whose mutant survived
   until then. Two survive, race-only: the read's open and the replay's open without `NOFOLLOW_LINKS`.
 - **Gates**, all exit 0: check; test 2,178 (43 new, 0 failures, 11 skipped: the 9 as before and the two
   junction tests off Windows), node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 85%,
