@@ -232,8 +232,12 @@ class CommandLineGitSync(
         git(listOf("config", "--get", key)).takeIf { it.succeeded() }?.stdout?.trim()?.ifEmpty { null }
 
     /**
-     * Stages [scope], searches what is staged there for the push token, and commits exactly [scope].
-     * `add` with a pathspec stages removals as well (git 2.0 and later), with or without `--all`.
+     * Searches the working tree within [scope], stages it, searches what is staged, and commits exactly
+     * [scope]. `add` with a pathspec stages removals as well (git 2.0 and later), with or without `--all`.
+     *
+     * Searched before staging as well as after: a refusal found only after `add` left the file that
+     * carries the token staged, where the next plain `git commit` takes it (the review's M5). Searched
+     * with `--untracked`, which leaves out what git ignores, and the scope leaves `.ps` out besides.
      *
      * `git commit -- <paths>` is a partial commit: it takes those paths from the working tree and
      * ignores the rest of the index, which is what keeps another process's staged file out. On a
@@ -242,6 +246,7 @@ class CommandLineGitSync(
      * unsearched — which is why the push searches again, what was actually committed.
      */
     private fun committed(what: String, scope: List<String>, message: String): Boolean {
+        if (!carriesNoCredential(what) { listOf(listOf("--untracked", "--") + scope) }) return false
         if (!retryingOnContention(what) { git(listOf("add", "--all", "--") + scope) }) return false
         if (!carriesNoCredential(what) { listOf(listOf("--cached", "--") + scope) }) return false
         return retryingOnContention(what) { git(listOf("commit", "--message", message, "--") + scope) }

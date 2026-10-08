@@ -620,6 +620,23 @@ class CommandLineGitSyncTest {
         subjects() shouldContainExactly emptyList()
     }
 
+    /**
+     * A refusal after staging left the token's file staged, where the next plain `git commit` takes it
+     * (the review's M5). The working tree within the commit's scope is searched before anything is
+     * staged, so a refused commit leaves the index as it found it.
+     */
+    @Test
+    fun `a refused commit leaves nothing staged`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("problems/zz/notes.md", "my token is $A_PUSH_CREDENTIAL\n")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe false
+
+        git("diff", "--cached", "--name-only").trim() shouldBe ""
+    }
+
     @Test
     fun `a submit whose files carry the push token is not committed`() {
         aPushTokenIn(root)
