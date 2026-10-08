@@ -269,12 +269,12 @@ is written once, read normally from then on, and the backfill's count becomes tr
 
 #361 on `fix/361-writers-never-follow-links`:
 
-- `ff2462c` the bound, `RecordWrites`, with its tests;
-- `2635d01` the boot pass goes on past a record it could not attach;
-- `a66529a` every writer under `problems/`;
-- `6532d1b` the writers at the root's level;
-- three pins that review of the mutants asked for: `89e3005` the heartbeat's non-following read,
-  `9597093` a failure that is no refusal still reaching a writer that skips refusals, and `58436dc`
+- `a4fd9ef` the bound, `RecordWrites`, with its tests;
+- `cd37817` the boot pass goes on past a record it could not attach;
+- `592c02d` every writer under `problems/`;
+- `2c064fa` the writers at the root's level;
+- three pins that review of the mutants asked for: `6e512d7` the heartbeat's non-following read,
+  `c707631` a failure that is no refusal still reaching a writer that skips refusals, and `cd087a5`
   a root-level write outside the repository refused for the true reason;
 - this page, `SECURITY.md`, the index, #354's pointer and progress, in the commit after them.
 
@@ -288,7 +288,7 @@ The bound, 21 mutants, with the number of `RecordWritesTest` tests each failed:
 | the walk following a link | 4 |
 | no real-path comparison per directory | 1, the case-fold test, which runs only where the filesystem folds case, as on this host |
 | no bound check | 3 |
-| no climb-out check | 1, after `58436dc`; it survived before |
+| no climb-out check | 1, after `cd087a5`; it survived before |
 | no regular-file check before an append | 3 |
 | no directory check at the file | 1 |
 | a replace written in place | 4 |
@@ -329,7 +329,7 @@ The writers, each routed back to the raw `Files` calls it made before (`CodeArti
 | the boot pass | 1 |
 | the seeds' raw write behind their link check | survives: race only |
 
-**Gates**, before the review round, at `58436dc` with this page, all exit 0:
+**Gates**, before the review round, at `cd087a5` with this page, all exit 0:
 
 - `./scripts/check.sh`;
 - `./scripts/test.sh`: 2,117 JUnit tests, 73 new, 0 failures, 9 skipped (as before: 8 C# and the
@@ -344,7 +344,7 @@ unreachable on POSIX: a filesystem root handed as a target, a directory vanishin
 `relativize` across drive roots, the `ATOMIC_MOVE` fallback, the temporary file's cleanup after a
 failed move, and the branch for a filesystem with no POSIX modes. CI has not run this branch.
 
-**The review round, at `545d6aa`.** A security review and a quality review attacked the branch.
+**The review round, at `dd259a2`.** A security review and a quality review attacked the branch.
 Neither blocked the merge. Four findings were fixed here. Each fix has a test that was red against the
 code before it, and the tests that only pin what held are named:
 
@@ -357,25 +357,25 @@ code before it, and the tests that only pin what held are named:
   - On HFS+, the quality review measured, on a disk image, that the first write into a new
     Korean-titled directory was refused: NFD on disk against the NFC walked.
 
-  `574bcb6` adds the listing check and compares both answers as text after NFC. Its tests play the
+  `0523221` adds the listing check and compares both answers as text after NFC. Its tests play the
   image, HFS+ and a real path that leads elsewhere through `DiskAnswers`, on any platform. The
   image's alias was written and HFS+'s first write refused before the change. The real path that
   leads elsewhere pins what the old check already refused. The fix itself has not run in the image,
   on Windows or on HFS+.
 - **The root-level bound** (S3). `underRoot` wrote `log/../.ps/git-credentials` and
-  `.git/hooks/pre-commit` (measured). `748da22` refuses a `.` or `..` below the root, gives each
+  `.git/hooks/pre-commit` (measured). `5a160c3` refuses a `.` or `..` below the root, gives each
   root-level writer an allow-list of first names, and walks from the root as configured. Both paths
   were written before the change. So would a `.` or `..` that stays inside `problems/`, now refused
   too. A root configured through `..` pins what held.
 - **A hard link** (S2). An append wrote `IMPORTANT | {"run":1}` into an outside file hard-linked as
-  `runs.jsonl`. `629f5cc` refuses a file whose `unix:nlink` exceeds 1, except on Windows, where the
+  `runs.jsonl`. `fefb790` refuses a file whose `unix:nlink` exceeds 1, except on Windows, where the
   view does not exist and the test skips. The append went through before the change.
 - **The boot pass's catch** (Q3). Every `Exception` was logged by its class alone, a programming
-  error without its stack. Since `99c7077`, an I/O failure is still logged that way. Any other fault
+  error without its stack. Since `d76b2c9`, an I/O failure is still logged that way. Any other fault
   is an ERROR with its stack, and cancellation is rethrown.
   - The fault test logged no ERROR before the change. The I/O and cancellation tests pin what held.
   - The fetch is wrapped (`fetched`), so no fetch detail can reach the stack trace.
-- `aa0643c` pins that a problem writer handed the name `problems` itself writes nothing. It was
+- `69687d3` pins that a problem writer handed the name `problems` itself writes nothing. It was
   added when the mutants were planned, since the mutant that drops that condition would have
   survived.
 
@@ -395,7 +395,7 @@ rewritten lines. Each ran against its own tests, every file was restored after, 
 | no dot check | 2 |
 | the target normalized before it is judged, as before | 2 |
 | no allow-list at the root | 1 |
-| a problem writer admitting `problems` itself | 1, the pin `aa0643c` |
+| a problem writer admitting `problems` itself | 1, the pin `69687d3` |
 | no hard-link check | 1 |
 | an I/O failure logged as a fault | 1 |
 | a fault logged by its class alone, as before | 1 |
@@ -404,7 +404,7 @@ rewritten lines. Each ran against its own tests, every file was restored after, 
 | the walk following a link | 4 |
 | the root not resolved | 26 |
 
-**Gates after the review round**, at `aa0643c` with this page, all exit 0:
+**Gates after the review round**, at `69687d3` with this page, all exit 0:
 
 - `./scripts/check.sh`;
 - `./scripts/test.sh`: 2,128 JUnit tests, 11 of them new this round, 0 failures, and 9 skipped as
