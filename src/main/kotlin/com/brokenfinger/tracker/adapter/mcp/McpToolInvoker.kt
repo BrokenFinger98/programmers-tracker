@@ -29,7 +29,8 @@ import kotlinx.serialization.json.putJsonArray
  * An argument a model can fix — a date it spelled wrong, a `groupBy` it does not offer —
  * comes back as a **tool execution error** (`isError: true`) carrying the correction,
  * which the client is expected to hand to the model. An unknown tool is a **protocol
- * error**, because no rewording of the arguments will make it exist.
+ * error**, because no rewording of the arguments will make it exist. So is an `arguments` that
+ * is not an object, which [McpCall.strictArguments] refuses before any tool is reached (#365).
  *
  * Nothing here writes. The record repository is opened read-only through [RecordQuery], so
  * a prompt-injected instruction to "delete my failures" has no path to act on.

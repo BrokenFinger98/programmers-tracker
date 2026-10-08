@@ -117,26 +117,26 @@ data class McpCall(
     // Every reader below casts instead of coercing, and all but one read a member of the wrong JSON
     // type as absent: it is a malformed request, which has to come back as an absent value we can
     // refuse cleanly rather than as an exception that would surface to the client as an internal
-    // error. The one that refuses instead is strictArguments(): for a prompt an absent value is a
-    // whole request, so a malformed one must not be allowed to read as absent.
+    // error. The one that refuses instead is strictArguments(), which every reader of `arguments`
+    // goes through: there an absent value is a whole request, so a malformed one must not read as absent.
 
     /** `params.name` — the tool a `tools/call` runs, or the prompt a `prompts/get` renders. */
     fun name(): String? = (params["name"] as? JsonPrimitive)?.contentOrNull
 
-    fun arguments(): JsonObject = params["arguments"] as? JsonObject ?: JsonObject(emptyMap())
-
     /**
-     * A prompt's arguments: the object given, none when absent or null, and a refusal for anything else.
-     * Stricter than [arguments]: every argument here is optional, so `{}` is a whole request, and a
-     * malformed `arguments` read as `{}` would silently widen the answer to everything on record and look right.
+     * The arguments of a `tools/call` or a `prompts/get`: the object given, none when absent or null, and a refusal for
+     * anything else. Every argument of the prompt and of five of the seven tools is optional, so `{}` is a whole
+     * request, and a malformed `arguments` read as `{}` would silently widen the answer to everything on record and
+     * look right (#365). Both requests' schemas type `arguments` as an optional object, so anything else fails the
+     * request's own schema: a protocol error, `-32602`, and not a tool error, which is for a value a model can correct.
      */
-    fun strictArguments(): JsonObject = when (val given = params["arguments"]) {
-        null, JsonNull -> JsonObject(emptyMap())
-        is JsonObject -> given
-        else -> throw McpFailure(McpErrors.INVALID_PARAMS, 400, "arguments must be an object of strings")
+    fun strictArguments(): JsonObject {
+        val given = params["arguments"]
+        if (given == null || given is JsonNull) return JsonObject(emptyMap())
+        return given as? JsonObject ?: throw McpFailure(McpErrors.INVALID_PARAMS, 400, "arguments must be an object")
     }
 
-    fun stringArgument(name: String): String? = (arguments()[name] as? JsonPrimitive)?.contentOrNull
+    fun stringArgument(name: String): String? = (strictArguments()[name] as? JsonPrimitive)?.contentOrNull
 
     companion object {
         // Lenient about shape, strict about the envelope: a body that is not JSON at all is a

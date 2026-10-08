@@ -50,7 +50,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
     private fun answerModern(call: McpCall): JsonObject = when (call.method) {
         DISCOVER -> discovery()
         TOOLS_LIST -> cacheable(toolList())
-        TOOLS_CALL -> tools.call(call.name(), call.arguments())
+        TOOLS_CALL -> tools.call(call.name(), call.strictArguments())
         PROMPTS_LIST -> cacheable(promptList())
         PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.strictArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
@@ -60,7 +60,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         INITIALIZE -> initialization(call)
         PING -> JsonObject(emptyMap())
         TOOLS_LIST -> toolList()
-        TOOLS_CALL -> tools.call(call.name(), call.arguments())
+        TOOLS_CALL -> tools.call(call.name(), call.strictArguments())
         PROMPTS_LIST -> promptList()
         PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.strictArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")

@@ -1,10 +1,13 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.support.fixtures.aCallParams
 import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
 import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
+import com.brokenfinger.tracker.support.fixtures.argumentsThatAreNotAnObject
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.maps.shouldBeEmpty
@@ -12,6 +15,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
@@ -70,13 +74,13 @@ class McpCallTest {
     fun `a call with no arguments member has empty arguments rather than failing`() {
         val call = McpCall.from(aLegacyBody("tools/call", buildJsonObject { put("name", "stats") }))
 
-        call.arguments().shouldBeEmpty()
+        call.strictArguments().shouldBeEmpty()
         call.stringArgument("groupBy").shouldBeNull()
     }
 
     /** `arguments` is optional in the specification: absent and null are none, not a refusal. */
     @Test
-    fun `prompt arguments are none when absent or null, and the object when given`() {
+    fun `arguments are none when absent or null, and the object when given`() {
         val absent = buildJsonObject { put("name", "exam_prep") }
         val nulled = JsonObject(absent + ("arguments" to JsonNull))
         val given = aPromptGetParams(arguments = buildJsonObject { put("language", "java") })
@@ -86,17 +90,31 @@ class McpCallTest {
         McpCall.from(aLegacyBody("prompts/get", given)).strictArguments().keys shouldBe setOf("language")
     }
 
-    /** A tool reads a malformed `arguments` as none; for a prompt that would widen to everything on record. */
+    /**
+     * Read as none, a malformed `arguments` would widen the answer to everything on record, since `{}` is a whole
+     * request for a prompt and for five of the seven tools. The message is true of both paths: a tool's values are
+     * not all strings, and a prompt's are checked one by one, under their names.
+     */
     @Test
-    fun `prompt arguments that are not an object are refused as invalid params`() {
-        val params = buildJsonObject {
-            put("name", "exam_prep")
-            put("arguments", "java")
+    fun `arguments that are not an object are refused as invalid params, saying what they must be`() {
+        argumentsThatAreNotAnObject().forEach { notAnObject ->
+            val call = McpCall.from(aLegacyBody("tools/call", aCallParams("submissions", notAnObject)))
+
+            val refused = shouldThrow<McpFailure> { call.strictArguments() }
+
+            withClue("arguments = $notAnObject") {
+                Triple(refused.code, refused.status, refused.message) shouldBe
+                    Triple(McpErrors.INVALID_PARAMS, 400, "arguments must be an object")
+            }
         }
+    }
 
-        val refused = shouldThrow<McpFailure> { McpCall.from(aLegacyBody("prompts/get", params)).strictArguments() }
+    /** The reader of one argument goes through the strict one, so it cannot read a malformed call as absent. */
+    @Test
+    fun `a string argument is read through the strict reader, so a malformed arguments is refused, not absent`() {
+        val call = McpCall.from(aLegacyBody("tools/call", aCallParams("stats", JsonPrimitive("groupBy"))))
 
-        refused.code shouldBe McpErrors.INVALID_PARAMS
+        shouldThrow<McpFailure> { call.stringArgument("groupBy") }.code shouldBe McpErrors.INVALID_PARAMS
     }
 
     @Test
