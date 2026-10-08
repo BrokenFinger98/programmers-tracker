@@ -254,7 +254,8 @@ class FileRawSessionLog(
     private fun namedLikeSessions(raw: Path): List<RawSession> =
         Files.list(raw).use { entries -> entries.toList().mapNotNull { sessionOf(it) } }
 
-    // Said once with how many and why. Counted only where no link is on the way: through one, nothing is listed.
+    // Said once with how many and why. Counted only where the directory was inspected and no link is on the way;
+    // otherwise nothing is listed, and the message names no link that may not be there.
     private fun leftInPlace(refusal: StateDirectory.Refusal, raw: StateDirectory.Inspection): List<RawSession> {
         val left = (raw as? StateDirectory.Usable)?.let { sessionsIn(it.directory).size }
         if (left != 0) sayOnce("$NOT_REPLAYED${refusal.name}") { warnLeft(left, refusal) }
@@ -262,7 +263,7 @@ class FileRawSessionLog(
     }
 
     private fun warnLeft(left: Int?, refusal: StateDirectory.Refusal) {
-        if (left == null) return logger.warn(LEFT_BEHIND_A_LINK, refusal.reason)
+        if (left == null) return logger.warn(NOT_COUNTED, refusal.reason)
         logger.warn(LEFT_IN_PLACE, left, refusal.reason)
     }
 
@@ -448,11 +449,10 @@ class FileRawSessionLog(
             "Raw frames held in memory were lost when the server stopped, because .ps was not usable: {} of them."
         private const val LEFT_IN_PLACE =
             "{} raw session(s) were left in place, not replayed: {}. Each is replayed as a grading at the first " +
-                "start that finds .ps usable, so remove first any that git delivered (`git ls-files .ps` lists " +
-                "them). Said once for this reason."
-        private const val LEFT_BEHIND_A_LINK =
-            "Raw sessions were not replayed: {}. Nothing behind the link was read or counted, and it is left " +
-                "as it is. Said once for this reason."
+                "start that finds .ps usable, unless git has ever tracked it. Said once for this reason."
+        private const val NOT_COUNTED =
+            "Raw sessions were not replayed: {}. Their directory was not listed, so nothing in it was read or " +
+                "counted, and it is left as it is. Said once for this reason."
         private const val KNOWN_TO_GIT =
             "{} raw session(s) were left in place and will never be replayed: git has tracked their names under " +
                 ".ps, so each may be what a pull delivered rather than a grading this server captured. They stay " +

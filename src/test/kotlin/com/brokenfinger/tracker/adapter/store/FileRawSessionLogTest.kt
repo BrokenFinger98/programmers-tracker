@@ -597,7 +597,10 @@ class FileRawSessionLogTest {
         heard.single() shouldNotContain ".ps/"
     }
 
-    /** Counting them would list a directory through a link, so they are said to be left, not counted. */
+    /**
+     * Counting them would list a directory through a link, so they are said to be left, not counted. The words
+     * name no link: the same message serves a directory that could not be inspected (the review of PR #395).
+     */
     @Test
     fun `sessions behind a link are said to be left, and are not counted through it`() {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
@@ -607,7 +610,7 @@ class FileRawSessionLogTest {
 
         val heard = warningsWhile(FileRawSessionLog::class) { logGuardedBy(aStateDirectory(root)).unprocessed() }
 
-        heard.single() shouldContain "Nothing behind the link was read or counted"
+        heard.single() shouldContain "Their directory was not listed, so nothing in it was read or counted"
         heard.single() shouldContain StateDirectory.Refusal.HOLDS_A_LINK.reason
     }
 
@@ -729,7 +732,8 @@ class FileRawSessionLogTest {
     /**
      * Whether `.ps` may be written is asked at a session's first frame and kept for that grading: asking at
      * every frame would cost a git call each, a median of 7–8 ms on the host against 0.03 ms for the append.
-     * Every frame still checks its own path, so a link is never written through (the swap test above).
+     * Every frame still checks its own path, so a link swapped in between two frames is not written through
+     * (the swap test above): a stat, then an open that follows no link at the file.
      * What a pull can change unseen is git's answer: the grading in flight finishes in its own file, which
      * git does not track, and the next session asks again and is held. What is held is not lost.
      */

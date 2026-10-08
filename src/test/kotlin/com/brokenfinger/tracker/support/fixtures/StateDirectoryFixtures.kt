@@ -9,6 +9,12 @@ import java.nio.file.Path
 // Object mother for the record repository's state directory (dev rules §6.4, #360). Production
 // code has no default for what git tracks — a writer never assumes "nothing" — so a test says it.
 
+/**
+ * The command every refusal of the state directory gives for untracking it, under every spelling a filesystem
+ * folds to `.ps` — `.PS`, `.pſ` and the rest (#377). Pinned here so each test that reads a refusal reads the same.
+ */
+const val UNTRACK_EVERY_SPELLING = "git rm -r --cached --ignore-unmatch -- ':(icase).ps' ':(icase).pſ'"
+
 /** What git answers in a healthy record repository: nothing tracked under `.ps`, and nothing ever was. */
 val NOTHING_TRACKED: TrackedState = object : TrackedState {
     override fun tracksAnything(): Boolean = false

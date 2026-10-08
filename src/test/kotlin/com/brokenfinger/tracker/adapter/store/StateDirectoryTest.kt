@@ -4,11 +4,13 @@ import com.brokenfinger.tracker.adapter.store.StateDirectory.Refusal
 import com.brokenfinger.tracker.adapter.store.StateDirectory.Refused
 import com.brokenfinger.tracker.adapter.store.StateDirectory.Usable
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
+import com.brokenfinger.tracker.support.fixtures.UNTRACK_EVERY_SPELLING
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -121,7 +123,25 @@ class StateDirectoryTest {
 
         aStateDirectory(root, tracked = { true }).forWriting() shouldBe Refused(Refusal.TRACKED)
         Refusal.TRACKED.transient shouldBe false
-        Refusal.TRACKED.reason shouldContain "git rm -r --cached .ps"
+        Refusal.TRACKED.reason shouldContain UNTRACK_EVERY_SPELLING
+    }
+
+    /**
+     * Untracked and left on disk, a raw session git delivered reads as the tracker's own (the review of PR #395),
+     * so what git put there is deleted first. The server's own files, a credential staged by hand, are only untracked.
+     */
+    @Test
+    fun `the way out of a tracked state directory deletes what git put there before untracking it`() {
+        val reason = Refusal.TRACKED.reason
+
+        reason shouldContain "Delete from disk any that git put there rather than this server"
+        reason.indexOf("Delete from disk") shouldBeLessThan reason.indexOf(UNTRACK_EVERY_SPELLING)
+    }
+
+    /** Removed alone, a linked raw directory takes the sessions behind it off the work list (the review of PR #395). */
+    @Test
+    fun `a link below the state directory is replaced with what lies behind it, not removed alone`() {
+        Refusal.HOLDS_A_LINK.reason shouldContain "moving into it first what lies behind it"
     }
 
     /** Unknown is not clean for a commit; a capture does not depend on git working. */
@@ -138,7 +158,7 @@ class StateDirectoryTest {
     @Test
     fun `what is not the state directory is refused with how to replace it`() {
         Refusal.NOT_THE_DIRECTORY.reason shouldContain "is not the tracker's own state directory"
-        Refusal.NOT_THE_DIRECTORY.reason shouldContain "git rm -r --cached .ps"
+        Refusal.NOT_THE_DIRECTORY.reason shouldContain UNTRACK_EVERY_SPELLING
     }
 
     // Nothing walks the directory; a writer's own path is checked (#360) -----------------------

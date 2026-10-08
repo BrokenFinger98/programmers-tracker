@@ -130,18 +130,22 @@ class StateDirectory(
         NOT_THE_DIRECTORY(
             transient = false,
             reason = "what answers to .ps is not the tracker's own state directory — a link, or a name the " +
-                "filesystem folds to .ps, such as .PS. Replace it with a real directory named exactly .ps; " +
-                UNTRACK,
+                "filesystem folds to .ps, such as .PS. Replace it with a real directory named exactly .ps, moving " +
+                "into it first what it holds; $UNTRACK",
         ),
         TRACKED(
             transient = false,
-            reason = "git tracks files under .ps, so whatever the server writes there is a change any " +
-                "`commit -a` publishes, the push credential included. Run `git rm -r --cached .ps` and commit that",
+            reason = "git tracks files under .ps, in some spelling of the name, so whatever the server writes " +
+                "there is a change any `commit -a` publishes, the push credential included. " +
+                "`$LIST_EVERY_SPELLING` lists them. Delete from disk any that git put there rather than this " +
+                "server, since one left behind untracked reads as the server's own, then run " +
+                "`$UNTRACK_EVERY_SPELLING` and commit that",
         ),
         HOLDS_A_LINK(
             transient = false,
             reason = "a directory the server writes into under .ps is a symbolic link, and whatever is written " +
-                "through it lands where it leads. Remove the link; $UNTRACK",
+                "through it lands where it leads. Replace it with a real directory, moving into it first what lies " +
+                "behind it, since the link removed alone takes the raw sessions there off the work list; $UNTRACK",
         ),
         UNANSWERED(transient = true, reason = "git could not say whether it tracks anything under .ps"),
         NOT_INSPECTED(transient = true, reason = "what answers to .ps could not be read"),
@@ -152,7 +156,12 @@ class StateDirectory(
     }
 }
 
-private const val UNTRACK = "if git tracks it, run `git rm -r --cached .ps` and commit that"
+// Every spelling a filesystem folds to `.ps`: `:(icase)` folds ASCII alone, so `.pſ` (U+017F) needs its own
+// pathspec, and `.ps` alone named none of the others (the review of PR #395, measured on APFS). The tests run
+// these commands as the owner reads them, for each spelling.
+private const val LIST_EVERY_SPELLING = "git ls-files -- ':(icase).ps' ':(icase).pſ'"
+private const val UNTRACK_EVERY_SPELLING = "git rm -r --cached --ignore-unmatch -- ':(icase).ps' ':(icase).pſ'"
+private const val UNTRACK = "if git tracks anything there, run `$UNTRACK_EVERY_SPELLING` and commit that"
 
 /** The names [directory] lists, as `readdir` returns them: the name on disk, whatever name it was reached by. */
 internal fun namesOnDisk(directory: Path): Set<String> =

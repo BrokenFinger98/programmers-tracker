@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
+import com.brokenfinger.tracker.support.fixtures.UNTRACK_EVERY_SPELLING
 import com.brokenfinger.tracker.support.fixtures.aFineGrainedShapedToken
 import com.brokenfinger.tracker.support.fixtures.aGithubShapedToken
 import com.brokenfinger.tracker.support.fixtures.aLink
@@ -455,7 +456,7 @@ class CommandLineGitSyncTest {
         }
 
         heard.size shouldBe 2
-        heard.forEach { it shouldContain "git rm -r --cached .ps" }
+        heard.forEach { it shouldContain UNTRACK_EVERY_SPELLING }
         subjects() shouldContainExactly emptyList()
     }
 
@@ -576,7 +577,7 @@ class CommandLineGitSyncTest {
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
 
         heard.single() shouldContain "git push refused"
-        heard.single() shouldContain "git rm -r --cached .ps"
+        heard.single() shouldContain UNTRACK_EVERY_SPELLING
         subjects(at = remote) shouldContainExactly listOf("init")
         everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
     }

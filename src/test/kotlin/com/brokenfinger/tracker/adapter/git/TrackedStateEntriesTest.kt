@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -183,6 +186,38 @@ class TrackedStateEntriesTest {
         repo.git("commit", "--message", "a merge that adds a session")
 
         TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/m.jsonl")
+    }
+
+    // The way out the refusal names, under every spelling (#377) ------------------------------------
+
+    /**
+     * `git ls-files .ps` listed none of these and `git rm -r --cached .ps` untracked none, so the refusal stood
+     * after the owner followed it (the review of PR #395, measured on APFS). The commands the TRACKED reason
+     * gives, run here exactly as the owner reads them, list each spelling and leave git tracking nothing there.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = [".ps/raw", ".PS/raw", ".Ps/raw", ".pS/raw", ".pſ/raw", ".Pſ/raw", ".PS/RAW", ".pſ/RAW"])
+    fun `the TRACKED reason lists and untracks what git tracks under any spelling of the state directory`(
+        directory: String,
+    ) {
+        tracked(listOf("$directory/x.jsonl"))
+        repo.git("commit", "--message", "as a pull delivers it")
+        val reason = StateDirectory.Refusal.TRACKED.reason
+
+        ran(commandIn(reason, "git ls-files")).trim() shouldBe "$directory/x.jsonl"
+        ran(commandIn(reason, "git rm"))
+
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe false
+    }
+
+    // A command the owner is told to run, as backquoted in [reason].
+    private fun commandIn(reason: String, starting: String): String =
+        Regex("`([^`]+)`").findAll(reason).map { it.groupValues[1] }.first { it.startsWith(starting) }
+
+    // Run as a shell would split it: single quotes keep a word whole. Never through a shell, which Windows lacks.
+    private fun ran(command: String): String {
+        val words = Regex("'([^']*)'|(\\S+)").findAll(command).map { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+        return repo.git(*words.drop(1).toList().toTypedArray())
     }
 
     /** [paths] in the index as git would hold them after a checkout, whatever this filesystem folds. */
