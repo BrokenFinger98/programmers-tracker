@@ -466,6 +466,15 @@ class RecordWritesTest {
         Files.exists(root.resolve(".git")) shouldBe false
     }
 
+    /** A problem's files lie inside `problems/`; the name itself, as a file at the root, is no problem's. */
+    @Test
+    fun `a problem writer refuses the problems name itself, and creates nothing`() {
+        val refusal = shouldThrow<RefusedWriteException> { problems().replace(root.resolve("problems"), "x") }
+
+        refusal.message shouldContain "it lies outside problems/"
+        Files.exists(root.resolve("problems")) shouldBe false
+    }
+
     /** Under either bound, a `.` or `..` is refused even where it would land inside: a writer is never handed one. */
     @Test
     fun `a path naming dot or dot-dot is refused, even where it stays inside problems`() {
