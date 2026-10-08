@@ -15,6 +15,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.Clock
 import java.time.OffsetDateTime
@@ -183,15 +184,21 @@ class RecordWriter private constructor(
      * relative to the record repository.
      *
      * Best-effort by design: the verdict is unrecoverable and the copy is not, so a failed
-     * copy leaves the path naming the raw directory — where the frames still are — rather
-     * than a tidier path that would be a lie.
+     * copy leaves the record with no raw path rather than one that would be a lie. Where the
+     * frames are then is said as it is: kept with the runs by [retireRaw], or — when the raw
+     * log never held any — nowhere (#360).
      */
     private fun copiedRawPath(capture: SettledCapture, attempt: Int): String? {
         if (!capture.movesRaw(attempt)) return null
         val destination = rawAttemptPath.of(capture.lessonId, capture.problem?.title, attempt)
         return runCatching { relativeOf(rawLog.complete(capture.rawSessionId, destination)) }
-            .onFailure { logger.warn("Raw frames stayed in the raw directory ({})", it.javaClass.simpleName) }
+            .onFailure { notCopied(capture, it) }
             .getOrNull()
+    }
+
+    private fun notCopied(capture: SettledCapture, cause: Throwable) {
+        if (cause is NoSuchFileException) return logger.warn(NONE_KEPT, capture.lessonId)
+        logger.warn(NOT_COPIED, capture.lessonId, cause.javaClass.simpleName)
     }
 
     /**
@@ -225,6 +232,10 @@ class RecordWriter private constructor(
     companion object {
         private val logger = LoggerFactory.getLogger(RecordWriter::class.java)
         private val json = Json { ignoreUnknownKeys = true }
+
+        private const val NONE_KEPT = "No raw frames were kept for lesson {}, so its record has no raw copy"
+        private const val NOT_COPIED =
+            "Raw frames for lesson {} were not copied beside the record ({}); they are kept with the runs instead"
 
         /**
          * Opens the writer over an existing record repository, restoring **both** in-memory

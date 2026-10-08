@@ -35,6 +35,9 @@ interface GitSync {
      * Commits whatever is uncommitted, idempotently: it does nothing on a clean tree and is
      * safe to call repeatedly. This is the retry mechanism for everything the scoped path
      * above failed to commit.
+     *
+     * The tracker's own state, the push credential among it, is never part of it, whatever
+     * the repository's ignore rules say (#360).
      */
     fun reconcile(): Boolean
 

@@ -13,6 +13,7 @@ import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.aTruncatedStream
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -185,6 +186,16 @@ class RecordWriterTest {
         // The copy never happened, so there is no path inside the repository to name (#99).
         record.rawPath.shouldBeNull()
         stored().single().outcome shouldBe Outcome.JUDGED
+    }
+
+    /** Nothing kept for a grading is said as that, not as frames that stayed behind somewhere (#360). */
+    @Test
+    fun `a grading whose frames were never kept says so`() = runBlocking<Unit> {
+        val capture = aSettledCapture(rawSessionId = aRawSessionId("never-written.jsonl"))
+
+        val heard = warningsWhile(RecordWriter::class) { runBlocking { writer().write(capture) } }
+
+        heard.single() shouldContain "No raw frames were kept"
     }
 
     /**

@@ -1,13 +1,20 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 
 /**
  * The record repository must ignore the state directory, because the state moved inside it
@@ -185,7 +192,116 @@ class RecordRepositoryIgnoresTest {
         RecordRepositoryIgnores(root.resolve("no/such/directory")).ensure()
     }
 
+    // A .gitignore that is not a regular file (#360) -------------------------------------------
+
+    /**
+     * Git stores links, so a `.gitignore` can arrive as one. Read through and written back, the rules
+     * landed in whatever it pointed at — here a file outside the repository — while git, which never
+     * follows a linked `.gitignore`, ignored nothing. So it is neither read nor written, and said.
+     */
+    @Test
+    fun `a gitignore that is a link is neither read nor written through`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val records = Files.createDirectories(root.resolve("records"))
+        val outside = Files.writeString(root.resolve("someone-elses-ignore"), OUTSIDE)
+        aLink(records.resolve(".gitignore"), outside)
+
+        val warnings = warningsWhile(RecordRepositoryIgnores::class) { RecordRepositoryIgnores(records).ensure() }
+
+        Files.readAllBytes(outside) shouldBe OUTSIDE.toByteArray()
+        Files.isSymbolicLink(records.resolve(".gitignore")) shouldBe true
+        warnings.single() shouldContain "is not a regular file"
+        warnings.single() shouldNotContain "someone-elses-ignore"
+    }
+
+    /** A link to nowhere looks absent unless asked without following it, and writing through it created a file. */
+    @Test
+    fun `a dangling gitignore link creates nothing where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val records = Files.createDirectories(root.resolve("records"))
+        val target = root.resolve("not-there")
+        aLink(records.resolve(".gitignore"), target)
+
+        RecordRepositoryIgnores(records).ensure()
+
+        Files.exists(target, LinkOption.NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /**
+     * Only an absent file is an empty one. A `.gitignore` that is there and is not UTF-8 read as empty,
+     * and the rules were written over everything it held.
+     */
+    @Test
+    fun `a gitignore that cannot be read as text is left exactly as it was`() {
+        val bytes = byteArrayOf(0xC3.toByte(), 0x28, '\n'.code.toByte()) + "# mine\n".toByteArray()
+        Files.write(root.resolve(".gitignore"), bytes)
+
+        val warnings = warningsWhile(RecordRepositoryIgnores::class) { RecordRepositoryIgnores(root).ensure() }
+
+        Files.readAllBytes(root.resolve(".gitignore")) shouldBe bytes
+        warnings.single() shouldContain "Could not ensure"
+    }
+
+    /**
+     * An owner who made `.gitignore` read-only meant nothing to rewrite it, and a replace needs only the
+     * directory, so it went through anyway (#360). It is left as it is, and the missing rules are said.
+     */
+    @Test
+    fun `a read-only gitignore is left as it is, and said`() {
+        assumeTrue(keepsPosixPermissions(root), "this test sets POSIX permissions")
+        val file = write(".gitignore", "# mine, read-only on purpose\n")
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("r--r--r--"))
+        assumeTrue(!Files.isWritable(file), "a superuser writes it anyway")
+
+        val warnings = warningsWhile(RecordRepositoryIgnores::class) { RecordRepositoryIgnores(root).ensure() }
+
+        read(".gitignore") shouldBe "# mine, read-only on purpose\n"
+        warnings.single() shouldContain "read-only"
+    }
+
+    /**
+     * Replaced, never written into: that is what stops a link that appears between the check and
+     * the write from being written through. A hard link shows the difference without the race — it
+     * is a regular file, and written into, it changed the file it shares with.
+     */
+    @Test
+    fun `a regular gitignore gains its rules by replacement, never by writing into it`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a hard link")
+        val records = Files.createDirectories(root.resolve("records"))
+        val shared = Files.writeString(root.resolve("shared-ignore"), OUTSIDE)
+        Files.createLink(records.resolve(".gitignore"), shared)
+
+        RecordRepositoryIgnores(records).ensure()
+
+        Files.readAllBytes(shared) shouldBe OUTSIDE.toByteArray()
+        Files.readString(records.resolve(".gitignore")).shouldContain("\n.ps/\n")
+    }
+
+    /**
+     * The rules are added by replacing the file rather than writing into it, which is what stops a
+     * link that appears in between from being written through. The replacement must not narrow
+     * the permissions the owner's file had.
+     */
+    @Test
+    fun `a gitignore that gains a rule keeps its permissions`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+        val file = write(".gitignore", "# mine\n")
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(GROUP_WRITABLE))
+
+        RecordRepositoryIgnores(root).ensure()
+
+        read(".gitignore").shouldContain("\n.ps/\n")
+        PosixFilePermissions.toString(Files.getPosixFilePermissions(file)) shouldBe GROUP_WRITABLE
+    }
+
     private fun write(name: String, text: String) = Files.writeString(root.resolve(name), text)
 
     private fun read(name: String): String = Files.readString(root.resolve(name))
+
+    private companion object {
+        const val OUTSIDE = "# a file outside the records repository\n"
+
+        /** Neither what a temporary file starts as nor the usual default, so keeping it proves something. */
+        const val GROUP_WRITABLE = "rw-rw-r--"
+    }
 }

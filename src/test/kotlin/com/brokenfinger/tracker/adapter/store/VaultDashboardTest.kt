@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -27,7 +28,7 @@ class VaultDashboardTest {
 
     @Test
     fun `writes the dashboard into a vault that has none`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(dashboard) shouldContain "views:"
     }
@@ -40,7 +41,7 @@ class VaultDashboardTest {
      */
     @Test
     fun `seeds both readme twins alongside the dashboard`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(root.resolve("README.md")) shouldContain "# ps-records"
         Files.readString(root.resolve("README.ko.md")) shouldContain "translated-from: README.md@"
@@ -51,7 +52,7 @@ class VaultDashboardTest {
     fun `a missing seed is written even when the others exist`() {
         Files.writeString(root.resolve("README.md"), "mine\n")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(root.resolve("README.md")) shouldBe "mine\n"
         Files.exists(dashboard) shouldBe true
@@ -66,7 +67,7 @@ class VaultDashboardTest {
     fun `a repository that predates the feature still gets one`() {
         Files.writeString(root.resolve("README.md"), "an older vault\n")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.exists(dashboard) shouldBe true
     }
@@ -80,7 +81,7 @@ class VaultDashboardTest {
     fun `never overwrites a dashboard the reader has edited`() {
         Files.writeString(dashboard, "views: [] # mine\n")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(dashboard) shouldBe "views: [] # mine\n"
     }
@@ -92,11 +93,11 @@ class VaultDashboardTest {
      */
     @Test
     fun `refreshes a seed the reader never touched`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
         Files.writeString(dashboard, "stale content the server itself wrote")
-        SeedLedger(root).record("dashboard.base", "stale content the server itself wrote")
+        SeedLedger(root, aStateDirectory(root)).record("dashboard.base", "stale content the server itself wrote")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(dashboard) shouldContain "views:"
     }
@@ -111,7 +112,7 @@ class VaultDashboardTest {
         Files.createDirectories(root)
         Files.writeString(dashboard, "from a vault older than the ledger\n")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(dashboard) shouldBe "from a vault older than the ledger\n"
     }
@@ -119,10 +120,10 @@ class VaultDashboardTest {
     /** Startup runs on every boot; the second pass must be a no-op, not a second write. */
     @Test
     fun `is idempotent across boots`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
         val once = Files.readAllBytes(dashboard)
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readAllBytes(dashboard) shouldBe once
     }
@@ -134,7 +135,7 @@ class VaultDashboardTest {
      */
     @Test
     fun `does not throw when the vault cannot be written`() {
-        VaultDashboard(root.resolve("no/such/directory")).ensure()
+        root.resolve("no/such/directory").let { VaultDashboard(it, SeedLedger(it, aStateDirectory(it))) }.ensure()
     }
 
     /**
@@ -153,7 +154,7 @@ class VaultDashboardTest {
      */
     @Test
     fun `ships a dashboard Obsidian will not rewrite`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readAllLines(dashboard).filter { it.isBlank() || it.trimStart().startsWith("#") }
             .shouldBeEmpty()
@@ -172,24 +173,24 @@ class VaultDashboardTest {
      */
     @Test
     fun `adopts a seed that already matches what we ship, whatever the ledger says`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
         val ours = Files.readString(dashboard)
-        SeedLedger(root).record("dashboard.base", "what an older version of this server shipped")
+        SeedLedger(root, aStateDirectory(root)).record("dashboard.base", "what an older version of this server shipped")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
-        SeedLedger(root).isUnchanged("dashboard.base", dashboard).shouldBeTrue()
+        SeedLedger(root, aStateDirectory(root)).isUnchanged("dashboard.base", dashboard).shouldBeTrue()
         Files.readString(dashboard) shouldBe ours
     }
 
     /** Adoption is not a licence to overwrite: one character different is still theirs. */
     @Test
     fun `does not adopt a seed that differs by a single character`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
         Files.writeString(dashboard, Files.readString(dashboard) + " ")
-        SeedLedger(root).record("dashboard.base", "something else entirely")
+        SeedLedger(root, aStateDirectory(root)).record("dashboard.base", "something else entirely")
 
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         Files.readString(dashboard) shouldEndWith " "
     }
@@ -204,7 +205,7 @@ class VaultDashboardTest {
      */
     @Test
     fun `ships the views the vault is meant to answer with`() {
-        VaultDashboard(root).ensure()
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
         val text = Files.readString(dashboard)
         listOf("Recent", "Not passed yet", "By attempts", "By part", "By language", "Tags")

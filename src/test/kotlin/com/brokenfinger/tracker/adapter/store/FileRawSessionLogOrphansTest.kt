@@ -1,11 +1,13 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 /**
  * Orphaned frames were written and then never mentioned again (#169). These pin the query
@@ -59,5 +61,5 @@ class FileRawSessionLogOrphansTest {
         log.orphans().map { it.lessonId } shouldBe listOf(120802L)
     }
 
-    private fun log() = FileRawSessionLog.under(root)
+    private fun log() = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
 }

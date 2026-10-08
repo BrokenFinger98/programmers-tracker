@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -63,7 +64,7 @@ class FileBackupLogTest {
         backupLog().lastSuccessAt() shouldBe null
     }
 
-    private fun backupLog() = FileBackupLog.under(root)
+    private fun backupLog() = FileBackupLog.under(root, aStateDirectory(root))
 
     private fun write(text: String) {
         val file = root.resolve(".ps/backup.json")

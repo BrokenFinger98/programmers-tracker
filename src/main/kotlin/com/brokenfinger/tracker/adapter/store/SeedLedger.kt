@@ -24,9 +24,13 @@ import java.security.MessageDigest
  * the status quo.
  *
  * Lives in `.ps/` beside the timers and the backup marker (#126) — process state the record
- * repository gitignores, because it says nothing about anybody's solving history.
+ * repository gitignores, because it says nothing about anybody's solving history. Written by
+ * temp-and-rename through [AtomicStateFile.under], and only while [state] allows it: a pull can
+ * deliver `.ps/seeds.json` as a link, and the ledger overwrote what it led to at every boot (#360).
  */
-class SeedLedger(private val recordRoot: Path) {
+class SeedLedger(recordRoot: Path, state: StateDirectory) {
+    private val ledger = AtomicStateFile.under(recordRoot, LEDGER, state)
+
     /** True only when the file is exactly what we last wrote — never for a file we have no record of. */
     fun isUnchanged(seed: String, file: Path): Boolean {
         val recorded = recorded()[seed] ?: return false
@@ -35,9 +39,7 @@ class SeedLedger(private val recordRoot: Path) {
     }
 
     fun record(seed: String, content: String) {
-        val file = recordRoot.resolve(LEDGER)
-        Files.createDirectories(file.parent)
-        Files.writeString(file, JSON.encodeToString(recorded() + (seed to hashOf(content))))
+        ledger.write(JSON.encodeToString(recorded() + (seed to hashOf(content))))
     }
 
     /**
@@ -45,14 +47,15 @@ class SeedLedger(private val recordRoot: Path) {
      * changes nothing. A corrupt ledger must never be a reason to overwrite somebody's file.
      */
     private fun recorded(): Map<String, String> =
-        runCatching { JSON.decodeFromString<Map<String, String>>(Files.readString(recordRoot.resolve(LEDGER))) }
+        runCatching { JSON.decodeFromString<Map<String, String>>(ledger.read() ?: NOTHING_RECORDED) }
             .getOrDefault(emptyMap())
 
     private fun hashOf(content: String): String =
         MessageDigest.getInstance("SHA-256").digest(content.toByteArray()).joinToString("") { "%02x".format(it) }
 
     private companion object {
-        const val LEDGER = ".ps/seeds.json"
+        const val LEDGER = "seeds.json"
+        const val NOTHING_RECORDED = "{}"
 
         val JSON = Json { prettyPrint = true }
     }

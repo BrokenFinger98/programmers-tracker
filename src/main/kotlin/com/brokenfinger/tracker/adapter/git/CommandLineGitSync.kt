@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.git.StoredCredential.Patterns
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.application.GitSync
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
@@ -7,8 +9,10 @@ import com.brokenfinger.tracker.domain.Verdict
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.Duration
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * [GitSync] over the `git` command line, run inside the record repository.
@@ -34,9 +38,33 @@ import java.util.concurrent.TimeUnit
  * git call is skipped for the lifetime of this instance. Failing each commit forever and
  * logging each one would bury every other message the tool has to say, and the records
  * themselves are written either way.
+ *
+ * **What it commits and pushes is kept from carrying the push token (#360).** The token lives in
+ * `.ps/`, inside the repository, and a clone or a pull can deliver what switches a single guard
+ * off — a `.gitignore` git will not read, a link where a file was, a name the filesystem folds to
+ * `.ps`, a file git tracks inside it. So the guards are layered, each covering what the one before
+ * cannot:
+ *
+ * 1. Reconciliation leaves `.ps` — the entry and what is under it — out by pathspec, in any ASCII
+ *    case, whatever `.gitignore` says ([RECONCILE_SCOPE]).
+ * 2. No commit, reconciliation or push runs unless `.ps` is the real state directory and git tracks
+ *    nothing that is it or under it, under any name the filesystem folds to it ([StateDirectory]).
+ * 3. The credential is replaced, never written through a link ([GithubRemote]), and git is only
+ *    pointed at it while it is a regular file ([PushCredential]).
+ * 4. The content gate: the working tree within a commit's scope before staging, what is staged
+ *    before the commit, and every commit a push would send before the push, are searched for the
+ *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
+ *    remote, and runs with replace refs off, so the search reads the objects the push sends — for the
+ *    commits that remote's tracking refs lack, which a stale ref understates.
+ *
+ * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
+ * And each check is of a path at one moment, not of a handle held to the write — a swap in between
+ * is a window the checks do not close. Every refusal is one WARN that names why and never the token,
+ * and a false — fail closed.
  */
 class CommandLineGitSync(
     private val root: Path,
+    environment: Map<String, String> = System.getenv(),
     private val waitFor: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GitSync {
     /**
@@ -45,6 +73,10 @@ class CommandLineGitSync(
      */
     private val credential = PushCredential(root)
 
+    private val process = GitProcess(root, environment)
+
+    private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
+
     /**
      * Asked once, on the first git call rather than at construction — the composition root
      * builds this before the user has any chance to fix it, and a lazy answer keeps the
@@ -52,6 +84,15 @@ class CommandLineGitSync(
      * calls still ask once.
      */
     private val isRepository: Boolean by lazy { detectRepository() }
+
+    /** Whether git's ignore rules for `.ps/` were already asked about — once, like [isRepository]. */
+    private val stateIgnoreAsked = AtomicBoolean()
+
+    /** Whether waiting out the user's merge, cherry-pick, revert or rebase was already said. */
+    private val waitingSaid = AtomicBoolean()
+
+    /** The last head a push searched clean, and what it was searched against. */
+    private val lastSearchedClean = AtomicReference<SearchedHead?>()
 
     override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean =
         inRepository("commit") { commitScoped(record, paths) }
@@ -62,11 +103,28 @@ class CommandLineGitSync(
 
     // `git remote` lists names and prints nothing when there is none, so an empty answer is the
     // whole signal. A failure to run it answers false: unknown is not "configured".
-    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.output.isNotBlank() }
+    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
-        return neverThrowing(what, action)
+        return neverThrowing(what) { inVerifiedState(what) && action() }
+    }
+
+    /**
+     * Commits and pushes run only while `.ps` is the tracker's own state directory and git tracks
+     * nothing that is it or under it, in any name that comes to it (#360). A link a pull swapped in, a
+     * name the filesystem folds to `.ps`, or a file or link git tracks inside it turns state the server
+     * writes into a path a commit can carry — raw frames, timers, the credential. Checked on every call,
+     * because a pull can change it while the server runs.
+     */
+    private fun inVerifiedState(what: String): Boolean = when (val inspection = stateDirectory.forGit()) {
+        is StateDirectory.Usable -> true
+        is StateDirectory.Refused -> refusedState(what, inspection.refusal.reason)
+    }
+
+    private fun refusedState(what: String, reason: String): Boolean {
+        logger.warn(STATE_REFUSED, what, root, reason)
+        return false
     }
 
     // `rev-parse` is git's own answer and covers what a `.git` directory test does not — a
@@ -77,7 +135,7 @@ class CommandLineGitSync(
     // unrelated working tree under our message and pushed it (#93).
     private fun detectRepository(): Boolean {
         val top = runCatching { git(listOf("rev-parse", "--show-toplevel")) }.getOrNull()
-        if (top != null && top.succeeded() && isRoot(top.output.trim())) return true
+        if (top != null && top.succeeded() && isRoot(top.stdout.trim())) return true
         logger.warn(NOT_A_REPOSITORY, root)
         return false
     }
@@ -91,10 +149,10 @@ class CommandLineGitSync(
     // solution file ride along with the next submit or the next reconciliation.
     private fun commitScoped(record: SubmissionRecord, paths: List<Path>): Boolean {
         if (record.action != GradingAction.SUBMIT) return true
+        if (operationInProgress()) return waitingItOut()
         val scope = insideRoot(paths)
         if (scope.isEmpty() || !isDirty(scope)) return true
-        val message = CommitMessage.of(record)
-        if (!retryingOnContention("commit") { stageAndCommit(scope, message) }) return false
+        if (!committed("commit", scope, CommitMessage.of(record))) return false
         pushOnPass(record)
         return true
     }
@@ -113,28 +171,194 @@ class CommandLineGitSync(
     }
 
     private fun commitEverything(): Boolean {
-        if (!isDirty(emptyList())) return true
-        return retryingOnContention("reconcile") { stageAllAndCommit() }
+        warnOnceUnlessStateIgnored()
+        if (operationInProgress()) return waitingItOut()
+        if (!isDirty(RECONCILE_SCOPE)) return true
+        return committed("reconcile", RECONCILE_SCOPE, RECONCILE_MESSAGE)
     }
 
+    /**
+     * Says once per instance, on the first reconciliation, when git's own rules do not ignore
+     * `.ps/` — a `.gitignore` without the rule, or one git cannot read, such as a link. The
+     * pathspec keeps `.ps/` out of reconciliation either way; the warning is for every other rule
+     * in that file, which stands or falls with it, and for every `git add` that is not ours.
+     *
+     * The question is the rules', so it is asked as `.ps/` and without the index. Asked as `.ps`,
+     * git applies the directory rule `.ps/` only to a directory that exists, and a fresh repository
+     * has none yet; asked of the index, a state file someone staged by hand reads as "not
+     * ignored" because it is tracked. Each would report a working rule as broken.
+     */
+    private fun warnOnceUnlessStateIgnored() {
+        if (stateIgnoreAsked.getAndSet(true)) return
+        if (git(listOf("check-ignore", "--quiet", "--no-index", STATE_DIRECTORY)).code != NO_RULE_MATCHED) return
+        logger.warn(STATE_NOT_IGNORED_WARNING, root)
+    }
+
+    /**
+     * A merge, cherry-pick, revert or rebase the user has open. Git refuses a partial commit inside one
+     * ("cannot do a partial commit during a merge"), and the staging before it would already have marked
+     * every conflict resolved. Asked where git keeps its state, which in a worktree is not `.git/`.
+     */
+    private fun operationInProgress(): Boolean {
+        val paths = git(listOf("rev-parse") + IN_PROGRESS.flatMap { listOf("--git-path", it) })
+        if (!paths.succeeded()) return false
+        return paths.stdout.lines().filter { it.isNotBlank() }.any { Files.exists(root.resolve(it.trim())) }
+    }
+
+    // Records stay uncommitted until the user finishes or aborts; the next reconciliation after that
+    // picks them up. Said once, because the backup asks every minute while it is due. A submit waits
+    // too: its staging marked a conflicted record resolved, markers and all (the review's N11).
+    private fun waitingItOut(): Boolean {
+        if (!waitingSaid.getAndSet(true)) logger.warn(OPERATION_IN_PROGRESS, root)
+        return false
+    }
+
+    /**
+     * One branch to one remote, named on the command line (#360). A bare `git push` sent whatever
+     * `remote.<r>.push` or `push.default=matching` said — branches the search never looked at — so the
+     * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
+     * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
+     * name under `push.default=upstream` is not where this push goes. The search covers the commits that
+     * remote's own branches lack.
+     *
+     * Before the first commit there is nothing to push, and that is answered as a push that succeeded
+     * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
+     * a documented way to run — is nowhere to push, so nothing is searched for it.
+     */
     private fun pushed(): Boolean {
-        val result = git(listOf("push"))
-        if (result.succeeded()) return true
-        return failed("push", result)
+        val head = headCommit() ?: return true
+        val branch = currentBranch() ?: return detached()
+        val remote = pushRemoteOf(branch)
+        if (!hasDestination(remote)) return noRemote(remote)
+        if (!searchedClean(SearchedHead(head, remote, fingerprintOfStore()))) return false
+        val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
+        return result.succeeded() || failed("push", result)
     }
 
-    // `git commit -- <paths>` is a partial commit: it takes those paths from the working tree
-    // and ignores the rest of the index, which is what keeps another process's staged file out.
-    private fun stageAndCommit(scope: List<String>, message: String): GitResult {
-        val staged = git(listOf("add", "--") + scope)
-        if (!staged.succeeded()) return staged
-        return git(listOf("commit", "--message", message, "--") + scope)
+    private fun headCommit(): String? =
+        git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
+
+    private fun hasDestination(remote: String): Boolean =
+        listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
+
+    private fun noRemote(remote: String): Boolean {
+        logger.warn(NO_REMOTE, root, remote)
+        return false
     }
 
-    private fun stageAllAndCommit(): GitResult {
-        val staged = git(listOf("add", "--all"))
-        if (!staged.succeeded()) return staged
-        return git(listOf("commit", "--message", RECONCILE_MESSAGE))
+    /**
+     * A head already searched clean — for the same remote, against the same stored token — is not
+     * searched again. A push that kept failing, to a remote that was down, searched the same commits at
+     * every attempt: 23.4 s for 1,660 commits, every minute the backup was due (the review of ea1357c).
+     */
+    private fun searchedClean(head: SearchedHead): Boolean {
+        if (lastSearchedClean.get() == head) return true
+        if (!carriesNoToken("push") { outgoingSearches(head.remote) }) return false
+        lastSearchedClean.set(head)
+        return true
+    }
+
+    // What was stored when a head was searched, kept as a digest rather than as the secret itself.
+    private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {
+        is Patterns -> MessageDigest.getInstance("SHA-256").digest(stored.asInput().toByteArray()).toHexString()
+        else -> stored.toString()
+    }
+
+    private fun currentBranch(): String? =
+        git(listOf("symbolic-ref", "--quiet", "--short", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
+
+    private fun detached(): Boolean {
+        logger.warn("git push skipped in {}: HEAD is detached, so there is no branch to push", root)
+        return false
+    }
+
+    // The remote git itself would push the branch to, in git's own order of precedence.
+    private fun pushRemoteOf(branch: String): String =
+        listOf("branch.$branch.pushRemote", "remote.pushDefault", "branch.$branch.remote")
+            .firstNotNullOfOrNull { configured(it) } ?: DEFAULT_REMOTE
+
+    private fun configured(key: String): String? =
+        git(listOf("config", "--get", key)).takeIf { it.succeeded() }?.stdout?.trim()?.ifEmpty { null }
+
+    /**
+     * Searches the working tree within [scope], stages it, searches what is staged, and commits exactly
+     * [scope]. `add` with a pathspec stages removals as well (git 2.0 and later), with or without `--all`.
+     *
+     * Searched before staging as well as after: a refusal found only after `add` left the file that
+     * carries the token staged, where the next plain `git commit` takes it (the review's M5). Searched
+     * with `--untracked`, which leaves out what git ignores, and the scope leaves `.ps` out besides.
+     *
+     * `git commit -- <paths>` is a partial commit: it takes those paths from the working tree and
+     * ignores the rest of the index, which is what keeps another process's staged file out. On a
+     * branch with no commit yet it is still a root commit (measured on git 2.48.1). It reads the
+     * working tree again, so a file that changes between the search and the commit is committed
+     * unsearched — which is why the push searches again, what was actually committed.
+     */
+    private fun committed(what: String, scope: List<String>, message: String): Boolean {
+        if (!carriesNoToken(what) { listOf(listOf("--untracked", "--") + scope) }) return false
+        if (!retryingOnContention(what) { git(listOf("add", "--all", "--") + scope) }) return false
+        if (!carriesNoToken(what) { listOf(listOf("--cached", "--") + scope) }) return false
+        return retryingOnContention(what) { git(listOf("commit", "--message", message, "--") + scope) }
+    }
+
+    /**
+     * The content gate (#360): true when no GitHub token is in any of the searches — each the arguments
+     * of one `git grep`. Two kinds of pattern go to each: anything shaped like a GitHub token, always,
+     * so the gate does not depend on what is stored and finds a token rotated out of the store (the
+     * review's R1); and what the store holds, as fixed strings on stdin, never in argv. It searches the
+     * content git would carry, not a path, so it holds wherever a token turns up — though not in a
+     * commit or tag message, which it does not read.
+     *
+     * Fails closed, with one WARN that never carries what was searched for: a store that is there and
+     * cannot be read, searches that cannot be listed (null), a search that does not finish, a match.
+     */
+    private fun carriesNoToken(what: String, searches: () -> List<List<String>>?): Boolean {
+        val stored = credential.stored()
+        if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
+        return searchedClean(what, stored, searches())
+    }
+
+    private fun searchedClean(what: String, stored: StoredCredential, searches: List<List<String>>?): Boolean {
+        if (searches == null) return refused(CREDENTIAL_UNSEARCHED, what)
+        val outcome = searches.asSequence().flatMap { greps(stored, it) }.firstOrNull { it != NO_MATCH } ?: return true
+        if (outcome == MATCH) return refused(CREDENTIAL_FOUND, what)
+        return refused(CREDENTIAL_UNSEARCHED, what)
+    }
+
+    // The token shapes first, then what is stored — the second only runs if the first found nothing.
+    private fun greps(stored: StoredCredential, search: List<String>): Sequence<Int> = sequence {
+        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TOKEN_SHAPES.flatMap { listOf("-e", it) } + search)))
+        if (stored is Patterns) yield(outcomeOf(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput())))
+    }
+
+    /**
+     * What a grep's ending means for the gate. One that could not read a blob says so on stderr and
+     * exits 1, the code for "nothing found" (measured on 2.48.1 and 2.53.0) — not a search that ran to
+     * the end. A warning, such as a `.gitignore` git cannot follow, is not an error.
+     */
+    private fun outcomeOf(result: GitResult): Int {
+        if (result.code == NO_MATCH && result.stderr.lines().any { it.startsWith("error:") }) return UNREAD
+        return result.code
+    }
+
+    /**
+     * One search per batch of the commits a push to [remote] would send: those none of its
+     * remote-tracking branches holds. A push updates the branch it pushed, so after the first one this
+     * is what was committed since; with none at all it is every commit. Another remote's branches do
+     * not count — the review's N4: a commit already pushed to a second remote was skipped, and sent here
+     * unsearched. The tracker configures no upstream (`push.default=current`), so `@{u}..HEAD` would
+     * name nothing. Null when they cannot be listed.
+     */
+    private fun outgoingSearches(remote: String): List<List<String>>? {
+        val listed = git(listOf("rev-list", "HEAD", "--not", "--remotes=$remote"))
+        if (!listed.succeeded()) return null
+        return listed.stdout.lines().filter { it.isNotBlank() }.chunked(REVISIONS_PER_SEARCH) { it + "--" }
+    }
+
+    /** One WARN naming why — never what was searched for, or where it matched — and false. */
+    private fun refused(why: String, what: String): Boolean {
+        logger.warn(why, what, root)
+        return false
     }
 
     /**
@@ -151,23 +375,37 @@ class CommandLineGitSync(
         return abandoned(what)
     }
 
-    /** Whether anything under [scope] differs from HEAD; an empty scope asks about everything. */
-    private fun isDirty(scope: List<String>): Boolean =
-        git(listOf("status", "--porcelain", "--") + scope).output.isNotBlank()
+    /**
+     * Whether anything under [scope] differs from HEAD, read from git's answer alone. A warning is
+     * not a change: while `.gitignore` is a link, git warns on every call, and that warning once
+     * made a clean tree look dirty and every reconciliation an empty commit that failed (#360). A
+     * status that failed still counts as dirty, so the staging that follows runs and reports why.
+     *
+     * Untracked files are always listed: `status.showUntrackedFiles=no` is the user's setting, and
+     * honoured here it made every new record look like nothing to reconcile (#360).
+     */
+    private fun isDirty(scope: List<String>): Boolean {
+        val status = git(listOf("status", "--porcelain", "--untracked-files=all", "--") + scope)
+        return !status.succeeded() || status.stdout.isNotBlank()
+    }
 
     private fun insideRoot(paths: List<Path>): List<String> = paths.mapNotNull { relativeOf(it) }.distinct()
 
     // Forward slashes on every host, as git wants them. A path that escapes the record
     // repository is dropped rather than staged: committing a file the user never meant to
-    // publish is not a failure we get to make quietly.
+    // publish is not a failure we get to make quietly. So is one under the state directory, in any
+    // case a filesystem may fold to it (#360): no record lives there.
     private fun relativeOf(path: Path): String? {
         val relative = root.toAbsolutePath().relativize(path.toAbsolutePath())
-        if (relative.startsWith("..")) return outside()
+        if (relative.startsWith("..")) return notStaged("outside the record repository")
+        if (relative.getName(0).toString().equals(StateDirectory.NAME, ignoreCase = true)) {
+            return notStaged("under the state directory")
+        }
         return relative.joinToString("/")
     }
 
-    private fun outside(): String? {
-        logger.warn("A path outside the record repository was not staged")
+    private fun notStaged(where: String): String? {
+        logger.warn("A path {} was not staged", where)
         return null
     }
 
@@ -194,23 +432,8 @@ class CommandLineGitSync(
 
     private fun backoffFor(attempt: Int): Duration = BACKOFF_SCHEDULE.getOrElse(attempt - 1) { BACKOFF_SCHEDULE.last() }
 
-    /**
-     * One `git` invocation with stderr folded into the output, so a diagnosis never depends
-     * on which stream git chose.
-     *
-     * Output goes to a file rather than a pipe, which is what makes [TIMEOUT] a real bound:
-     * a full pipe buffer would block us before we ever got to wait. Terminal prompting is
-     * off, so a push cannot stop for credentials — and the timeout is there for the case
-     * where it stalls anyway, because a capture must never wait on the network.
-     */
-    private fun git(args: List<String>): GitResult {
-        val output = Files.createTempFile("git-", ".out")
-        try {
-            return GitResult(exitCodeOf(args, output), Files.readString(output))
-        } finally {
-            Files.deleteIfExists(output)
-        }
-    }
+    /** One `git` invocation, as [GitProcess] runs every one of them. */
+    private fun git(args: List<String>, input: String? = null): GitResult = process.run(commandFor(args), input)
 
     /**
      * The exact argument list handed to the process, credential prefix included. Internal
@@ -219,26 +442,105 @@ class CommandLineGitSync(
      */
     internal fun commandFor(args: List<String>): List<String> = listOf(GIT) + credential.gitConfig() + args
 
-    private fun exitCodeOf(args: List<String>, output: Path): Int {
-        val process = ProcessBuilder(commandFor(args))
-            .directory(root.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(output.toFile())
-            .also { it.environment()[NO_PROMPT] = "0" }
-            .start()
-        if (process.waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)) return process.exitValue()
-        process.destroyForcibly()
-        return TIMED_OUT
-    }
-
     companion object {
         /** What a reconciliation commit says: these files were left behind, not chosen. */
         const val RECONCILE_MESSAGE = "chore: reconcile uncommitted records"
+
+        /**
+         * Everything but what is under `.ps/`, the tracker's own state — the push token is
+         * `.ps/git-credentials`. The check, the staging and the commit all take this pathspec, so
+         * nothing under `.ps/` enters a reconciliation whatever `.gitignore` says, or whether git
+         * can read it at all (#360).
+         *
+         * **Spelled as a glob on purpose.** `add --all` exits 1 when an argument names a path the
+         * ignore rules exclude, and an exclusion counts as naming it: with `.ps/` ignored, as in a
+         * healthy repository, `:(exclude).ps`, `:!.ps` and every other spelling that starts with
+         * `.ps` failed each reconciliation (measured on git 2.48.1). git judges whether an
+         * argument names a path by its prefix before the first wildcard (`exclude_matches_pathspec`
+         * in git's `dir.c`); `[.]` leaves this one no prefix, and still matches nothing but the dot.
+         *
+         * **And in any ASCII case** (`icase`), so `.PS/` is left out too (#360). On a case-insensitive
+         * volume a case alias of `.ps` is refused before git runs ([StateDirectory]); this is what holds
+         * where both spellings can stand side by side. ASCII only — `.p` with U+017F, which APFS folds
+         * to `.ps`, is not matched; git tracking anything under it refuses before git runs, and the
+         * content gate stands behind that.
+         *
+         * **The entry itself as well as what is under it.** A partial commit takes every path the
+         * pathspec matches in HEAD too: with a tracked `.ps` link taken out of the index by hand and a
+         * real directory in its place, it found a directory where a link was tracked and stopped —
+         * "'.ps' does not have a commit checked out" (measured on 2.48.1 and 2.53.0).
+         */
+        private val RECONCILE_SCOPE = "[${StateDirectory.NAME.first()}]${StateDirectory.NAME.drop(1)}".let { glob ->
+            listOf(".", ":(exclude,glob,icase)$glob", ":(exclude,glob,icase)$glob/**")
+        }
 
         /** Said once per process, so it stays readable instead of drowning every other line. */
         const val NOT_A_REPOSITORY =
             "{} is not a git repository, so records are written but never committed. " +
                 "Run `git init` there and restart to keep a history — this is said only once."
+
+        private const val STATE_NOT_IGNORED_WARNING =
+            "git does not ignore .ps/ in {}: its .gitignore lacks the rule, or git cannot read the " +
+                "file — git never follows a .gitignore that is a symbolic link, and then none of its " +
+                "rules (.DS_Store, editor state) apply. The tracker's own commits still leave .ps/ out, " +
+                "and it searches what it commits and pushes for the token; another tool's git add does " +
+                "neither. Make .gitignore a regular file that holds the rule. This is said only once."
+
+        /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
+        private const val STATE_DIRECTORY = "${StateDirectory.NAME}/"
+
+        private const val NO_REMOTE =
+            "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
+
+        private const val OPERATION_IN_PROGRESS =
+            "{} has a merge, cherry-pick, revert or rebase in progress, so the tracker's commits wait " +
+                "rather than commit inside it: records stay uncommitted until it is finished or aborted. " +
+                "This is said only once."
+
+        /** Where git marks an operation the user has open, as `git rev-parse --git-path` names them. */
+        private val IN_PROGRESS =
+            listOf("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply")
+
+        /** Why is the state directory's own, from [StateDirectory]: never a path below `.ps`, never content. */
+        private const val STATE_REFUSED = "git {} refused in {}: {}."
+
+        private const val CREDENTIAL_FOUND =
+            "git {} refused in {}: what it would send carries a GitHub token — the one stored in " +
+                ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub " +
+                "and remove it from history."
+
+        private const val CREDENTIAL_UNREADABLE =
+            "git {} refused in {}: .ps/git-credentials is not a regular file, or cannot be read, so the push " +
+                "token cannot be searched for. Replace it with a regular file, or remove it."
+
+        private const val CREDENTIAL_UNSEARCHED =
+            "git {} refused in {}: the search for the push token did not run to the end, and nothing goes " +
+                "out unsearched."
+
+        /** `git grep -q` exits 0 when something matched and 1 when nothing did; anything else is an error. */
+        private const val MATCH = 0
+        private const val NO_MATCH = 1
+
+        /** A grep that exited as if nothing matched, after failing to read something it was asked to search. */
+        private const val UNREAD = -2
+
+        /**
+         * GitHub's token formats, as `git grep -E` patterns: they are not secret, so they go in argv.
+         * The classic kinds are a prefix, `_`, then 30 random and 6 checksum characters (GitHub's
+         * engineering blog), 36 in all; `_` is in the class because a stateless installation token is
+         * `ghs_<app id>_<JWT>`, whose JWT header alone runs past 36. A fine-grained token is
+         * `github_pat_` and more; its length is not documented, and the bound stays at 60.
+         */
+        private val TOKEN_SHAPES = listOf("gh[pousr]_[A-Za-z0-9_]{36,}", "github_pat_[A-Za-z0-9_]{60,}")
+
+        /** Where a push goes when git names no other remote for the branch. */
+        private const val DEFAULT_REMOTE = "origin"
+
+        /** Commits per `git grep`, which keeps every argument list far below any system's limit. */
+        private const val REVISIONS_PER_SEARCH = 256
+
+        /** `git check-ignore` exits 1 for a path no rule ignores; 0 is ignored, 128 is an error. */
+        private const val NO_RULE_MATCHED = 1
 
         /**
          * Four retries and then the next reconciliation takes over. An external lock holder
@@ -250,29 +552,11 @@ class CommandLineGitSync(
 
         val BACKOFF_SCHEDULE: List<Duration> = listOf(100L, 200L, 400L, 800L).map(Duration::ofMillis)
 
-        /** Generous for a local repository, and short enough that nothing waits on it. */
-        val TIMEOUT: Duration = Duration.ofSeconds(60)
-
         private const val GIT = "git"
-        private const val NO_PROMPT = "GIT_TERMINAL_PROMPT"
-        private const val TIMED_OUT = -1
 
         private val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java)
     }
 }
 
-/** One finished `git` invocation — its exit code and everything it printed. */
-private data class GitResult(val code: Int, val output: String) {
-    fun succeeded(): Boolean = code == 0
-
-    // Git's own words when another process holds the index: "Unable to create
-    // '<repo>/.git/index.lock': File exists." followed by "Another git process seems to be
-    // running in this repository." Measured 2026-08-05 against git 2.48.1. Both spellings are
-    // matched because the second survives a git that rewords the first.
-    fun blockedByLock(): Boolean = output.contains(LOCK) || output.contains(ANOTHER_PROCESS)
-
-    private companion object {
-        const val LOCK = "index.lock"
-        const val ANOTHER_PROCESS = "Another git process"
-    }
-}
+/** A head searched clean: the commit, the remote it was searched for, and a digest of what was stored. */
+private data class SearchedHead(val commit: String, val remote: String, val store: String)

@@ -1,6 +1,11 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import com.brokenfinger.tracker.support.git.GitWorkspace
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import com.sun.net.httpserver.HttpServer
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -231,6 +236,113 @@ class GithubRemoteTest {
             perms.none { it.name.startsWith("GROUP") || it.name.startsWith("OTHERS") }.shouldBeTrue()
         }
         git("remote", "get-url", "origin") shouldNotContain "ghp_test_token"
+    }
+
+    /**
+     * `.ps` a tracked link into the tree, as a pull can leave it: the credential written there would be
+     * a path git tracks. It is not written, it is said, and nothing is wired on top of it (#360).
+     */
+    @Test
+    fun `stores no credential into a state directory that is a link`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(repo.root.resolve("problems/zz"))
+        aLink(repo.root.resolve(".ps"), tracked)
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.exists(tracked.resolve("git-credentials")) shouldBe false
+        heard.single() shouldContain "is not the tracker's own state directory"
+        heard.single() shouldNotContain "ghp_test_token"
+        git("remote").trim() shouldBe ""
+    }
+
+    /**
+     * A link at the credential path, one git does not track — left behind by `git rm --cached`: the token
+     * written through it landed in the file it leads to (#360). The store is replaced, the link with it,
+     * never written through, and the file the link led to is left exactly as it was.
+     */
+    @Test
+    fun `replaces a link at the credential path rather than writing through it`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val tracked = repo.write("problems/notes-sync.md", "someone's notes\n")
+        val store = aLink(repo.root.resolve(PushCredential.FILE), tracked)
+
+        remote().ensure()
+
+        Files.readString(tracked) shouldBe "someone's notes\n"
+        Files.isSymbolicLink(store) shouldBe false
+        Files.readString(store) shouldContain "x-access-token:ghp_test_token@github.com"
+    }
+
+    /**
+     * The same link as a pull delivers it, tracked: replaced, the token would be a change any `commit -a`
+     * publishes. Nothing is stored, and both ends are left exactly as they were.
+     */
+    @Test
+    fun `stores nothing when the credential path is a tracked link`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val tracked = repo.write("problems/notes-sync.md", "someone's notes\n")
+        val store = aLink(repo.root.resolve(PushCredential.FILE), tracked)
+        repo.git("add", "--force", "--", "problems/notes-sync.md", PushCredential.FILE)
+        repo.git("commit", "--message", "as a pull delivers it")
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.readString(tracked) shouldBe "someone's notes\n"
+        Files.isSymbolicLink(store) shouldBe true
+        heard.single() shouldContain "git tracks files under .ps"
+        heard.single() shouldNotContain "ghp_test_token"
+    }
+
+    /**
+     * A pull delivered `.ps/git-credentials` as a file git tracks. Renamed over it, the token became a
+     * modified tracked file, and another tool's `commit -a` and push published it (measured by the
+     * review). It is not stored, and the tracked file is left as it came.
+     */
+    @Test
+    fun `stores no token over a store git tracks`() {
+        val store = repo.write(PushCredential.FILE, "https://x-access-token:someone-else@github.com\n")
+        repo.git("add", "--force", PushCredential.FILE)
+        repo.git("commit", "--message", "as a pull delivers it")
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.readString(store) shouldBe "https://x-access-token:someone-else@github.com\n"
+        heard.single() shouldContain "git tracks files under .ps"
+        git("status", "--porcelain").trim() shouldBe ""
+    }
+
+    /**
+     * U1's token half: on APFS a pulled `.pſ/git-credentials` is the store itself, tracked under a
+     * name no ASCII rule folds. The real token was renamed onto it, and another tool's `commit -a`
+     * published it (the review of ea1357c).
+     */
+    @Test
+    fun `stores no token where a fold of the name is tracked`() {
+        assumeTrue(foldsTogether(dir, A_LONG_S_STATE_DIRECTORY, ".ps"), "this filesystem does not fold U+017F")
+        repo.write(".gitignore", ".ps/\n")
+        repo.write(PushCredential.FILE, "https://x-access-token:junk@github.com\n")
+        val blob = repo.git("hash-object", "-w", "--no-filters", PushCredential.FILE).trim()
+        repo.git("add", ".gitignore")
+        repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$A_LONG_S_STATE_DIRECTORY/git-credentials")
+        repo.git("commit", "--message", "as a pull delivers it")
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.readString(repo.root.resolve(PushCredential.FILE)) shouldBe "https://x-access-token:junk@github.com\n"
+        heard.single() shouldContain "git tracks files under .ps"
+        git("status", "--porcelain").trim() shouldBe ""
+    }
+
+    /** Nor into a directory the filesystem folds to `.ps`, delivered by a clone. */
+    @Test
+    fun `stores no credential into a state directory the filesystem folds`() {
+        assumeTrue(foldsTogether(dir, ".PS", ".ps"), "this filesystem keeps .PS and .ps apart")
+        val alias = Files.createDirectory(repo.root.resolve(".PS"))
+
+        remote().ensure()
+
+        Files.exists(alias.resolve("git-credentials")) shouldBe false
     }
 
     /**

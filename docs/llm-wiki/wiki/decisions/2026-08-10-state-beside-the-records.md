@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [storage, configuration, git, credentials, deployment]
 author: BrokenFinger98
 created: 2026-08-10
-updated: 2026-08-11
+updated: 2026-10-08
 sources: [decisions/2026-08-05-write-serialization, decisions/2026-08-06-record-repository-lock, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-10-sensor-verified.md]
 ---
 
@@ -116,3 +116,15 @@ first boot `git check-ignore` reported the state directory as committable; after
 repository was clean and the server's log line named the file it had edited. The one raw
 session left on the work list was recognised as already recorded (`duplicates=1`) rather than
 recorded a second time.
+
+⚠️ **Amended 2026-10-08 (#360).** The rule turned out not to be enough on its own. Git follows no
+`.gitignore` that is a link, and git stores links, so a `.gitignore` arriving with a clone could
+switch the rule off; reconciliation's `git add --all` then staged `.ps/git-credentials`, the push
+token `.ps/` has held since #258. Two adversarial reviews then found the same token reaching a push
+through aliases of `.ps` itself — a link a pull swaps in, a name the filesystem folds — through what a
+pull can put inside it, and through another tool's commit or the push's own settings. The rule is now
+one of six layers. Reconciliation leaves `.ps` out by pathspec. While `.ps` is an alias, or git tracks
+anything under it under any name the filesystem folds to it, the tracker commits nothing, pushes
+nothing and writes no state file there, and holds raw frames in memory instead; nothing is written
+through a link at any time. And it searches what it commits and pushes for the stored token and for
+GitHub's token shapes: [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]].

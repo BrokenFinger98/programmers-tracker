@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import io.kotest.matchers.collections.shouldContain
@@ -190,10 +191,11 @@ class RecordWriterGitTest {
         CommandLineGitSync(repo.root).reconcile() shouldBe true
 
         repo.subjects().single() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
-        // Reconciliation is `git add --all`, so this list is the whole answer to "what does
-        // the record repository publish". The raw frames for this grading are sitting in
-        // `.ps/raw` one directory up from `attempts/`, and the only reason they are absent is
-        // the rule `RecordRepositoryIgnores` wrote — which is why `.gitignore` is here (#126).
+        // Reconciliation is `git add --all` outside `.ps`, so this list is the whole answer to
+        // "what does the record repository publish". The raw frames for this grading are sitting
+        // in `.ps/raw` one directory up from `attempts/`. Reconciliation leaves them out by
+        // pathspec (#360), and the rule `RecordRepositoryIgnores` wrote keeps them out of every
+        // other `git add` — which is why `.gitignore` is here (#126).
         repo.filesInHead() shouldContainExactly listOf(
             ".gitignore",
             "log/submissions.jsonl",
@@ -207,7 +209,7 @@ class RecordWriterGitTest {
         val layout = RecordLayout(repo.root)
         return RecordWriter.of(
             store = JsonlRecordStore.under(repo.root),
-            rawLog = FileRawSessionLog.under(repo.root),
+            rawLog = FileRawSessionLog.under(repo.root, Clock.systemUTC(), aStateDirectory(repo.root)),
             rawAttemptPath = AttemptRawPath(layout::rawAttemptFile),
             recordRoot = repo.root,
             git = git,
@@ -235,7 +237,11 @@ class RecordWriterGitTest {
     )
 
     private fun staged(name: String) = aRawSessionId("$name.jsonl").also {
-        FileRawSessionLog.under(repo.root).append(it, """{"type":"finish","grading":"$name"}""")
+        FileRawSessionLog.under(
+            repo.root,
+            Clock.systemUTC(),
+            aStateDirectory(repo.root),
+        ).append(it, """{"type":"finish","grading":"$name"}""")
     }
 
     private fun logLines(): List<String> =

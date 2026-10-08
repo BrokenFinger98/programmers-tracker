@@ -4,8 +4,11 @@ import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
 import com.brokenfinger.tracker.adapter.git.GithubRemote
 import com.brokenfinger.tracker.adapter.git.GithubToken
 import com.brokenfinger.tracker.adapter.git.RecordRepositoryInit
+import com.brokenfinger.tracker.adapter.git.TrackedStateEntries
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
 import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
+import com.brokenfinger.tracker.adapter.store.SeedLedger
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.adapter.store.VaultDashboard
 import com.brokenfinger.tracker.application.BackupAge
 import com.brokenfinger.tracker.application.BackupLog
@@ -62,10 +65,19 @@ class GitConfiguration {
     fun gitSync(init: RecordRepositoryInit, @Value("\${tracker.record-repo}") recordRepo: String): GitSync =
         CommandLineGitSync(recordRoot(recordRepo))
 
+    /**
+     * The state directory, with git's answer to what it tracks there: one for every writer of state,
+     * which each write only while it is the real one, holds no link, and git tracks nothing there
+     * (#360). Building it touches nothing; each writer asks at its own write.
+     */
+    @Bean
+    fun stateDirectory(@Value("\${tracker.record-repo}") recordRepo: String): StateDirectory =
+        recordRoot(recordRepo).let { StateDirectory(it, TrackedStateEntries(it)) }
+
     /** Beside the repository whose last successful push it records (design §5.1). */
     @Bean
-    fun backupLog(@Value("\${tracker.record-repo}") recordRepo: String): BackupLog =
-        FileBackupLog.under(recordRoot(recordRepo))
+    fun backupLog(@Value("\${tracker.record-repo}") recordRepo: String, stateDirectory: StateDirectory): BackupLog =
+        FileBackupLog.under(recordRoot(recordRepo), stateDirectory)
 
     /**
      * Does its work while being constructed, which is what puts it before the first
@@ -88,8 +100,11 @@ class GitConfiguration {
      * derived data to regenerate (#254).
      */
     @Bean
-    fun vaultDashboard(@Value("\${tracker.record-repo}") recordRepo: String): VaultDashboard =
-        VaultDashboard(recordRoot(recordRepo)).also { it.ensure() }
+    fun vaultDashboard(
+        @Value("\${tracker.record-repo}") recordRepo: String,
+        stateDirectory: StateDirectory,
+    ): VaultDashboard =
+        recordRoot(recordRepo).let { VaultDashboard(it, SeedLedger(it, stateDirectory)) }.also { it.ensure() }
 
     @Bean
     fun dailyBackup(

@@ -1,7 +1,13 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -87,5 +93,27 @@ class SeedLedgerTest {
         Files.writeString(root.resolve(name), content)
     }
 
-    private fun ledger() = SeedLedger(root)
+    private fun ledger() = SeedLedger(root, aStateDirectory(root))
+
+    /**
+     * `.ps/seeds.json` a link to a file outside the repository: the ledger wrote through it, and overwrote
+     * that file at every boot (#360, N7). Read, it is no ledger; written, it is replaced, and what it led
+     * to is left as it was. A pull delivers such a link tracked, which refuses every writer outright.
+     */
+    @Test
+    fun `the ledger never writes through a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val outside = Files.writeString(
+            Files.createDirectories(root.resolve("elsewhere")).resolve("owners-file"),
+            "theirs\n",
+        )
+        val records = Files.createDirectories(root.resolve("records"))
+        val ledgerFile = aLink(records.resolve(".ps/seeds.json"), outside)
+
+        SeedLedger(records, aStateDirectory(records)).record("dashboard.base", "seeded")
+
+        Files.readString(outside) shouldBe "theirs\n"
+        Files.isSymbolicLink(ledgerFile) shouldBe false
+        Files.readString(ledgerFile) shouldContain "dashboard.base"
+    }
 }

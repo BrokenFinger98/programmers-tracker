@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmit
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
@@ -251,7 +252,7 @@ class McpToolInvokerTest {
      */
     @Test
     fun `every tool says so when gradings exist that no record represents`() {
-        val raw = FileRawSessionLog.under(root)
+        val raw = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
         raw.orphaned(120802, """{"message":{"action":"submit","type":"finish"}}""")
         val invoker = McpToolInvoker(aRecordRepository(root).containing(aSubmissionRecord()).query(raw = raw))
 
@@ -273,7 +274,7 @@ class McpToolInvokerTest {
 
     @Test
     fun `stats says so when gradings exist that no record represents`() {
-        val raw = FileRawSessionLog.under(root)
+        val raw = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
         raw.orphaned(120802, """{"message":{"action":"submit","type":"testcase"}}""")
         raw.orphaned(120802, """{"message":{"action":"submit","type":"finish"}}""")
         raw.orphaned(181946, """{"message":{"action":"submit","type":"finish"}}""")

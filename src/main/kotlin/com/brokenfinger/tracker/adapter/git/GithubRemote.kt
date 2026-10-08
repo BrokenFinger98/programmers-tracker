@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.AtomicStateFile
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonObject
@@ -9,11 +11,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermissions
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 /**
  * A GitHub token in, a private repository wired as `origin` out (#258).
@@ -28,8 +27,8 @@ import java.util.concurrent.TimeUnit
  *   never the privacy.
  * - **The token never reaches a log or a remote URL.** [GithubToken] renders masked, and pushes
  *   authenticate through a credential store at `.ps/git-credentials` — owner-only, inside the
- *   directory every record repository already gitignores — so a failed push logged with git's
- *   own words cannot contain it.
+ *   verified state directory — so a failed push logged with git's own words cannot contain it.
+ *   What keeps it out of a commit is [CommandLineGitSync]'s, not the store's location (#360).
  * - **An existing `origin` is left alone, with one exception**: a *GitHub* SSH URL is repointed
  *   at HTTPS. SSH is retired and the image no longer ships `openssh-client`, so leaving it would
  *   not respect a choice — it would guarantee a push that cannot succeed. Any other remote,
@@ -82,7 +81,7 @@ class GithubRemote(
         // Always, not only when wiring: this is how an SSH setup migrates to the token (change
         // the remote URL, boot) and how a rotated token in .env takes effect. The helper only
         // ever answers for https://github.com, so an SSH remote is unaffected by its existence.
-        storeCredential()
+        if (!storeCredential()) return
         if (hasOrigin()) {
             convertGithubSsh()
             return
@@ -130,19 +129,36 @@ class GithubRemote(
 
     /**
      * The credential store pushes authenticate through — rewritten on every wiring so a rotated
-     * token in `.env` takes effect, owner-only like the watch token, and inside `.ps/` so the
-     * gitignore the server itself maintains keeps it out of every commit.
+     * token in `.env` takes effect, owner-only like the watch token, inside the verified state
+     * directory, which reconciliation leaves out by pathspec.
+     *
+     * **Replaced, never written through (#360).** A pull can put a tracked link where the ignored
+     * file was, and a token written through it lands in the tracked file it leads to. A temporary
+     * file renamed over the store replaces whatever stands there, the link included, and starts
+     * owner-only ([AtomicStateFile]).
      */
-    private fun storeCredential() {
-        val file = PushCredential(recordRoot).file()
-        Files.createDirectories(file.parent)
-        runCatching {
-            Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY))
+    private fun storeCredential(): Boolean =
+        when (val inspection = StateDirectory(recordRoot, TrackedStateEntries(recordRoot)).forGit()) {
+            is StateDirectory.Usable -> stored(inspection.directory)
+            is StateDirectory.Refused -> notStored(inspection.refusal.reason)
         }
-        Files.writeString(file, "https://x-access-token:${token!!.raw()}@github.com\n")
-        runCatching { Files.setPosixFilePermissions(file, OWNER_ONLY) }
+
+    private fun stored(directory: Path): Boolean {
+        val store = AtomicStateFile(directory.resolve(PushCredential.STORE))
+        store.write("https://x-access-token:${token!!.raw()}@github.com\n")
         // No `git config` here on purpose. The pointer is passed per command instead, because
         // this repository's config is the user's too and the path we would write is ours (#267).
+        return true
+    }
+
+    /**
+     * `.ps` is not the tracker's own, git tracks something that is it or under it, or git cannot say
+     * (#360): a credential written there would be a path a commit can carry. Nothing is stored and
+     * nothing is wired on top of it; the token is not named.
+     */
+    private fun notStored(reason: String): Boolean {
+        logger.warn(CREDENTIAL_NOT_STORED, recordRoot, reason)
+        return false
     }
 
     /**
@@ -181,15 +197,7 @@ class GithubRemote(
         return client.send(request, HttpResponse.BodyHandlers.ofString())
     }
 
-    private fun git(vararg args: String): String {
-        val process = ProcessBuilder(listOf("git") + args)
-            .directory(recordRoot.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(30, TimeUnit.SECONDS)) process.destroyForcibly()
-        return output
-    }
+    private fun git(vararg args: String): String = GitProcess(recordRoot).run(listOf("git") + args).output
 
     // The token itself must not appear here, and GithubToken.toString() makes sure a lazy
     // interpolation could not leak it either.
@@ -211,7 +219,7 @@ class GithubRemote(
         /** Both spellings GitHub hands out, with the trailing `.git` optional. */
         val GITHUB_SSH = Regex("""(?:ssh://)?git@github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?""")
 
-        val OWNER_ONLY = PosixFilePermissions.fromString("rw-------")
+        const val CREDENTIAL_NOT_STORED = "The push credential is not stored in {}, and origin is not wired: {}."
 
         val logger = LoggerFactory.getLogger(GithubRemote::class.java)
     }

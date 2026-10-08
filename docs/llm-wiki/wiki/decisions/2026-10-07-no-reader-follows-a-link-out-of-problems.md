@@ -253,4 +253,5 @@ Found in the audit and left for their own issues:
   alone, and `RecordRepositoryIgnores` reads and rewrites the rules through the link without
   noticing. A linked `.gitignore` arriving with a clone would have the next reconcile commit the
   push token, and the next pass push it. It sits at the root, outside `problems/`, so outside this
-  decision — and it is the more serious of the two.
+  decision — and it is the more serious of the two. Decided on 2026-10-08:
+  [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]].

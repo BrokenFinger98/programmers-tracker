@@ -40,7 +40,7 @@ import java.nio.file.Path
  * Failure is logged, never thrown. A grading Programmers has broadcast cannot be replayed
  * (protocol §11), and losing one to a dashboard file would be the wrong trade in every direction.
  */
-class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger = SeedLedger(recordRoot)) {
+class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
     fun ensure() {
         SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }
     }
