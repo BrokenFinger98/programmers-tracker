@@ -5763,6 +5763,107 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - S4: `WatchToken.writeText`.
   - S5 and Q7: the reads that still follow a link.
 - **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
+
+## 2026-10-08 — #377 a raw session git delivered is never replayed (branch fix/377-raw-replay-guard)
+- **Both findings reproduced** before any change, as tests that failed against `41f713e`:
+  - the reconciler recorded a session under a state directory git tracks anything in, and one behind
+    a linked raw directory (`recorded: expected 0 but was 1`, each);
+  - `unprocessed()` returned a session real git checked out, and sessions behind a linked `.ps` or
+    `.ps/raw`;
+  - once git tracked a file under `.ps` mid-grading, the next frame of the grading in flight was still
+    written to `.ps/raw`.
+- `9c45aa7`: the work list is read only where a frame would be written, through `forWriting()` and then
+  `pathFor("raw")`, the judgement every raw write takes. A refused session is left in place, unread,
+  and one WARN per reason says how many and why. Through a link nothing is listed or counted. The
+  commit adds 11 tests: 9 in the store, one of them against real git, and 2 in the reconciler.
+- `1ce2977`: the session verdict's cache is kept, its bound stated in the KDoc and pinned by 1 test.
+  Measured on the host (APFS, git 2.48.1) with 500 to 5,000 index entries:
+  - `forWriting()`: median 7.2–8.1 ms;
+  - `tracksAnything()`: 6.8–8.0 ms;
+  - `pathFor("raw")`: 0.007 ms;
+  - an append: 0.03 ms.
+
+  The image was not measured, because the sandbox refused to run git in a container.
+- **Mutation.** Each of 12 mutants ran against the whole suite, and all were killed. They were the
+  guard, `forWriting()` and `pathFor("raw")` each removed, `forGit()` in its place, counting through a
+  link, the WARN's silence, once-ness, count and reason, deleting what is refused, and git asked per
+  frame or per log.
+- **Gates**, all exit 0 on the branch rebased onto `ff56a5f` (#392):
+  - check;
+  - test: 2,147 JUnit tests in 161 classes, 0 failures, 9 skipped as before; node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 85% (631 of 742), with all 16 new branches covered;
+  - guards: 12 of 12.
+- **Docs.** An Outcome note in [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]]. No
+  new ADR: the cache is round 4's design, kept with a measured bound.
+- **Remaining, at `4008e8f`.** The review round below closes the first two.
+  - Once `.ps` was untracked, as the TRACKED reason advised, a session git delivered was replayed at
+    the next boot. The WARN named `git ls-files .ps`, which lists no folded spelling.
+  - An untracked link at a session file was listed, and the reconciler read through it.
+  - `orphans()` is unguarded.
+  - #378 items 2–3 are untouched.
+- **Pending.** Pushed as PR #395 by the coordinator; CI was green on `4008e8f`. Not verified live.
+
+## 2026-10-08 — #377 review round: PR #395's M1, M2, M4 and L1–L5 (branch fix/377-raw-replay-guard)
+- **The review.** An adversarial review of PR #395, at `4008e8f`, found nothing blocking. It measured on
+  real git 2.48.1 on APFS that the forged replay was deferred, not blocked: upstream force-added a raw
+  session, the owner pulled, ran the TRACKED advice `git rm -r --cached .ps` and restarted, and the boot
+  recorded the forged PASS (`recorded=1`). Commits on top of `4008e8f`, no rebase. Each fix has a test that
+  failed against the commit before it, on behaviour.
+- `fca29fc` **L2.** Git is asked first, and the link check runs just before the listing. A `.ps/raw` swapped
+  for a link inside the git question was listed through before.
+- `8c24551` **L1.** Only regular files are listed. A session file that is a link was listed and recorded;
+  the reconciler now reads without following a link at the file.
+- `35fc42f` **M1.** `TrackedState.pathsEverTracked()`, answered by one
+  `git log --all -m --root --no-renames --name-only -z`. A session whose `raw/<name>` git's history names,
+  in any case, is never replayed; while git cannot say, none is. Ten tests, the end-to-end one with real
+  git. Measured on this host, median of 21, synthetic histories:
+  - 166 commits (460 KB tree): the question took 10.7 ms; `unprocessed()` with one session waiting 20.1 ms;
+  - 1,660 commits (4.5 MB tree): 33.6 and 40.7 ms;
+  - with nothing waiting git's history is not read (7.9 and 8.4 ms, the index question alone).
+- `bab8bb8` **M2, the TRACKED advice, L3, L5.** The reasons give `git ls-files -- ':(icase).ps'
+  ':(icase).pſ'` and `git rm -r --cached --ignore-unmatch -- ':(icase).ps' ':(icase).pſ'`; TRACKED says to
+  delete from disk what git put there first. A parameterized test runs both commands as the owner reads
+  them, for eight spellings; the old reason had no listing command, and its `git rm -r --cached .ps` left
+  `tracksAnything()` true for `.PS` and `.pſ` entries (probed). HOLDS_A_LINK and NOT_THE_DIRECTORY say to
+  move what lies behind the link first; the uncounted WARN names no link.
+- `0de3f66` **M4.** `RawSessionLog.unreplayed()`; `incompleteHistory` carries `sessionsNotReplayed` and
+  `rawDirectoryNotListed`; `docs/mcp.md` and its twin (blob `70f95ca`). `ec783c3` counts what is left in one
+  place.
+- `8362c46` **Pins.** `--root` under `log.showRoot=false`, the `raw` segment, one WARN.
+- **Mutation.** 32 mutants, each against the whole suite, all killed; the table is in the ADR.
+- **Gates**, all exit 0: check; test (2,181 JUnit in 161 classes, 0 failures, 9 skipped as before; node 4
+  of 4); build; `verifyBranchCoverage` (`adapter/store` 85%, 641 of 754; `adapter/git` 85%, 232 of 270;
+  every package at or above its floor); guards (12 of 12).
+- **Docs.** The #360 ADR's #377 Outcome: the review round, M1's cost, L4's measured collision and the
+  mutation table. No new ADR: these fix the round's own guard; no new decision.
+- **Remaining.** `orphans()` unguarded (M3, for #378); a session git delivered and the owner only untracked
+  stays on disk, never replayed and counted at every start; a git that cannot answer holds the work list;
+  the reflogs are not read; a directory swapped after the listing is read through. Not measured in the
+  image; CI has not run this round; not verified live.
+- **Pending.** Not pushed; the coordinator merges main in and pushes.
+## 2026-10-08 — #373 the push gate reads each new object once (branch perf/373-scan-new-objects)
+- **Measured on main first.** Synthetic histories shaped like the #360 review's — each commit adds one base64 file, so nothing is token-shaped and every search runs to the end — plus the tracker's own shape, each commit also appending a line to `log/submissions.jsonl`. Through `push()` to a remote with a URL and nothing behind it (git 2.48.1, M4 Pro): first push 25.2 s (1,660 commits, 4.2 MB tree), 252.5 s (5,000 commits, 9.8 MB), 56.3 s (the log history, 729 MB of blob versions); the slowest `git grep` call, replaying the same calls in a shell, 3.3, 16.1 and 6.9 s.
+- **The scan** (`58de882`, wired in `9a79453`). `rev-list --objects <range>` names each object once; `cat-file --batch-check` gives types and sizes (50,000 ids a call); `cat-file --batch` prints the blobs, about 64 MB of content a call, read through `GitProcess.runReading` (`43a111c`, stdout from its temp file as a stream) by `BatchOutput` (`8da5a08`) in 1 MB windows that repeat `TokenPatterns.overlap` bytes (141). The range is unchanged and decided in `outgoingRange` alone; only blobs are read (commit and tag messages stay #375's); the commit side stays `git grep`; the cache key is unchanged. Every failure is `CREDENTIAL_UNSEARCHED`: rev-list or batch-check failing, a description missing an id or saying `missing`, `--batch` failing or timing out, a header not as asked, content cut short, no newline after it, output left over.
+- **Matching** (`TokenPatterns`, `983b8b6`): bytes read as ISO-8859-1; the shapes moved there from `CommandLineGitSync`; stored values matched as the UTF-8 bytes `git grep -F -f -` is fed, split as it splits them. Two parity tests run `git grep -E` and `-F` under `LC_ALL=C` on the same probe files and require the same files found.
+- **The coordinator's two #372-review findings, folded in.** A token beside `0xE9`, `0xC0 0xAF` or `0x80` — measured here: `en_US.UTF-8` git found none of five probe files, `C` all five — is pinned in the parity probes, in real blobs the scan reads, and in `BatchOutput`'s bytes. And a UTF-16 view: a window that holds a NUL is also read as UTF-16, both byte orders, from its first and second byte; `a token in a UTF-16 file is never pushed` was red on the old push (`expected:<false> but was:<true>`, the token went out).
+- **`GitProcess`** (`8493d88`). Input is written from its own thread and a git past its timeout is killed through its handle: with 1 MB of input and a 1 s timeout the call took 10.1 s and reported success (input on the caller's thread), then 10.0 s (`Process.destroyForcibly` closing stdin waits for the write); now 1.1 s.
+- **After**, the same harness: first push 0.21–0.33 s, 0.52–0.63 s, 4.3–7.2 s; five outgoing commits 0.12–0.18 / 0.13–0.16 / 0.16–0.37 s (main 0.22–0.31 / 0.48–0.54 / 0.31–0.33); nothing outgoing 0.09–0.14 s (main 0.07–0.13). Slowest single call 0.14 s, 0.38 s (`rev-list --objects`), 1.03 s (one 64 MB `--batch` call, matching included). The git behaviours the refusals rest on were checked on 2.53.0 in the tracker's image: identical.
+- **Tests.** New: `TokenPatternsTest` 19, `GitObjectTest` 11, `BatchOutputTest` 19, `OutgoingObjectScanTest` 22; `GitProcessTest` +4, `CommandLineGitSyncTest` +3. Red first against stubs that answered clean or read everything whole (15 of the first 16, then 8 against bytes-only; 10/11; 8/19 plus an `OutOfMemoryError` on the endless header; 17/20), and the UTF-16 push test against the old wiring. Existing push-refusal tests all green: the middle commit (new), another remote (N4), the stored value, both shapes on the push side (fine-grained new), the unreadable blob and tree, the unlistable range, replace refs, the cache.
+- **Mutation** (36, `mutate.py` in the scratchpad, each reverted): 34 fail a test; the unbounded header exhausts the test JVM's heap (`Java heap space`) on its test; 1 equivalent (content ending early taken for the object's end — a short read is only ever the end of the output, and the newline check after it fails too). Planning the run found three checks no test could fail (the CR, the batch-check exit code and its every-id check), pinned in `53c6598`; the run left UTF-16LE alone and the NUL gate surviving, pinned in `37bb284` and run again. Per mutant in the ADR.
+- **Docs.** ADR [[decisions/2026-10-08-the-push-gate-reads-each-object-once]]; the #360 ADR's decision 4 bullet and two costs marked superseded (not its Outcome, which #389 appends to); index.
+- **Gates**, all exit 0: check; test (2,129 JUnit across 164 classes, 0 failures, 9 skipped — 8 C# and the `icase` test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 306/345, from 85%, 225/262; `adapter/config` 65% at its floor); guards.
+- **Found, not fixed.** The commit side's `git grep` still lets a token in UTF-16 text into a local commit; the push then refuses every attempt until history is rewritten. Out of #373's scope.
+- Pending: a rebase onto #389 (`GitProcess` PINNED and `CommandLineGitSync`'s `isDirty` area are its; this branch changes `feed`, the kill and `runReading`, and the gate's plumbing); CI on three OSes (Windows skips the four new tests that run shell aliases); not verified live.
+
+## 2026-10-08 — #373 review: every push reads HEAD's own tree (branch perf/373-scan-new-objects)
+- **The regression** (the review of PR #396 at 315f44e, Medium). The tracker never fetches, so a remote-tracking ref stays where the last push left it. After `remote set-url` to a new remote, or with the remote re-created empty, `origin/main` still named a commit whose tree held a token, the range left that blob out, and a clean commit on top went out with it. On main, `git grep` read HEAD's whole tree and refused.
+- **The fix** (`eaab208`). The push lists `HEAD^{tree}` beside its range; the scan reads what either listing names, each object once. A commit behind a stale ref was not read before #373 either, and stays #376's.
+- **Red on 315f44e**: both reviewer scenarios as real-git tests, `expected:<false> but was:<true>` (the push went out). Scan tests red against a first-listing-only stub (2) and a no-dedupe stub (`expected:<1> but was:<2>`).
+- **Mutation** (4, all killed): HEAD's tree not listed 2 tests; no dedupe 1; a failed listing taken for an empty one 5; the first listing alone 4.
+- **Cost**, same harness and histories: first push unchanged (0.21–0.28 / 0.50–0.59 / 3.9–9.5 s; HEAD's blobs are in the range already); five outgoing commits 0.17–0.25 / 0.24–0.29 / 0.19–0.21 s (was 0.12–0.18 / 0.13–0.16 / 0.16–0.37; main 0.22–0.54); nothing outgoing 0.20–0.46 s (was 0.09–0.14). HEAD's tree: 4.2 / 9.8 / 3.4 MB of blobs, listed in 0.04–0.29 s.
+- **Docs.** The ADR's Decision 1, its Rationale table (a column for HEAD's tree), two costs rewritten — what a stale ref still leaves out, stated precisely — and an Outcome paragraph; the index line.
+- **Gates**, all exit 0: check; test (2,246 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 311/353); guards. Two earlier coverage runs failed in `TrackerApplicationTests` alone: its fixed records path under the system temp directory was locked by another worktree's concurrent test run. Not this change; found, not fixed.
 ## 2026-10-08 — #394 the context test gets a directory per run (branch test/394-context-test-own-dir)
 - **The defect.** `TrackerApplicationTests` booted into `${java.io.tmpdir}/programmers-tracker-context-test/records`, one path for every checkout on the machine. The record repository's lock was doing its job against the test: overlapping runs refused each other, and each began from what the last left. Here that was a repository with two `chore: reconcile uncommitted records` commits from 2026-10-07 and the state of every run since.
 - **Red.** Two `git worktree` copies of `afb55e5`, `./gradlew test --tests '*TrackerApplicationTests'` started together. One passed; the other failed at startup with `RecordRepositoryLockedException: Another programmers-tracker instance is already recording into …/programmers-tracker-context-test/records`. Its whole 4.9 s run fell inside the other's 8.6 s. A first attempt that started 5 s apart did not overlap and passed both, so the collision needs the timing.
