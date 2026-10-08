@@ -576,6 +576,27 @@ class FileRawSessionLogTest {
         logGuardedBy(aStateDirectory(root, swapping)).unprocessed().shouldBeEmpty()
     }
 
+    /**
+     * A session file that is itself a link was listed, and read through it: linked to frames in the tree, it
+     * was recorded (the review of PR #395, measured). The tracker writes no link there, so only regular files
+     * are listed, and the rest are said once, by how many.
+     */
+    @Test
+    fun `a session file that is a link is not listed, and that is said once`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        aLink(root.resolve(".ps/raw/$A_SESSION"), Files.writeString(frames, """{"n":1}""" + "\n"))
+        val log = logGuardedBy(aStateDirectory(root))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
+        }
+
+        heard.single() shouldContain "1 raw session(s) were not replayed because each is not a regular file"
+        heard.single() shouldNotContain ".ps/"
+    }
+
     /** Counting them would list a directory through a link, so they are said to be left, not counted. */
     @Test
     fun `sessions behind a link are said to be left, and are not counted through it`() {

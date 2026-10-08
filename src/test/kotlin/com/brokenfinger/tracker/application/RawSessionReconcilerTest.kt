@@ -299,6 +299,35 @@ class RawSessionReconcilerTest {
         namesIn(elsewhere) shouldHaveSize 1
     }
 
+    /** Linked to frames in the tree, a session file was replayed from them (the review of PR #395, measured). */
+    @Test
+    fun `a session file that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        Files.write(frames, broadcastsOf("algorithm-pass.jsonl"))
+        aLink(root.resolve(".ps/raw/$A_SESSION"), frames)
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+    }
+
+    /** Listed as a file and swapped for a link before it is read: the read does not follow it. */
+    @Test
+    fun `a session is never read through a link at its file`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        Files.write(frames, broadcastsOf("algorithm-pass.jsonl"))
+        val link = aLink(root.resolve(".ps/raw/$A_SESSION"), frames)
+        val listedBeforeTheSwap = object : RawSessionLog by rawLog {
+            override fun unprocessed() = listOf(RawSession(RawSessionId(A_SESSION), LESSON_ID, SESSION_START, link))
+        }
+
+        reconcile(listedBeforeTheSwap) shouldBe ReconcileReport(failed = 1)
+
+        records().shouldBeEmpty()
+    }
+
     @Test
     fun `a raw directory that was never created is a no-op`() {
         reconcile() shouldBe ReconcileReport()
@@ -314,9 +343,9 @@ class RawSessionReconcilerTest {
     // Harness --------------------------------------------------------------------------------
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
-    private fun reconcile(): ReconcileReport = runBlocking {
+    private fun reconcile(log: RawSessionLog = rawLog): ReconcileReport = runBlocking {
         RawSessionReconciler(
-            rawLog,
+            log,
             writer(),
             StaleTimer(ELAPSED_SEC),
             aFrameReader(),
@@ -363,6 +392,9 @@ class RawSessionReconcilerTest {
         const val ELAPSED_SEC = 3600L
         const val LESSON_ID = 120804L
         const val SQL_LESSON_ID = 131528L
+
+        /** The name a session opened at [SESSION_START] for [LESSON_ID] gets. */
+        const val A_SESSION = "20260805T090000000Z-120804.jsonl"
     }
 }
 

@@ -215,9 +215,19 @@ class FileRawSessionLog(
         }
     }
 
-    private fun sessionsIn(raw: Path): List<RawSession> = Files.list(raw).use { entries ->
-        entries.toList().mapNotNull { sessionOf(it) }.sortedBy { it.id.value }
+    // Regular files alone (#377): the tracker writes no link there, so one named like a session is not its own,
+    // and is never read through. Those passed over are said once, by how many.
+    private fun sessionsIn(raw: Path): List<RawSession> {
+        val (files, others) = namedLikeSessions(raw).partition(::isARegularFile)
+        if (others.isNotEmpty()) sayOnce(NOT_A_FILE) { logger.warn(NOT_REGULAR_FILES, others.size) }
+        return files.sortedBy { it.id.value }
     }
+
+    private fun isARegularFile(session: RawSession): Boolean =
+        Files.isRegularFile(session.path, LinkOption.NOFOLLOW_LINKS)
+
+    private fun namedLikeSessions(raw: Path): List<RawSession> =
+        Files.list(raw).use { entries -> entries.toList().mapNotNull { sessionOf(it) } }
 
     // Said once with how many and why. Counted only where no link is on the way: through one, nothing is listed.
     private fun leftInPlace(refusal: StateDirectory.Refusal, raw: StateDirectory.Inspection): List<RawSession> {
@@ -418,6 +428,10 @@ class FileRawSessionLog(
         private const val LEFT_BEHIND_A_LINK =
             "Raw sessions were not replayed: {}. Nothing behind the link was read or counted, and it is left " +
                 "as it is. Said once for this reason."
+        private const val NOT_REGULAR_FILES =
+            "{} raw session(s) were not replayed because each is not a regular file — a link, most likely, which " +
+                "this server never writes there — and none was read. Said once."
+        private const val NOT_A_FILE = "not a file"
         private const val NOT_REPLAYED = "not replayed: "
         private const val LIMIT = "limit"
 
