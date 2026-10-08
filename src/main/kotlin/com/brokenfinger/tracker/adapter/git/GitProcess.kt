@@ -31,9 +31,13 @@ internal class GitProcess(
     private val discard: (Path) -> Unit = { Files.deleteIfExists(it) },
     private val timeout: Duration = TIMEOUT,
 ) {
-    /** Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [timeout]. */
-    fun run(command: List<String>, input: String? = null): GitResult =
-        inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(command, input, stdout, stderr) } }
+    /**
+     * Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [timeout].
+     * [variables] are set for this call alone, over the tracker's own: the copy of the index a commit is
+     * staged in first is named for the calls that use it, and for no other (#376).
+     */
+    fun run(command: List<String>, input: String? = null, variables: Map<String, String> = emptyMap()): GitResult =
+        inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(command, input, variables, stdout, stderr) } }
 
     /**
      * Runs [command] as [run] does, and hands what git wrote to stdout to [read] as a stream, never held
@@ -54,8 +58,14 @@ internal class GitProcess(
         return Files.newInputStream(stdout).buffered().use(read)
     }
 
-    private fun ran(command: List<String>, input: String?, stdout: Path, stderr: Path): GitResult {
-        val code = exitCodeOf(command, input, stdout, stderr)
+    private fun ran(
+        command: List<String>,
+        input: String?,
+        variables: Map<String, String>,
+        stdout: Path,
+        stderr: Path,
+    ): GitResult {
+        val code = exitCodeOf(command, input, stdout, stderr, variables)
         return GitResult(code, textOf(stdout), textOf(stderr))
     }
 
@@ -76,12 +86,18 @@ internal class GitProcess(
         runCatching { discard(file) }.onFailure { file.toFile().deleteOnExit() }
     }
 
-    private fun exitCodeOf(command: List<String>, input: String?, stdout: Path, stderr: Path): Int {
+    private fun exitCodeOf(
+        command: List<String>,
+        input: String?,
+        stdout: Path,
+        stderr: Path,
+        variables: Map<String, String> = emptyMap(),
+    ): Int {
         val process = ProcessBuilder(command)
             .directory(root.toFile())
             .redirectOutput(stdout.toFile())
             .redirectError(stderr.toFile())
-            .also { it.environment().putAll(environment()) }
+            .also { it.environment().putAll(environment() + variables) }
             .start()
         feed(process, input)
         if (process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) return process.exitValue()

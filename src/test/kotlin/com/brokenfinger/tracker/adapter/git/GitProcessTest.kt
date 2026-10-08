@@ -63,6 +63,22 @@ class GitProcessTest {
         answer.stdout shouldContain "notes/today.md"
     }
 
+    /**
+     * The copy of the index a commit is staged in first, so a refusal leaves the real one untouched (#376): one
+     * call is handed it, and the next reads the repository's own again.
+     */
+    @Test
+    fun `a call can be handed an index of its own, and the next call reads the real one`() {
+        val empty = base.resolve("empty-index")
+        val process = GitProcess(repo.root)
+
+        val own = process.run(listOf("git", "ls-files"), variables = mapOf("GIT_INDEX_FILE" to "$empty"))
+        val next = process.run(listOf("git", "ls-files"))
+
+        own.stdout shouldBe ""
+        next.stdout shouldContain "notes/today.md"
+    }
+
     /** `GIT_LITERAL_PATHSPECS=1` reads every `:(…)` as a file name, so no exclusion excludes anything. */
     @Test
     fun `pathspec magic stays on whatever the inherited environment says`() {
