@@ -36,10 +36,13 @@ import java.util.concurrent.ConcurrentHashMap
  * created where absent, and must be a real directory, not a link, whose real path is the path walked. So a write
  * never passes a link — nothing is created or written wherever one leads — and a directory that is no link yet
  * resolves elsewhere, such as a hand-made `Problems` where a filesystem folds case, is refused before anything is
- * made inside it. The names walked must lie under the bound: the real root with `problems` appended for a
- * problem's files, the real root itself for `log/`, `tags/` and the vault's seeds. Only the root is resolved, as
- * [ProblemFiles] resolves it, because it may sit behind a link by configuration (macOS's `/var`, a `~/ps-records`
- * link). Unlike a read, a write follows no link at all, even one that stays inside the bound.
+ * made inside it. The target must lie below the root as configured and name no `.` or `..` on the way — no writer
+ * is handed one, and folding one away lexically let a root-level path climb back out — and it must fall under the
+ * bound: inside `problems/` for a problem's files, and for a writer at the root's own level only the names it keeps
+ * there (`log`, `tags`, the seeds, the heartbeat's marker), so never `.git` or `.ps`. Only the root is resolved,
+ * physically and from the path as configured, as git and the lock resolve it, because it may sit behind a link by
+ * configuration (macOS's `/var`, a `~/ps-records` link). Unlike a read, a write follows no link at all, even one that
+ * stays inside the bound.
  *
  * **The file.** A whole file is written beside its target and moved over it, so a link standing there is replaced
  * rather than followed — said once — and a hard link is broken rather than written through. It keeps the mode of
@@ -56,7 +59,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 internal class RecordWrites private constructor(
     private val root: Path,
-    private val bound: List<String>,
+    private val firstNames: Set<String>,
+    private val insideFirstName: Boolean,
     private val ownerOnly: Boolean,
 ) {
     private val said = ConcurrentHashMap.newKeySet<String>()
@@ -108,27 +112,33 @@ internal class RecordWrites private constructor(
 
     // The target's own directory, walked from the real root and created where absent, then the target's name in it.
     private fun fileIn(target: Path): Path {
-        val absolute = target.toAbsolutePath().normalize()
-        val name = absolute.fileName ?: throw refused(target, outsideTheBound())
-        val directory = walked(target, namesOf(target, absolute.parent), creating = true)
-        return (directory ?: throw NoSuchFileException("$target")).resolve(name.toString())
+        val names = namesOf(target)
+        val directory = walked(target, names.dropLast(1), creating = true)
+        return (directory ?: throw NoSuchFileException("$target")).resolve(names.last())
     }
 
     private fun existing(directory: Path): Path? {
-        val absolute = directory.toAbsolutePath().normalize()
-        if (!Files.exists(absolute, NOFOLLOW_LINKS)) return null
-        return walked(directory, namesOf(directory, absolute), creating = false)
+        if (!Files.exists(directory, NOFOLLOW_LINKS)) return null
+        return walked(directory, namesOf(directory), creating = false)
     }
 
-    // Where the writer was told to write, lexically, as RecordLayout names it: under the bound, never climbing out.
-    private fun namesOf(target: Path, directory: Path): List<String> {
-        val relative = runCatching { root.relativize(directory) }.getOrNull()
-        val names = relative?.map { it.toString() }?.filter { it.isNotEmpty() }
-        if (names == null || PARENT in names || names.take(bound.size) != bound) {
-            throw refused(target, outsideTheBound())
-        }
+    // Where the writer was told to write, as RecordLayout names it: below the configured root, through no `.` or `..`
+    // — no writer is handed one, and folding one away let a path climb back out — and under the bound.
+    private fun namesOf(target: Path): List<String> {
+        val names = namesBelowRoot(target.toAbsolutePath()) ?: throw refused(target, OUTSIDE_THE_REPOSITORY)
+        if (names.any { it in DOT_NAMES }) throw refused(target, NAMES_A_DOT)
+        if (!admitted(names)) throw refused(target, outsideTheBound())
         return names
     }
+
+    private fun namesBelowRoot(absolute: Path): List<String>? {
+        if (!absolute.startsWith(root) || absolute.nameCount <= root.nameCount) return null
+        return absolute.subpath(root.nameCount, absolute.nameCount).map { it.toString() }
+    }
+
+    // `problems/` admits what lies inside it; a writer at the root's level, only the names it keeps there.
+    private fun admitted(names: List<String>): Boolean =
+        names.first() in firstNames && (!insideFirstName || names.size > 1)
 
     // Null only when a directory vanished between being made and being looked at, or was not there to delete from.
     private fun walked(target: Path, names: List<String>, creating: Boolean): Path? {
@@ -241,8 +251,8 @@ internal class RecordWrites private constructor(
     private fun relative(path: Path): String = root.toRealPath().relativize(path).joinToString("/")
 
     private fun outsideTheBound(): String {
-        if (bound.isEmpty()) return "it lies outside the records repository"
-        return "it lies outside ${bound.joinToString("/")}/"
+        if (insideFirstName) return "it lies outside ${firstNames.single()}/"
+        return "it is none of the names this writer keeps at the root: ${firstNames.sorted().joinToString()}"
     }
 
     // Once per reason for this instance, naming the path the writer was handed: never content, never a link's target.
@@ -259,7 +269,10 @@ internal class RecordWrites private constructor(
         private const val UNIX = "unix"
         private const val LINK_COUNT = "unix:nlink"
         private const val NEWLINE = '\n'.code.toByte()
-        private const val PARENT = ".."
+        private val DOT_NAMES = setOf(".", "..", "")
+        private const val OUTSIDE_THE_REPOSITORY = "it lies outside the records repository"
+        private const val NAMES_A_DOT =
+            "it names . or .. below the root, which no writer is handed and none may climb by"
         private const val TEMP_SUFFIX = ".tmp"
         private const val A_DIRECTORY = "a directory"
         private const val A_REGULAR_FILE = "a regular file"
@@ -276,17 +289,20 @@ internal class RecordWrites private constructor(
             "Replacing {}, which {}, with the file itself rather than writing through it (#361). " +
                 "Said once for this path."
 
-        /** The writer of a problem's files, bounded at the real root with `problems` appended. */
-        fun underProblems(layout: RecordLayout, ownerOnly: Boolean = false): RecordWrites {
-            val problems = layout.problemsDirectory()
-            return RecordWrites(problems.parent, listOf(problems.fileName.toString()), ownerOnly)
-        }
+        /** The writer of a problem's files: inside `problems/`, below the root as configured. */
+        fun underProblems(layout: RecordLayout, ownerOnly: Boolean = false): RecordWrites =
+            RecordWrites(layout.configuredRoot(), setOf(RecordLayout.PROBLEMS), insideFirstName = true, ownerOnly)
 
-        /** The writer of a file at the root's level — the submission log, a tag note, a seed — bounded at [root]. */
-        fun underRoot(root: Path): RecordWrites = RecordWrites(root.toAbsolutePath().normalize(), emptyList(), false)
+        /**
+         * The writer of files at the root's own level — the submission log, the tag notes, the seeds, the heartbeat's
+         * marker — which writes only under [firstNames], the names it keeps there. Never `.git` or `.ps` (#361).
+         */
+        fun underRoot(root: Path, firstNames: Set<String>): RecordWrites =
+            RecordWrites(root.toAbsolutePath(), firstNames, insideFirstName = false, ownerOnly = false)
 
         /** [underRoot] for the records repository [layout] lays out. */
-        fun underRoot(layout: RecordLayout): RecordWrites = underRoot(layout.problemsDirectory().parent)
+        fun underRoot(layout: RecordLayout, firstNames: Set<String>): RecordWrites =
+            underRoot(layout.configuredRoot(), firstNames)
     }
 }
 

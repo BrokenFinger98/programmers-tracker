@@ -27,7 +27,7 @@ import java.nio.file.Path
  * work list to be replayed.
  */
 class JsonlRecordStore(private val file: Path, root: Path = file.toAbsolutePath().parent.parent) : RecordStore {
-    private val writes = RecordWrites.underRoot(root)
+    private val writes = RecordWrites.underRoot(root, setOf(RecordLayout.LOG))
 
     override fun append(line: String) {
         val record = line.trimEnd('\r', '\n')

@@ -171,7 +171,7 @@ class RecordWritesTest {
     fun `a records root that is not there yet is created`() {
         val fresh = root.resolve("fresh")
 
-        RecordWrites.underRoot(fresh).appendLine(fresh.resolve("log/submissions.jsonl"), "{}")
+        RecordWrites.underRoot(fresh, setOf("log")).appendLine(fresh.resolve("log/submissions.jsonl"), "{}")
 
         Files.readString(fresh.resolve("log/submissions.jsonl")) shouldBe "{}\n"
     }
@@ -254,7 +254,7 @@ class RecordWritesTest {
         val nowhere = outside.resolve("made-by-an-append.jsonl")
         val link = aLink(root.resolve("log/submissions.jsonl"), nowhere)
 
-        shouldThrow<RefusedWriteException> { RecordWrites.underRoot(root).appendLine(link, "{}") }
+        shouldThrow<RefusedWriteException> { RecordWrites.underRoot(root, setOf("log")).appendLine(link, "{}") }
 
         Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
     }
@@ -386,7 +386,7 @@ class RecordWritesTest {
         aLink(root.resolve("log"), outside)
 
         shouldThrow<RefusedWriteException> {
-            RecordWrites.underRoot(root).appendLine(root.resolve("log/submissions.jsonl"), "{}")
+            RecordWrites.underRoot(root, setOf("log")).appendLine(root.resolve("log/submissions.jsonl"), "{}")
         }
 
         namesIn(outside).shouldBeEmpty()
@@ -433,11 +433,55 @@ class RecordWritesTest {
     @Test
     fun `a root-level writer refuses a file outside the records repository, saying so`() {
         val refusal = shouldThrow<RefusedWriteException> {
-            RecordWrites.underRoot(root).replace(outside.resolve("made-by-a-note.md"), "x")
+            RecordWrites.underRoot(root, setOf("tags")).replace(outside.resolve("made-by-a-note.md"), "x")
         }
 
         refusal.message shouldContain "it lies outside the records repository"
         namesIn(outside).shouldBeEmpty()
+    }
+
+    /**
+     * Measured as written in #361's review: lexical normalization took the `..` out before anything looked, so the
+     * root's bound admitted the token's own file. No writer is handed such a path; the bound now says so itself.
+     */
+    @Test
+    fun `a root-level writer refuses a path that climbs back out, and creates nothing`() {
+        val token = aPushTokenIn(root)
+        val log = RecordWrites.underRoot(root, setOf("log"))
+
+        shouldThrow<RefusedWriteException> { log.replace(root.resolve("log/../.ps/git-credentials"), "overwritten\n") }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.exists(root.resolve("log")) shouldBe false
+    }
+
+    /** Measured as written in #361's review: the root's bound admitted git's own hooks. */
+    @Test
+    fun `a root-level writer refuses a name it does not keep, and creates nothing`() {
+        val log = RecordWrites.underRoot(root, setOf("log"))
+
+        shouldThrow<RefusedWriteException> { log.replace(root.resolve(".git/hooks/pre-commit"), "#!/bin/sh\n") }
+
+        Files.exists(root.resolve(".git")) shouldBe false
+    }
+
+    /** Under either bound, a `.` or `..` is refused even where it would land inside: a writer is never handed one. */
+    @Test
+    fun `a path naming dot or dot-dot is refused, even where it stays inside problems`() {
+        shouldThrow<RefusedWriteException> { problems().replace(root.resolve("problems/./1-x/README.md"), "page\n") }
+        shouldThrow<RefusedWriteException> { problems().replace(root.resolve("problems/1-x/../2-y/README.md"), "x") }
+
+        Files.exists(root.resolve("problems")) shouldBe false
+    }
+
+    /** Only what lies below the root is judged: a root configured through `..` is written where it physically leads. */
+    @Test
+    fun `a records root configured through dot-dot is written where it leads`() {
+        val configured = Files.createDirectories(root.resolve("elsewhere")).resolve("..")
+
+        RecordWrites.underProblems(RecordLayout(configured)).replace(configured.resolve("problems/1-x/README.md"), "p")
+
+        Files.readString(root.resolve("problems/1-x/README.md")) shouldBe "p"
     }
 
     /** Containment is by path element: `problems-old` begins with the same letters and is still outside. */

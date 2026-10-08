@@ -49,7 +49,7 @@ import java.nio.file.Path
  * whole beside its own name rather than written in place.
  */
 class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
-    private val writes = RecordWrites.underRoot(recordRoot)
+    private val writes = RecordWrites.underRoot(recordRoot, SEEDS.toSet())
 
     fun ensure() {
         SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }

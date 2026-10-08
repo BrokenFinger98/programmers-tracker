@@ -48,7 +48,7 @@ class RepositoryHeartbeat(
 ) : AutoCloseable {
     private val beats = AtomicLong()
 
-    private val writes = RecordWrites.underRoot(marker.toAbsolutePath().parent)
+    private val writes = RecordWrites.underRoot(marker.toAbsolutePath().parent, setOf(marker.fileName.toString()))
 
     /**
      * @throws RecordRepositoryLockedException when the marker changes while we watch it,

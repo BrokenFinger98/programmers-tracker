@@ -21,7 +21,7 @@ import com.brokenfinger.tracker.domain.calc.TouchedProblem
  * ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
  */
 class TagNotes(private val layout: RecordLayout) {
-    private val writes = RecordWrites.underRoot(layout)
+    private val writes = RecordWrites.underRoot(layout, setOf(RecordLayout.TAGS))
 
     fun write(counts: List<TagCount>) = counts.forEach { writeOne(it) }
 
