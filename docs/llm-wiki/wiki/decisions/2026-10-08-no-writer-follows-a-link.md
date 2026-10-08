@@ -109,15 +109,20 @@ the heartbeat marker, and the runner sweep. The sweep was the only *delete* thro
 ## Decision
 
 **`adapter/store/RecordWrites`**, internal and beside `ProblemFiles`, is the one way the records
-repository is written. A writer gets one with `underProblems(layout)` or `underRoot(root)`.
+repository is written. A writer gets one with `underProblems(layout)` or
+`underRoot(root, firstNames)`. Parts of this were amended after the review round (Outcome).
 
 - **The walk.** Every directory from the real root down to the target's own is walked one name at a
-  time. Each is created where absent. Each must be a real directory, not a link (`NOFOLLOW_LINKS`),
-  whose real path is the path walked. The names walked must lie under the bound: the real root with
-  `problems` appended, or the real root itself for `log/`, `tags/` and the seeds. Only the root is
-  resolved, as `ProblemFiles` resolves it. Unlike a read, a write follows no link at all, even one
-  that stays inside the bound. A directory that resolves elsewhere is refused before anything is made
-  inside it: a case variant such as `Problems`, or a Windows junction.
+  time, and each is created where absent. Each must be a real directory, not a link
+  (`NOFOLLOW_LINKS`). Its parent must list it under exactly the name walked, and its real path must
+  be the path walked. Both are compared as text after NFC. Unlike a read, a write follows no link at
+  all, even one that stays inside the bound. A folded alias such as `Problems`, or a directory that
+  resolves elsewhere such as a Windows junction, is refused before anything is made inside it. Real
+  paths and listings come through `DiskAnswers`, a seam like `StateDirectory`'s listing.
+- **The bound.** The target must lie below the root as configured and name no `.` or `..`. A
+  problem's files lie inside `problems/`. A writer at the root's own level keeps an allow-list of
+  first names: `log`, `tags`, the seeds and the heartbeat's marker, so never `.git` or `.ps`. Only the
+  root is resolved, physically and from the path as configured, as git and the lock resolve it.
 - **The file.**
   - `replace` writes a temporary file beside the target and moves it over the target. A link
     standing there is replaced, never written through, and said once. It keeps the mode of the
@@ -125,7 +130,8 @@ repository is written. A writer gets one with `underProblems(layout)` or `underR
     for owner-only.
   - `writeOnce` leaves a regular file alone and replaces anything else.
   - `appendLine` requires a regular file or none, ends a line a crash cut short, and opens without
-    following a link.
+    following a link. Where the `unix` view can count a file's names, it refuses a file with a second
+    name, a hard link. Windows offers no such view.
   - `createNew` creates nothing where anything stands.
   - `deleteIn` creates nothing, and deletes nothing through a link.
 - **A refusal.** It logs one WARN per reason for the instance. The WARN names the path the writer was
@@ -147,8 +153,10 @@ Each writer's posture:
 | `RepositoryHeartbeat` | WARN, skipped; read without following a link | It was best effort before. A link where the marker should be reads as no marker, and the next write replaces it. |
 
 One change in `application`: `CodeAttachment.attachPending` treats a record whose attachment throws
-as `DEFERRED`. It says so by the exception's class name and goes on to the next record. At capture
-time `ChannelCapture` has always caught the same failure. At boot nothing did:
+as `DEFERRED` and goes on to the next record. An I/O failure, a refused write among them, is said by
+its class name alone, because its message can carry a path that names where a link leads. Any other
+fault is an ERROR with its stack. Cancellation is rethrown. At capture time `ChannelCapture` has
+always caught the same failure. At boot nothing did:
 `StartupReconciliation` calls the pass unwrapped, and the startup runner is unwrapped too. #354's
 accepted costs traced this from the code. A refusal that stands until someone removes the link would
 have made every restart end the same way.
@@ -158,8 +166,10 @@ have made every restart end the same way.
 **A write that never passes a link needs no notion of where the link leads.** The read bound asks
 "is the real path inside?" because a read through an inside link is harmless. A write through any
 link changes a file the writer was not handed. Walking name by name with `NOFOLLOW_LINKS` answers
-the only question a write needs, before anything is created. Comparing each directory's real path
-with the path walked adds the cases no link check sees: a case-folded alias and a junction.
+the only question a write needs, before anything is created. The parent's listing and the real path
+add the cases no link check sees: a folded alias and a junction. Neither answer holds everywhere on
+its own. The tracker's image echoes the name asked for as the real path, and Windows' `Path.equals`
+ignores case. So both are asked, and each is compared as text after NFC, which HFS+ needs.
 
 **Replacing heals; refusing repeats.** Git commits a replaced link as a typechange to a regular file,
 which is what the repository should hold. The statement shows the difference. Refused, a linked
@@ -190,8 +200,9 @@ is written once, read normally from then on, and the backfill's count becomes tr
   racing the server on this machine, and the server never pulls. Handle-based writes are the
   follow-up #360 already lists. The append's `NOFOLLOW_LINKS` matters only inside that race; its
   mutant survives.
-- **A hard link at an appended file is appended to.** It is the file itself, and git cannot deliver
-  one. A replaced file breaks a hard link rather than writing through it.
+- **A hard link at an appended file is appended to on Windows.** Elsewhere it is refused, since the
+  review round. Windows has no `unix` view to count a file's names. Git cannot deliver a hard link,
+  and a replaced file breaks one rather than writing through it.
 - **Anything linked on purpose on the way is refused.** That covers `problems/`, a problem
   directory, `attempts/`, `tags/` and `log/`, even a link that stays inside `problems/`, which the
   reader follows. No code, page, log line or note is written under it, and each refusal is said once
@@ -211,18 +222,41 @@ is written once, read normally from then on, and the backfill's count becomes tr
   extended attributes are not carried. Its mode is kept. The heartbeat now writes its marker by
   temporary file and rename at every beat. Beside a page, a `.<name>.<n>.tmp` exists for the moment
   of the write. A reconcile racing it could commit one, as it always could beside a code file.
-- **Every write walks its directories.** Each one takes a stat and a real path. Measured on this
-  host (APFS, JDK 25), over 2,000 writes of a 4 KB page, three rounds: a replace took 0.22–0.24 ms
-  against 0.04 ms for the plain write it replaced, and an append 0.07–0.08 ms against 0.03 ms. A
-  grading writes about ten files, and a boot rewrites every page and about 80 tag notes, so this
-  costs milliseconds per grading and tens of milliseconds per boot.
-- **A case variant such as `Problems` is refused for writes** on a case-insensitive volume, as #354
-  refused it for reads.
-- **Two reads still follow a link.** `JsonlRecordStore.read()` reads a linked log's target as the
-  history. Lines of that file that parse as records reach MCP and the attempt counter. No such line
-  is pushed: the appends are refused, and git commits the link as a link. `RunLog`'s idempotency
-  check reads a boolean from a linked run log. Both are readers, outside #354's `problems/` bound and
-  this issue's scope, and are follow-ups.
+- **Every write walks its directories.** Each step takes a stat, a listing of its parent and a real
+  path. All figures are from this host (APFS, JDK 25).
+  - Before the listing, over 2,000 writes of a 4 KB page: a replace took 0.22–0.24 ms against 0.04 ms
+    for the plain write it replaced, and an append 0.07–0.08 ms against 0.03 ms.
+  - With 700 sibling directories in `problems/`, the median of nine rounds: a replace took 234 µs
+    before the listing and 617 µs after. A boot's 110 replaces (25 pages, the index and 84 tag notes)
+    took 26.3 ms, then 36.4 ms.
+  - Reading a 700-entry directory alone took 0.36–0.53 ms. A history of 700 problems would add about
+    0.3 s to each boot's page refresh. That figure is computed, not measured.
+  - Nothing is cached. A cached listing would be stale exactly when a pull renames a directory, and
+    a modification time does not reliably say so on a filesystem that keeps whole seconds, as HFS+
+    does.
+- **A folded alias is refused for writes everywhere**: by the listing in the tracker's image, and by
+  either check on the host and on Windows. Reads differ. `ProblemFiles` compares real paths, which the
+  image echoes, so in the image it reads through an alias that a write refuses. Such an alias still
+  lies inside the repository, and this is #354's bound, unchanged here.
+- **A root configured as `<link>/..` is written where it physically leads**, as git and the lock see
+  it, while `ProblemFiles` reads the lexical path (#354's accepted cost). The first draft normalized
+  the target and the root lexically. Dropping that in the review round, to see the `..`, also put
+  such a root's writes back where they landed before #361.
+- **Two reads still follow a link** (security S5, quality Q7; filed). `JsonlRecordStore.read()` reads
+  a linked log's target as the history. Lines of that file that parse as records reach MCP and the
+  attempt counter. No such line is pushed: the appends are refused, and git commits the link as a
+  link. `RunLog`'s idempotency check reads a boolean from a linked run log. Both are readers, outside
+  #354's `problems/` bound and this issue's scope.
+- **A replace over a file another process holds open fails on Windows** (Q4; filed). Windows refuses
+  to rename over an open file unless it was opened to share deletion, so a page an editor holds
+  open is not rewritten. The failure is an I/O error, which a skipping writer does not skip.
+- **A temporary file left by a crash stays beside its target** (Q5; filed). The next reconcile
+  commits it. Code files always had this.
+- **`RecordWrites` repeats parts of `StateDirectory` and `AtomicStateFile`** (Q6; filed): the
+  per-directory checks, the rename, and a warn-once set each. Only the directory listing is shared,
+  since the review round. Merging the rest is a refactor of its own.
+- **`WatchToken` writes its token with `writeText`, which follows a link** (S4; filed). It lives in
+  the tool's own `.ps/`, outside the records root and this issue's scope.
 - **A bind mount under the root is a directory to every check.** Making one needs root on this
   machine. A junction is refused by the real-path comparison, untested on Windows.
 - **Built bare, `FileRawSessionLog` copies unbounded.** That is the bare constructor, which tests
@@ -295,7 +329,7 @@ The writers, each routed back to the raw `Files` calls it made before (`CodeArti
 | the boot pass | 1 |
 | the seeds' raw write behind their link check | survives: race only |
 
-**Gates**, at `58436dc` with this page, all exit 0:
+**Gates**, before the review round, at `58436dc` with this page, all exit 0:
 
 - `./scripts/check.sh`;
 - `./scripts/test.sh`: 2,117 JUnit tests, 73 new, 0 failures, 9 skipped (as before: 8 C# and the
@@ -309,6 +343,89 @@ The writers, each routed back to the raw `Files` calls it made before (`CodeArti
 unreachable on POSIX: a filesystem root handed as a target, a directory vanishing mid-walk,
 `relativize` across drive roots, the `ATOMIC_MOVE` fallback, the temporary file's cleanup after a
 failed move, and the branch for a filesystem with no POSIX modes. CI has not run this branch.
+
+**The review round, at `545d6aa`.** A security review and a quality review attacked the branch.
+Neither blocked the merge. Four findings were fixed here. Each fix has a test that was red against the
+code before it, and the tests that only pin what held are named:
+
+- **Folded aliases** (security S1, quality Q1 and Q2). The walk compared real paths with
+  `Path.equals`, and three places got past it:
+  - In the tracker's image the real path echoes the name asked for. The security review made
+    `Problems/`, `PROBLEMS/` and `problemſ/` by hand and measured `wrote into alias: true`.
+  - On Windows, `Path.equals` ignores case. The quality review predicted that the folding test fails
+    on windows-latest.
+  - On HFS+, the quality review measured, on a disk image, that the first write into a new
+    Korean-titled directory was refused: NFD on disk against the NFC walked.
+
+  `574bcb6` adds the listing check and compares both answers as text after NFC. Its tests play the
+  image, HFS+ and a real path that leads elsewhere through `DiskAnswers`, on any platform. The
+  image's alias was written and HFS+'s first write refused before the change. The real path that
+  leads elsewhere pins what the old check already refused. The fix itself has not run in the image,
+  on Windows or on HFS+.
+- **The root-level bound** (S3). `underRoot` wrote `log/../.ps/git-credentials` and
+  `.git/hooks/pre-commit` (measured). `748da22` refuses a `.` or `..` below the root, gives each
+  root-level writer an allow-list of first names, and walks from the root as configured. Both paths
+  were written before the change. So would a `.` or `..` that stays inside `problems/`, now refused
+  too. A root configured through `..` pins what held.
+- **A hard link** (S2). An append wrote `IMPORTANT | {"run":1}` into an outside file hard-linked as
+  `runs.jsonl`. `629f5cc` refuses a file whose `unix:nlink` exceeds 1, except on Windows, where the
+  view does not exist and the test skips. The append went through before the change.
+- **The boot pass's catch** (Q3). Every `Exception` was logged by its class alone, a programming
+  error without its stack. Since `99c7077`, an I/O failure is still logged that way. Any other fault
+  is an ERROR with its stack, and cancellation is rethrown.
+  - The fault test logged no ERROR before the change. The I/O and cancellation tests pin what held.
+  - The fetch is wrapped (`fetched`), so no fetch detail can reach the stack trace.
+- `aa0643c` pins that a problem writer handed the name `problems` itself writes nothing. It was
+  added when the mutants were planned, since the mutant that drops that condition would have
+  survived.
+
+Filed by the coordinator as follow-ups, and listed under accepted costs: Q4, Q5, Q6, S4, and S5 with
+Q7.
+
+**Mutation, the review round.** 16 mutants of the new behaviours and of two earlier ones on
+rewritten lines. Each ran against its own tests, every file was restored after, and all were killed.
+
+| Mutant | Tests failed |
+|---|---|
+| no listing check | 1, the image |
+| the listing without its NFC fallback | 1, HFS+ |
+| the real path compared as text without NFC | 1, HFS+ |
+| the real path compared with `Path.equals`, as before | 1, HFS+ |
+| no real-path check | 1, the real path that leads elsewhere |
+| no dot check | 2 |
+| the target normalized before it is judged, as before | 2 |
+| no allow-list at the root | 1 |
+| a problem writer admitting `problems` itself | 1, the pin `aa0643c` |
+| no hard-link check | 1 |
+| an I/O failure logged as a fault | 1 |
+| a fault logged by its class alone, as before | 1 |
+| cancellation taken for a failure | 1 |
+| the fault logged without its stack | 1 |
+| the walk following a link | 4 |
+| the root not resolved | 26 |
+
+**Gates after the review round**, at `aa0643c` with this page, all exit 0:
+
+- `./scripts/check.sh`;
+- `./scripts/test.sh`: 2,128 JUnit tests, 11 of them new this round, 0 failures, and 9 skipped as
+  before; node 4 of 4;
+- `./scripts/build.sh`;
+- `./gradlew verifyBranchCoverage`: `adapter/store` 84% (615 of 726), `application` 88% (340 of 383),
+  every package at or above its floor;
+- `./scripts/guards.sh`.
+
+`RecordWrites` now leaves 12 of its 98 branches uncovered. Each is a race, a Windows-only path, or a
+defensive case:
+
+- a target that is the root itself;
+- a directory vanishing mid-walk or before a delete;
+- a directory that cannot be made for another reason;
+- a replaced link said a second time;
+- the temporary file's cleanup after a failed move;
+- the `ATOMIC_MOVE` fallback;
+- a filesystem with no POSIX modes, or no `unix` view.
+
+CI has not run the branch.
 
 **Not verified live.** The bound changes nothing a normal records repository can see. A rebuilt
 server should write byte-identical pages and code files with the same modes. `git status` in the

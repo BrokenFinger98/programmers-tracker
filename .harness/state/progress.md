@@ -5680,3 +5680,36 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   with nothing to recover, and no `Not writing` or `Replacing` line. CI on the three OSes has not run;
   Windows skips every link test. Follow-ups: `JsonlRecordStore.read()` and `RunLog`'s idempotency read
   still follow a link (readers, outside #354's bound); handle-based writes, with #360's.
+
+## 2026-10-08 — #361 review round (security S1–S5, quality Q1–Q7)
+- **Two reviews of `545d6aa`**, neither blocking the merge. Four findings were fixed on the branch,
+  each test red against the code before it; the coordinator files the rest.
+- **Folded aliases (S1, Q1, Q2).** `574bcb6`: each directory must be listed in its parent under
+  exactly the name walked, and both the listing and the real path are compared as text after NFC.
+  - The review measured `wrote into alias: true` in the image, where the real path echoes the name.
+  - It predicted that Windows' case-blind `Path.equals` fails the folding test.
+  - It measured that an HFS+ image refused the first write into a new Korean-titled directory.
+  - The fix takes the listing and the real path through a `DiskAnswers` seam, like
+    `StateDirectory`'s listing, and `namesOnDisk` is now shared. Tests play the image, HFS+ and a
+    real path that leads elsewhere.
+  - Cost, median of nine rounds: a replace beside 700 sibling directories went from 234 µs to
+    617 µs, and a boot's 110 replaces from 26.3 ms to 36.4 ms. Listing 700 entries takes 0.36–0.53 ms.
+- **The root-level bound (S3).** `748da22`: no `.` or `..` below the root. The target is no longer
+  normalized, and the root is walked as configured. Each root-level writer keeps an allow-list of
+  first names: `log`, `tags`, the seeds, the heartbeat marker. Both measured paths
+  (`log/../.ps/git-credentials`, `.git/hooks/pre-commit`) were written before the change.
+- **A hard link (S2).** `629f5cc`: an append refuses a file with `unix:nlink` above 1. It is skipped
+  on Windows, which has no `unix` view.
+- **The boot pass (Q3).** `99c7077`: an I/O failure is logged by its class, any other fault as an
+  ERROR with its stack, and cancellation is rethrown. The fetch is already wrapped by `fetched`.
+- **Pin.** `aa0643c`: the `problems` name itself is refused.
+- **Mutation.** 16 mutants of the new behaviours, plus two rerun on rewritten lines; all killed.
+- **Gates.** check, test, build, `verifyBranchCoverage` and guards all exit 0. Tests: 2,128, 0
+  failures, 9 skipped. Coverage: `adapter/store` 84% (615/726), `application` 88% (340/383).
+- **Follow-ups the coordinator files**, also in the ADR's costs:
+  - Q4: a rename over an open file on Windows.
+  - Q5: a crash's temp file, committed by the next reconcile.
+  - Q6: duplication with `StateDirectory` and `AtomicStateFile`.
+  - S4: `WatchToken.writeText`.
+  - S5 and Q7: the reads that still follow a link.
+- **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
