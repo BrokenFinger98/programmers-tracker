@@ -136,8 +136,6 @@ data class McpCall(
         return given as? JsonObject ?: throw McpFailure(McpErrors.INVALID_PARAMS, 400, "arguments must be an object")
     }
 
-    fun stringArgument(name: String): String? = (strictArguments()[name] as? JsonPrimitive)?.contentOrNull
-
     companion object {
         // Lenient about shape, strict about the envelope: a body that is not JSON at all is a
         // parse error, but a member we do not recognise is simply carried along.

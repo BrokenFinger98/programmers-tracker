@@ -15,7 +15,6 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
@@ -67,7 +66,7 @@ class McpCallTest {
         val call = McpCall.from(aLegacyBody("tools/call", params))
 
         call.name() shouldBe "stats"
-        call.stringArgument("groupBy") shouldBe "verdict"
+        call.strictArguments() shouldBe buildJsonObject { put("groupBy", "verdict") }
     }
 
     @Test
@@ -75,7 +74,6 @@ class McpCallTest {
         val call = McpCall.from(aLegacyBody("tools/call", buildJsonObject { put("name", "stats") }))
 
         call.strictArguments().shouldBeEmpty()
-        call.stringArgument("groupBy").shouldBeNull()
     }
 
     /** `arguments` is optional in the specification: absent and null are none, not a refusal. */
@@ -107,14 +105,6 @@ class McpCallTest {
                     Triple(McpErrors.INVALID_PARAMS, 400, "arguments must be an object")
             }
         }
-    }
-
-    /** The reader of one argument goes through the strict one, so it cannot read a malformed call as absent. */
-    @Test
-    fun `a string argument is read through the strict reader, so a malformed arguments is refused, not absent`() {
-        val call = McpCall.from(aLegacyBody("tools/call", aCallParams("stats", JsonPrimitive("groupBy"))))
-
-        shouldThrow<McpFailure> { call.stringArgument("groupBy") }.code shouldBe McpErrors.INVALID_PARAMS
     }
 
     @Test
