@@ -54,7 +54,8 @@ import java.util.concurrent.atomic.AtomicReference
  * 4. The content gate: the working tree within a commit's scope before staging, what is staged
  *    before the commit, and every commit a push would send before the push, are searched for the
  *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
- *    remote, and runs with replace refs off, so what was searched is what is sent.
+ *    remote, and runs with replace refs off, so the search reads the objects the push sends — for the
+ *    commits that remote's tracking refs lack, which a stale ref understates.
  *
  * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
@@ -461,18 +462,17 @@ class CommandLineGitSync(
          * **And in any ASCII case** (`icase`), so `.PS/` is left out too (#360). On a case-insensitive
          * volume a case alias of `.ps` is refused before git runs ([StateDirectory]); this is what holds
          * where both spellings can stand side by side. ASCII only — `.p` with U+017F, which APFS folds
-         * to `.ps`, is not matched, and the state-directory check and the content gate stand there.
+         * to `.ps`, is not matched; git tracking anything under it refuses before git runs, and the
+         * content gate stands behind that.
          *
          * **The entry itself as well as what is under it.** A partial commit takes every path the
          * pathspec matches in HEAD too: with a tracked `.ps` link taken out of the index by hand and a
          * real directory in its place, it found a directory where a link was tracked and stopped —
          * "'.ps' does not have a commit checked out" (measured on 2.48.1 and 2.53.0).
          */
-        private val RECONCILE_SCOPE = listOf(
-            ".",
-            ":(exclude,glob,icase)${StateDirectory.GLOB}",
-            ":(exclude,glob,icase)${StateDirectory.GLOB}/**",
-        )
+        private val RECONCILE_SCOPE = "[${StateDirectory.NAME.first()}]${StateDirectory.NAME.drop(1)}".let { glob ->
+            listOf(".", ":(exclude,glob,icase)$glob", ":(exclude,glob,icase)$glob/**")
+        }
 
         /** Said once per process, so it stays readable instead of drowning every other line. */
         const val NOT_A_REPOSITORY =

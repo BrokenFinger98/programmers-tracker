@@ -142,9 +142,6 @@ class StateDirectory(
 
     companion object {
         const val NAME = ".ps"
-
-        /** [NAME] as a glob with no literal text before its first wildcard, for git pathspecs. */
-        val GLOB = "[${NAME.first()}]${NAME.drop(1)}"
     }
 }
 
