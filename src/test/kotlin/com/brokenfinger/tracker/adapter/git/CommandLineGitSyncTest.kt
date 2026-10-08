@@ -1059,7 +1059,7 @@ class CommandLineGitSyncTest {
         written("notes/today.md", "a note\n")
         git("add", "--all")
         git("commit", "--message", "a record")
-        Files.delete(looseObjectOf("HEAD:notes/today.md"))
+        deletedObject("HEAD:notes/today.md")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
 
@@ -1074,7 +1074,7 @@ class CommandLineGitSyncTest {
         written("notes/today.md", "a note\n")
         git("add", "--all")
         git("commit", "--message", "a record")
-        Files.delete(looseObjectOf("HEAD^{tree}"))
+        deletedObject("HEAD^{tree}")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
 
@@ -1153,7 +1153,7 @@ class CommandLineGitSyncTest {
         git("remote", "add", "origin", base.resolve("down.git").toString())
         val sync = sync()
         sync.push() shouldBe false
-        Files.delete(looseObjectOf("HEAD:notes/today.md"))
+        deletedObject("HEAD:notes/today.md")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
 
@@ -1266,8 +1266,18 @@ class CommandLineGitSyncTest {
      * directory the filesystem folds to the one [file] is in.
      */
     private fun trackedAs(path: String, file: Path) {
-        val blob = git("hash-object", "-w", root.relativize(file).toString()).trim()
+        val blob = git("hash-object", "-w", "--no-filters", root.relativize(file).toString()).trim()
         git("update-index", "--add", "--cacheinfo", "100644,$blob,$path")
+    }
+
+    /**
+     * [revision]'s loose object, deleted. Git writes objects read-only, and Windows refuses to delete a
+     * read-only file where POSIX only asks about the directory, so the attribute is cleared first.
+     */
+    private fun deletedObject(revision: String) {
+        val file = looseObjectOf(revision)
+        file.toFile().setWritable(true)
+        Files.delete(file)
     }
 
     /** Where git keeps [revision]'s object while it is loose, as it is in a repository never packed. */

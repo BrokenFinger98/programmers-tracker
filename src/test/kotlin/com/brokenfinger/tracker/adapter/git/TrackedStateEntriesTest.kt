@@ -58,7 +58,7 @@ class TrackedStateEntriesTest {
     @Test
     fun `an entry in another case is answered yes`() {
         repo.write("decoy", "decoy\n")
-        val blob = repo.git("hash-object", "-w", "decoy").trim()
+        val blob = repo.git("hash-object", "-w", "--no-filters", "decoy").trim()
         repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,.PS/x")
 
         TrackedStateEntries(repo.root).tracksAnything() shouldBe true
@@ -72,7 +72,7 @@ class TrackedStateEntriesTest {
     @Test
     fun `an entry under a Unicode case fold of the name is answered yes`() {
         repo.write("decoy", "decoy\n")
-        val blob = repo.git("hash-object", "-w", "decoy").trim()
+        val blob = repo.git("hash-object", "-w", "--no-filters", "decoy").trim()
         repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$A_LONG_S_STATE_DIRECTORY/x")
 
         TrackedStateEntries(repo.root).tracksAnything() shouldBe true

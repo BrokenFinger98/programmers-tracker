@@ -322,7 +322,7 @@ class GithubRemoteTest {
         assumeTrue(foldsTogether(dir, A_LONG_S_STATE_DIRECTORY, ".ps"), "this filesystem does not fold U+017F")
         repo.write(".gitignore", ".ps/\n")
         repo.write(PushCredential.FILE, "https://x-access-token:junk@github.com\n")
-        val blob = repo.git("hash-object", "-w", PushCredential.FILE).trim()
+        val blob = repo.git("hash-object", "-w", "--no-filters", PushCredential.FILE).trim()
         repo.git("add", ".gitignore")
         repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$A_LONG_S_STATE_DIRECTORY/git-credentials")
         repo.git("commit", "--message", "as a pull delivers it")
