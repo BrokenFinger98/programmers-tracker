@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.madeFifo
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.AccessDeniedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -217,6 +219,21 @@ class AtomicStateFileTest {
         timers().write("{}")
 
         Files.readString(path()) shouldBe "{}"
+    }
+
+    /**
+     * A document that cannot be looked at is no answer, and is thrown rather than read as none (#387): taken for a
+     * document never written, the next write would start from nothing. Pinned from the mutation round, as before.
+     */
+    @Test
+    fun `a document that cannot be looked at is thrown, not read as none`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a directory's permissions away")
+        timers().write("""{"a":1}""")
+
+        sealedWhile(path().parent) {
+            assumeTrue(!Files.isReadable(path().parent), "a superuser reads it anyway")
+            shouldThrow<AccessDeniedException> { timers().read() }
+        }
     }
 
     /**

@@ -386,6 +386,21 @@ class RecordWriterTest {
         heard.single() shouldContain "attempts/001.raw.jsonl was kept"
     }
 
+    /** A take-back that fails is a copy kept: its number stays taken, and the failure is said by its kind. */
+    @Test
+    fun `a copy whose take-back fails keeps its number taken`() = runBlocking<Unit> {
+        val store = FailingStore(JsonlRecordStore.under(root))
+        val unwithdrawable = KeptCopies(FileRawSessionLog(rawDirectory())) { throw IOException("the delete failed") }
+        val writer = writer(store, rawLog = unwithdrawable)
+        val heard = warningsWhile(RecordWriter::class) {
+            runBlocking { shouldThrow<IllegalStateException> { writer.write(aSubmit(1, liveRaw("g1.jsonl"))) } }
+        }
+        store.failing = false
+
+        writer.write(aSubmit(2, liveRaw("g2.jsonl")))!!.attempt shouldBe 2
+        heard.first() shouldContain "could not be taken back (IOException)"
+    }
+
     // The raw log as the composition root builds it: copies walked through no link, `.ps` checked (#360, #361).
     private fun boundedRawLog(): RawSessionLog =
         FileRawSessionLog.under(root, Clock.fixed(NOW, ZoneOffset.UTC), aStateDirectory(root))
@@ -547,9 +562,13 @@ private class UnreadableStore(private val delegate: RecordStore) : RecordStore {
     }
 }
 
-/** A raw log that cannot take a copy back, as when its frames were held only in memory (#387's review). */
-private class KeptCopies(private val delegate: RawSessionLog) : RawSessionLog by delegate {
-    override fun withdraw(session: RawSessionId, copy: Path): Boolean = false
+/**
+ * A raw log that takes no copy back (#387's review): false, as for frames held only in memory, or whatever [answer]
+ * does instead — a delete that fails throws.
+ */
+private class KeptCopies(private val delegate: RawSessionLog, private val answer: () -> Boolean = { false }) :
+    RawSessionLog by delegate {
+    override fun withdraw(session: RawSessionId, copy: Path): Boolean = answer()
 }
 
 /** Fails every append until told otherwise — the shape a full disk leaves behind. */
