@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 
 /**
@@ -40,6 +41,26 @@ class RecordBoundTest {
         problems().fileIn(root.resolve("problems/1-x/runs.jsonl"), creating = false).shouldBeNull()
 
         namesIn(root).shouldBeEmpty()
+    }
+
+    /** A directory itself, as the state directory is asked for: walked, made where absent, and answered as itself. */
+    @Test
+    fun `a directory is made where absent and answered as itself`() {
+        val made = RecordBound.underRoot(root, setOf(".ps")).made(root.resolve(".ps"))
+
+        made shouldBe realRoot().resolve(".ps")
+        Files.isDirectory(root.resolve(".ps"), LinkOption.NOFOLLOW_LINKS) shouldBe true
+    }
+
+    @Test
+    fun `a directory made through a link is out of bounds, and nothing is made where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps"), outside)
+
+        val out = shouldThrow<OutOfBounds> { RecordBound.underRoot(root, setOf(".ps")).made(root.resolve(".ps/raw")) }
+
+        out.reason shouldBe ".ps is a symbolic link"
+        namesIn(outside).shouldBeEmpty()
     }
 
     @Test

@@ -53,6 +53,12 @@ internal class RecordBound private constructor(
         return walked(names.dropLast(1), creating)?.resolve(names.last())
     }
 
+    /**
+     * [directory] itself, walked from the real root and made where absent — as `.ps` is asked for (#386). Null when it
+     * vanished between being made and being looked at.
+     */
+    fun made(directory: Path): Path? = walked(namesOf(directory), creating = true)
+
     /** [directory] itself, walked without making anything; null when it is not there. */
     fun existing(directory: Path): Path? {
         if (!isThere(directory)) return null
@@ -122,11 +128,6 @@ internal class RecordBound private constructor(
         return disk.realPathOf(root)
     }
 
-    // Made when absent — by another writer meanwhile too — and judged after, so a link that won the race is refused.
-    private fun createdOrThere(directory: Path) {
-        runCatching { Files.createDirectory(directory) }.onFailure { if (it !is FileAlreadyExistsException) throw it }
-    }
-
     private fun outOfBounds(directory: Path, what: String) = OutOfBounds("${relative(directory)} $what")
 
     private fun outsideTheBound(): String {
@@ -171,6 +172,14 @@ internal class DiskAnswers(
     val realPathOf: (Path) -> Path = { it.toRealPath() },
     val namesIn: (Path) -> Set<String> = ::namesOnDisk,
 )
+
+/**
+ * [directory] made when absent — by another writer meanwhile too, which is no failure — for the caller to judge after,
+ * so a link that won the race is refused there. The one way the records and `.ps` make a directory (#386).
+ */
+internal fun createdOrThere(directory: Path) {
+    runCatching { Files.createDirectory(directory) }.onFailure { if (it !is FileAlreadyExistsException) throw it }
+}
 
 /**
  * Whether anything stands at [path], a link included, as the filesystem says (#387). Only "no such file" is no: a name
