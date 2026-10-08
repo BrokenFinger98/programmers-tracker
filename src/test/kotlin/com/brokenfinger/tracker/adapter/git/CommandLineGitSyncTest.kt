@@ -1028,8 +1028,8 @@ class CommandLineGitSyncTest {
      * The `LC_ALL=C` pin's second reason (the review of #389). In a UTF-8 locale macOS's regex stops at a
      * byte that is not UTF-8, so `git grep -E` missed a token after one on the same line, exited 1 and
      * said nothing: measured with Homebrew git 2.48.1 here, and by the review with Apple's git as well. The
-     * fixed-string search for the stored value found it either way. In the C locale the token is found.
-     * glibc made no difference, so on Linux this passes with the pin or without it.
+     * fixed-string search for the stored value found it either way. In the C locale the token was found.
+     * glibc made no difference. Since #376 the commit's search reads the bytes in the JVM, in any locale.
      */
     @Test
     fun `a token after a byte that is not UTF-8 is never committed, whatever the locale`() {
@@ -1093,8 +1093,7 @@ class CommandLineGitSyncTest {
     fun `a token in a UTF-16 file is never pushed`() {
         val remote = remoteInitialised()
         written(".gitignore", ".ps/\n")
-        val powershell = byteArrayOf(-1, -2) + "${aGithubShapedToken()}\r\n".toByteArray(Charsets.UTF_16LE)
-        Files.write(Files.createDirectories(root.resolve("notes")).resolve("powershell.txt"), powershell)
+        writtenAsPowershellDoes("notes/powershell.txt", "${aGithubShapedToken()}\r\n")
         git("add", "--all")
         git("commit", "--message", "a note another tool committed")
 
@@ -1633,6 +1632,206 @@ class CommandLineGitSyncTest {
         git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
     }
 
+    // A commit is searched for what it adds; what HEAD already holds is said, not refused (#376) --
+    //
+    // A pull can bring in a file with a token-shaped string in it. Searched whole, every reconciliation
+    // after it was refused with "revoke the token", though a commit adds nothing of it and a push sends
+    // nothing of it that the remote lacks.
+
+    /**
+     * #376: the commit gate searched everything in its scope, so a token-shaped string a pull brought in
+     * refused every reconciliation from then on. A commit is searched for the content it adds; what HEAD
+     * already holds is a leak to revoke, said once and without what it is.
+     */
+    @Test
+    fun `a token-shaped string a pull brought in does not stop reconciliation, and is said once`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/pasted.md", "${aGithubShapedToken()}\n")
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            written("log/submissions.jsonl", RECORD)
+            sync.reconcile() shouldBe true
+            written("log/submissions.jsonl", "$RECORD\n$RECORD")
+            sync.reconcile() shouldBe true
+        }
+
+        heard.single() shouldContain "already holds a GitHub token"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects().take(2) shouldContainExactly List(2) { CommandLineGitSync.RECONCILE_MESSAGE }
+    }
+
+    /** Each string is said when it enters HEAD, so one pulled after the first was said is said as well. */
+    @Test
+    fun `a token-shaped string pulled later is said as well`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/pasted.md", "${aGithubShapedToken()}\n")
+        val sync = sync()
+        sync.reconcile() shouldBe true
+        pulledFrom(remote, "notes/again.md", "${aGithubShapedToken('B')}\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+    }
+
+    /**
+     * What HEAD holds was searched for what was stored at the time. A value stored since, already in a
+     * committed file, is said at the next reconciliation: a changed store has HEAD searched whole again.
+     */
+    @Test
+    fun `a token stored after it was committed is said`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/old.md", "the token: $A_PUSH_CREDENTIAL\n")
+        git("add", "--all")
+        git("commit", "--message", "a note another tool committed")
+        val sync = sync()
+        sync.reconcile() shouldBe true
+        aPushTokenIn(root)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /**
+     * A search of what is committed that could not run is not remembered as one that did: with an object git
+     * could not read, nothing is said, and the next reconciliation searches it again and says what it holds.
+     */
+    @Test
+    fun `what is committed is searched again after a search of it could not run`() {
+        written(".gitignore", ".ps/\n")
+        val pasted = written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        val sync = sync()
+        deletedObject("HEAD:notes/pasted.md")
+        warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true } shouldContainExactly emptyList()
+        git("hash-object", "-w", root.relativize(pasted).toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+    }
+
+    /** What HEAD's tree already holds is not added by a commit that moves it, wherever it goes. */
+    @Test
+    fun `a token-shaped string HEAD already holds is not refused where a commit moves it`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        Files.move(root.resolve("notes/pasted.md"), root.resolve("notes/moved.md"))
+
+        sync().reconcile() shouldBe true
+
+        git("ls-tree", "-r", "--name-only", "HEAD").lines().filter { it.isNotBlank() } shouldContainExactly
+            listOf(".gitignore", "notes/moved.md")
+    }
+
+    /**
+     * `git grep` finds no token in UTF-16 text, so a commit took one in, and every push after it was refused
+     * (#373's accepted cost). What a commit adds is read as the push reads it, before anything is staged.
+     */
+    @Test
+    fun `a token in a UTF-16 file is never committed, and nothing is left staged`() {
+        written(".gitignore", ".ps/\n")
+        writtenAsPowershellDoes("notes/powershell.txt", "${aGithubShapedToken()}\r\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        subjects() shouldContainExactly emptyList()
+        git("diff", "--cached", "--name-only").trim() shouldBe ""
+    }
+
+    /**
+     * `git grep` reads content only, so a reconciliation committed a file named with a token, and every push
+     * after it was refused (#375). The paths a commit adds are read as their bytes, and the refusal names "a
+     * file or directory name", never which: the name would carry the token.
+     */
+    @Test
+    fun `a file named with a token is never committed, and nothing is left staged`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/${aGithubShapedToken()}.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects() shouldContainExactly emptyList()
+        git("diff", "--cached", "--name-only").trim() shouldBe ""
+    }
+
+    /** A directory's name is in the path of everything under it, and the stored value is searched for there too. */
+    @Test
+    fun `a directory named with the stored token is never committed`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("$A_PUSH_CREDENTIAL/notes.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name"
+        subjects() shouldContainExactly emptyList()
+    }
+
+    /** A name HEAD already holds is not added by a commit that changes the file: it is said, not refused. */
+    @Test
+    fun `a file named with a token HEAD already holds does not stop a commit that changes it`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/${aGithubShapedToken()}.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        written("notes/${aGithubShapedToken()}.md", "a note, changed\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects().first() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
+    }
+
+    /**
+     * What a commit adds is staged first in a copy of the index, and a file git cannot read fails that
+     * staging as it fails the real one. Git's own words say which file, as they did when the real one failed.
+     */
+    @Test
+    fun `a file git cannot read stops the commit in git's own words`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a file's permissions away")
+        written(".gitignore", ".ps/\n")
+        val sealed = written("notes/sealed.md", "a note\n")
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+        }
+
+        heard.single() shouldContain "git reconcile failed"
+        heard.single() shouldContain "notes/sealed.md"
+    }
+
+    /**
+     * A preview git cannot make refuses the commit, though the real staging would have gone through: what
+     * could not be staged in the copy was never searched. Here a required clean filter fails only where git
+     * is pointed at another index, as the copy is, and the real `add` and the commit run it without one.
+     */
+    @Test
+    fun `a commit whose preview git cannot make is refused, in git's own words`() {
+        assumeTrue(canPlantLinksIn(root), "this test runs a shell filter")
+        written(".gitignore", ".ps/\n")
+        git("config", "filter.gate.clean", "sh -c '[ -z \"\$GIT_INDEX_FILE\" ] && cat'")
+        git("config", "filter.gate.required", "true")
+        written(".gitattributes", "notes/*.md filter=gate\n")
+        written("notes/today.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "clean filter 'gate' failed"
+        subjects() shouldContainExactly emptyList()
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**
@@ -1839,6 +2038,13 @@ class CommandLineGitSyncTest {
         git("config", "user.name", "Other", at = other)
         git("config", "commit.gpgsign", "false", at = other)
         return other
+    }
+
+    /** [text] at [relative] as Windows PowerShell 5.1 writes it with `>`: UTF-16LE behind a byte order mark. */
+    private fun writtenAsPowershellDoes(relative: String, text: String) {
+        val file = root.resolve(relative)
+        Files.createDirectories(file.parent)
+        Files.write(file, byteArrayOf(-1, -2) + text.toByteArray(Charsets.UTF_16LE))
     }
 
     private fun subjects(at: Path = root): List<String> {

@@ -90,8 +90,8 @@ class GitProcessTest {
     }
 
     /**
-     * The tracker reads git's own words: a directory git could not open, an `error:` from a search, the
-     * index lock. A git built with translations says them in the server's language — git 2.48.1 here
+     * The tracker reads git's own words: a directory git could not open, the index lock. A git built with
+     * translations says them in the server's language — git 2.48.1 here
      * answered this status in Korean under `ko_KR.UTF-8` and as "Auf Branch main" under German, and German
      * translates even the `warning:` prefix (#372). Where git has no translations, or the locale is not
      * installed, it answers in English either way, and this cannot fail.

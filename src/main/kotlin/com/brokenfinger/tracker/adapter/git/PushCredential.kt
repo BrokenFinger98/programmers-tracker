@@ -99,7 +99,7 @@ sealed interface StoredCredential {
      * masked, like every credential type here (dev rules §7.2).
      */
     class Patterns(private val values: List<String>) : StoredCredential {
-        /** One pattern per line, for `git grep -F -f -`: they reach git on stdin, never in argv. */
+        /** One pattern per line, as `git grep -F -f -` reads them and `TokenPatterns` splits them. Never in argv. */
         fun asInput(): String = values.joinToString("\n", postfix = "\n")
 
         override fun toString(): String = "Patterns(***)"
