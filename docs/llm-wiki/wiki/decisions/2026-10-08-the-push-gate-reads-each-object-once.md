@@ -183,14 +183,14 @@ the bytes `BatchOutput` reads.
 
 #373 on `perf/373-scan-new-objects`:
 
-- `66a58da` input written from its own thread, and a git past its timeout killed through its handle;
-- `9a1d286` `GitProcess.runReading`;
-- `180948b` `TokenPatterns`, with the shapes moved there, the UTF-16 view and the parity tests;
-- `95ed428` `GitObject` and `BatchOutput`;
-- `596ee7c` `OutgoingObjectScan`;
-- `2d64faf` the push gate on the scan, and three push tests;
-- `64ca2ca` the CR, exit-code and every-id checks pinned;
-- `bf39d9b` both UTF-16 byte orders and the NUL gate pinned;
+- `8493d88` input written from its own thread, and a git past its timeout killed through its handle;
+- `43a111c` `GitProcess.runReading`;
+- `983b8b6` `TokenPatterns`, with the shapes moved there, the UTF-16 view and the parity tests;
+- `8da5a08` `GitObject` and `BatchOutput`;
+- `58de882` `OutgoingObjectScan`;
+- `9a79453` the push gate on the scan, and three push tests;
+- `53c6598` the CR, exit-code and every-id checks pinned;
+- `37bb284` both UTF-16 byte orders and the NUL gate pinned;
 - this page, the #360 page's superseded lines, the index and progress.
 
 Every new test was red first. Each new class against a stub that answered clean or read everything
@@ -206,8 +206,8 @@ build: a header read without a bound exhausts the test JVM's heap (`Java heap sp
 for it. One is equivalent: content that ends early taken for the end of the object, since a short read
 happens only at the end of the output, where the newline that must follow fails as well. Planning the
 run found three checks no test could fail — a CR kept in a stored value, and the two batch-check checks,
-each of which covered the other — pinned in `64ca2ca` before it ran. The run left two survivors besides
-the equivalent one, UTF-16LE alone and the NUL gate gone, pinned in `bf39d9b` and run again. The
+each of which covered the other — pinned in `53c6598` before it ran. The run left two survivors besides
+the equivalent one, UTF-16LE alone and the NUL gate gone, pinned in `37bb284` and run again. The
 mutants, with how many tests each failed: input on the caller's thread 1; the old
 kill 1; `runReading` reading whatever the exit 2; no UTF-16 view 9; UTF-16 from the first byte only 1;
 one byte order only 1; the UTF-16 view without the stored values 1; every window read as UTF-16 1; stored
