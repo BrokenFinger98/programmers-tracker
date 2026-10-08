@@ -73,17 +73,20 @@ class GitWorkspace(private val base: Path) {
      * it one way, the current branch the other way, and `git merge` exits 1 with the conflict unresolved.
      */
     fun mergeLeftInConflict(relative: String) {
-        write(relative, "base\n")
-        git("add", "--all")
-        git("commit", "--message", "base")
+        committedAs(relative, "base")
         git("checkout", "--quiet", "-b", "other")
-        write(relative, "theirs\n")
-        git("commit", "--all", "--message", "theirs")
+        committedAs(relative, "theirs")
         git("checkout", "--quiet", "-")
-        write(relative, "ours\n")
-        git("commit", "--all", "--message", "ours")
+        committedAs(relative, "ours")
         val (code, output) = run(listOf("merge", "other"), root)
         check(code == 1) { "git merge was expected to stop on a conflict and exited $code: $output" }
+    }
+
+    /** [relative] written with [side] as its content and committed under that name, on the current branch. */
+    private fun committedAs(relative: String, side: String) {
+        write(relative, "$side\n")
+        git("add", "--all")
+        git("commit", "--message", side)
     }
 
     fun git(vararg args: String, at: Path = root): String {
