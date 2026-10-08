@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -346,7 +347,11 @@ class DailyBackupTest {
         backupLog().lastSuccessAt() shouldBe EVENING.plus(Duration.ofMinutes(123))
     }
 
-    /** A push that really failed is tried again on the same backoff, said at each try, and lands once it can. */
+    /**
+     * A push that really failed is tried again on the same backoff, said at each try, and lands once it can.
+     * What each line says of the next try holds at that try: from the second on, the next is not a minute
+     * away (the review of #399).
+     */
     @Test
     fun `a push that keeps failing is tried again on the backoff, and lands once it can`() {
         val unreachable = GitWorkspace(base.resolve("unreachable"))
@@ -361,6 +366,7 @@ class DailyBackupTest {
         ticks(backup, clock, count = 16) // the next try is at 31
 
         heard.count { "could not push" in it } shouldBe 5
+        heard.forEach { it shouldNotContain "a minute later" }
         backupLog().lastSuccessAt() shouldBe EVENING.plus(Duration.ofMinutes(31))
     }
 

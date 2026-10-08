@@ -149,15 +149,20 @@ class DailyBackup(
     private companion object {
         val logger = LoggerFactory.getLogger(DailyBackup::class.java)
 
+        /**
+         * When the day is tried again, as true at the tenth try as at the first: "a minute later at first",
+         * said at every try, promised a minute where the wait had grown to an hour (the review of #399).
+         */
+        const val RETRIED =
+            "The day stays due and is tried again, after a wait that doubles with each failed try, from a " +
+                "minute up to an hour."
+
         const val HELD_BACK =
             "Daily backup held back: records are left uncommitted, and the reconciliation's own warning " +
-                "says why; whatever was already committed is pushed. The day stays due and is tried again, " +
-                "a minute later at first and at most an hour apart. This process says so once for each " +
-                "scheduled backup."
+                "says why; whatever was already committed is pushed. $RETRIED This process says so once for " +
+                "each scheduled backup."
 
-        const val NOT_PUSHED =
-            "Daily backup could not push; the day stays due and is tried again, a minute later at first " +
-                "and at most an hour apart."
+        const val NOT_PUSHED = "Daily backup could not push. $RETRIED"
     }
 }
 
