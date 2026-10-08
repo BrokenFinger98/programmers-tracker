@@ -310,11 +310,13 @@ Six layers, each covering what the one before cannot:
    branch goes to its own name there, and `branch.<b>.merge` is not consulted. A remote with no `url`
    and no `pushurl` is nowhere to push: nothing is searched, and the WARN says so. The commits searched
    are `rev-list HEAD --not --remotes=<remote>`. An unborn HEAD is nothing to push, says nothing and
-   answers true — which the daily backup records as a success (#372). A detached one is not pushed,
-   and says so.
+   answers true. *Since #372 the daily backup records a day only when reconciliation succeeded as
+   well, so an unborn branch whose reconciliation was refused is not recorded — see the Outcome.* A
+   detached one is not pushed, and says so.
 6. **Git's environment** (`GitProcess`). Every git call of the tracker runs through one helper, with
    `GIT_TERMINAL_PROMPT=0` and `GIT_NO_REPLACE_OBJECTS=1` — so the search reads the objects a push
-   sends — and without `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE` and the four
+   sends — and, since #372, `LC_ALL=C`, so git says its words in English and `grep -E` reads bytes as
+   bytes; and without `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE` and the four
    pathspec switches, whatever the server was started with.
 
 Smaller items:
@@ -459,8 +461,8 @@ Two pin that a healthy repository still commits and pushes with a credential sto
 - **The other ignore rules still depend on `.gitignore`.** With a broken one, reconciliation commits
   `.DS_Store`, `.obsidian/workspace.json`, `.idea/` and `*.iml` as before. A WARN says so at boot.
 - **An untracked directory git cannot open is skipped silently (F8).** Reading stderr again would bring
-  back the empty commit a linked `.gitignore`'s warning caused. *Since #372 it is skipped and said —
-  see the Outcome.*
+  back the empty commit a linked `.gitignore`'s warning caused. *Since #372 it is skipped and said,
+  once a day while it lasts — see the Outcome.*
 - **TOCTOU windows remain (N10): every check is of a path, not a held handle.** They sit between the
   state directory's inspection and a write, between a writer's stat of its directories and its open
   (the open itself never follows a link at the file), and between the commit's searches and the
@@ -515,6 +517,12 @@ Two pin that a healthy repository still commits and pushes with a credential sto
   `GIT_CONFIG_COUNT`, which set config, and `GIT_OBJECT_DIRECTORY` and
   `GIT_ALTERNATE_OBJECT_DIRECTORIES` still pass through; each is the server's own environment, set
   by its owner.
+- **The records repository's hooks inherit `LC_ALL=C` (#372).** A hook the owner keeps there runs in
+  the C locale now. Measured here: bash's `${#x}` counts bytes (6 for a two-syllable Hangul word, 2
+  under `en_US.UTF-8`), and Ruby's default external encoding becomes US-ASCII; Python 3 stays UTF-8.
+  For git itself the pin changes nothing in the tracker's image: no `git.mo` is in it, so its git has
+  no translations, and the review found glibc's regex unaffected by the locale. Its hooks still run
+  in the C locale there.
 - **A head searched clean is remembered in memory.** A restart searches it once more. A remote-tracking
   ref that moves backward under the same head widens the range without a new search; those commits were
   on that remote already.
@@ -639,19 +647,30 @@ commit, no tracked symlink, `.ps` a real directory (#360's newest comment).
 - **F8 is said.** Every status the tracker runs has its stderr read for
   `warning: could not open directory '<path>': <reason>` — measured on 2.48.1 for a directory at
   `000` or `-wx`, for the subdirectory of one at `r--`, and for a tracked directory at `000`, where a
-  changed file was not listed either. Each directory is named once per instance, with git's reason and
-  never what it holds. It stays a warning: reconciliation commits the rest and answers true, so the
+  changed file was not listed either. Each directory is named with git's reason and never what it
+  holds — once per instance at first, once a day since the review below. It stays a warning:
+  reconciliation commits the rest and answers true, so the
   empty commit this page's cost was about does not come back. Git's other such line,
   `unable to access '<path>'`, is left alone: it named the `.gitignore` of a directory git can list
   but not enter, and a linked `.gitignore` — files whose rules then do not apply, which leaves no
   record out. Not caught: a *tracked* directory at `r--` hid a changed file in it behind a line with
   no `warning:` (`<path>: Permission denied`), measured.
-- **Git's environment pins `LC_ALL=C` (layer 6).** Homebrew's git 2.48.1 translated
-  `could not open directory` under `ko_KR.UTF-8`, the language this tool's users run it in, and
-  under `de_DE.UTF-8` the prefixes too: a grep over an unreadable blob said `Fehler:` and exited 1,
-  so the gate's `error:` check read it as nothing found — the reworded git this page's costs name,
-  reached by a locale instead. Under Korean the prefix stays `error:`. Paths and commit messages are
-  not translated: the suite's Korean subjects and problem paths pass under the pin.
+- **Git's environment pins `LC_ALL=C` (layer 6), for two reasons.**
+  - *Translations.* Homebrew's git 2.48.1 translated `could not open directory` under
+    `ko_KR.UTF-8`, the language this tool's users run it in, and under `de_DE.UTF-8` the prefixes
+    too: a grep over an unreadable blob said `Fehler:` and exited 1, so the gate's `error:` check
+    read it as nothing found — the reworded git this page's costs name, reached by a locale instead.
+    Under Korean the prefix stays `error:`.
+  - *Bytes* (found by the review of #389). In a UTF-8 locale macOS's regex stops at a byte that is
+    not UTF-8, so the gate's `git grep -E` missed a token after one on the same line. A note holding
+    `caf`, the Latin-1 byte `0xE9`, a space and a token-shaped string: exit 1 and nothing on stderr
+    under `en_US.UTF-8`, 0 under `C` (measured here; the review saw the same with Apple's git and no
+    difference on glibc). Before the pin, `reconcile()` committed that note and answered true. The
+    token before the byte, or on the next line, is found either way, and so is the stored value,
+    which is searched as fixed strings.
+
+  Paths and commit messages are not translated: the suite's Korean subjects and problem paths pass
+  under the pin.
 - **The daily backup records a day only when reconciliation succeeded as well** (the amendment to
   [[decisions/2026-08-06-wire-git-into-the-pipeline]]). A branch with no commit yet and nothing to
   commit still counts; one whose reconciliation was refused, which decision 5's true would have
@@ -662,3 +681,27 @@ under Korean (`List is empty`); git's answer in English under Korean and German 
 Korean). Mutants, each failing a test: the pin removed (2 tests), the detector removed (2), the
 directory said at every status (1), and the warning read as a change, which failed the second
 reconciliation (1).
+
+**After the review of #389** (approved, nothing blocking):
+
+- The bytes reason above, pinned through the real `reconcile()` with `en_US.UTF-8` inherited: a
+  refusal and no commit. Red with the pin removed (`expected:<false> but was:<true>`). On Linux the
+  test passes either way, and its KDoc says so.
+- Two mutants of the F8 detector had survived — a dedupe key shared by every directory, which
+  silences all after the first, and a pattern that stops at a quote. A test now seals `it's/` and a
+  directory with a space and Hangul in its name; each mutant fails it (expected 2, was 1).
+- F8 is said once a day while it lasts, by the date on the process clock, not once per process. The
+  review measured `runIfDue()` recording every day around a directory at `000`, with the warning
+  said on the first day only. The day is still recorded: holding it would retry every minute for what
+  only the owner can fix. The exception is stated in `GitSync` and `DailyBackup.performed`, and pinned
+  at both layers.
+- The F8 warning no longer says nothing under the directory is pushed: in a tracked one, what was
+  committed before still goes up.
+- **Known cost, left to #390.** A held day now retries every minute, so the content gate's
+  `CREDENTIAL_FOUND` warning, and a failing pre-commit hook, repeat every minute while it is held,
+  where before the day was recorded and they came once a day. #390 takes it with the per-minute
+  warnings of a repository with no remote.
+
+Mutants of this round, each failing a test: the pin removed again (3 tests, the bytes test among
+them); the date ignored, so once per process (2); the dedupe removed (3); the directory holding the
+day, by reading the warning as a change (4); and the two above (1 each).

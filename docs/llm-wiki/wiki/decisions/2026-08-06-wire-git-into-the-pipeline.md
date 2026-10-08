@@ -81,7 +81,8 @@ in the earlier work said what happens when it is never made a repository.
 4. **`DailyBackup` compares an injected clock against a persisted instant.** Due when the most
    recent 23:00 Asia/Seoul is later than the last successful backup — `null` counts as due.
    `BackupSchedule` ticks once a minute and asks; `StartupReconciliation` asks once at boot.
-   Only a push that landed is recorded, so a failed one leaves the day due.
+   Only a push that landed is recorded, so a failed one leaves the day due. *Amended 2026-10-08
+   (#372): and only when reconciliation succeeded as well — see the Outcome.*
 5. **`StartupReconciliation` sequences the three recoveries in one place**: raw sessions become
    records, `git.reconcile()` commits whatever is uncommitted, then the backup catches up.
    The order is load-bearing — reconcile first and it misses the records the sessions were
@@ -147,8 +148,8 @@ alone, while the backup log said the day was covered and the next check found no
 - A branch with no commit yet and nothing to commit counts. Nothing exists to back up, and #360
   made such a push answer "nothing to push". One whose reconciliation was refused does not count:
   there, #360's answer alone would have recorded a day whose records exist only here.
-- A held day is said once for each scheduled backup. The reason is said by the reconciliation
-  itself.
+- A held day is said once for each scheduled backup by the running process; a restart says it
+  again. The reason is said by the reconciliation itself.
 
 Weighed and not taken: skipping the push while reconciliation fails, which keeps every committed
 attempt at home behind a note the gate refuses or a merge left open; and an outcome type in place
@@ -157,9 +158,16 @@ on.
 
 Accepted costs. While a day is held, every check reconciles and pushes again, once a minute: the
 push usually sends nothing, but each is a round trip to the remote. A persistent refusal is
-warned about at every check by the reconciliation, as a failing push already was. A directory git
-cannot open does not hold the day: reconciliation commits the rest, answers true and names the
-directory once ([[decisions/2026-10-08-reconcile-never-stages-the-state-directory]], its F8).
+warned about at every check by the reconciliation, as a failing push already was — the content
+gate's `CREDENTIAL_FOUND`, and a failing pre-commit hook, now repeat every minute while the day is
+held, where before the day was recorded and they came once a day (the review of #389; left to
+#390, with the per-minute warnings of a repository with no remote). A directory git cannot open
+does not hold the day: reconciliation commits the rest and answers true, so the day is recorded
+without what it holds, and the directory is named once a day while it lasts
+([[decisions/2026-10-08-reconcile-never-stages-the-state-directory]], its F8). Holding the day for
+it would retry every minute for what only the owner can fix. The exception is stated in `GitSync`
+and `DailyBackup.performed`, and a `DailyBackupTest` case pins it: both evenings recorded, the
+directory named at each (red first, said once per process: expected 2, was 1).
 
 Six new `DailyBackupTest` cases were red first on the old code (`expected:<false> but was:<true>`):
 the token search's refusal, a merge in progress, an index lock that never clears, a branch with no
