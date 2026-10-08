@@ -38,22 +38,27 @@ import java.util.concurrent.atomic.AtomicBoolean
  * logging each one would bury every other message the tool has to say, and the records
  * themselves are written either way.
  *
- * **Nothing it commits or pushes carries the push token (#360).** The token lives in `.ps/`,
- * inside the repository, and a clone or a pull can deliver what switches a single guard off — a
- * `.gitignore` git will not read, a link where a file was, a name the filesystem folds to `.ps`.
- * So the guards are layered, each covering what the one before cannot:
+ * **What it commits and pushes is kept from carrying the push token (#360).** The token lives in
+ * `.ps/`, inside the repository, and a clone or a pull can deliver what switches a single guard
+ * off — a `.gitignore` git will not read, a link where a file was, a name the filesystem folds to
+ * `.ps`, a file git tracks inside it. So the guards are layered, each covering what the one before
+ * cannot:
  *
- * 1. Reconciliation leaves `.ps/` out by pathspec, in any ASCII case, whatever `.gitignore`
- *    says ([RECONCILE_SCOPE]).
- * 2. Git runs only while `.ps` is the real state directory ([StateDirectory]): not a link a pull
- *    swapped in, and not a name the filesystem folds to it.
+ * 1. Reconciliation leaves `.ps` — the entry and what is under it — out by pathspec, in any ASCII
+ *    case, whatever `.gitignore` says ([RECONCILE_SCOPE]).
+ * 2. No commit, reconciliation or push runs unless `.ps` is the real state directory, holds no link
+ *    and holds nothing git tracks ([StateDirectory]).
  * 3. The credential is replaced, never written through a link ([GithubRemote]), and git is only
  *    pointed at it while it is a regular file ([PushCredential]).
- * 4. The content gate: what is staged, before every commit, and every commit a push would send,
- *    before the push, are searched for the token itself. It is the last line, and the only one
- *    that does not depend on a path.
+ * 4. The content gate: the working tree within a commit's scope before staging, what is staged
+ *    before the commit, and every commit a push would send before the push, are searched for the
+ *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
+ *    remote, and runs with replace refs off, so what was searched is what is sent.
  *
- * Every refusal is one WARN that names why and never the token, and a false — fail closed.
+ * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
+ * And each check is of a path at one moment, not of a handle held to the write — a swap in between
+ * is a window the checks do not close. Every refusal is one WARN that names why and never the token,
+ * and a false — fail closed.
  */
 class CommandLineGitSync(
     private val root: Path,
@@ -211,7 +216,7 @@ class CommandLineGitSync(
         if (!git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).succeeded()) return true
         val branch = currentBranch() ?: return detached()
         val remote = pushRemoteOf(branch)
-        if (!carriesNoCredential("push") { outgoingSearches(remote) }) return false
+        if (!carriesNoToken("push") { outgoingSearches(remote) }) return false
         val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
         if (result.succeeded()) return true
         return failed("push", result)
@@ -248,9 +253,9 @@ class CommandLineGitSync(
      * unsearched — which is why the push searches again, what was actually committed.
      */
     private fun committed(what: String, scope: List<String>, message: String): Boolean {
-        if (!carriesNoCredential(what) { listOf(listOf("--untracked", "--") + scope) }) return false
+        if (!carriesNoToken(what) { listOf(listOf("--untracked", "--") + scope) }) return false
         if (!retryingOnContention(what) { git(listOf("add", "--all", "--") + scope) }) return false
-        if (!carriesNoCredential(what) { listOf(listOf("--cached", "--") + scope) }) return false
+        if (!carriesNoToken(what) { listOf(listOf("--cached", "--") + scope) }) return false
         return retryingOnContention(what) { git(listOf("commit", "--message", message, "--") + scope) }
     }
 
@@ -265,7 +270,7 @@ class CommandLineGitSync(
      * Fails closed, with one WARN that never carries what was searched for: a store that is there and
      * cannot be read, searches that cannot be listed (null), a search that does not finish, a match.
      */
-    private fun carriesNoCredential(what: String, searches: () -> List<List<String>>?): Boolean {
+    private fun carriesNoToken(what: String, searches: () -> List<List<String>>?): Boolean {
         val stored = credential.stored()
         if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
         return searchedClean(what, stored, searches())
@@ -473,9 +478,8 @@ class CommandLineGitSync(
             "git does not ignore .ps/ in {}: its .gitignore lacks the rule, or git cannot read the " +
                 "file — git never follows a .gitignore that is a symbolic link, and then none of its " +
                 "rules (.DS_Store, editor state) apply. The tracker's own commits still leave .ps/ out, " +
-                "and it commits or pushes nothing that carries the push token; another tool's git add " +
-                "does not hold back. Make .gitignore a regular file that holds the rule. " +
-                "This is said only once."
+                "and it searches what it commits and pushes for the token; another tool's git add does " +
+                "neither. Make .gitignore a regular file that holds the rule. This is said only once."
 
         /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
         private const val STATE_DIRECTORY = "${StateDirectory.NAME}/"
