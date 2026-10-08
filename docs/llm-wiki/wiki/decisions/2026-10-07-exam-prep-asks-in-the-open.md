@@ -106,7 +106,9 @@ weighed there is listed.
   part"); a `language` that reads as a date; and an `arguments` that is not an object ("arguments
   must be an object of strings"). A prompt's `arguments` is read by its own strict reader,
   `McpCall.promptArguments()`: absent or null is none, an object is used, anything else is refused.
-  A blank or null argument is not given.
+  A blank or null argument is not given. ⚠️ Since #365, below: the reader is
+  `McpCall.strictArguments()`, which `tools/call` reads through too, and its refusal reads
+  "arguments must be an object" on both paths.
 - **The modern `prompts/list` is cacheable (D5)**: `ttlMs` (an hour) and `cacheScope: private`,
   beside the `resultType: complete` every modern result carries.
 - **`prompts/get` is held to `Mcp-Name` (D6)**, as `tools/call` is, with the Base64 sentinel decoded
@@ -180,8 +182,10 @@ meet a cap.
 - **Claude Code reads neither `title` nor the argument descriptions.** The argument order is all
   the help its menu gives.
 - **The text is English**; the client's model chooses the answer's language.
-- **The same widening and unquoted keys remain on the tool path (#365).** Five of the seven tools
-  read a malformed `arguments` as none, and every tool echoes unknown keys unquoted.
+- ⚠️ (old) — "**The same widening and unquoted keys remain on the tool path (#365).** Five of the
+  seven tools read a malformed `arguments` as none, and every tool echoes unknown keys unquoted."
+  **Closed by #365**: the tool path reads through the same strict reader and quotes unknown keys the
+  same way. See the Outcome.
 
 ## Outcome
 
@@ -267,5 +271,37 @@ tests failed while 25 literal tests still passed.
 Found in review and filed rather than fixed on this branch:
 
 - **#365** — the tool path reads a malformed `arguments` as none and echoes unknown keys unquoted.
+  Done on #365, below.
 - **#366** — a KDoc in `RecordQuery` links a decision that does not exist, and `scripts/guards.sh`
   does not check `[[…]]` targets. This branch checked the links its own KDocs make by hand.
+
+**2026-10-08 (#365): the tool path is held to the prompt's reader and the prompt's words.** Branch
+`fix/365-strict-tool-arguments`.
+
+- **A non-object `arguments` is refused on every tool.** `tools/call` reads its arguments through
+  the strict reader this branch added, renamed `McpCall.strictArguments()` once it had both callers.
+  The lenient reader lost its last caller and is deleted. Before, `"arguments": "x"`, `[]` or `5`
+  was read as none: `submissions`, `list_problems`, `review_queue`, `slow_passes` and `repair_steps`
+  answered over everything on record, and `get_problem` and `stats` answered "lessonId is required"
+  and "groupBy is required" to a call that had sent arguments. Now each is `-32602`, on HTTP 400 to a
+  modern client and 200 to a handshake one, as an unknown tool is. Absent or `null` stays none.
+- **Why a protocol error and not `isError`.** The CallToolRequest schema types `arguments` as an
+  optional object in 2025-11-25 and 2026-07-28 (spec repository at `0a11bf68c7`, read 2026-10-08),
+  and the tools page makes a request that fails that schema a protocol error. Input validation is a
+  tool error there, so an unknown key or a bad value is still answered with `isError`.
+- **One message for both paths: "arguments must be an object".** "Of strings" was true of the prompt
+  and not of a tool, whose values are numbers and lists as well. A prompt's values are still checked
+  one by one, as `<name> must be text`.
+- **Unknown keys on a tool are quoted, with what the tool takes.** The refusal reads
+  `unknown argument(s): "a, b"; stats takes groupBy`, where it read `unknown argument(s): a, b`, and a
+  key with a newline no longer breaks it. The list is the tool's schema in its own order, read from
+  the schema by `McpToolCatalog.argumentsOf`, so the invoker's seven copies of the property names are
+  gone. An owner that takes nothing would read "takes no arguments"; no tool does today.
+- **The shared words live in one place.** `McpArguments.unknown` words the unknown-key refusal for
+  both paths (the prompt adds ", in that order"), and `McpArguments.optionalText` reads a text
+  argument for both. Before, the two paths kept identical wording by copying.
+
+Each new test was red before its code, except two: a pin of what already held (an absent or `null`
+`arguments` is none, in both eras) and the schema without `properties`, written after its code.
+Mutants showed both red, and all 24 mutants of the branch were killed. Not verified live: the
+running container predates the branch, and rebuilding it is the owner's step.
