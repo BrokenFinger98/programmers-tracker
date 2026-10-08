@@ -9,16 +9,11 @@ import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption.ATOMIC_MOVE
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.READ
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.attribute.FileAttribute
-import java.nio.file.attribute.PosixFileAttributes
-import java.nio.file.attribute.PosixFilePermissions
 
 /**
  * How a file in the records repository is written when a link could carry the write somewhere else (#361) —
@@ -38,21 +33,22 @@ import java.nio.file.attribute.PosixFilePermissions
  * `problems/` for a problem's files, and for a writer at the root's own level only the names it keeps there. Unlike a
  * read under `problems/`, a write follows no link at all, even one that stays inside the bound.
  *
- * **The file.** A whole file is written beside its target and moved over it, so a link standing there is replaced
- * rather than followed — said once — and a hard link is broken rather than written through. It keeps the mode of
- * the regular file it replaces, and a new one gets what a plain write gives a new file, unless the writer is
- * [ownerOnly]. An appended file must be a regular file or absent, and is opened without following a link; it must
- * also have no second name, where the `unix` view can count a file's names — not on Windows, which offers no such
- * view, so a hard link there is appended to. A file created new is never created where anything stands, a link
- * included.
+ * **The file.** A whole file is written beside its target and moved over it by [FileReplacement], the write the state
+ * directory's files share (#386), so a link standing there is replaced rather than followed — said once — and a hard
+ * link is broken rather than written through. It keeps the mode of the regular file it replaces, and a new one gets
+ * what a plain write gives a new file, unless the writer is owner-only. An appended file must be a regular file or
+ * absent, and is opened without following a link; it must also have no second name, where the `unix` view can count a
+ * file's names — not on Windows, which offers no such view, so a hard link there is appended to. A file created new is
+ * never created where anything stands, a link included.
  *
  * **Said once, never quoted.** A refusal logs one warning naming the path the writer was handed and the reason —
  * once per reason for this instance, never the content and never where a link leads — and throws
  * [RefusedWriteException], unless the writer asked to skip ([replaceOrSkip]). Which writers fail loudly and which
  * carry on is each writer's own posture ([[decisions/2026-10-08-no-writer-follows-a-link]]).
  */
-internal class RecordWrites private constructor(private val bound: RecordBound, private val ownerOnly: Boolean) {
+internal class RecordWrites private constructor(private val bound: RecordBound, ownerOnly: Boolean) {
     private val said = SaidOnce()
+    private val replacement = FileReplacement(FileMode.forRecords(ownerOnly))
 
     /** Replaces [target] whole with [text]. A link standing there is replaced, never written through. */
     fun replace(target: Path, text: String) = replaceAt(target, fileIn(target), text)
@@ -123,51 +119,16 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
         }
     }
 
+    // A directory there is refused and a link is replaced, said: those are this writer's. The write is the shared one.
     private fun replaceAt(target: Path, file: Path, text: String) {
         if (Files.isDirectory(file, NOFOLLOW_LINKS)) throw refused(target, "${bound.relative(file)} $IS_A_DIRECTORY")
         if (isThereButNotAFile(file)) replacing(target, file)
-        replacedWith(file, text)
+        replacement.replace(file, text)
     }
 
     private fun replacing(target: Path, file: Path) {
         val kind = kindOf(file, A_REGULAR_FILE)
         said.say("$REPLACED ${bound.relative(file)}") { logger.warn(REPLACED_WARNING, target, kind) }
-    }
-
-    // Beside the file, so the move stays a rename within one directory, and moved over it.
-    private fun replacedWith(file: Path, text: String) {
-        val temp = Files.createTempFile(file.parent, ".${file.fileName}.", TEMP_SUFFIX, *creationMode(file))
-        runCatching { writtenThenMoved(temp, file, text) }.onFailure {
-            Files.deleteIfExists(temp)
-            throw it
-        }
-    }
-
-    private fun writtenThenMoved(temp: Path, file: Path, text: String) {
-        Files.writeString(temp, text, CHARSET)
-        keptMode(file, temp)
-        moved(temp, file)
-    }
-
-    // Owner-only when the writer asks, as code files always were; otherwise what a plain write gives a new file,
-    // which the umask still narrows.
-    private fun creationMode(file: Path): Array<FileAttribute<*>> {
-        if (ownerOnly || POSIX !in file.fileSystem.supportedFileAttributeViews()) return emptyArray()
-        return arrayOf<FileAttribute<*>>(PLAIN_MODE)
-    }
-
-    // A file rewritten in place kept its mode, so a replace keeps a regular file's. A link's own bits say nothing, and
-    // an owner-only writer keeps none. Best effort: a mode that cannot be set leaves the new file as it was made.
-    private fun keptMode(file: Path, temp: Path) {
-        if (ownerOnly) return
-        val current = runCatching { Files.readAttributes(file, PosixFileAttributes::class.java, NOFOLLOW_LINKS) }
-        val attributes = current.getOrNull()?.takeIf { it.isRegularFile } ?: return
-        runCatching { Files.setPosixFilePermissions(temp, attributes.permissions()) }
-    }
-
-    // ATOMIC_MOVE is the guarantee wanted; where a filesystem cannot give it, a plain replace still follows no link.
-    private fun moved(temp: Path, file: Path) {
-        runCatching { Files.move(temp, file, ATOMIC_MOVE) }.getOrElse { Files.move(temp, file, REPLACE_EXISTING) }
     }
 
     // A last line a crash cut short is ended first, so the next is never glued onto it. Read without following a link.
@@ -204,12 +165,9 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
     companion object {
         private val logger = LoggerFactory.getLogger(RecordWrites::class.java)
         private val CHARSET = StandardCharsets.UTF_8
-        private val PLAIN_MODE = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-rw-rw-"))
-        private const val POSIX = "posix"
         private const val UNIX = "unix"
         private const val LINK_COUNT = "unix:nlink"
         private const val NEWLINE = '\n'.code.toByte()
-        private const val TEMP_SUFFIX = ".tmp"
         private const val IS_A_DIRECTORY = "is a directory"
         private const val IS_A_HARD_LINK =
             "is a hard link — another name shares the file, and an append would change it"
