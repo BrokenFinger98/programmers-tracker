@@ -281,6 +281,22 @@ class DailyBackupTest {
         remoteLess.subjects() shouldContainExactly listOf(CommandLineGitSync.RECONCILE_MESSAGE)
     }
 
+    /**
+     * A records directory that vanished while the server runs, where git cannot even start. The check
+     * threw, from the question that tells "no remote" from "a push that failed" (the review of #399). It
+     * answers now, and the day stays due.
+     */
+    @Test
+    fun `a records directory that vanished leaves the day due, and the check does not throw`() {
+        val gone = GitWorkspace(base.resolve("gone"))
+        val backup = DailyBackup(sync(gone.root), backupLog(), fixedAt(EVENING), zone = SEOUL)
+        gone.root.toFile().deleteRecursively()
+
+        backup.runIfDue() shouldBe false
+
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
     /** A push that really failed — a remote whose URL leads nowhere — still says so, and the day stays due. */
     @Test
     fun `a push that could not reach its remote says so, and leaves the day due`() {

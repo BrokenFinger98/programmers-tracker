@@ -233,6 +233,22 @@ class CommandLineGitSyncTest {
         sync().push() shouldBe false
     }
 
+    /**
+     * Nothing on the port throws, and `hasRemote()` was the one method left unguarded: with the records
+     * directory gone, `git remote` cannot even start there, and the daily backup's check threw (the
+     * review of #399). Unknown is answered as no remote, as a `git remote` that failed already is, and
+     * said.
+     */
+    @Test
+    fun `a remote that cannot be asked about is answered as none, said, and never thrown`() {
+        val sync = sync()
+        root.toFile().deleteRecursively()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.hasRemote() shouldBe false }
+
+        heard.single() shouldContain "git remote could not run"
+    }
+
     @Test
     fun `the manual trigger pushes commits no pass ever pushed`() {
         val remote = remoteInitialised()

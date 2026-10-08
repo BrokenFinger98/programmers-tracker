@@ -69,6 +69,8 @@ interface GitSync {
      * things it is (#183): a repository nobody gave a remote is a **supported way to run the
      * tool** — the README says push needs credentials the tool cannot invent — while a
      * repository that has one and is not pushing is a fault.
+     *
+     * False as well when git cannot say, which is warned about where it happened.
      */
     fun hasRemote(): Boolean
 }

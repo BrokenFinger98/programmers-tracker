@@ -114,8 +114,17 @@ class CommandLineGitSync(
     override fun push(): Boolean = inRepository("push") { pushed() }
 
     // `git remote` lists names and prints nothing when there is none, so an empty answer is the
-    // whole signal. A failure to run it answers false: unknown is not "configured".
-    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+    // whole signal. A failure to run it answers false: unknown is not "configured". So does one that
+    // could not start, which threw — with the records directory gone, out of the backup's check (the
+    // review of #399) — and is said, as every other git call here that could not run is.
+    override fun hasRemote(): Boolean = runCatching { remotesListed() }.getOrElse { remoteUnknown(it) }
+
+    private fun remotesListed(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+
+    private fun remoteUnknown(cause: Throwable): Boolean {
+        logger.warn(REMOTE_UNKNOWN, root, cause.javaClass.simpleName)
+        return false
+    }
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
@@ -538,6 +547,9 @@ class CommandLineGitSync(
 
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
+
+        private const val REMOTE_UNKNOWN =
+            "git remote could not run in {} ({}), so whether it has a remote is unknown, and it is answered as none."
 
         /**
          * Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]).
