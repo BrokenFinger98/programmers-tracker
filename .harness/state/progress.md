@@ -5904,3 +5904,44 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Gates**, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 341/384; `adapter/config` 65% at its floor); guards.
 - **Found, not fixed.** The commit side still reads file content alone, so a file named with a token is committed by a reconciliation and every push is then refused until history is rewritten.
 - Pending: CI; not verified live.
+## 2026-10-08 — #378 held frames and orphans, with the re-check of #377 folded in (branch fix/378-held-frames-and-orphans)
+- **Base.** Cut from `f807f77`; `origin/fix/377-raw-replay-guard` (`3a0cdfb`) merged in (`2580f87`). Commits on
+  top, no rebase. #378's git items 1 and 4 are #376's, so every commit says `Refs #378`, never `Closes`.
+- `8134559` **M3 (High).** `orphans()` reads only where a write may go: `forWriting()`, then
+  `pathFor("raw", "orphans")`, then git's history. Only a regular file of 16 MiB at most, judged and opened
+  without following a link; never a FIFO, a device or a link. What is passed over is counted
+  (`orphanFilesNotRead`), a directory that could not be listed is flagged (`orphansNotListed`), each said once
+  with why; `docs/mcp.md` and its twin. 15 tests; 10 red against `f807f77` with the new port types stubbed
+  (the FIFO, the link to one and the MCP call timed out; the rest read forged frames), 5 pin the WARNs and
+  the one question to git.
+- `65e282b` **Item 3.** An orphan whose file is a link is held in memory, never written through, and written
+  once a regular file or nothing stands there; the link is never replaced. Found: the throw also stopped the
+  next grading's first frame, through `releaseHeld()`. 3 tests, red.
+- `84eaa56` **The re-check of #377, folded.** F1: `--reflog` in the history question (reset + force-push and
+  force-push + `pull --rebase` pinned with real git; cost 9.5 → 10.1 ms on 166 commits, 30.5 → 35.8 ms on
+  1,660, median of 21); TRACKED and `SECURITY.md` make the delete from disk mandatory, since expiry,
+  filter-repo and a shallow fetch stay open. F2: `Known(paths)` or `Unanswered(reason)` — git's exit code and
+  first line, the timeout, or the exception's kind — in both WARNs. F3: what git delivered is neither
+  replayed nor counted, said once a start. F4: `docs/mcp.md`'s cases and the twin (blob `6a5a5ce`). F5
+  accepted in the ADR. 5 new tests and 3 rewritten, each red first.
+- `b2856a5` **Item 2.** Runs set aside and orphans hold three quarters of the 8,000,000-character budget at
+  most, so a submit in flight keeps room; red first with `NoSuchFileException` from `complete()`. Measured:
+  the full budget retains 16.1 MB (2.01 bytes a character); a run's frames 0.9–1.6 K characters, a submit's
+  2.1–2.9 K. Spilling to disk rejected; frames held at exit are lost, and said.
+- `e39b261` **Mutation pins.** 51 mutants (`mutate378.py` in the scratchpad), each against the store,
+  git-history, MCP, application and config tests (1,175): 39 killed. The other 12, and 2 written for F2 after
+  the run: 10 pinned with 10 new tests and one assertion, each now killed (1,184 tests); 4 left, which pass
+  the whole suite as well (2,329): the orphans reader's two link checks, each alone; a timeout's wording; an
+  empty first line. Per mutant in the ADR.
+- `a5ea2ad` **KDocs.** `TrackedStateEntries` and the `TrackedState` port say the history question reads
+  reflogs, and how far "ever" goes.
+- **Gates**, all exit 0, at `a5ea2ad`: check; test (2,329 JUnit in 166 classes, 0 failures, 9 skipped as before;
+  node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 85%, 687 of 806; `adapter/git` 87%, 320 of 365;
+  `adapter/mcp` 92%, 340 of 368; every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** The #360 ADR's Outcome: M3, items 2 and 3 with their options and measurements, F1–F5, the mutation
+  table. No new ADR: the decisions are the round's own and are recorded there.
+- **Remaining.** Frames held while `.ps` is refused are lost at exit; a forged session the owner only
+  untracked replays once git's history stops naming it (expiry, filter-repo, a shallow fetch); F5's race; the
+  orphans reader's two link checks each stand in for the other. Not measured in the image; CI has not run
+  this branch; not verified live.
+- **Pending.** Not pushed.
