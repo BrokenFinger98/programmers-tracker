@@ -79,7 +79,8 @@ Stated where it is implemented rather than repeated here:
 - **Reads of your records** — what those writers keep is read through the same walk, so a link a
   clone or pull planted is never read as your history. A submission log that cannot be read is an
   error wherever it is asked for — every MCP tool answers a fault rather than a count — and never an
-  empty history; the server keeps running and keeps each grading's frames until the log reads again
+  empty history; the server keeps running, and keeps each grading's frames for the first start after
+  the log reads again to record
   ([#387](https://github.com/BrokenFinger98/programmers-tracker/issues/387)).
 - **This repository** — `scripts/guards.sh` fails the build on a committed record, a
   session-cookie-shaped string or the live `/watch` token, and the pre-push hook runs it.

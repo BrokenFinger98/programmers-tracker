@@ -5794,3 +5794,20 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   ADRs, the index, `SECURITY.md`, `docs/mcp.md` and its twin.
 - **Pending.** CI on the three OSes, and the junction tests' first run on windows-latest. Live: after a
   rebuild, every MCP answer and page should be unchanged, with no `Not reading` line at boot.
+- **Review round.** The adversarial review of PR #398 blocked it, measuring on the APFS host and in the
+  runtime image (uid 1000):
+  - High-1, `orphans()` follows links: a pulled link to `/proc/self/fd/1` or a FIFO under
+    `.ps/raw/orphans` hung the boot and timed out every MCP tool. The ADR's audit row and accepted cost
+    are corrected; the code fix is #378's.
+  - Medium-1, `9f63366`: a failed append withdraws its raw copy and forgets the writer's indexes, read
+    again from the log at the next grading. The critic's sequence now gives attempt 2, not 4, and a
+    replay finds no leftover in its way.
+  - Low-1, `588a52b`: `/watch` answers without the last record and says why in `recordsUnread`, never
+    500; the badge shows red `!`.
+  - Low-2, `af8796b`: `AtomicStateFile` reads a regular file only, so a FIFO at the watch token no
+    longer hangs the start.
+  - Mutation: 18 mutants, 17 killed, two of them after the pins in `46acd3d`; one survives,
+    near-equivalent.
+  - Gates, all exit 0: check; test 2,224 (18 new, 0 failures, 11 skipped as before), node 4 of 4;
+    build; `verifyBranchCoverage` (`adapter/store` 85%, `adapter/web` 82%, `application` 89%); guards.
+  - Pending, as before: CI on the three OSes, the junction tests' first run, and the live check.

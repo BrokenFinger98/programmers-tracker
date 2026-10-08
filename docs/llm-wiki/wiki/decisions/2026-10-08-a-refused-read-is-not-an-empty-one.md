@@ -67,16 +67,16 @@ Under `.ps` in the records repository, #360's state directory:
 |---|---|---|---|
 | `FileRawSessionLog.unprocessed` and `RawSessionReconciler.linesOf` | `.ps/raw/<session>.jsonl` | yes, the listing and the replay | the listing goes through `StateDirectory.pathFor`; the replay reads only a regular file, without following a link. Not in the issue: what replays becomes a record that is committed and pushed |
 | `FileRawSessionLog.framesOnDisk` | the same | no, the checked raw directory and a no-follow open (#360) | none |
-| `FileRawSessionLog.orphans` | `.ps/raw/orphans/<lesson>.jsonl` | yes | none: what leaves is a lesson id from the name and a count of lines, never content |
+| `FileRawSessionLog.orphans` | `.ps/raw/orphans/<lesson>.jsonl` | yes, the listing and every file's read, with no regular-file check | none here, judged harmless as "only a line count leaves" — **measured false by the review** (below): a link or a FIFO there blocks the boot and every MCP tool. The fix is #378's |
 | `FileRawSessionLog.onDisk` | `.ps/raw/<name>` | `exists` follows | none: whether a name is taken |
-| `AtomicStateFile.read`: timers, backup marker, `seeds.json` | `.ps/<document>` | no at the document (#360); a linked `.ps` is passed | none: git and every state writer refuse a `.ps` that is a link or tracked (#360), and what is read is a number, a date or a hash |
+| `AtomicStateFile.read`: timers, backup marker, `seeds.json` | `.ps/<document>` | no at the document (#360), but a FIFO there was opened and waited on; a linked `.ps` is passed | after the review, a regular file only, looked at without following a link. A linked `.ps` is still passed: git and every state writer refuse a `.ps` that is a link or tracked (#360), and what is read is a number, a date or a hash |
 | `PushCredential.stored`, `gitConfig` | `.ps/git-credentials` | no, a regular file read without following (#360) | none |
 
 Outside the records root:
 
 | Reader | Path | Followed a link before | Change |
 |---|---|---|---|
-| `WatchToken` | the tool's `.ps/watch-token` | yes, read and write | read without following a link, written beside and moved, owner-only from creation; a link there is replaced, said |
+| `WatchToken` | the tool's `.ps/watch-token` | yes, read and write; a FIFO there held the server's start | read as a regular file without following a link, written beside and moved, owner-only from creation; a link or a FIFO there is replaced, said. The tool's `.ps` above it is the owner's to place, and is passed |
 | `ManualFileSessionProvider.readValue` | the tool's `.ps/session` | yes | none: outside the records, in a `.ps/` this repository ignores and `guards.sh` fails the build on |
 | `ClasspathProblemCatalog`, `VaultDashboard.shipped` | the classpath | — | none |
 | `GitProcess.textOf` | the system temp directory | — | none |
@@ -129,7 +129,9 @@ How the writer outlives a log it cannot read:
 - (iii) Sealed until a restart. Safe, but a transient I/O error would then stop all recording until
   someone restarted the server, where the crash it replaces restarted itself.
 - (iv) **Read when the first grading needs it, and again at the next while it fails** — chosen.
-  Kotlin's `lazy` keeps no failure, so this is one property and three getters.
+  Kotlin's `lazy` keeps no failure, so this was one property and three getters. The review showed it
+  was not enough on its own (below): a holder replaced the `lazy`, read when empty and emptied by an
+  append that fails.
 
 ## Decision
 
@@ -152,7 +154,8 @@ What a refused read means, reader by reader:
 |---|---|---|
 | `JsonlRecordStore.read` | thrown | The record of record: an empty answer is every reader's "no submissions". |
 | ↳ MCP, every tool | a fault of ours, answered as JSON-RPC `-32603` on HTTP 200 (#355) | No count at all, rather than counts from behind a link or a zero from a log never read. |
-| ↳ `RecordWriter` | nothing recorded; each grading throws and keeps its frames on the work list | No attempt number without the history; the first grading after the log reads again is numbered from it. |
+| ↳ `RecordWriter` | nothing recorded; each grading throws and keeps its frames on the work list. After the review, a grading whose *append* is refused, the history already read, takes nothing either: its copy is withdrawn and the writer's indexes are forgotten, to be read again at the next grading | No attempt number without the history; the first grading after the log reads and appends again is numbered from it. The refused ones wait on the work list for the next start. |
+| ↳ `/watch`, every heartbeat (after the review) | the answer stands without `lastRecord`; `recordsUnread` says why in a fixed sentence, and the badge shows it as red `!` | It answered 500 with an ERROR stack every 30 s, and the extension makes the session hand-over on a good answer only. |
 | ↳ boot: the code attachment pass | said by its kind, nothing retried, and the boot goes on | The startup runner catches nothing. |
 | ↳ boot: the vault refresh, the statement backfill | said, as any failure there already was | Nothing is rewritten from an empty history. |
 | `RunLog`'s duplicate check | no line held | The append that follows refuses the link and throws, so the record keeps its code pending. |
@@ -184,7 +187,8 @@ downstream can tell the two apart. Thrown, it fails where it is asked, and the s
 
 **Degrade, do not crash.** The server keeps observing while the log is refused, so each grading's frames
 wait on the work list and nothing is lost. The writer retries the history at each grading, so a transient
-read error costs one grading's delay, and removing the link needs no restart.
+read error costs one grading's delay, and removing the link needs no restart for the gradings after it.
+The ones refused meanwhile wait for the next start, which replays the work list (accepted costs).
 
 **Each change was red first, against the code before it** (saved per cycle):
 
@@ -214,8 +218,12 @@ Two tests were pins, green before: the owner-only mode of a generated token, and
   design (#355), so a model cannot say that the log is a link; the server log says it once. A message
   naming the cause would need `adapter/store` to know MCP's errors, or a fault type in `application`.
 - **A linked log means a running server that records nothing.** Each grading is an ERROR and keeps its
-  frames; MCP fails every call; the vault, statements and pending code wait. All of it resumes at the
-  first grading after the link is gone.
+  frames; MCP fails every call; the vault, statements and pending code wait. Recording resumes at the
+  first grading after the link is gone — but, as the review measured, **not for the gradings refused
+  meanwhile**: their frames stay on the work list, which only a start replays. Until then MCP omits
+  them silently, since `incompleteHistory` counts orphaned frames and not the work list; #377's
+  `sessionsNotReplayed` (PR #395) may cover part of that. And a grading recorded live before that start
+  takes the next number, so the replayed ones are numbered after it, though they came first.
 - **An unreadable log no longer stops the boot.** It used to fail the writer's bean, and the container
   restarted. Now every reader says it, and the writer retries at each grading. A transient error at boot
   costs that boot's attachment pass and page refresh, which wait for the next; a standing one no longer
@@ -228,9 +236,19 @@ Two tests were pins, green before: the owner-only mode of a generated token, and
   and the open, by something racing the server on this machine.
 - **A link that stays inside `problems/` is still read by `RunLog`'s check**, as by every reader there
   (#354). The append refuses it, so the record keeps its code pending.
-- **Other reads under `.ps` pass a linked `.ps` or `raw/orphans`.** The state documents and the orphan
-  count read through such a directory, as #360 decided: git and every state writer refuse it while it
-  stands, and what is read is a number, a date, a hash or a line count.
+- **The state documents under `.ps` are read through a linked `.ps`**, as #360 decided: git and every
+  state writer refuse it while it stands, and what is read is a number, a date or a hash — from a
+  regular file only, since the review.
+- **The orphan count is not harmless, and is not fixed here.** This page judged it so, since only a
+  line count leaves: the review measured that premise false. A pulled `.ps/raw/orphans/1.jsonl` linked
+  to `/proc/self/fd/1` (committed with `add --force`; `.ps` is ignored only on the victim's side) hung
+  the boot in the deployed image right after "Startup reconciliation": no reconcile commit was made,
+  and HEALTHCHECK stayed `healthy`. MCP `stats` timed out at 15 s, because `withGaps` counts orphans on
+  every tool; the thread dump showed `main` and the MCP carrier in `orphanOf`'s `readAllLines`. A FIFO
+  there does the same, and an outside file's lines are counted as orphan frames. `orphans()` follows a
+  link at its directory and at each file, and opens each without asking whether it is a regular file:
+  the read this page's audit missed. Its fix, the guard and regular-file reads without following a
+  link, is #378's, on another branch, since three branches touch `FileRawSessionLog` (critic M3).
 - **A watch token file linked on purpose is replaced by a new token**, which the extension must be
   given. Pointing `tracker.watch.token-file` at the file itself keeps a token elsewhere.
 - **No test watches the window the narrowing left open.** The narrowing is gone, so the window cannot
@@ -241,6 +259,11 @@ Two tests were pins, green before: the owner-only mode of a generated token, and
   fail the seed with a WARN; either way nothing was written.
 - **Every read at the root walks**: a stat, a listing and a real path per directory, as a write does.
   `log/` is one directory deep. Not measured for reads; #361 measured the listing at writes.
+- **A copy the writer could not take back keeps its number only while the server runs** (the review's
+  fix, below). That is the one copy on disk of frames held in memory while `.ps` was refused, or a copy
+  whose delete failed. After a start before another grading is recorded, the number is free in the
+  log again: the next grading's copy meets the kept one and goes with the runs, as any refused copy
+  does. Both are said.
 - **The junction tests have not run.** They need windows-latest, and this branch has not been pushed.
   What they exercise is pinned on every platform by the `DiskAnswers` cases that play a real path
   leading elsewhere.
@@ -314,3 +337,95 @@ them only after the FIFO pin. Two survive, both race-only.
 **Not verified live**, and CI has not run the branch. A normal records repository should see nothing
 change: the same answers from every MCP tool, the same pages, and no `Not reading` line at boot. The
 junction tests run for the first time on windows-latest.
+
+### The review
+
+An adversarial review of PR #398 blocked it. It measured on the APFS host and in the runtime image, a
+Linux container over a macOS bind mount running as uid 1000. Its findings, and what this branch did
+with each:
+
+- **High-1: the orphan count follows links.** Measured as the accepted costs now say: a link to
+  `/proc/self/fd/1` or a FIFO at `.ps/raw/orphans/<lesson>.jsonl` blocks the boot and every MCP tool.
+  This page's audit row and accepted cost are corrected. The code fix is #378's, which adds the guard
+  and regular-file reads without following a link there.
+- **Medium-1: the writer's recovery claim was false when the link appears while the server runs.**
+  Measured: g1 took attempt 1; `log/` became a link, and g2 and g3 were refused; the link was removed,
+  and g4 took attempt **4**, where this page and the writer's KDoc said 2. `attempts/002.raw.jsonl` and
+  `003.raw.jsonl` were left with no record. A restart replayed g2 as 5 and g3 as 6. A restart before any
+  new grading numbered them right, but `complete()` met the leftovers, so both records had
+  `rawPath=null`. The cause predates #387: the number was allocated and the raw copied before the
+  append, and nothing was taken back. **Fixed** (`9f63366`):
+  - a failed append withdraws the copy, through the raw log's new `withdraw`;
+  - it forgets the writer's indexes — the number, the gap (`sincePrevSec`, found on the way: a retry's
+    was measured from the refused grading) and the capture key — which the next grading reads again
+    from the log, as a start would;
+  - only a regular file is deleted, its directory walked through no link;
+  - a copy that must stay keeps its number taken while the server runs, and is said.
+
+  Pinned with the critic's sequence: g4 now takes attempt 2, beside copies 001 and 002 only. A restart
+  before any other grading replays g2 and g3 as 2 and 3, each beside its own copy. What stays is in the
+  accepted costs: the refused gradings wait for a start, and MCP does not count them meanwhile.
+- **Low-1: `/watch` answered 500 on every heartbeat while the log was refused** (`588a52b`). That meant
+  an ERROR stack every 30 s, the badge reading "failed — 500 … no detail", and no session hand-over,
+  which the extension makes on a good answer only. Now:
+  - the answer stands without `lastRecord`;
+  - `recordsUnread` says why, in a fixed sentence that quotes nothing of the cause;
+  - the badge shows it as red `!`, which the extension README and its twin now describe.
+
+  Only a failed read of the log is answered so; any other failure still fails.
+- **Low-2: `AtomicStateFile` read a FIFO** (`af8796b`). One at the tool's `.ps/watch-token` hung the
+  `WatchToken` constructor, and the start with it. It now reads a regular file only, looked at without
+  following a link, and `WatchToken` says a FIFO it replaces. A linked `.ps` above the document is
+  still passed, and the class says why:
+  - the records' `.ps` is refused by git and every state writer while it is a link (#360), and holds no
+    credential;
+  - the tool's own `.ps` is its owner's to place, and `guards.sh` fails the build on anything tracked
+    there but its `.gitkeep`.
+
+**Red first.** Against `69249ad`:
+
+- the critic's sequence took attempt 4 where 2 was expected;
+- the replay's copies were `null`;
+- a failed append's retry took attempt 2, and its gap was 200 s where the log's was 300 s;
+- `/watch` threw where it should answer;
+- both FIFO tests timed out at 5 s.
+
+The new `withdraw` tests did not compile without the method.
+
+**Mutation.** 18 mutants of the new behaviour, each run against its tests and the file restored after.
+17 were killed, two of them only after a pin (`46acd3d`). One survives.
+
+| Mutant | Tests failed |
+|---|---|
+| nothing forgotten after a failed append | 3 |
+| forgotten, but the copy never taken back | 3 |
+| a kept copy's number given back | 1 |
+| a kept copy not said | 1 |
+| frames held in memory not seen | 1 |
+| anything at the copy's path deleted | 1 |
+| the delete past the walk | 1 |
+| a copy already gone counted as kept | 1 |
+| a failed take-back counted as done | 1, the pin; it survived before |
+| a released key read again from the log | survives (see below) |
+| every failed read of the log answered 500 | 1 |
+| any failure answered as an unread log | 1 |
+| no reason given | 1 |
+| the cause quoted | 1 |
+| a link checked and a FIFO opened | 2 |
+| the look following a link | 1 |
+| a name that cannot be looked at, read as absent | 1, the pin; it survived before |
+| a replaced FIFO not said | 1 |
+
+The survivor gives the same `IOException` family and leaves the same state. It costs one more read of
+the log, and may name the read's refusal where the append's was meant.
+
+**Gates**, all exit 0 at `46acd3d`, with this page:
+
+- `./scripts/check.sh`;
+- `./scripts/test.sh`: 2,224 JUnit tests, 18 of them new, 0 failures, 11 skipped as before; node 4 of 4;
+- `./scripts/build.sh`;
+- `./gradlew verifyBranchCoverage`: `adapter/store` 85% (639 of 746), `adapter/web` 82% (96 of 116),
+  `application` 89% (363 of 407), every package at or above its floor;
+- `./scripts/guards.sh`.
+
+Still **not verified live**, and not pushed: CI has not run these commits.
