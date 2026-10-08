@@ -117,7 +117,7 @@ data class McpCall(
     // Every reader below casts instead of coercing, and all but one read a member of the wrong JSON
     // type as absent: it is a malformed request, which has to come back as an absent value we can
     // refuse cleanly rather than as an exception that would surface to the client as an internal
-    // error. The one that refuses instead is promptArguments(): for a prompt an absent value is a
+    // error. The one that refuses instead is strictArguments(): for a prompt an absent value is a
     // whole request, so a malformed one must not be allowed to read as absent.
 
     /** `params.name` — the tool a `tools/call` runs, or the prompt a `prompts/get` renders. */
@@ -130,7 +130,7 @@ data class McpCall(
      * Stricter than [arguments]: every argument here is optional, so `{}` is a whole request, and a
      * malformed `arguments` read as `{}` would silently widen the answer to everything on record and look right.
      */
-    fun promptArguments(): JsonObject = when (val given = params["arguments"]) {
+    fun strictArguments(): JsonObject = when (val given = params["arguments"]) {
         null, JsonNull -> JsonObject(emptyMap())
         is JsonObject -> given
         else -> throw McpFailure(McpErrors.INVALID_PARAMS, 400, "arguments must be an object of strings")

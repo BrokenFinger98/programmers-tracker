@@ -81,9 +81,9 @@ class McpCallTest {
         val nulled = JsonObject(absent + ("arguments" to JsonNull))
         val given = aPromptGetParams(arguments = buildJsonObject { put("language", "java") })
 
-        McpCall.from(aLegacyBody("prompts/get", absent)).promptArguments() shouldBe JsonObject(emptyMap())
-        McpCall.from(aLegacyBody("prompts/get", nulled)).promptArguments() shouldBe JsonObject(emptyMap())
-        McpCall.from(aLegacyBody("prompts/get", given)).promptArguments().keys shouldBe setOf("language")
+        McpCall.from(aLegacyBody("prompts/get", absent)).strictArguments() shouldBe JsonObject(emptyMap())
+        McpCall.from(aLegacyBody("prompts/get", nulled)).strictArguments() shouldBe JsonObject(emptyMap())
+        McpCall.from(aLegacyBody("prompts/get", given)).strictArguments().keys shouldBe setOf("language")
     }
 
     /** A tool reads a malformed `arguments` as none; for a prompt that would widen to everything on record. */
@@ -94,7 +94,7 @@ class McpCallTest {
             put("arguments", "java")
         }
 
-        val refused = shouldThrow<McpFailure> { McpCall.from(aLegacyBody("prompts/get", params)).promptArguments() }
+        val refused = shouldThrow<McpFailure> { McpCall.from(aLegacyBody("prompts/get", params)).strictArguments() }
 
         refused.code shouldBe McpErrors.INVALID_PARAMS
     }

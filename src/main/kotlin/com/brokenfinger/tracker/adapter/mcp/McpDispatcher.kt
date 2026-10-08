@@ -52,7 +52,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         TOOLS_LIST -> cacheable(toolList())
         TOOLS_CALL -> tools.call(call.name(), call.arguments())
         PROMPTS_LIST -> cacheable(promptList())
-        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.promptArguments())
+        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.strictArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
@@ -62,7 +62,7 @@ class McpDispatcher(private val tools: McpToolInvoker) {
         TOOLS_LIST -> toolList()
         TOOLS_CALL -> tools.call(call.name(), call.arguments())
         PROMPTS_LIST -> promptList()
-        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.promptArguments())
+        PROMPTS_GET -> McpPromptCatalog.get(call.name(), call.strictArguments())
         else -> throw McpFailure(McpErrors.METHOD_NOT_FOUND, 404, "this server does not implement ${call.method}")
     }
 
