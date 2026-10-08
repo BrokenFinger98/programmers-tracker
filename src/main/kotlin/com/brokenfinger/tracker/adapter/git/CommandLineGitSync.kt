@@ -126,6 +126,8 @@ class CommandLineGitSync(
         return false
     }
 
+    override fun hasPushCredential(): Boolean = credential.isStored()
+
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
         return neverThrowing(what) { inVerifiedState(what) && action() }

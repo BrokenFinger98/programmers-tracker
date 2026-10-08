@@ -123,8 +123,9 @@ class GithubRemoteTest {
 
     /**
      * Any answer that is neither "created" nor "the name exists" — a revoked token, a scope the
-     * user did not grant, GitHub being down. Nothing is wired and the records stay local, which
-     * is the degraded mode the daily backup already reports (#272 covered this path).
+     * user did not grant, GitHub being down. Nothing is wired and the records stay local (#272
+     * covered this path). The credential was stored first, so the daily backup says the remote is
+     * missing, once for each scheduled backup (the review of #399).
      */
     @Test
     fun `an answer that is neither created nor already-exists wires nothing`() {

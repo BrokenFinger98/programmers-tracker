@@ -4,7 +4,9 @@ import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.madeFifo
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
@@ -86,6 +88,41 @@ class PushCredentialTest {
         aLink(root.resolve(PushCredential.FILE), elsewhere)
 
         PushCredential(root).gitConfig().shouldBeEmpty()
+    }
+
+    // Whether one is stored (#390) -------------------------------------------------------------
+
+    /**
+     * A stored credential is the evidence that a remote was wanted, which the daily backup asks for when
+     * there is none (the review of #399). It is the file's presence, never what it holds: a store this
+     * process cannot read was still written, and is still the owner's token.
+     */
+    @Test
+    fun `a credential is stored once the file is there, whether or not it can be read`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes the store's permissions away")
+        val file = store()
+
+        val stored = sealedWhile(file) {
+            assumeTrue(!Files.isReadable(file), "a superuser reads it anyway")
+            PushCredential(root).isStored()
+        }
+
+        stored shouldBe true
+    }
+
+    @Test
+    fun `no credential is stored before one is written`() {
+        PushCredential(root).isStored() shouldBe false
+    }
+
+    /** A link at the store's path is not the server's write, and git is not pointed at it either. */
+    @Test
+    fun `a link at the store is no stored credential`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.writeString(root.resolve("elsewhere"), "https://x-access-token:token@github.com\n")
+        aLink(root.resolve(PushCredential.FILE), elsewhere)
+
+        PushCredential(root).isStored() shouldBe false
     }
 
     // What the content gate searches for (#360) -----------------------------------------------

@@ -56,10 +56,16 @@ class PushCredential(private val root: Path) {
      * pushing without a credential.
      */
     fun gitConfig(): List<String> {
-        val file = file()
-        if (!Files.isRegularFile(file, NOFOLLOW_LINKS)) return emptyList()
-        return listOf("-c", "credential.helper=store --file=$file")
+        if (!isStored()) return emptyList()
+        return listOf("-c", "credential.helper=store --file=${file()}")
     }
+
+    /**
+     * Whether a credential is stored: a regular file at [file], judged by its presence and never by what it
+     * holds. A link there is not one, as git is not pointed at it. The daily backup takes it as evidence
+     * that a remote was wanted (the review of #399).
+     */
+    fun isStored(): Boolean = Files.isRegularFile(file(), NOFOLLOW_LINKS)
 
     /**
      * What the store holds, for the search that keeps it out of every commit and push (#360). Read

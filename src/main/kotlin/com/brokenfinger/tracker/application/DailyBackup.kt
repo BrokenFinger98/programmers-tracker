@@ -53,6 +53,9 @@ class DailyBackup(
      */
     private val heldSaidFor = AtomicReference<Instant?>()
 
+    /** The scheduled backup this process last said was missing a remote it was meant to have, likewise. */
+    private val missingSaidFor = AtomicReference<Instant?>()
+
     /** The scheduled backup being tried again after a try that did not count, and when it may be (#390). */
     private val retry = AtomicReference<BackupRetry?>()
 
@@ -101,7 +104,7 @@ class DailyBackup(
      */
     private fun performed(due: Instant): Boolean {
         val reconciled = git.reconcile()
-        if (!git.push()) return notPushed()
+        if (!git.push()) return notPushed(due)
         if (!reconciled) return heldBack(due)
         log.succeededAt(clock.instant())
         logger.info("Daily backup pushed the record repository")
@@ -126,10 +129,23 @@ class DailyBackup(
      * fault (#390). With no remote at all — a documented way to run, which the boot report and the backup
      * schedule say once, at INFO — the day does not count and nothing is said: "could not push" at every
      * check was 1,440 lines a day. The question is the one [BackupReporter] asks to tell the two apart.
+     *
+     * **Unless a remote was evidently wanted** (the review of #399): a backup was recorded before, or a push
+     * credential is stored, which only a token given to the tracker leaves. Then the remote is missing, not
+     * skipped — the boot's wiring failed, or the remote went away — and that is said once for each scheduled
+     * backup, as a held day is.
      */
-    private fun notPushed(): Boolean {
-        if (!git.hasRemote()) return false
-        return incomplete()
+    private fun notPushed(due: Instant): Boolean {
+        if (git.hasRemote()) return incomplete()
+        if (!remoteWanted()) return false
+        return remoteMissing(due)
+    }
+
+    private fun remoteWanted(): Boolean = log.lastSuccessAt() != null || git.hasPushCredential()
+
+    private fun remoteMissing(due: Instant): Boolean {
+        if (missingSaidFor.getAndSet(due) != due) logger.warn(REMOTE_MISSING)
+        return false
     }
 
     // Warn rather than throw: a backup that could not go up costs a day of remote history, and
@@ -163,6 +179,12 @@ class DailyBackup(
                 "each scheduled backup."
 
         const val NOT_PUSHED = "Daily backup could not push. $RETRIED"
+
+        const val REMOTE_MISSING =
+            "Daily backup could not push: the record repository has no remote, yet a push credential is stored " +
+                "or a backup was recorded before, so one was meant to be there. $RETRIED Add the remote back, or " +
+                "restart with GITHUB_TOKEN set to wire one; docs/bootstrap.md says how to keep the records on " +
+                "this machine alone instead. This process says so once for each scheduled backup."
     }
 }
 

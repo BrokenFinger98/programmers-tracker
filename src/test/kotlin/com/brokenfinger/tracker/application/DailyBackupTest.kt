@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
 import com.brokenfinger.tracker.support.fixtures.MovableClock
 import com.brokenfinger.tracker.support.fixtures.aGithubShapedToken
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
@@ -280,6 +281,51 @@ class DailyBackupTest {
 
         backupLog().lastSuccessAt() shouldBe null
         remoteLess.subjects() shouldContainExactly listOf(CommandLineGitSync.RECONCILE_MESSAGE)
+    }
+
+    /**
+     * Silence is for the repository nobody gave a remote, not for one whose remote went away: the records
+     * reached it, and have stopped. The reviewer removed a remote and heard nothing for five days but the
+     * boot report's "no remote" at INFO (the review of #399). Said once for each scheduled backup, as a
+     * held day is, and never as a push that failed.
+     */
+    @Test
+    fun `a remote removed after a backup is said once for each scheduled backup`() {
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
+        backup.runIfDue() shouldBe true
+        repo.git("remote", "remove", "origin")
+        clock.now = NEXT_EVENING
+
+        val next = warningsWhile(DailyBackup::class) { ticks(backup, clock, count = 4) } // tried at 0, 1, 3
+        clock.now = NEXT_EVENING.plus(Duration.ofDays(1))
+        val after = warningsWhile(DailyBackup::class) { ticks(backup, clock, count = 2) } // tried at 0, 1
+
+        next.single() shouldContain "no remote"
+        after.single() shouldContain "no remote"
+        backupLog().lastSuccessAt() shouldBe EVENING
+    }
+
+    /**
+     * A push credential is stored only when a token was given, so a remote was wanted: the boot's wiring
+     * failed, or the remote went away since. That is said once for each scheduled backup (the review of
+     * #399), where a repository with neither a credential nor a backup recorded says nothing.
+     */
+    @Test
+    fun `a stored push credential with no remote is said once for each scheduled backup`() {
+        val remoteLess = GitWorkspace(base.resolve("remote-less"))
+        remoteLess.write(".gitignore", ".ps/\n")
+        aPushTokenIn(remoteLess.root)
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(remoteLess.root), backupLog(), clock, zone = SEOUL)
+
+        val evening = warnedWhile { ticks(backup, clock, count = 4) } // tried at 0, 1, 3
+        clock.now = NEXT_EVENING
+        val next = warnedWhile { ticks(backup, clock, count = 2) } // tried at 0, 1
+
+        evening.single() shouldContain "no remote"
+        next.single() shouldContain "no remote"
+        backupLog().lastSuccessAt() shouldBe null
     }
 
     /**

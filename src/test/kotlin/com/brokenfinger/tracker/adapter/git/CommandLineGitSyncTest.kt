@@ -249,6 +249,21 @@ class CommandLineGitSyncTest {
         heard.single() shouldContain "git remote could not run"
     }
 
+    /**
+     * A stored push credential is the evidence that a remote was wanted, which the daily backup asks for
+     * when there is none (the review of #399). Answered at each call, as the store can be written while
+     * the server runs.
+     */
+    @Test
+    fun `a push credential is reported once one is stored`() {
+        val sync = sync()
+        sync.hasPushCredential() shouldBe false
+
+        aPushTokenIn(root)
+
+        sync.hasPushCredential() shouldBe true
+    }
+
     @Test
     fun `the manual trigger pushes commits no pass ever pushed`() {
         val remote = remoteInitialised()
