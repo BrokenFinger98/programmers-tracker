@@ -18,6 +18,8 @@ import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -799,6 +801,48 @@ class CommandLineGitSyncTest {
         heard.forEach { it shouldContain "state directory" }
     }
 
+    // A directory git cannot open (#372) ----------------------------------------------------------
+
+    /**
+     * Git reports a directory it cannot open on stderr alone, exits 0 and lists nothing under it. Since
+     * #360 dirtiness is read from stdout, so the records in it were left out without a word (the review's
+     * F8). It is said once per directory, by the name git gives — never what it holds — and stays a
+     * warning: the rest is reconciled, where reading it as a failure failed every check.
+     */
+    @Test
+    fun `a directory git cannot open is said once by name, and the rest is reconciled`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a directory's permissions away")
+        written(".gitignore", ".ps/\n")
+        written("log/submissions.jsonl", RECORD)
+        val sealed = written("problems/120804/attempts/001.raw.jsonl", RAW_FRAME).parent.parent
+        val sync = sync()
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+        }
+
+        heard.single() shouldContain "problems/120804/"
+        heard.single() shouldNotContain RAW_FRAME
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
+    /** Git translates the sentence and not the path, and this tool's users run it in Korean. */
+    @Test
+    fun `a directory git cannot open is said whatever language the server runs in`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a directory's permissions away")
+        written(".gitignore", ".ps/\n")
+        val sealed = written("problems/120804/attempts/001.raw.jsonl", RAW_FRAME).parent.parent
+        val sync = CommandLineGitSync(root, System.getenv() + KOREAN, waitFor = {})
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+        }
+
+        heard.single() shouldContain "problems/120804/"
+    }
+
     // The state directory is the real one, or git is not run at all (#360) ----------------------
     //
     // No credential is stored in these, so the content gate has nothing to search for: what keeps the
@@ -1362,6 +1406,9 @@ class CommandLineGitSyncTest {
         const val CODE = "class Solution {}\n"
         const val RECORD = """{"lessonId":120804}"""
         const val RAW_FRAME = """{"type":"frame","marker":"a frame of the server's own state"}"""
+
+        /** The locale a Korean user's server runs in, where git translates what it says. */
+        val KOREAN = mapOf("LC_ALL" to "ko_KR.UTF-8", "LANG" to "ko_KR.UTF-8")
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2

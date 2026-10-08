@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -90,6 +91,9 @@ class CommandLineGitSync(
 
     /** Whether waiting out the user's merge, cherry-pick, revert or rebase was already said. */
     private val waitingSaid = AtomicBoolean()
+
+    /** Each directory git said it could not open, once said (#372). */
+    private val unreadableSaid: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /** The last head a push searched clean, and what it was searched against. */
     private val lastSearchedClean = AtomicReference<SearchedHead?>()
@@ -386,7 +390,27 @@ class CommandLineGitSync(
      */
     private fun isDirty(scope: List<String>): Boolean {
         val status = git(listOf("status", "--porcelain", "--untracked-files=all", "--") + scope)
+        sayUnreadable(status.stderr)
         return !status.succeeded() || status.stdout.isNotBlank()
+    }
+
+    /**
+     * A directory git cannot open is reported on stderr alone: status exits 0 and lists nothing under it
+     * (`warning: could not open directory 'problems/120804/': Permission denied`, git 2.48.1). Read from
+     * stdout, what it holds was left out of every commit without a word (#372, the review's F8 of #360).
+     * Each is said once per instance, by the path git names, and nothing under it is read. A warning and
+     * not a failure: the rest is committed. Read as a change, as before #360, it made every reconciliation
+     * an empty commit that failed — which would now hold the daily backup at every check.
+     *
+     * Git's other warning that names a path it cannot read, `unable to access '<path>'`, is about a file
+     * git reads for itself: the `.gitignore` of a directory it can list but not enter, or a linked one
+     * (both measured), whose rules then do not apply. It leaves no record out, and the root `.gitignore`
+     * has its own warning.
+     */
+    private fun sayUnreadable(stderr: String) {
+        stderr.lines().mapNotNull { UNREADABLE_DIRECTORY.matchEntire(it.trimEnd())?.groupValues }
+            .filter { (_, directory) -> unreadableSaid.add(directory) }
+            .forEach { (_, directory, reason) -> logger.warn(UNREADABLE, directory, root, reason) }
     }
 
     private fun insideRoot(paths: List<Path>): List<String> = paths.mapNotNull { relativeOf(it) }.distinct()
@@ -491,6 +515,13 @@ class CommandLineGitSync(
 
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
+
+        /** Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]). */
+        private val UNREADABLE_DIRECTORY = Regex("""warning: could not open directory '(.+)': ([^']*)""")
+
+        private const val UNREADABLE =
+            "git cannot open {} in {} ({}), so nothing under it is committed or pushed until it can: make it " +
+                "readable to the user the tracker runs as. This is said once per directory."
 
         private const val OPERATION_IN_PROGRESS =
             "{} has a merge, cherry-pick, revert or rebase in progress, so the tracker's commits wait " +

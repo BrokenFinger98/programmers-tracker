@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.git.PushCredential
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 
 // Object mother for a planted link (dev rules §6.4, #354). Git stores symbolic links, so a records
 // repository can arrive by clone or pull with a link under problems/ aimed at what its root also holds —
@@ -46,6 +47,20 @@ fun canPlantLinksIn(root: Path): Boolean = root.fileSystem.supportedFileAttribut
  * probe as [canPlantLinksIn] today, named for what such a test needs rather than borrowed from links.
  */
 fun keepsPosixPermissions(root: Path): Boolean = root.fileSystem.supportedFileAttributeViews().contains("posix")
+
+/**
+ * [directory] with every permission taken away, as `chmod 000` leaves it, while [action] runs — and given
+ * back afterwards, so a `@TempDir` can still be cleaned up. A superuser opens it anyway: a test that needs
+ * it unreadable assumes `!Files.isReadable(directory)` inside [action], and skips under root.
+ */
+fun <T> sealedWhile(directory: Path, action: () -> T): T {
+    Files.setPosixFilePermissions(directory, emptySet())
+    try {
+        return action()
+    } finally {
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
+    }
+}
 
 /** [path] made a FIFO, which only `mkfifo` makes; false where there is none to run. Its parent must exist. */
 fun madeFifo(path: Path): Boolean =
