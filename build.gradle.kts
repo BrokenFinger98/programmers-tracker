@@ -128,6 +128,7 @@ val verifyEveryTestClassRan =
         val resultsDir = layout.buildDirectory.dir("test-results/test")
         inputs.files(sources)
         doLast {
+            proveTestClassFilter()
             val declared = testClassesOwingAResult(sources.files.map { it.nameWithoutExtension to it.readText() })
             val ran = (resultsDir.get().asFile.listFiles() ?: emptyArray())
                 .filter { it.name.endsWith(".xml") }
@@ -160,6 +161,35 @@ fun testClassesOwingAResult(sources: Iterable<Pair<String, String>>): Set<String
     .toSortedSet()
 
 private val integrationClassTag = Regex("""(?m)^@Tag\("integration"\)""")
+
+/**
+ * Shows [testClassesOwingAResult] a class it must leave out and one it must keep, before its verdict
+ * on the real sources is believed. A filter that matched every source would leave every class out
+ * and pass any tree, and nothing in a green run would say so
+ * ([[decisions/2026-08-10-guards-must-prove-they-ran]]). The second class is the harder half: the
+ * tag is there, on a method, and it must not be read as the class's.
+ */
+fun proveTestClassFilter() {
+    val taggedClass = """
+        @Tag("integration")
+        class LiveTest {
+            @Test
+            fun reaches() {}
+        }
+    """.trimIndent()
+    val taggedMethod = """
+        class MixedTest {
+            @Tag("integration")
+            @Test
+            fun reaches() {}
+        }
+    """.trimIndent()
+    val owed = testClassesOwingAResult(listOf("LiveTest" to taggedClass, "MixedTest" to taggedMethod))
+    check(owed == setOf("MixedTest")) {
+        "the test-class filter must leave out a class tagged integration and keep one that tags only a " +
+            "method, but it kept $owed — its verdict on the real sources would mean nothing"
+    }
+}
 
 // Branch coverage, floor per package, deferred in `2026-08-05-ci-guard-scoping` and widened
 // past the calculators in #272.
