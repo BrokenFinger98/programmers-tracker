@@ -5,10 +5,10 @@ package com.brokenfinger.tracker.adapter.git
  * it adds — read from git's raw diff output, `diff-index --cached -z` for a commit about to be made and
  * `diff-tree -r -z` for what entered HEAD, which name both.
  *
- * A path a commit changes or removes keeps the name the tree already gave it, so only the paths it adds are
- * names it adds; and a blob is searched less what the tree it is added to holds anywhere, so content a
- * commit moves or copies within it is not added either. What the tree already holds is a leak to revoke if
- * it carries a token, not something this commit adds.
+ * A path a commit changes or removes keeps the names the tree already gave it, so only the paths it adds can add
+ * names, and each part of one is a name; and a blob is searched less what the tree it is added to holds anywhere,
+ * so content a commit moves or copies within it is not added either. What the tree already holds is a leak to
+ * revoke if it carries a token, not something this commit adds — a name as much as content (#402).
  */
 internal class Introduced private constructor(
     private val blobs: List<String>,
@@ -22,10 +22,15 @@ internal class Introduced private constructor(
     fun listings(): List<List<String>> = blobs.chunked(IDS_PER_LISTING).map { it + listOf("--not", base) }
 
     /**
-     * Whether a path it adds holds a token shape or a stored value, as its bytes and never as UTF-16: a path
-     * holds no NUL, so no UTF-16 text of an ASCII character can be in one (#375 reads a tree's names so).
+     * The names the paths it adds hold — each part of each — matched as their bytes and never as UTF-16: a name
+     * holds no NUL, so no UTF-16 text of an ASCII character can be in one (#375 reads a tree's names so). One that
+     * carries a token is [SearchOutcome.FoundInName] unless [held] holds it already, the base's own: a file added
+     * under a directory a pull named with a token adds its own name, not the directory's (#402).
      */
-    fun namesHold(patterns: TokenPatterns): Boolean = names.any(patterns::foundInBytes)
+    fun namesSearched(patterns: TokenPatterns, held: NamesHeld): SearchOutcome {
+        val heldOrNot = names.filter(patterns::foundInBytes).map { held.holds(it) ?: return SearchOutcome.Unsearched }
+        return SearchOutcome.FoundInName.takeIf { false in heldOrNot } ?: SearchOutcome.Clean
+    }
 
     /**
      * One change in raw diff output — `:<old mode> <new mode> <old id> <new id> <status>` — and its path, in
@@ -58,7 +63,7 @@ internal class Introduced private constructor(
          */
         fun ofReceived(answer: String, base: String): Introduced? {
             val changes = changesIn(answer) ?: return null
-            val names = changes.mapNotNull { it.nameAdded() }
+            val names = changes.mapNotNull { it.nameAdded() }.flatMap { it.split('/') }.distinct()
             return Introduced(changes.mapNotNull { it.blobLeft() }, names, base)
         }
 

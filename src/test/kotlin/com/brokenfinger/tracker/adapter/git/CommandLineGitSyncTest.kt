@@ -1962,6 +1962,29 @@ class CommandLineGitSyncTest {
         refsAt(remote) shouldContainExactly emptyList()
     }
 
+    /** The commit's twin: a file added under a directory HEAD already names with a token adds a new name only. */
+    @Test
+    fun `a file added under a directory named with a token HEAD already holds is committed`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("${aGithubShapedToken()}/notes.md")
+        written("${aGithubShapedToken()}/today.md", "a note\n")
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("${aGithubShapedToken()}/today.md")
+    }
+
+    @Test
+    fun `a new token-shaped directory under a held one is never committed`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("${aGithubShapedToken()}/notes.md")
+        written("${aGithubShapedToken()}/${aGithubShapedToken('B')}/today.md", "a note\n")
+
+        sync().reconcile() shouldBe false
+
+        subjects() shouldContainExactly listOf("added by another tool")
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**

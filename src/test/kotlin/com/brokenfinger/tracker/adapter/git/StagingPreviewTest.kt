@@ -92,8 +92,8 @@ class StagingPreviewTest {
         repo.write("added.md", "added\n")
         val previewed = preview().of(EVERYTHING, headTree()).shouldBeInstanceOf<Introduced>()
 
-        previewed.namesHold(storedAs("added")) shouldBe true
-        previewed.namesHold(storedAs("changed")) shouldBe false
+        previewed.namesSearched(storedAs("added"), NamesHeld.NONE) shouldBe SearchOutcome.FoundInName
+        previewed.namesSearched(storedAs("changed"), NamesHeld.NONE) shouldBe SearchOutcome.Clean
     }
 
     /** Before the first commit everything staging would add is introduced, against the tree with nothing in it. */

@@ -248,7 +248,7 @@ class CommandLineGitSync(
         val searched = SearchedTree(headTree() ?: return, fingerprintOfStore())
         val before = lastSearchedTree.get()?.before(searched) ?: emptyTree() ?: return
         val entered = enteredSince(before, searched.tree) ?: return
-        val outcome = searched(entered, credential.stored())
+        val outcome = searched(entered, credential.stored(), HeldNames(calls, setOf(before)))
         if (outcome == SearchOutcome.Unsearched) return
         if (outcome != SearchOutcome.Clean) logger.warn(ALREADY_COMMITTED, root)
         lastSearchedTree.set(searched)
@@ -463,13 +463,14 @@ class CommandLineGitSync(
         val base = headTree() ?: emptyTree() ?: return refused(CREDENTIAL_UNSEARCHED, what)
         return when (val preview = stagingPreview.of(scope, base)) {
             is Preview.Failed -> failed(what, preview.answer)
-            is Introduced -> carriesNoToken(what) { searched(preview, it) }
+            is Introduced -> carriesNoToken(what) { searched(preview, it, HeldNames(calls, setOf(base))) }
         }
     }
 
-    // The names first, which are in memory already, then the blobs, through the scan the push reads with.
-    private fun searched(introduced: Introduced, stored: StoredCredential): SearchOutcome {
-        if (introduced.namesHold(TokenPatterns.of(stored))) return SearchOutcome.FoundInName
+    // The names first, which are in memory already, less what [held] holds, then the blobs, as a push reads them.
+    private fun searched(introduced: Introduced, stored: StoredCredential, held: NamesHeld): SearchOutcome {
+        val names = introduced.namesSearched(TokenPatterns.of(stored), held)
+        if (names != SearchOutcome.Clean) return names
         return outgoing.outcome(introduced.listings(), stored)
     }
 

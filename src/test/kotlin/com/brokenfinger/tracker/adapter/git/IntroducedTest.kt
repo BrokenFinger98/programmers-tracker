@@ -95,7 +95,7 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().namesHold(nothingStored) shouldBe true
+        introduced.shouldNotBeNull().namesSearched(nothingStored, NamesHeld.NONE) shouldBe SearchOutcome.FoundInName
     }
 
     /** A directory's name is in the path of everything under it, and it is matched there. */
@@ -106,7 +106,7 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().namesHold(nothingStored) shouldBe true
+        introduced.shouldNotBeNull().namesSearched(nothingStored, NamesHeld.NONE) shouldBe SearchOutcome.FoundInName
     }
 
     /** A path that was there before keeps the name it had: what a commit changes or removes it does not add. */
@@ -119,15 +119,15 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().namesHold(nothingStored) shouldBe false
+        introduced.shouldNotBeNull().namesSearched(nothingStored, NamesHeld.NONE) shouldBe SearchOutcome.Clean
     }
 
     /** A submodule's name is in the tree like any other. */
     @Test
     fun `the name of a submodule it adds is searched`() {
-        val submodule = change("000000", "160000", NONE, BLOB_A, 'A', aGithubShapedToken())
+        val submodule = Introduced.ofReceived(change("000000", "160000", NONE, BLOB_A, 'A', aGithubShapedToken()), BASE)
 
-        Introduced.ofReceived(submodule, BASE).shouldNotBeNull().namesHold(nothingStored) shouldBe true
+        submodule.shouldNotBeNull().namesSearched(nothingStored, NamesHeld.NONE) shouldBe SearchOutcome.FoundInName
     }
 
     /**
@@ -142,7 +142,8 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().namesHold(TokenPatterns.of(stored)) shouldBe true
+        introduced.shouldNotBeNull().namesSearched(TokenPatterns.of(stored), NamesHeld.NONE) shouldBe
+            SearchOutcome.FoundInName
     }
 
     @Test
@@ -153,11 +154,72 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().namesHold(nothingStored) shouldBe false
+        introduced.shouldNotBeNull().namesSearched(nothingStored, NamesHeld.NONE) shouldBe SearchOutcome.Clean
+    }
+
+    // Names the base already holds (#402) ---------------------------------------------------------------
+
+    /**
+     * Each part of a path it adds is a name, and a name the base already holds is not new: a file added under a
+     * directory a pull named with a token adds the file's name, not the directory's.
+     */
+    @Test
+    fun `a directory name the base already holds is not new`() {
+        val added = introduced("${aGithubShapedToken()}/today.md")
+
+        added.namesSearched(nothingStored, heldOf(aGithubShapedToken())) shouldBe SearchOutcome.Clean
+    }
+
+    @Test
+    fun `a new name under a held one is found`() {
+        val added = introduced("${aGithubShapedToken()}/${aGithubShapedToken('B')}.md")
+
+        added.namesSearched(nothingStored, heldOf(aGithubShapedToken())) shouldBe SearchOutcome.FoundInName
+    }
+
+    /** Every part counts, the ones between the first and the last as well. */
+    @Test
+    fun `a directory between others is a name`() {
+        introduced("notes/${aGithubShapedToken()}/today.md").namesSearched(nothingStored, heldOf()) shouldBe
+            SearchOutcome.FoundInName
+    }
+
+    @Test
+    fun `a name the base cannot say it holds is unsearched`() {
+        val unknown = object : NamesHeld {
+            override fun holds(name: String): Boolean? = null
+        }
+
+        introduced("notes/${aGithubShapedToken()}.md").namesSearched(nothingStored, unknown) shouldBe
+            SearchOutcome.Unsearched
+    }
+
+    /** Whether a name is held costs a listing of the base, so only a name that carries a token is asked about. */
+    @Test
+    fun `only a name that carries a token is asked about`() {
+        val asked = mutableListOf<String>()
+        val counting = object : NamesHeld {
+            override fun holds(name: String): Boolean = true.also { asked += name }
+        }
+
+        introduced("notes/${aGithubShapedToken()}/today.md").namesSearched(nothingStored, counting)
+
+        asked shouldBe listOf(aGithubShapedToken())
     }
 
     private fun change(oldMode: String, newMode: String, old: String, new: String, status: Char, path: String) =
         ":$oldMode $newMode $old $new $status\u0000$path\u0000"
+
+    /** What a commit that adds a file at [path], and changes nothing else, introduces. */
+    private fun introduced(path: String): Introduced =
+        Introduced.ofReceived(change("000000", "100644", NONE, BLOB_A, 'A', path), BASE).shouldNotBeNull()
+
+    /** A base that holds [names], each as its bytes. */
+    private fun heldOf(vararg names: String): NamesHeld = object : NamesHeld {
+        private val held = names.map { String(it.toByteArray(Charsets.UTF_8), Charsets.ISO_8859_1) }.toSet()
+
+        override fun holds(name: String): Boolean = name in held
+    }
 
     private companion object {
         val nothingStored: TokenPatterns = TokenPatterns.of(StoredCredential.None)
