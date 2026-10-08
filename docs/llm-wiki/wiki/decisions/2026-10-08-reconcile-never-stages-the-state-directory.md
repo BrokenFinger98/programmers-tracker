@@ -1069,3 +1069,75 @@ against the code before it, on behaviour. Where an API was new, it went in first
     says why.
   - F5's race.
   - Not measured in the image; CI has not run this branch; not verified live.
+
+**PR #401: CI, and the critic's check at `dd9648b`.** The coordinator rebased the round onto main `258ed10` before
+pushing it, so its commits above carry the names the push gave them. What follows is on top of `dd9648b`, with no
+rebase.
+
+- **CI failed on all three OSes** (`548520a`). The test of the reason's 200-character cut gave git a `.git` file
+  naming a missing directory. Git 2.48.1 here, and 2.53.0 on Ubuntu 26.04 in Docker, name that directory in full;
+  CI's gits printed `fatal: not a git repository: (null)`, and `(NULL)` on Windows, so the cut was never reached.
+  The reason is now built by `TrackedStateEntries.reasonOf` from git's result alone, and pinned there with results
+  made in the test: the cut, the first line that says something, a git that said nothing, and one that timed out.
+  The last two were among the four the mutation check above left. The one real-git test keeps only what every git
+  says, `git log exited 128: fatal: not a git repository`.
+- **CI's Windows leg failed the two new FIFO tests** (`24ae432`, `a1578d2`). Both assumed `madeFifo()`, which
+  trusted `mkfifo`'s exit code. The runner's `mkfifo` is Git for Windows', which exits 0 and leaves a file the JVM
+  reads as a regular one; #398 met it in `WatchTokenTest`. `madeFifo()` now also requires the JVM to read what was
+  made as "other", in the same text #387 carries, and both tests assume `canPlantLinksIn()` first, as the other FIFO
+  tests do.
+- **Medium, measured: a release lost what it could not write** (`8bb62c1`). The critic swapped a link in just after
+  the release's check. In 400 runs the next grading's first `append()` threw 164 times, through `decided()` and
+  `releaseHeld()`, and 376 of 400 held frames were lost: they had left memory before the write. Nothing was written
+  through the link. `ChannelCapture.onFrame` does not catch the throw, so the observation flow would fail and
+  reconnect (inferred).
+  - A release now takes a run's or a lesson's frames, writes them, and on a failure puts them back ahead of anything
+    held since. It never throws, so a live grading never fails over a held frame.
+  - An orphan's own write that fails is held as a refused one is.
+  - The failure is said once, by the exception's kind and never with a path.
+  - An orphan is held inside the map's own step for its lesson, so a release can no longer take a list that a frame
+    is then added to.
+  - Three tests close a directory to writes, which fails the append as any failure would. Each failed before with
+    `AccessDeniedException` thrown out of `append()` or `orphaned()`.
+- **Low, inferred: the link check came before git's history question** (`6960164`). `orphans()` checked `orphans/`,
+  listed it, asked git, and then read. A pull in between could swap in a link, and the files were read through it,
+  since a no-follow open covers the last component alone. Once git has answered, the directory is now checked again
+  and listed anew. The new test swaps the link in during the question; before, the call counted the target's 40
+  lines as orphaned frames.
+- **Accepted, not fixed: a file swapped for a FIFO between the check and the open** hangs `orphans()` for good. Git
+  cannot make a FIFO, so it takes a local process with write access to `.ps`.
+- **Merged** main `40bc5f5` (#387, PR #398) as `b0dea9e`. Its `withdraw` and read-time checks sit beside this
+  branch's orphans guard, settled share and release fix. Three conflicts, each kept both sides.
+- **Tests.** Eight new: four at the reason's seam, three for the release, one for the swap. The bound test that read
+  git's wording is gone, and the real-git reason test now asserts the stable start only.
+- **Mutation**, against the store, git-history, MCP, application and config tests:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | the timeout not named | 1 |
+  | git's line not cut | 1 |
+  | an empty first line taken for git's reason | 2 |
+  | git's line not trimmed | 1 |
+  | no put-back for a lesson's orphans | 2 |
+  | no put-back for a run | 1 |
+  | no catch, so a failed write is thrown at the capture | 3 |
+  | an orphan's own failed write not held | 1 |
+  | the failure said at every write | 1 |
+  | a lesson's orphans, or a run, put back after what was held since | none |
+  | no check after git's history | 1 |
+  | a refused re-check taken for no orphans | 1 |
+
+  The pair left takes a frame held while a write is in flight, a concurrency the tests do not drive. Of the four
+  the earlier check left, the orphans reader's two link checks remain.
+- **Linux.** The changed test classes ran on Ubuntu 26.04 with git 2.53.0, as a non-root user, in
+  `eclipse-temurin:25-jdk`: 353 tests, 0 failed, 4 skipped (a Windows junction, and three that need a filesystem
+  that folds case).
+- **Gates**, all exit 0, at `6960164`:
+  - check;
+  - test: 2,445 JUnit tests in 169 classes, 0 failures, 11 skipped (the 9 before, and #387's two Windows
+    junction tests), and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 86% (716 of 832), `adapter/git` 90% (360 of 400), `adapter/mcp` 92%
+    (340 of 368), every package at or above its floor;
+  - guards: 12 of 12, with this page and progress staged.
+- **What remains**, besides the list above: the FIFO swap; and CI has not run these commits.

@@ -6011,3 +6011,33 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - The ADR's accepted cost is now precise: `sessionsNotReplayed` counts what the last start left, not
   gradings refused while the server runs.
 - **Pending.** Not pushed. CI, the junction tests' first run and the live check, as before.
+## 2026-10-08 — #378 PR #401: CI, the release race, the check after git (branch fix/378-held-frames-and-orphans)
+- **Base.** On `dd9648b`, the coordinator's rebase of the round onto main `258ed10`. Commits on top, no rebase;
+  main `40bc5f5` (#387, PR #398) merged in as `b0dea9e`, three conflicts each keeping both sides.
+- `548520a` **CI, all three OSes.** The cut of git's line in a reason was tested on git's own wording: 2.48.1 here
+  and 2.53.0 in Docker name a missing git directory in full, CI's gits printed `(null)` (`(NULL)` on Windows). The
+  reason is built by `TrackedStateEntries.reasonOf` and pinned there on made results: the cut, the first line that
+  says something, a git that said nothing, a timeout. The real-git test asserts the stable start only.
+- `24ae432`, `a1578d2` **CI, Windows.** The two new FIFO tests trusted `mkfifo`'s exit code; Git for Windows'
+  exits 0 and leaves a regular file. `madeFifo()` requires "other", in #387's text, and both tests assume
+  `canPlantLinksIn()` as the other FIFO tests do.
+- `8bb62c1` **Medium (the critic, measured: 164 throws in 400 runs, 376 of 400 held frames lost).** A release
+  takes, writes, and puts back on a failure; it never throws, so a live grading never fails over a held frame. An
+  orphan's own failed write is held; the failure is said once. Three tests on a directory closed to writes, red
+  with `AccessDeniedException` before.
+- `6960164` **Low (inferred).** `orphans/` is checked again and listed anew once git has answered its history; the
+  new test, red before, counted a swapped link's 40 lines.
+- **Accepted.** A file swapped for a FIFO between the check and the open hangs `orphans()`; it takes a local
+  process with write access to `.ps`, since git cannot make a FIFO.
+- **Mutation** (16, `mutate401.py` in the scratchpad): 14 killed; the put-back order for orphans and runs survives,
+  as it takes a frame held while a write is in flight. The timeout's wording and the empty first line, left by
+  the round's first check, are now killed at the seam.
+- **Linux.** The changed classes on Ubuntu 26.04, git 2.53.0, non-root, `eclipse-temurin:25-jdk`: 353 tests, 0
+  failed, 4 skipped (a Windows junction, three that need a case-folding filesystem).
+- **Gates**, all exit 0, at `6960164`: check; test (2,445 JUnit in 169 classes, 0 failures, 11 skipped: the 9
+  before and #387's two Windows junction tests; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 86%,
+  716 of 832; `adapter/git` 90%, 360 of 400; every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** The #360 ADR's Outcome gains this round, with the FIFO swap accepted.
+- **Remaining.** The FIFO swap; the put-back order under concurrency; CI has not run these commits; not verified
+  live.
+- **Pending.** Not pushed; the coordinator pushes.
