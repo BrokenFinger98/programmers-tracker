@@ -9,8 +9,6 @@ import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
-import io.kotest.matchers.string.shouldHaveLength
 import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -160,7 +158,10 @@ class TrackedStateEntriesTest {
         TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeInstanceOf<TrackedHistory.Unanswered>()
     }
 
-    /** A failed history held every session without saying why (the review of PR #395): git's own words say it. */
+    /**
+     * A failed history held every session without saying why (the review of PR #395): git's own words say it. Only
+     * their start is asserted, the part every git version has said; what follows differs between them.
+     */
     @Test
     fun `a history git cannot read is answered with git's reason`() {
         val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
@@ -168,8 +169,7 @@ class TrackedStateEntriesTest {
         val reason = TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeInstanceOf<TrackedHistory.Unanswered>()
             .reason
 
-        reason shouldContain "128"
-        reason shouldContain "not a git repository"
+        reason shouldStartWith "git log exited 128: fatal: not a git repository"
     }
 
     /** A git that cannot be started — no such directory, or no git at all — is answered with why, never thrown. */
@@ -179,18 +179,36 @@ class TrackedStateEntriesTest {
             TrackedHistory.Unanswered("IOException")
     }
 
-    /** Git's own line is cut at its bound, so a path it names cannot make the reason as long as it likes. */
+    // The reason itself, built from git's result alone (PR #401) --------------------------------
+
+    /**
+     * Git's own line is cut at its bound, so a path it names cannot make the reason as long as it likes. Pinned on
+     * a result made here: a real git named a missing git directory in full in 2.48.1 and as `(null)` on CI's
+     * gits, so a real one tests the bound only on some machines.
+     */
     @Test
     fun `git's own line in a reason is cut at its bound`() {
-        val elsewhere = Files.createDirectories(base.resolve("a-git-file-to-nowhere"))
-        val nowhere = base.resolve("x".repeat(120)).resolve("y".repeat(120))
-        Files.writeString(elsewhere.resolve(".git"), "gitdir: $nowhere\n")
+        val line = "fatal: " + "x".repeat(300)
 
-        val reason = TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeInstanceOf<TrackedHistory.Unanswered>()
-            .reason
+        TrackedStateEntries.reasonOf(GitResult(128, "", "$line\nthe line after it\n")) shouldBe
+            "git log exited 128: " + line.take(TrackedStateEntries.REASON_LENGTH)
+    }
 
-        reason shouldStartWith "git log exited 128: fatal: not a git repository"
-        reason.substringAfter("git log exited 128: ") shouldHaveLength 200
+    @Test
+    fun `the first line git said something on is its reason`() {
+        TrackedStateEntries.reasonOf(GitResult(128, "", "\n   \n  fatal: what went wrong  \nmore\n")) shouldBe
+            "git log exited 128: fatal: what went wrong"
+    }
+
+    @Test
+    fun `a git that said nothing is answered with how it ended`() {
+        TrackedStateEntries.reasonOf(GitResult(1, "", "")) shouldBe "git log exited 1"
+    }
+
+    @Test
+    fun `a git that did not finish is answered with its timeout`() {
+        TrackedStateEntries.reasonOf(GitResult(GitProcess.TIMED_OUT, "", "")) shouldBe
+            "git log did not finish within ${GitProcess.TIMEOUT.seconds} s"
     }
 
     /**

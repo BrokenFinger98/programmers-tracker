@@ -58,13 +58,6 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
         return TrackedHistory.Known(belowStateDirectory(pathsIn(result.stdout)))
     }
 
-    // How git ended, and its own first line when it said one: why, never what any file holds (the review of PR #395).
-    private fun reasonOf(result: GitResult): String {
-        if (result.code == GitProcess.TIMED_OUT) return "git log did not finish within ${GitProcess.TIMEOUT.seconds} s"
-        val said = result.stderr.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
-        return listOfNotNull("git log exited ${result.code}", said?.take(REASON_LENGTH)).joinToString(": ")
-    }
-
     // Each first segment is judged once: the history names the same few thousands of times.
     private fun belowStateDirectory(paths: List<String>): Set<String> {
         val state = firstSegments(paths).filter { isStateDirectory(it) }.toSet()
@@ -85,8 +78,8 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
         Files.exists(entry) && Files.exists(state) && Files.isSameFile(entry, state)
     }.getOrDefault(false)
 
-    private companion object {
-        const val NUL = '\u0000'
+    internal companion object {
+        private const val NUL = '\u0000'
 
         /**
          * Every ref and every reflog entry: a reset and a force-push, or a force-push and a plain `pull --rebase`,
@@ -96,12 +89,25 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
          * unborn repository answers nothing, and exit 0. What no reflog holds any more — an expired entry, a
          * rewritten history — is not named, which is why the owner deletes what git put there first.
          */
-        val HISTORY = listOf(
+        private val HISTORY = listOf(
             "git", "log", "--all", "--reflog", "-m", "--root", "--no-renames", "--no-color", "--no-show-signature",
             "--name-only", "-z", "--format=",
         )
 
         /** How much of git's own first line a reason keeps. */
         const val REASON_LENGTH = 200
+
+        private val DID_NOT_FINISH = "git log did not finish within ${GitProcess.TIMEOUT.seconds} s"
+
+        /**
+         * Why the history question failed: how git ended, and its own first line when it said one — why, never what
+         * any file holds (the review of PR #395). Built from the result alone, so its bound is tested whatever a git
+         * version says: 2.48.1 named a missing git directory in full, and CI's gits printed `(null)` (PR #401).
+         */
+        fun reasonOf(result: GitResult): String {
+            if (result.code == GitProcess.TIMED_OUT) return DID_NOT_FINISH
+            val said = result.stderr.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+            return listOfNotNull("git log exited ${result.code}", said?.take(REASON_LENGTH)).joinToString(": ")
+        }
     }
 }
