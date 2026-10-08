@@ -354,6 +354,30 @@ class CommandLineGitSyncTest {
         filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
     }
 
+    /**
+     * The owner took a tracked `.ps` link out of the index by hand and put a real directory in its
+     * place. A partial commit still takes the entry `.ps` itself from HEAD, finds a directory where a
+     * link was tracked, and stops: "'.ps' does not have a commit checked out". So the pathspec leaves
+     * out the entry as well as what is under it (#360).
+     */
+    @Test
+    fun `a state directory that replaced a tracked link does not stop reconciliation`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        written(".gitignore", ".ps/\n")
+        aLink(root.resolve(".ps"), Files.createDirectories(root.resolve("problems/zz")))
+        written("problems/zz/README.md", "decoy\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        git("rm", "--cached", "--quiet", ".ps")
+        Files.delete(root.resolve(".ps"))
+        Files.createDirectory(root.resolve(".ps"))
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+    }
+
     /** A timer ticked or a frame landed, and nothing else moved: that is nothing to reconcile, not an empty commit. */
     @Test
     fun `a change under the state directory alone is nothing to reconcile`() {

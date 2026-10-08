@@ -405,8 +405,13 @@ class CommandLineGitSync(
          * volume a case alias of `.ps` is refused before git runs ([StateDirectory]); this is what holds
          * where both spellings can stand side by side. ASCII only — `.p` with U+017F, which APFS folds
          * to `.ps`, is not matched, and the state-directory check and the content gate stand there.
+         *
+         * **The entry itself as well as what is under it.** A partial commit takes every path the
+         * pathspec matches in HEAD too: with a tracked `.ps` link taken out of the index by hand and a
+         * real directory in its place, it found a directory where a link was tracked and stopped —
+         * "'.ps' does not have a commit checked out" (measured on 2.48.1 and 2.53.0).
          */
-        private val RECONCILE_SCOPE = listOf(".", ":(exclude,glob,icase)[.]ps/**")
+        private val RECONCILE_SCOPE = listOf(".", ":(exclude,glob,icase)[.]ps", ":(exclude,glob,icase)[.]ps/**")
 
         /** Said once per process, so it stays readable instead of drowning every other line. */
         const val NOT_A_REPOSITORY =
