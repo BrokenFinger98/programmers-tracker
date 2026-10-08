@@ -210,5 +210,24 @@ again, the same answer.
 `icase` test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 87%,
 429 of 488; `adapter/config` 65% at its floor); guards (12 of 12).
 
+**After #390**, merged from main at `c49e033` (PR #399). #390 made `hasRemote()` never throw and the push
+silent with no remote at all, and the daily backup asks `hasRemote()` to tell that setup from a push that
+failed, and `hasPushCredential()` whether a remote was wanted. The merge keeps both sides: one
+`runCatching` around the named remotes and the URL remote. `088b0a2` pins the interplay with the real
+adapter and the real backup: a branch whose remote is a URL is backed up there, and one whose URL leads
+nowhere has the backup say it could not push, beside the adapter's own line. Both failed against main's
+adapter at `258ed10` — `expected:<true> but was:<false>`, and two warnings expected where none was said:
+the URL remote skipped as no remote, and the backup silent. The second failed as well against the merge
+taking main's `hasRemote()` as it was, with the adapter's line alone. Mutants of the merge, each killed:
+main's `hasRemote()` taken 2 tests; this branch's, unguarded 2; this branch's `noRemote()`, said with no
+remote at all 3; the credential dropped 2. The range and cache mutants ran a third time, on the final code,
+with the same verdicts: the range from the tracking refs 7, the cache on the head and store alone 2, without
+the tips 1, an unanswering destination taken for one that holds nothing 3, a URL never taken for one 4, and
+the cache without the destinations equivalent.
+
+Gates on `088b0a2`, all exit 0: check; test (2,398 JUnit across 170 classes, 0 failures, 9 skipped; node
+4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 436 of 492; `application` 89%; `adapter/config`
+65% at its floor); guards (12 of 12).
+
 Not verified: Windows, where the copy is named through `GIT_INDEX_FILE` with a Windows path, and where the
 shell-filter and file-permission tests skip; CI has not run this branch; not live.
