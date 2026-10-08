@@ -25,10 +25,11 @@ import java.util.concurrent.atomic.AtomicReference
  * The last success is persisted rather than held in memory for the same reason: the process
  * restarting is the normal case, not the exceptional one.
  *
- * **A try that does not count is tried again on a backoff** (#390): a minute later, then twice as long
+ * **A try that leaves the day due is tried again on a backoff** (#390): a minute later, then twice as long
  * each time, up to an hour ([BackupRetry]). The check runs every minute, and while the day was due every
  * one of them ran git, the records repository's hooks and the content search again, and said why: 1,440
  * times a day for a refusal that stands. The next scheduled backup starts over, and so does a restart.
+ * Whether the day is still due decides, so a try that threw backs off too.
  */
 class DailyBackup(
     private val git: GitSync,
@@ -63,15 +64,19 @@ class DailyBackup(
         return attempted(due)
     }
 
-    // A try that did not count is tried again on the backoff, and one that counted ends it.
+    // A try that leaves the day due is tried again on the backoff, and one that records it ends it. The record
+    // decides, not the answer: a try that threw, or answered true while its record was not written, set no
+    // backoff, and the next check tried again (the review of #399).
     private fun attempted(due: Instant): Boolean {
-        val counted = performed(due)
-        retry.set(retryAfter(due, counted))
-        return counted
+        try {
+            return performed(due)
+        } finally {
+            retry.set(retryAfter(due))
+        }
     }
 
-    private fun retryAfter(due: Instant, counted: Boolean): BackupRetry? {
-        if (counted) return null
+    private fun retryAfter(due: Instant): BackupRetry? {
+        if (!isDue(due)) return null
         return BackupRetry.of(retry.get(), due, clock.instant())
     }
 

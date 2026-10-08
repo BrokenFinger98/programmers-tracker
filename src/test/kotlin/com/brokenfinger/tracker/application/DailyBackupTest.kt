@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -364,12 +365,73 @@ class DailyBackupTest {
         heard.count { "held back" in it } shouldBe 2
     }
 
+    /**
+     * Whether the day is still due decides the backoff, not what the try answered (the review of #399). A
+     * try that threw set none, so the next check tried again: a backup log whose write failed gave 60
+     * pushes and 60 exceptions in an hour.
+     */
+    @Test
+    fun `a try that throws is backed off like any other`() {
+        val clock = MovableClock(EVENING)
+        val git = PushCounting(sync(repo.root))
+        val backup = DailyBackup(git, UnwritableLog, clock, zone = SEOUL)
+
+        val thrown = thrownWhileTicking(backup, clock, count = 60)
+
+        thrown shouldBe 6 // at 0, 1, 3, 7, 15 and 31 minutes
+        git.pushes shouldBe 6
+    }
+
+    /**
+     * A try can answer that it counted while no record of it was written: a state file's write is skipped
+     * while the state directory is refused, and said once by the store (#360). The day stays due, and was
+     * tried at every check: 60 pushes in an hour (the review of #399).
+     */
+    @Test
+    fun `a try that counted without a record is backed off like any other`() {
+        val clock = MovableClock(EVENING)
+        val git = PushCounting(sync(repo.root))
+        val backup = DailyBackup(git, ForgetfulLog, clock, zone = SEOUL)
+
+        ticks(backup, clock, count = 60)
+
+        git.pushes shouldBe 6
+    }
+
+    /**
+     * A try that records the day leaves no backoff behind. Should the record go afterwards — a backup log
+     * deleted, or one that cannot be read, reads as never backed up — the next check tries at once, as a
+     * restart would, rather than wait out a backoff a success had ended.
+     */
+    @Test
+    fun `a recorded try leaves no backoff behind`() {
+        val note = repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
+        ticks(backup, clock, count = 1) // held at minute 0
+        Files.delete(note)
+        ticks(backup, clock, count = 1) // recorded at minute 1
+        Files.delete(base.resolve("state/backup.json"))
+
+        backup.runIfDue() shouldBe true // at minute 2
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     /** [count] checks a minute apart, as the schedule makes them, from the clock's time on. */
     private fun ticks(backup: DailyBackup, clock: MovableClock, count: Int) = repeat(count) {
         backup.runIfDue()
         clock.now = clock.now.plus(Duration.ofMinutes(1))
+    }
+
+    /** [ticks] that go on past a check that throws, answering how many did. */
+    private fun thrownWhileTicking(backup: DailyBackup, clock: MovableClock, count: Int): Int {
+        var thrown = 0
+        repeat(count) {
+            if (runCatching { backup.runIfDue() }.isFailure) thrown++
+            clock.now = clock.now.plus(Duration.ofMinutes(1))
+        }
+        return thrown
     }
 
     /** What the backup and the git adapter warned about while [action] ran, the backup's lines first. */
@@ -428,4 +490,29 @@ class DailyBackupTest {
         /** 2026-08-04, 23:02 in Seoul — the last backup before a night that was slept through. */
         val TWO_NIGHTS_AGO: Instant = Instant.parse("2026-08-04T14:02:00Z")
     }
+}
+
+/** Real git, with its pushes counted: one for each time the backup tried. */
+private class PushCounting(private val git: GitSync) : GitSync by git {
+    var pushes = 0
+        private set
+
+    override fun push(): Boolean {
+        pushes++
+        return git.push()
+    }
+}
+
+/** A backup log whose write fails, as a full disk fails it. */
+private object UnwritableLog : BackupLog {
+    override fun lastSuccessAt(): Instant? = null
+
+    override fun succeededAt(instant: Instant) = throw IOException("No space left on device")
+}
+
+/** A backup log whose write is skipped without a word to its caller, as a refused state directory skips it. */
+private object ForgetfulLog : BackupLog {
+    override fun lastSuccessAt(): Instant? = null
+
+    override fun succeededAt(instant: Instant) = Unit
 }
