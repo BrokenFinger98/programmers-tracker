@@ -102,6 +102,31 @@ class TokenPatternsTest {
         nothingStored.foundIn(windowOf(text)) shouldBe true
     }
 
+    /**
+     * Read from its second byte, UTF-16LE spells big-endian text as well — all but a last character with
+     * no byte after it. So a token that ends its blob is found in each byte order by reading that order,
+     * and so is one that starts it with no byte order mark.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = ["UTF-16LE", "UTF-16BE"])
+    fun `a token that fills UTF-16 text from end to end is found`(charset: String) {
+        val text = aGithubShapedToken().toByteArray(Charset.forName(charset))
+
+        nothingStored.foundIn(windowOf(text)) shouldBe true
+    }
+
+    /**
+     * Text holds no NUL byte, so it is never read as UTF-16. There two bytes are two characters, as
+     * `git grep -F` reads them, never the one character they would spell as UTF-16.
+     */
+    @Test
+    fun `text with no NUL byte is never read as UTF-16`() {
+        val value = "中文"
+        val stored = patternsOf("https://someone:$value@example.invalid")
+
+        stored.foundIn(windowOf(value.toByteArray(Charsets.UTF_16LE))) shouldBe false
+    }
+
     @Test
     fun `a stored value in UTF-16 text is found`() {
         val text = "my token is $A_PUSH_CREDENTIAL".toByteArray(Charsets.UTF_16LE)
