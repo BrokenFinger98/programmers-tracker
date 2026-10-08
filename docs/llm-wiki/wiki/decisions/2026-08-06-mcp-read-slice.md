@@ -4,7 +4,7 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [mcp, protocol-versioning, adapter, authorization, dependencies]
 created: 2026-08-06
-updated: 2026-08-06
+updated: 2026-10-08
 sources: []
 ---
 
@@ -168,3 +168,10 @@ whatever its size**, so a reader taking the first entry as the headline is never
 - **Known gap:** no pagination. `submissions` with no arguments returns the whole log.
   Bounded scope was explicitly requested for this issue; a `limit` argument is the obvious
   next step and was not added unilaterally.
+
+## Outcome
+
+- 2026-10-08 (#355): decision 3 did not say which status an error gets when the binding assigns it
+  none. A fault of ours, `-32603`, is such an error. It used to go out on 500 with `id: null`, which
+  the client in use reads as a transport fault. It now goes out on 200 in both eras, with the
+  request's id: [[decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200]].

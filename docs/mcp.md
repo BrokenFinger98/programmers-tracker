@@ -213,7 +213,11 @@ blank or non-text `language` or `part`, a `since` that is not a date, a name it 
 comes back as a tool error (`isError: true`) saying what was wrong, so a model can correct it. A
 JSON `null` means "not given". A fault of ours behind valid arguments is answered as an internal
 error (JSON-RPC `-32603`) that carries nothing of the exception, never as advice to change arguments
-that were fine. Why each of these rules is what it is:
+that were fine. It carries the request's `id` and arrives on HTTP 200 in both eras: the modern
+binding assigns that code no status, and on a 500 a client such as Claude Code sees a transport
+fault rather than the error
+([`decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200`](llm-wiki/wiki/decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200.md)).
+Why each of the other rules is what it is:
 [`decisions/2026-10-07-repair-steps-are-served-not-judged`](llm-wiki/wiki/decisions/2026-10-07-repair-steps-are-served-not-judged.md).
 
 `get_problem` takes `include` for the code of one problem: a list drawn from `code` and `runs`, or
@@ -410,7 +414,8 @@ You do not have to configure this. The server decides from how your client opens
   refused this way is logged with its path and the reason, never with its content.
 - **No Programmers session cookie is ever on this path**, at any log level.
 - Nothing is logged on the normal path — not the request and not the answer — because every
-  answer is a piece of your solving history.
+  answer is a piece of your solving history. A fault of ours is logged by its exception's class
+  alone, since an exception's message can carry what a tool had read.
 
 ---
 

@@ -108,7 +108,8 @@ weighed there is listed.
   a refused one comes back as a tool error (`isError`) in the filter's own words; a JSON `null` is
   "not given", here and in `get_problem`'s `include`. Past the arguments, an invariant breaking is
   rethrown as our fault and answered as an internal error (HTTP 500, JSON-RPC `-32603`) carrying
-  nothing of the exception.
+  nothing of the exception. ⚠️ The 500 is superseded by #355, below: 200 in both eras, with the
+  request's id.
 - **`get_problem(include=["code","runs"])` enriches the existing items.** Submits get `code`; runs
   get `code`, `codeFetchedAt`, `codeLate`, `diffFromPrevGrading` or `noDiff`, `diffTruncated`, and
   `fromCodeLate` when the earlier side's code was late — the doubt shown on the item whose diff used
@@ -235,7 +236,10 @@ Found in review and filed rather than fixed on this branch:
   came out identical to the snapshot taken before the deploy.
 - **#355** — an internal fault answers with `id: null` and HTTP 500 in both eras, where JSON-RPC
   wants the request id echoed and the read-slice ADR keeps handshake-era failures on 200
-  (pre-existing; this branch pins the current shape in `McpControllerTest`).
+  (pre-existing; this branch pins the current shape in `McpControllerTest`). Done in
+  [[decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200]]: the dispatcher answers the
+  call with its id on 200 in both eras. The 2026-07-28 binding turned out to assign `-32603` no
+  status, so the pinned test's "500 is what the binding assigns" had never been checked.
 - **#356** — `incompleteHistory` is appended after the payload, so a client that cuts a large
   answer cuts the warning first.
 
