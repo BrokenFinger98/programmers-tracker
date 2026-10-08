@@ -2,13 +2,22 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.domain.calc.TouchedProblem
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 
 class TagNotesTest {
@@ -19,7 +28,50 @@ class TagNotesTest {
     @TempDir
     lateinit var root: Path
 
+    @TempDir
+    lateinit var outside: Path
+
     private fun notes() = TagNotes(RecordLayout(root))
+
+    // Written over a link, never through one (#361) ---------------------------------------------------
+
+    @Test
+    fun `a tag note that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val note = aLink(root.resolve("tags/dp.md"), token)
+
+        val heard = warningsWhile(RecordWrites::class) { notes().write(listOf(DP)) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.isSymbolicLink(note) shouldBe false
+        Files.readString(note) shouldContain "tag: dp"
+        heard.single() shouldContain note.toString()
+    }
+
+    /** The whole map is rewritten at every boot, so a linked directory is said once for it, not once a note. */
+    @Test
+    fun `a tags directory that is a link gets no notes, said once, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("tags"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) { notes().write(listOf(DP, GREEDY)) }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "tags is a symbolic link"
+    }
+
+    @Test
+    fun `a tag note that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-note.md")
+        val note = aLink(root.resolve("tags/dp.md"), nowhere)
+
+        notes().write(listOf(DP))
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.readString(note) shouldContain "tag: dp"
+    }
 
     @Test
     fun `writes one note per tag, with the denominator that makes it honest`() {
@@ -170,5 +222,10 @@ class TagNotesTest {
         notes().write(listOf(TagCount("tsp", 1, 0, 0)))
 
         Files.readString(root.resolve("tags/tsp.md")) shouldNotContain "[["
+    }
+
+    private companion object {
+        val DP = TagCount("dp", catalogTotal = 38, attempted = 5, solved = 3)
+        val GREEDY = TagCount("greedy", catalogTotal = 20, attempted = 1, solved = 0)
     }
 }

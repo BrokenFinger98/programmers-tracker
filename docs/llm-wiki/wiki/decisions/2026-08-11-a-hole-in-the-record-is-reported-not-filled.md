@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [records, recovery, mcp, analysis, failure-taxonomy]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-08-11
+updated: 2026-10-08
 sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, decisions/2026-08-08-run-raw-sessions, decisions/2026-08-05-failure-taxonomy]
 ---
 
@@ -44,7 +44,7 @@ measured. The temptation to repair them is real, and it is the decision here.
    accident. Attaching an 18/18 PASS to the wrong attempt is exactly what CLAUDE.md forbids —
    substituting a default when identification fails.
 2. **Correct the two records by hand.** Tempting: the log is append-only and corrections are a
-   supported operation ([[decisions/2026-08-06-record-corrections-by-append]]). Rejected
+   supported operation ([[decisions/2026-08-05-code-pending-correction-append]]). Rejected
    because a hand-written correction is indistinguishable in the log from a measured one, and
    the whole value of this repository is that its records were observed.
 3. **Delete them, and the wrong records with them.** Rejected outright — discarding originals

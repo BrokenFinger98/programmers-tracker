@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.Clock
@@ -32,6 +34,9 @@ import java.time.ZoneOffset
 class FileRawSessionLogTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     private val startedAt = Instant.parse("2026-08-05T14:23:01.123Z")
 
@@ -433,6 +438,47 @@ class FileRawSessionLogTest {
         log.close()
 
         Files.readAllLines(stateRaw(session)) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    // The copy beside the record, never through a link (#361) ------------------------------------------
+
+    /**
+     * `CREATE_NEW` never wrote through a link standing where the copy goes, but the directories above it were made
+     * through one, and the copy landed where it led. It is refused now, and the frames stay on the work list, where
+     * the writer sets them aside as before.
+     */
+    @Test
+    fun `a submit's frames are not copied through an attempts directory that is a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/120804-x/attempts"), outside)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+        val session = log.start(120804)
+        log.append(session, """{"n":1}""")
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> {
+                log.complete(session, root.resolve("problems/120804-x/attempts/001.raw.jsonl"))
+            }
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        log.unprocessed().map { it.id } shouldContainExactly listOf(session)
+        heard.single() shouldContain "attempts is a symbolic link"
+    }
+
+    /** Pinned, not new: anything standing where the copy goes was refused before, a dangling link included. */
+    @Test
+    fun `a submit's frames are never copied where a dangling link stands, or where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-copy.jsonl")
+        val destination = aLink(root.resolve("problems/120804-x/attempts/001.raw.jsonl"), nowhere)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+        val session = log.start(120804)
+        log.append(session, """{"n":1}""")
+
+        shouldThrow<FileAlreadyExistsException> { log.complete(session, destination) }
+
+        Files.exists(nowhere, LinkOption.NOFOLLOW_LINKS) shouldBe false
     }
 
     private fun stateRaw(session: RawSessionId): Path = root.resolve(".ps/raw").resolve(session.value)

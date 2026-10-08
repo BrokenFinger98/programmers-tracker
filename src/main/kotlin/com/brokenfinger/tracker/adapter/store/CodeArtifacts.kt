@@ -18,13 +18,16 @@ import java.nio.file.Path
  * gets an attempt copy and a diff; a run that wrote one would overwrite an attempt that is
  * already history.
  *
- * Every write is temp-then-replace via [AtomicStateFile], so a reader — a git commit, an
+ * Every write is temp-then-replace via [RecordWrites], so a reader — a git commit, an
  * editor, a later re-analysis — never sees half a solution, and writing the same code twice
- * leaves the same bytes.
+ * leaves the same bytes. It writes through no link on the way (#361), and a refusal is thrown:
+ * the record then keeps its code pending rather than naming a file that was never written.
+ * Owner-only, as code files have been since the first write path.
  */
 class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
     private val layout = RecordLayout(recordRoot)
     private val files = ProblemFiles(layout)
+    private val writes = RecordWrites.underProblems(layout, ownerOnly = true)
 
     /** The latest code per language, refreshed on **both** run and submit (design §5.1). */
     fun writeLatest(record: SubmissionRecord, code: String): Path {
@@ -104,7 +107,7 @@ class CodeArtifacts(recordRoot: Path, private val records: RecordStore) {
     }
 
     private fun written(file: Path, code: String): Path {
-        AtomicStateFile(file).write(normalized(code))
+        writes.replace(file, normalized(code))
         return file
     }
 

@@ -158,12 +158,14 @@ there can read the token directly.
   sees a file there — `Files.exists` follows a link — and writes nothing, and the pass still reports
   it filled until writers stop following links (#361). Read from the code, not measured. One request
   per boot per such file; the same was already true of a `statement.md` that exists and cannot be
-  read.
+  read. Since #361 a link at the file is replaced by the statement once; a linked directory above it
+  is refused, and the pass counts it failed rather than filled.
 - **Only readers are bounded. Writers follow links (#361).** Measured in a scratch copy on
   2026-10-07: `Files.writeString` through a linked problem `README.md` overwrote
   `.ps/git-credentials`, a `runs.jsonl` append through a link appended to it, and a dangling
   `statement.md` link made the writer create a file outside `problems/`. An integrity exposure rather
   than a leak, and a design of its own (refuse, or replace the link), so it is not decided here.
+  Decided on 2026-10-08: [[decisions/2026-10-08-no-writer-follows-a-link]].
 - **A directory swapped for a link between the check and the open is still followed.** The real
   path is opened without following its last name, so swapping the file itself fails;
   `NOFOLLOW_LINKS` covers nothing above it. Accepted: the server never pulls (it runs `init`,

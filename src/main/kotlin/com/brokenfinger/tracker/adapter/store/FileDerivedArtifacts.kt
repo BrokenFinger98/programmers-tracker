@@ -16,7 +16,6 @@ import com.brokenfinger.tracker.domain.calc.runner.PythonRunner
 import com.brokenfinger.tracker.domain.calc.runner.Runner
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 
@@ -35,6 +34,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
     private val artifacts = CodeArtifacts(recordRoot, records)
     private val layout = RecordLayout(recordRoot)
     private val files = ProblemFiles(layout)
+    private val writes = RecordWrites.underProblems(layout)
     private val runs = RunLog(layout, clock)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
@@ -84,16 +84,17 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
         logger.info("Lesson {}: no runner — {} is not yet supported (#37)", record.lessonId, record.language)
     }
 
+    // Written over a link, never through one, and skipped when refused, which RecordWrites says (#361).
     private fun written(record: SubmissionRecord, directory: Path, runner: Runner.Generated) {
         runCatching {
-            Files.createDirectories(directory)
-            Files.writeString(directory.resolve(runner.fileName), runner.source)
-            runner.extras.forEach { extra -> Files.writeString(directory.resolve(extra.fileName), extra.source) }
+            writes.replaceOrSkip(directory.resolve(runner.fileName), runner.source)
+            runner.extras.forEach { extra -> writes.replaceOrSkip(directory.resolve(extra.fileName), extra.source) }
         }.onFailure { logger.warn("Lesson {}: the runner could not be written", record.lessonId, it) }
     }
 
+    // The sweep deleted through a linked problem directory, wherever it led; now it deletes nothing there (#361).
     private fun refused(record: SubmissionRecord, directory: Path, reason: String) {
-        RUNNER_FILES.forEach { stale -> runCatching { Files.deleteIfExists(directory.resolve(stale)) } }
+        writes.deleteIn(directory, RUNNER_FILES)
         logger.info("Lesson {}: no runner — {}", record.lessonId, reason)
     }
 
@@ -112,12 +113,14 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
      * Written once and never again. A second grading of the same problem finds the file there
      * and leaves it — so a statement the reader annotated, or one Programmers has since
      * reworded, is not overwritten by whichever page a later fetch happened to see.
+     *
+     * "There" is a regular file (#361). A link is no statement anyone wrote, and the read bound
+     * reads one as absent (#354), so it was fetched again at every boot while this saw a file
+     * through it and wrote nothing. It is replaced instead, never written through. A link on the
+     * way is refused and thrown, so the backfill counts the problem as not filled.
      */
     override fun writeStatement(record: SubmissionRecord, markdown: String) {
-        val file = layout.statementFile(record.lessonId, record.title)
-        if (Files.exists(file)) return
-        Files.createDirectories(file.parent)
-        Files.writeString(file, markdown.trimEnd() + "\n")
+        writes.writeOnce(layout.statementFile(record.lessonId, record.title), markdown.trimEnd() + "\n")
     }
 
     override fun writeReadme(records: List<SubmissionRecord>) {

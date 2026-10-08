@@ -452,13 +452,15 @@ fi
 #    exception list. Code has none: every link under src/ is a claim (108 links
 #    to 24 pages at adoption). The rest of the tree fails the same reason harder.
 #    With this resolution, outside raw/ (immutable) and this script, 17 links
-#    fail, and 10 are not claims: the schema's two examples, a `[[decisions/…]]`
-#    placeholder, and seven in the vault's own namespace (`[[tags/dp]]`) that
-#    were never wiki pages. The other 7 are real: the dead slug three more
-#    times, and four links to three source pages no commit has ever held. A
-#    check that failed every push on those would not repair them; that is
-#    /wiki-lint's work. And raw/ keeps the dead slug in a record nobody may
-#    edit, which is why §4 leaves dated records out.
+#    failed at adoption, and 10 are not claims: the schema's two examples, a
+#    `[[decisions/…]]` placeholder, and seven in the vault's own namespace
+#    (`[[tags/dp]]`) that were never wiki pages. The other 7 were real: the dead
+#    slug three more times, and four links to three source pages no commit had
+#    held. A check that failed every push on those would not have repaired
+#    them; #385 repaired all seven, the last a 2026-08-06 history entry in
+#    .harness/state/progress.md that linked the ADR by the name it was
+#    proposed under. And raw/ keeps the dead slug in a record nobody may edit,
+#    which is why §4 leaves dated records out.
 #
 #    A link is `[[kind/target]]` for any alphabetic kind, resolved against
 #    docs/llm-wiki/wiki/<kind>/<target>.md. There is no list of kinds to keep in

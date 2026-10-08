@@ -8,7 +8,11 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -17,7 +21,9 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 
 /**
  * Layer test for the derived code files (design §5.1). It drives real files under a
@@ -29,6 +35,9 @@ import java.nio.file.Path
 class CodeArtifactsTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `a run refreshes the solution file, which both actions share`() {
@@ -197,6 +206,73 @@ class CodeArtifactsTest {
 
         artifacts().diffFromPrev(second, numbered("new", huge)) shouldBe null
     }
+
+    // Written over a link, never through one (#361) ---------------------------------------------------
+
+    /**
+     * Code files were always written by a rename, which replaces a link standing where the file was rather than
+     * writing through it. That holds, and is said now.
+     */
+    @Test
+    fun `a solution file that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val solution = aLink(problemDirectory().resolve("Solution.java"), token)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeLatest(aRun(), CODE_V1) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.readString(solution) shouldBe CODE_V1 + "\n"
+        heard.single() shouldContain solution.toString()
+    }
+
+    /**
+     * What the rename never covered: a directory above the file. The temporary file and the move both landed where
+     * the link led. The attempt is refused now, and thrown, so the record keeps its code pending.
+     */
+    @Test
+    fun `an attempts directory that is a link is refused, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(problemDirectory().resolve("attempts"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { artifacts().writeAttempt(aSubmit(attempt = 2), CODE_V2) }
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "attempts is a symbolic link"
+    }
+
+    @Test
+    fun `an attempt file that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-an-attempt.java")
+        val attempt = aLink(problemDirectory().resolve("attempts/002.java"), nowhere)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeAttempt(aSubmit(attempt = 2), CODE_V2) }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.readString(attempt) shouldBe CODE_V2 + "\n"
+        heard.single() shouldContain attempt.toString()
+    }
+
+    /** Owner-only from the first write path (#18), and kept so. */
+    @Test
+    fun `code files are written owner-only, as they always were`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+
+        val latest = artifacts().writeLatest(aRun(), CODE_V1)
+        val attempt = checkNotNull(artifacts().writeAttempt(aSubmit(attempt = 1), CODE_V1))
+
+        permissionsOf(latest) shouldBe "rw-------"
+        permissionsOf(attempt) shouldBe "rw-------"
+    }
+
+    private fun aRun() = aSubmissionRecord(action = GradingAction.RUN, attempt = 1)
+
+    private fun aSubmit(attempt: Int) = aSubmissionRecord(action = GradingAction.SUBMIT, attempt = attempt)
+
+    private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 
     private fun artifacts() = CodeArtifacts(root, JsonlRecordStore.under(root))
 
