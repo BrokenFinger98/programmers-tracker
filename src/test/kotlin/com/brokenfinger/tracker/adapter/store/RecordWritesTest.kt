@@ -275,6 +275,26 @@ class RecordWritesTest {
         refusal.message shouldContain "is not a regular file"
     }
 
+    /**
+     * A hard link is the file itself under a second name, so an append wrote into whatever shared it: measured in
+     * #361's review, a run's line landed in an outside file hard-linked as `runs.jsonl`. Refused where the `unix`
+     * view can count a file's names; Windows has no such view, so the check does not run there.
+     */
+    @Test
+    fun `an appended file with a second name is refused, and the file it shares keeps its bytes`() {
+        assumeTrue(UNIX in root.fileSystem.supportedFileAttributeViews(), "no count of a file's names here")
+        val elsewhere = aFileNotOurs(outside)
+        val runs = Files.createDirectories(root.resolve("problems/1-x")).resolve("runs.jsonl")
+        assumeTrue(runCatching { Files.createLink(runs, elsewhere) }.isSuccess, "no hard link between the two")
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { problems().appendLine(runs, """{"run":1}""") }
+        }
+
+        Files.readString(elsewhere) shouldBe NOT_OURS
+        heard.single() shouldContain "problems/1-x/runs.jsonl is a hard link"
+    }
+
     /** A new file is never created through a link either: not where the link stands, and not where it points. */
     @Test
     fun `a new file where a dangling link stands is not created, there or where it points`() {
@@ -508,4 +528,8 @@ class RecordWritesTest {
     private fun inProblem(relative: String): Path = root.resolve("problems/1-x").resolve(relative)
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
+
+    private companion object {
+        const val UNIX = "unix"
+    }
 }

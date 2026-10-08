@@ -44,8 +44,10 @@ import java.util.concurrent.ConcurrentHashMap
  * **The file.** A whole file is written beside its target and moved over it, so a link standing there is replaced
  * rather than followed — said once — and a hard link is broken rather than written through. It keeps the mode of
  * the regular file it replaces, and a new one gets what a plain write gives a new file, unless the writer is
- * [ownerOnly]. An appended file must be a regular file or absent, and is opened without following a link. A file
- * created new is never created where anything stands, a link included.
+ * [ownerOnly]. An appended file must be a regular file or absent, and is opened without following a link; it must
+ * also have no second name, where the `unix` view can count a file's names — not on Windows, which offers no such
+ * view, so a hard link there is appended to. A file created new is never created where anything stands, a link
+ * included.
  *
  * **Said once, never quoted.** A refusal logs one warning naming the path the writer was handed and the reason —
  * once per reason for this instance, never the content and never where a link leads — and throws
@@ -79,10 +81,14 @@ internal class RecordWrites private constructor(
         replaceAt(target, file, text)
     }
 
-    /** Appends [line] and a line break to [target], a regular file or none, first ending a line a crash cut short. */
+    /**
+     * Appends [line] and a line break to [target], a regular file with no other name or none, first ending a line a
+     * crash cut short.
+     */
     fun appendLine(target: Path, line: String) {
         val file = fileIn(target)
         if (isThereButNotAFile(file)) throw refused(target, "${relative(file)} ${kindOf(file, A_REGULAR_FILE)}")
+        if (hasAnotherName(file)) throw refused(target, "${relative(file)} $IS_A_HARD_LINK")
         Files.writeString(file, healed(file) + line + "\n", CHARSET, CREATE, APPEND, NOFOLLOW_LINKS)
     }
 
@@ -219,6 +225,13 @@ internal class RecordWrites private constructor(
     private fun isThereButNotAFile(file: Path): Boolean =
         Files.exists(file, NOFOLLOW_LINKS) && !Files.isRegularFile(file, NOFOLLOW_LINKS)
 
+    // A hard link is the file under a second name, so an append would change it there too. Counted only where the
+    // `unix` view counts a file's names, which Windows does not offer: there the check does not run.
+    private fun hasAnotherName(file: Path): Boolean {
+        if (UNIX !in file.fileSystem.supportedFileAttributeViews() || !Files.exists(file, NOFOLLOW_LINKS)) return false
+        return (Files.getAttribute(file, LINK_COUNT, NOFOLLOW_LINKS) as Int) > 1
+    }
+
     private fun kindOf(path: Path, expected: String): String {
         if (Files.isSymbolicLink(path)) return "is a symbolic link"
         return "is not $expected"
@@ -243,12 +256,16 @@ internal class RecordWrites private constructor(
         private val CHARSET = StandardCharsets.UTF_8
         private val PLAIN_MODE = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-rw-rw-"))
         private const val POSIX = "posix"
+        private const val UNIX = "unix"
+        private const val LINK_COUNT = "unix:nlink"
         private const val NEWLINE = '\n'.code.toByte()
         private const val PARENT = ".."
         private const val TEMP_SUFFIX = ".tmp"
         private const val A_DIRECTORY = "a directory"
         private const val A_REGULAR_FILE = "a regular file"
         private const val IS_A_DIRECTORY = "is a directory"
+        private const val IS_A_HARD_LINK =
+            "is a hard link — another name shares the file, and an append would change it"
         private const val RESOLVES_ELSEWHERE =
             "resolves to another path — a name the filesystem folds, or a directory that leads elsewhere"
         private const val REPLACED = "replaced"
