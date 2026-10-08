@@ -4,7 +4,7 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [git, backup, scheduling, storage, single-writer, startup]
 created: 2026-08-06
-updated: 2026-08-11
+updated: 2026-10-08
 sources: [raw/sessions/2026-08-04-protocol-reverse-engineering-and-design.md, raw/sessions/2026-08-06-catalog-runners-and-the-record-repository.md]
 ---
 
@@ -132,3 +132,38 @@ new tests over real temporary repositories (537 in the suite). Still unwired fro
 the derived artifacts of #34 (solution file, diff, README) — they have no producer yet, so a
 submit commit today carries the log and the raw frames only. The MCP `push()` trigger
 (design §4.6) also has no caller, because MCP itself does not exist yet.
+
+**Amended 2026-10-08 (#372): a day counts only once its records are committed.** Decision 4
+recorded a day whenever the push landed, and the answer of `git.reconcile()` was never read.
+#360's adversarial review found the consequence: a reconciliation the content gate refused, one
+waiting out the user's merge, or one an index lock never let through left records on this disk
+alone, while the backup log said the day was covered and the next check found nothing due. Now:
+
+- The day is recorded only when `reconcile()` and `push()` both answer true. "Nothing to
+  reconcile" already answered true and every failure false, so the `GitSync` port kept its
+  signature; its KDoc now says what each answer means.
+- The push still runs when reconciliation failed: what is committed leaves the machine, and only
+  the record of the day waits.
+- A branch with no commit yet and nothing to commit counts. Nothing exists to back up, and #360
+  made such a push answer "nothing to push". One whose reconciliation was refused does not count:
+  there, #360's answer alone would have recorded a day whose records exist only here.
+- A held day is said once for each scheduled backup. The reason is said by the reconciliation
+  itself.
+
+Weighed and not taken: skipping the push while reconciliation fails, which keeps every committed
+attempt at home behind a note the gate refuses or a merge left open; and an outcome type in place
+of the port's boolean, which would tell "nothing to do" from "done" — a difference no caller acts
+on.
+
+Accepted costs. While a day is held, every check reconciles and pushes again, once a minute: the
+push usually sends nothing, but each is a round trip to the remote. A persistent refusal is
+warned about at every check by the reconciliation, as a failing push already was. A directory git
+cannot open does not hold the day: reconciliation commits the rest, answers true and names the
+directory once ([[decisions/2026-10-08-reconcile-never-stages-the-state-directory]], its F8).
+
+Six new `DailyBackupTest` cases were red first on the old code (`expected:<false> but was:<true>`):
+the token search's refusal, a merge in progress, an index lock that never clears, a branch with no
+commit yet whose reconciliation was refused, what is committed still going up, and the held day
+said once. The no-commit-yet day that counts is a pin, green before. Five mutants each fail a test:
+the reconciliation's answer ignored (6 tests), the push skipped while held (1), the held line at
+every check (1) or once per process (1), and a push with no commit yet answering false (1).

@@ -459,7 +459,8 @@ Two pin that a healthy repository still commits and pushes with a credential sto
 - **The other ignore rules still depend on `.gitignore`.** With a broken one, reconciliation commits
   `.DS_Store`, `.obsidian/workspace.json`, `.idea/` and `*.iml` as before. A WARN says so at boot.
 - **An untracked directory git cannot open is skipped silently (F8).** Reading stderr again would bring
-  back the empty commit a linked `.gitignore`'s warning caused.
+  back the empty commit a linked `.gitignore`'s warning caused. *Since #372 it is skipped and said —
+  see the Outcome.*
 - **TOCTOU windows remain (N10): every check is of a path, not a held handle.** They sit between the
   state directory's inspection and a write, between a writer's stat of its directories and its open
   (the open itself never follows a link at the file), and between the commit's searches and the
@@ -632,3 +633,32 @@ commit, no tracked symlink, `.ps` a real directory (#360's newest comment).
 **Windows CI found two things the reviews could not (PR #379).**
 - **Test setup.** Git writes objects read-only, and Windows will not delete a read-only file. The runner's `core.autocrlf` also made `hash-object` print a warning that the helper read as the object id.
 - **A product bug in `GitProcess`.** Windows will not delete a file a process still holds, and `git push` to a local path leaves receive-pack holding the output file after git exits. The cleanup in `finally` then threw, discarding the answer already read, so a push could be reported as one that "could not run". Cleanup is now best effort: a file that will not go is retried by the JVM at exit. `GitProcessTest` pins it, and the test fails against the throwing cleanup.
+
+**#372 followed up F8 and decision 5's unborn push** (branch `fix/372-backup-needs-reconcile`):
+
+- **F8 is said.** Every status the tracker runs has its stderr read for
+  `warning: could not open directory '<path>': <reason>` — measured on 2.48.1 for a directory at
+  `000` or `-wx`, for the subdirectory of one at `r--`, and for a tracked directory at `000`, where a
+  changed file was not listed either. Each directory is named once per instance, with git's reason and
+  never what it holds. It stays a warning: reconciliation commits the rest and answers true, so the
+  empty commit this page's cost was about does not come back. Git's other such line,
+  `unable to access '<path>'`, is left alone: it named the `.gitignore` of a directory git can list
+  but not enter, and a linked `.gitignore` — files whose rules then do not apply, which leaves no
+  record out. Not caught: a *tracked* directory at `r--` hid a changed file in it behind a line with
+  no `warning:` (`<path>: Permission denied`), measured.
+- **Git's environment pins `LC_ALL=C` (layer 6).** Homebrew's git 2.48.1 translated
+  `could not open directory` under `ko_KR.UTF-8`, the language this tool's users run it in, and
+  under `de_DE.UTF-8` the prefixes too: a grep over an unreadable blob said `Fehler:` and exited 1,
+  so the gate's `error:` check read it as nothing found — the reworded git this page's costs name,
+  reached by a locale instead. Under Korean the prefix stays `error:`. Paths and commit messages are
+  not translated: the suite's Korean subjects and problem paths pass under the pin.
+- **The daily backup records a day only when reconciliation succeeded as well** (the amendment to
+  [[decisions/2026-08-06-wire-git-into-the-pipeline]]). A branch with no commit yet and nothing to
+  commit still counts; one whose reconciliation was refused, which decision 5's true would have
+  recorded, does not.
+
+Each test was red first: the directory said once by name while the rest is committed, and the same
+under Korean (`List is empty`); git's answer in English under Korean and German (it answered in
+Korean). Mutants, each failing a test: the pin removed (2 tests), the detector removed (2), the
+directory said at every status (1), and the warning read as a change, which failed the second
+reconciliation (1).
