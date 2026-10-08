@@ -1,14 +1,19 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
+import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 
 /**
  * How every git call of the tracker runs (#360). The environment is the tracker's own: a variable the
@@ -101,6 +106,30 @@ class GitProcessTest {
         Path.of(answer.stdout.trim()).toRealPath() shouldBe repo.root.toRealPath()
     }
 
+    /**
+     * The input was written before the wait began, so a git that stopped reading it held the caller for as
+     * long as git ran — past the timeout, or for good (#373). The push gate hands `cat-file` every object id
+     * on stdin, far more than a pipe holds. Here a child of git holds the pipe as well and outlives the
+     * kill, which a kill that closed the pipe would have waited out.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `input git does not read cannot hold a call past its timeout`() {
+        assumeTrue(canPlantLinksIn(base), "this test runs a shell command")
+        val process = GitProcess(repo.root, timeout = Duration.ofSeconds(1))
+        val started = System.nanoTime()
+
+        val answer = process.run(listOf("git", "-c", "alias.stall=!sleep 10", "stall"), "x".repeat(MORE_THAN_A_PIPE))
+
+        answer.succeeded() shouldBe false
+        Duration.ofNanos(System.nanoTime() - started) shouldBeLessThan Duration.ofSeconds(5)
+    }
+
     private fun run(vararg args: String, inherited: Map<String, String>): GitResult =
         GitProcess(repo.root, System.getenv() + inherited).run(listOf("git") + args)
+
+    private companion object {
+        /** A megabyte: more than any pipe buffer holds, on any of the three systems CI runs. */
+        const val MORE_THAN_A_PIPE = 1 shl 20
+    }
 }

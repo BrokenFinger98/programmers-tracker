@@ -9,10 +9,10 @@ import java.util.concurrent.TimeUnit
 /**
  * One `git` invocation in [root], run the same way for every caller in this package (#360).
  *
- * Output goes to files rather than pipes, which is what makes [TIMEOUT] a real bound: a full pipe
- * buffer would block us before we ever got to wait. The two streams are kept apart, so what git
- * answers is read from stdout alone and a diagnosis reads both. Standard input is closed either way,
- * so no command can wait on it.
+ * Output goes to files rather than pipes, and input is written from a thread of its own, which is what
+ * makes [TIMEOUT] a real bound: a full pipe buffer would block us before we ever got to wait. The two
+ * streams are kept apart, so what git answers is read from stdout alone and a diagnosis reads both.
+ * Standard input is closed either way, so no command can wait on it.
  *
  * Terminal prompting is off, so a push cannot stop for credentials — and the timeout is there for the
  * case where it stalls anyway, because a capture must never wait on the network. Replace refs are off
@@ -28,8 +28,9 @@ internal class GitProcess(
     private val root: Path,
     private val inherited: Map<String, String> = System.getenv(),
     private val discard: (Path) -> Unit = { Files.deleteIfExists(it) },
+    private val timeout: Duration = TIMEOUT,
 ) {
-    /** Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [TIMEOUT]. */
+    /** Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [timeout]. */
     fun run(command: List<String>, input: String? = null): GitResult =
         inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(command, input, stdout, stderr) } }
 
@@ -63,17 +64,35 @@ internal class GitProcess(
             .also { it.environment().putAll(environment()) }
             .start()
         feed(process, input)
-        if (process.waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)) return process.exitValue()
-        process.destroyForcibly()
+        if (process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) return process.exitValue()
+        killed(process)
         return TIMED_OUT
+    }
+
+    // Through its handle: `Process.destroyForcibly` also closes stdin, and that waits for a write in
+    // progress, which a child of git still holding the pipe keeps going until it exits (#373).
+    private fun killed(process: Process) {
+        process.toHandle().destroyForcibly()
     }
 
     private fun environment(): Map<String, String> = inherited - UNSET + PINNED
 
-    // A command that exits before reading its input closes the pipe; its exit code then says what happened.
+    /**
+     * Input is written from a thread of its own, so the wait that follows bounds the call however much
+     * there is: written here, it held the caller for as long as git did not read it — past the timeout,
+     * and for good if git never did (#373). A command that exits before reading its input closes the
+     * pipe; its exit code then says what happened, and the writer ends on the closed pipe.
+     */
     private fun feed(process: Process, input: String?) {
-        runCatching { process.outputStream.use { stream -> input?.let { stream.write(it.toByteArray()) } } }
+        if (input == null) return closed(process)
+        Thread.ofPlatform().daemon().name("git-input").start { runCatching { written(process, input) } }
     }
+
+    private fun closed(process: Process) {
+        runCatching { process.outputStream.close() }
+    }
+
+    private fun written(process: Process, input: String) = process.outputStream.use { it.write(input.toByteArray()) }
 
     // Decoded leniently: a path git stores in bytes that are not UTF-8 is read, never thrown on.
     private fun textOf(file: Path): String = String(Files.readAllBytes(file), StandardCharsets.UTF_8)
