@@ -1140,6 +1140,37 @@ class CommandLineGitSyncTest {
     }
 
     /**
+     * The tracker never fetches, so a remote-tracking ref stays where the last push left it. Pointed at a new
+     * remote, `origin/main` still named a commit whose tree held a token, the range left that blob out, and
+     * the push sent it there (the review of 315f44e; refused before #373, whose search read every outgoing
+     * commit's whole tree). HEAD's tree is searched at every push, whatever the refs say.
+     */
+    @Test
+    fun `a token in HEAD's tree is found, though a stale ref says it was pushed`() {
+        aTokenAnotherToolPushed()
+        val fresh = base.resolve("fresh.git")
+        git("init", "--bare", "-b", "main", fresh.toString(), at = base)
+        git("remote", "set-url", "origin", fresh.toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        git("for-each-ref", at = fresh).trim() shouldBe ""
+    }
+
+    /** The same with the remote re-created empty under its old URL: its tracking ref still names the old commit. */
+    @Test
+    fun `a token in HEAD's tree is found, though the remote was re-created empty`() {
+        val remote = aTokenAnotherToolPushed()
+        Files.move(remote, base.resolve("deleted.git"))
+        git("init", "--bare", "-b", "main", remote.toString(), at = base)
+
+        sync().push() shouldBe false
+
+        git("for-each-ref", at = remote).trim() shouldBe ""
+    }
+
+    /**
      * `remote.origin.push` or `push.default=matching` sends branches the search never looked at. The
      * push names its one refspec, the current branch, and nothing else goes.
      */
@@ -1658,6 +1689,23 @@ class CommandLineGitSyncTest {
     private fun deleted(remote: Path) {
         remote.toFile().walkBottomUp().forEach { it.setWritable(true) }
         remote.toFile().deleteRecursively() shouldBe true
+    }
+
+    /**
+     * A token in `leak.md`, pushed to origin by another tool, so `origin/main` names its commit; then a clean
+     * commit on top, whose tree still holds the file. Returns the remote.
+     */
+    private fun aTokenAnotherToolPushed(): Path {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        written("leak.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "pushed by another tool")
+        git("push", "--quiet", "origin", "main")
+        written("notes/today.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "clean on top")
+        return remote
     }
 
     /** Someone else pushed meanwhile, which is what makes the next push a non-fast-forward. */

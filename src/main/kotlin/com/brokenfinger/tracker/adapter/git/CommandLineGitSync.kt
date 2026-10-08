@@ -59,7 +59,8 @@ import java.util.concurrent.atomic.AtomicReference
  *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
  *    remote, and runs with replace refs off, so the search reads the objects the push sends — each
  *    once ([OutgoingObjectScan], #373), for what the push's destinations lack as each says itself, never
- *    as a remote-tracking ref remembers it ([RemoteTips], #376).
+ *    as a remote-tracking ref remembers it ([RemoteTips], #376) — and HEAD's own tree at every push,
+ *    whatever the destinations say.
  *
  * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
@@ -310,10 +311,19 @@ class CommandLineGitSync(
      */
     private fun searchedClean(head: SearchedHead): Boolean {
         if (lastSearchedClean.get() == head) return true
-        if (!carriesNoToken("push") { outgoing.outcome(outgoingRange(head.held), it) }) return false
+        if (!carriesNoToken("push") { outgoing.outcome(searchedForPush(head.held), it) }) return false
         lastSearchedClean.set(head)
         return true
     }
+
+    /**
+     * What a push is searched for, as `rev-list` argument lists: what it would send, and HEAD's own tree,
+     * whatever the remote-tracking refs say. The tracker never fetches, so a ref stays where the last push
+     * left it: after `remote set-url`, or with the remote re-created empty, it still names commits the remote
+     * does not hold, and the range left out what they reach. A token still in HEAD's tree went out unsearched
+     * that way (the review of 315f44e). HEAD's tree is what the search before #373 read of HEAD.
+     */
+    private fun searchedForPush(held: Set<String>): List<List<String>> = listOf(outgoingRange(held), HEAD_TREE)
 
     /**
      * What a push would send, as `rev-list` arguments: HEAD's history, less what the tips its destinations
@@ -636,6 +646,9 @@ class CommandLineGitSync(
 
         /** Where a push goes when git names no other remote for the branch. */
         private const val DEFAULT_REMOTE = "origin"
+
+        /** HEAD's own tree, and everything under it, as `rev-list --objects` takes it. */
+        private val HEAD_TREE = listOf("HEAD^{tree}")
 
         /** `git check-ignore` exits 1 for a path no rule ignores; 0 is ignored, 128 is an error. */
         private const val NO_RULE_MATCHED = 1
