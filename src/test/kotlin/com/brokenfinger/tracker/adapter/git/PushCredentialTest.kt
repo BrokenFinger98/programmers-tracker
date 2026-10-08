@@ -75,6 +75,19 @@ class PushCredentialTest {
         PushCredential(root.resolve("sub").resolve("..")).file() shouldBe root.resolve(PushCredential.FILE)
     }
 
+    /**
+     * A link at the store's path was put there by someone else — a pull can deliver one — so git is
+     * not pointed at it (#360). Only the regular file the server writes is the store.
+     */
+    @Test
+    fun `points git at nothing when the store is a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.writeString(root.resolve("elsewhere"), "https://x-access-token:token@github.com\n")
+        aLink(root.resolve(PushCredential.FILE), elsewhere)
+
+        PushCredential(root).gitConfig().shouldBeEmpty()
+    }
+
     // What the content gate searches for (#360) -----------------------------------------------
 
     /** The token wherever it sits, and the stored line as it is: a leak of the store carries both. */

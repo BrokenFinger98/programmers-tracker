@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.StateDirectory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
@@ -10,9 +11,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermissions
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
@@ -131,17 +130,18 @@ class GithubRemote(
 
     /**
      * The credential store pushes authenticate through — rewritten on every wiring so a rotated
-     * token in `.env` takes effect, owner-only like the watch token, and inside `.ps/` so the
-     * gitignore the server itself maintains keeps it out of every commit.
+     * token in `.env` takes effect, owner-only like the watch token, inside the verified state
+     * directory, which reconciliation leaves out by pathspec.
+     *
+     * **Replaced, never written through (#360).** A pull can put a tracked link where the ignored
+     * file was, and a token written through it lands in the tracked file it leads to. A temporary
+     * file renamed over the store replaces whatever stands there, the link included, and starts
+     * owner-only ([AtomicStateFile]).
      */
     private fun storeCredential(): Boolean {
         val directory = StateDirectory(recordRoot).verified() ?: return notStored()
-        val file = directory.resolve(PushCredential.STORE)
-        runCatching {
-            Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY))
-        }
-        Files.writeString(file, "https://x-access-token:${token!!.raw()}@github.com\n")
-        runCatching { Files.setPosixFilePermissions(file, OWNER_ONLY) }
+        val store = AtomicStateFile(directory.resolve(PushCredential.STORE))
+        store.write("https://x-access-token:${token!!.raw()}@github.com\n")
         // No `git config` here on purpose. The pointer is passed per command instead, because
         // this repository's config is the user's too and the path we would write is ours (#267).
         return true
@@ -221,8 +221,6 @@ class GithubRemote(
 
         /** Both spellings GitHub hands out, with the trailing `.git` optional. */
         val GITHUB_SSH = Regex("""(?:ssh://)?git@github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?""")
-
-        val OWNER_ONLY = PosixFilePermissions.fromString("rw-------")
 
         const val STATE_DIRECTORY_REFUSED =
             "What answers to .ps in {} is not the tracker's own state directory — a link, or a name the " +

@@ -55,7 +55,7 @@ class PushCredential(private val root: Path) {
      */
     fun gitConfig(): List<String> {
         val file = file()
-        if (!Files.exists(file)) return emptyList()
+        if (!Files.isRegularFile(file, NOFOLLOW_LINKS)) return emptyList()
         return listOf("-c", "credential.helper=store --file=$file")
     }
 
