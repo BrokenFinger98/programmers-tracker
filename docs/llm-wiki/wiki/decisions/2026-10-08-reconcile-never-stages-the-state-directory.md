@@ -291,7 +291,9 @@ Six layers, each covering what the one before cannot:
 4. **The content gate**, in `CommandLineGitSync`:
    - Before staging, `git grep --untracked` searches the working tree under the commit's pathspec, so a
      refused commit leaves nothing staged. After staging, `git grep --cached` searches the index.
-   - Before every push, each commit the push would send is searched, 256 to a search.
+   - Before every push, each commit the push would send is searched, 256 to a search. *⚠️ Superseded
+     by [[decisions/2026-10-08-the-push-gate-reads-each-object-once]] (#373): each blob a push would
+     send is read once, by `cat-file`, and searched in the JVM.*
    - Each search looks for two things. First, GitHub's token shapes, `gh[pousr]_[A-Za-z0-9_]{36,}`
      and `github_pat_[A-Za-z0-9_]{60,}`, passed in argv because they are not secret. Then the stored
      value, read from `.ps/git-credentials` without following a link: each stored line, and the secret
@@ -493,10 +495,13 @@ Two pin that a healthy repository still commits and pushes with a credential sto
   batch exceed it, and the push is then refused at every attempt, because the range shrinks only when
   a push succeeds; until one does, every pass repeats the whole search. The owner's repository (166
   commits, 431 KB) is one batch. Searching each new blob once (`rev-list --objects`, then
-  `cat-file --batch`), which the review measured 180–370 times faster, is a follow-up.
+  `cat-file --batch`), which the review measured 180–370 times faster, is a follow-up. *⚠️ Resolved by
+  #373, the page decision 4 links: a first push of 5,000 commits went from 252.5 s to 0.52–0.63 s,
+  measured the same way on both.*
 - **A token in a file already pushed blocks every later push.** The search reads each outgoing
   commit's whole tree, so the file is found again until a commit removes it, and by then the token was
-  public and has to be revoked.
+  public and has to be revoked. *⚠️ No longer since #373: an object the remote's branches already reach
+  is not read again, as the push does not send it again.*
 - **Stale remote-tracking refs are trusted.** The range is what `refs/remotes/<remote>/*` lacks. A
   remote deleted and recreated empty under the same name, before a fetch, leaves commits out of the
   range that the push then sends unsearched. The refspec still sends one branch, but not only
