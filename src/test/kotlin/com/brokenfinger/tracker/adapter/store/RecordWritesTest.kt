@@ -409,6 +409,17 @@ class RecordWritesTest {
         Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
     }
 
+    /** A root-level writer is bounded too, and the reason it gives is the true one. */
+    @Test
+    fun `a root-level writer refuses a file outside the records repository, saying so`() {
+        val refusal = shouldThrow<RefusedWriteException> {
+            RecordWrites.underRoot(root).replace(outside.resolve("made-by-a-note.md"), "x")
+        }
+
+        refusal.message shouldContain "it lies outside the records repository"
+        namesIn(outside).shouldBeEmpty()
+    }
+
     /** Containment is by path element: `problems-old` begins with the same letters and is still outside. */
     @Test
     fun `a directory whose name only begins with problems is outside it`() {
