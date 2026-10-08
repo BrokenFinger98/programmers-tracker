@@ -3,12 +3,15 @@ package com.brokenfinger.tracker.adapter.store
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.text.Normalizer
 
 /**
- * Where a file in the records repository may lie, and the walk that finds it (#361) — taken out of [RecordWrites] so
- * the reads of what its writers keep can walk it too, and a reader and its writer agree on what is in bounds (#387).
+ * Where a file in the records repository may lie, and the walk that finds it (#361) — shared by [RecordWrites], which
+ * writes through it, and [RecordReads], which reads what those writers keep at the root, so a reader and its writer
+ * agree on what is in bounds (#387).
  *
  * **The bound.** The target must lie below the root as configured and name no `.` or `..` on the way — nobody is
  * handed one, and folding one away lexically let a root-level path climb back out — and it must fall under the bound:
@@ -52,7 +55,7 @@ internal class RecordBound private constructor(
 
     /** [directory] itself, walked without making anything; null when it is not there. */
     fun existing(directory: Path): Path? {
-        if (!Files.exists(directory, NOFOLLOW_LINKS)) return null
+        if (!isThere(directory)) return null
         return walked(namesOf(directory), creating = false)
     }
 
@@ -89,8 +92,8 @@ internal class RecordBound private constructor(
     }
 
     private fun stepInto(directory: Path, creating: Boolean): Path? {
-        if (creating && !Files.exists(directory, NOFOLLOW_LINKS)) createdOrThere(directory)
-        if (!Files.exists(directory, NOFOLLOW_LINKS)) return null
+        if (creating && !isThere(directory)) createdOrThere(directory)
+        if (!isThere(directory)) return null
         if (!Files.isDirectory(directory, NOFOLLOW_LINKS)) throw outOfBounds(directory, kindOf(directory, A_DIRECTORY))
         if (!listedExactly(directory)) throw outOfBounds(directory, NOT_LISTED)
         if (!resolvesToItself(directory)) throw outOfBounds(directory, RESOLVES_ELSEWHERE)
@@ -168,6 +171,20 @@ internal class DiskAnswers(
     val realPathOf: (Path) -> Path = { it.toRealPath() },
     val namesIn: (Path) -> Set<String> = ::namesOnDisk,
 )
+
+/**
+ * Whether anything stands at [path], a link included, as the filesystem says (#387). Only "no such file" is no: a name
+ * it cannot say about, under a directory that cannot be searched, throws rather than passing for absent — which a
+ * reader would take for nothing recorded, and `Files.exists` answers.
+ */
+internal fun isThere(path: Path): Boolean {
+    try {
+        Files.readAttributes(path, BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+    } catch (absent: NoSuchFileException) {
+        return false
+    }
+    return true
+}
 
 /** What stands at [path], for a reason: a symbolic link, or not [expected]. */
 internal fun kindOf(path: Path, expected: String): String {
