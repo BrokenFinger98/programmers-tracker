@@ -34,12 +34,17 @@ can put a link, a case variant or a tracked file where `.ps/` was. So the server
 `.ps` and everything under it out, whatever that file says. It runs no commit or push, and stores no
 credential, while `.ps` is not a real directory of its own or git tracks anything under it — under
 any name the filesystem folds to `.ps` — or while git cannot say whether it does. It writes nothing
-through a link. And before every commit and every push it searches the file content it would send
-for the stored token and for anything shaped like a GitHub token, refusing if it finds one or
-cannot read everything it would send. Before a push it also reads the commits it would send —
-messages, authors and committers — and the file and directory names, and it never pushes a tag
-([#375](https://github.com/BrokenFinger98/programmers-tracker/issues/375)). A token that
-reached a commit is revoked on GitHub; removing it from history does not make it secret again
+through a link. And before every commit and every push it searches what it would add or send —
+the file content, and the names of the files a commit adds — for the stored token and for anything
+shaped like a GitHub token, refusing if it finds one or cannot read everything it would send. A push
+is searched for what its remote says it lacks, asked at every push, and a commit for what it adds to
+what is already committed ([#376](https://github.com/BrokenFinger98/programmers-tracker/issues/376)).
+Before a push it also reads the commits it would send — messages, authors and committers — and the
+file and directory names, and it never pushes a tag
+([#375](https://github.com/BrokenFinger98/programmers-tracker/issues/375)). A token already
+committed, by a pull or another tool, is said once rather than refused, since a commit that does not
+add it sends nothing new. A token that reached a commit is revoked on GitHub; removing it from
+history does not make it secret again
 ([#360](https://github.com/BrokenFinger98/programmers-tracker/issues/360)).
 
 None of the three may appear in a log line, an exception message or a debug dump at any level.

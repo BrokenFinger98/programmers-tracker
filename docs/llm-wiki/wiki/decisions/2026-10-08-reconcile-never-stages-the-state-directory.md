@@ -291,7 +291,10 @@ Six layers, each covering what the one before cannot:
    agree.
 4. **The content gate**, in `CommandLineGitSync`:
    - Before staging, `git grep --untracked` searches the working tree under the commit's pathspec, so a
-     refused commit leaves nothing staged. After staging, `git grep --cached` searches the index.
+     refused commit leaves nothing staged. After staging, `git grep --cached` searches the index. *⚠️
+     Superseded by [[decisions/2026-10-08-each-gate-searches-what-its-destination-lacks]] (#376): what a
+     commit adds — its new paths, and its blobs less what HEAD's tree holds — is found by `add` on a copy
+     of the index and searched by the push's scan, before anything is staged, and once.*
    - Before every push, each commit the push would send is searched, 256 to a search. *⚠️ Superseded
      by [[decisions/2026-10-08-the-push-gate-reads-each-object-once]] (#373): each blob a push would
      send is read once, by `cat-file`, and searched in the JVM.*
@@ -306,13 +309,15 @@ Six layers, each covering what the one before cannot:
      why and never the token, and a false. A match says to revoke the token on GitHub and remove it
      from history.
    - A head already searched clean, for the same remote and the same stored token, is not searched
-     again by the same server.
+     again by the same server. *Since #378, for the same destinations and the tips they hold as well.*
 5. **The push.** `git push <remote> HEAD:refs/heads/<branch>`: the current branch alone, named on the
    command line, so `remote.<r>.push` and `push.default` send nothing else. The remote is
    `branch.<b>.pushRemote`, else `remote.pushDefault`, else `branch.<b>.remote`, else `origin`; the
    branch goes to its own name there, and `branch.<b>.merge` is not consulted. A remote with no `url`
    and no `pushurl` is nowhere to push: nothing is searched, and the WARN says so. The commits searched
-   are `rev-list HEAD --not --remotes=<remote>`. An unborn HEAD is nothing to push, says nothing and
+   are `rev-list HEAD --not --remotes=<remote>`. *⚠️ Superseded by #376: the range leaves out what the
+   push URLs say they hold, through `ls-remote`, never what a remote-tracking ref remembers; and a URL as
+   the branch's remote is pushed to (#378).* An unborn HEAD is nothing to push, says nothing and
    answers true. *Since #372 the daily backup records a day only when reconciliation succeeded as
    well, so an unborn branch whose reconciliation was refused is not recorded — see the Outcome.* A
    detached one is not pushed, and says so.
@@ -886,3 +891,21 @@ against the code before it, on behaviour. Where an API was new, it went in first
   - A directory swapped for a link after the listing, but before the reconciler reads it, is read through;
     the file itself never is. That needs a process racing the boot on this machine.
   - This round was not measured in the image, CI has not run it, and it was not verified live.
+
+**#376 and #378, the gate's range and scope** (the #376 page, linked from decision 4; branch
+`fix/376-gate-range-and-scope`). Two of round 4's findings, and two of #378's:
+
+- **The push range** leaves out what each push URL says it holds, through `ls-remote`, not what
+  `--remotes=<remote>` remembers. A remote re-created under the same name, repointed with `set-url`, or
+  given a `pushurl` apart from its `url`, was sent a token pushed once, unsearched; each is now refused, in
+  a test that was red before. A destination that cannot answer is not pushed to, and that is said once.
+- **The cache of a clean search** is keyed on what was searched: the destinations, the tips they held and
+  the store. The gate critic's C1 — `set-url` and `fetch --prune`, then the same server sending a history
+  token to the new remote — is a test that was red before.
+- **A URL as a branch's remote** is pushed to, and counts as a remote for the daily backup.
+- **A commit is searched for what it adds** — its new paths, matched as bytes, and its blobs less what
+  HEAD's tree holds — found by `add` on a copy of the index, so M5's guarantee holds for every encoding
+  and a refused file is never left staged. A file named with a token, and a token in UTF-16 text, are
+  refused at the commit now, where only the push refused them.
+- **What HEAD already holds is said, not refused**: a pull that brings in a token-shaped string no longer
+  refuses every reconciliation after it.
