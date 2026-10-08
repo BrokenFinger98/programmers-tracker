@@ -1,13 +1,20 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.NOT_OURS
+import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.time.Duration
 
@@ -25,6 +32,9 @@ import java.time.Duration
 class RepositoryHeartbeatTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `an empty repository is free`() {
@@ -127,6 +137,38 @@ class RepositoryHeartbeatTest {
         holder.close()
 
         Files.exists(marker()).shouldBeFalse()
+    }
+
+    // Written over a link, never through one (#361) ---------------------------------------------------
+
+    /**
+     * The marker sits at the records root when `.git` is not a directory there — a linked worktree — where a pull
+     * can deliver it as a link. Followed, the beat truncated what it led to every few seconds; and read through
+     * one, any file that kept changing would make a free repository look held.
+     */
+    @Test
+    fun `a marker that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = aFileNotOurs(outside)
+        aLink(marker(), elsewhere)
+
+        val heard = warningsWhile(RecordWrites::class) { heartbeat().claim() }
+
+        Files.readString(elsewhere) shouldBe NOT_OURS
+        Files.isSymbolicLink(marker()) shouldBe false
+        heard.single() shouldContain marker().toString()
+    }
+
+    @Test
+    fun `a marker that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-beat")
+        aLink(marker(), nowhere)
+
+        heartbeat().claim()
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.isSymbolicLink(marker()) shouldBe false
     }
 
     private fun heartbeat(onWait: () -> Unit = {}) = RepositoryHeartbeat(root, marker(), WATCH, waitFor = { onWait() })

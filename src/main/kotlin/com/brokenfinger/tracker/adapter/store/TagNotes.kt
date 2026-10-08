@@ -2,7 +2,6 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.domain.calc.TouchedProblem
-import java.nio.file.Files
 
 /**
  * The vault's tag map — `tags/<tag>.md`, one per catalogued tag (#229, spec
@@ -22,12 +21,14 @@ import java.nio.file.Files
  * ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
  */
 class TagNotes(private val layout: RecordLayout) {
+    private val writes = RecordWrites.underRoot(layout)
+
     fun write(counts: List<TagCount>) = counts.forEach { writeOne(it) }
 
+    // Written over a link, never through one (#361). The map is derived and rewritten at every boot, so a refused
+    // note is said, once for its reason, and skipped.
     private fun writeOne(count: TagCount) {
-        val file = layout.tagNote(count.tag)
-        Files.createDirectories(file.parent)
-        Files.writeString(file, render(count))
+        writes.replaceOrSkip(layout.tagNote(count.tag), render(count))
     }
 
     private fun render(count: TagCount): String =

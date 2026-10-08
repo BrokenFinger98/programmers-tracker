@@ -2,18 +2,31 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.application.AttemptAuthority
 import com.brokenfinger.tracker.domain.GradingAction
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aRecordLine
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 
 class JsonlRecordStoreTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `reading a log that does not exist yet is empty, not an error`() {
@@ -109,6 +122,52 @@ class JsonlRecordStoreTest {
         JsonlRecordStore.under(root).append(aRecordLine())
 
         Files.exists(root.resolve("log/submissions.jsonl")) shouldBe true
+    }
+
+    // Appended to, never through a link (#361) ------------------------------------------------------
+
+    /**
+     * The attempt authority, and a pull can deliver it as a link. A record is never appended where a link leads:
+     * the append is refused and thrown, as any failed append is, and the writer leaves the grading's frames on the
+     * work list for a boot after the link is gone to replay.
+     */
+    @Test
+    fun `a submission log that is a link is refused, and the file it leads to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        aLink(logFile(), token)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { store().append(aRecordLine()) }
+        }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        heard.single() shouldContain logFile().toString()
+        heard.single() shouldContain "log/submissions.jsonl is a symbolic link"
+    }
+
+    @Test
+    fun `a log directory that is a link is refused, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("log"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { store().append(aRecordLine()) }
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "log is a symbolic link"
+    }
+
+    @Test
+    fun `a submission log that is a dangling link is refused, and nothing is created where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-record.jsonl")
+        aLink(logFile(), nowhere)
+
+        shouldThrow<RefusedWriteException> { store().append(aRecordLine()) }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
     }
 
     private fun store() = JsonlRecordStore(logFile())
