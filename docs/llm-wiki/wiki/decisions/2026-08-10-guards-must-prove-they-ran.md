@@ -275,10 +275,11 @@ What it leaves unchecked, on purpose:
 - **Order.** A link may be written before its ADR, but both must be staged by the push. A branch
   that runs the guards between the two sees a failure that is correct and temporary.
 
-**Outcome, 2026-10-08 (#385).** `/wiki-lint` repaired six of the seven real breakages: the three
-source pages were written from their raw sessions, which resolved the three index entries and the
-concept, and the two decisions now link the ADR under its real name. The seventh is still there:
-the 2026-08-06 history entry in `.harness/state/progress.md`, which names the ADR as it was
-proposed. Re-measured with the same resolution, 11 links fail outside `src/`, `raw/` and
-`guards.sh` — the ten that are not claims, and that entry. A lint over `docs/` alone, like #385's,
-still prints the exam-prep plan's grep pattern; that is the ellipsis placeholder, one of the ten.
+**Outcome, 2026-10-08 (#385).** All seven real breakages are repaired. `/wiki-lint` wrote the
+three source pages from their raw sessions, which resolved the three index entries and the
+concept, and the two decisions now link the ADR under its real name. The seventh was the
+2026-08-06 history entry in `.harness/state/progress.md`, which linked the ADR by the name it was
+proposed under; it now links the filed page and keeps the proposed name as text. Re-measured with
+the same resolution, 10 links fail outside `src/`, `raw/` and `guards.sh` — exactly the ten that
+are not claims. A lint over `docs/` alone, like #385's, still prints the exam-prep plan's grep
+pattern; that is the ellipsis placeholder, one of the ten.
