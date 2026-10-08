@@ -325,8 +325,9 @@ asks your model to find your recurring mistakes in your own repair steps before 
 1. `stats(groupBy=part)` and `stats(groupBy=level)` — where passing took the most runs and submits;
 2. `repair_steps` over the scope you gave, called again with `limit` set to the answer's `total`
    when it says `truncated` — the corrections grouped into patterns named by what their diffs show,
-   each citing the record ids behind it and the number of problems it spans (a pattern seen once
-   is not a pattern);
+   or, where a step has no diff, by the judge's own output, saying the diff is missing. Every run
+   recorded before 2026-10-07 has none. Each pattern cites the record ids behind it and the number
+   of problems it spans (a pattern seen once is not a pattern);
 3. per pattern, the problems to re-solve, and up to three untouched ones from
    `list_problems(status=untouched, part=…)` in a part its steps come from;
 4. per pattern, two or three drills aimed at exactly that point;

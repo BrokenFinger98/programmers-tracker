@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@e22396c1dcbf18056f1feb94182c73fa8889420f -->
+<!-- translated-from: mcp.md@d1659c8c34f444b01614e9a7a6a23cd5c47cfddb -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -317,8 +317,10 @@ diff 만 줍니다.
 
 1. `stats(groupBy=part)` 와 `stats(groupBy=level)` — 통과까지 run 과 submit 이 가장 많이 든 곳;
 2. 주어진 범위로 `repair_steps` 를 부르고(답에 `truncated` 가 있으면 `limit` 을 그 답의 `total` 로
-   두고 다시), 수정들을 diff 가 보여주는 것으로 이름 붙인 패턴으로 묶어 패턴마다 근거가 된 기록 id 와
-   걸친 문제 수를 밝힙니다 — 한 번 본 것은 패턴이 아닙니다;
+   두고 다시), 수정들을 패턴으로 묶습니다. 패턴 이름은 diff 가 보여주는 것으로 붙이고, diff 가 없는
+   step 은 채점기가 낸 출력으로 붙이되 diff 가 없다고 밝힙니다. 2026-10-07 이전에 기록된 run 에는
+   diff 가 없습니다. 패턴마다 근거가 된 기록 id 와 걸친 문제 수를 밝힙니다 — 한 번 본 것은 패턴이
+   아닙니다;
 3. 패턴마다 다시 풀 문제와, 그 step 들이 나온 part 에서 `list_problems(status=untouched, part=…)` 로
    찾은 손대지 않은 문제 최대 세 개;
 4. 패턴마다 정확히 그 지점을 겨냥한 연습 두세 개;

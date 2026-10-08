@@ -5,7 +5,7 @@ tags: [mcp, prompt, interpretation-boundary, client-compatibility]
 author: BrokenFinger98
 created: 2026-10-07
 updated: 2026-10-08
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md, raw/sessions/2026-10-08-the-first-exam-prep-run.md]
 ---
 
 # The exam_prep prompt asks in the open
@@ -226,9 +226,30 @@ On the legacy revision:
 The tools did not change. All 36 snapshot files match the snapshot taken after #354, and the record
 repository stayed at 7e144fa with a clean status.
 
-**Still pending: the owner's run.** The owner runs `/mcp__programmers-tracker__exam_prep` in Claude
+⚠️ (superseded the same day — accepted, below) **Still pending: the owner's run.** The owner runs `/mcp__programmers-tracker__exam_prep` in Claude
 Code after `/mcp` → Reconnect. Spec §6 accepts it when the answer names patterns that cite record
 ids.
+
+**Accepted on 2026-10-08 (raw/sessions/2026-10-08-the-first-exam-prep-run.md).** After `/mcp` →
+Reconnect, the owner ran `/mcp__programmers-tracker__exam_prep mysql` and the prompt arrived scoped.
+The model made five calls:
+- `stats`, by part and by level;
+- `repair_steps`, which came back truncated at 20 of 63, then again with `limit=63`;
+- `list_problems(status=untouched, part="SELECT")`.
+
+It answered with three patterns, each citing record ids and the number of problems it spans. That
+is spec §6's acceptance.
+
+The run showed two things the design had not said. First, 58 of the 63 steps had no diff, because
+run code is kept only from 2026-10-07. Every pattern was therefore named from MySQL's
+`failedMessage`, the judge's own output. Second, the text gave no instruction for that case. #370
+adds one: where a step has no diff, the pattern is named by the judge's own output, and the answer
+says the diff is missing.
+
+Two smaller observations:
+- A leading space before the command makes Claude Code send it as plain text.
+- The reconnect also brought back `repair_steps`, which the session's cached discovery had been
+  missing since #357.
 
 The need to reconnect showed up again during the ingest. An agent spawned from this session at
 02:36 received the server instructions as they stood before #353, cut at 2,048 characters. The

@@ -31,6 +31,17 @@ class ExamPrepPromptTest {
         text shouldContain "A pattern seen once is not a pattern."
     }
 
+    /**
+     * The first owner run (#370): 58 of 63 steps had no diff, because run code is kept only from the
+     * 2026-10-07 tracker on, and every pattern was named from what the judge refused. Without this
+     * line a model told to name patterns "by what its diffs show" has nothing to name them by.
+     */
+    @Test
+    fun `where a step has no diff it names the pattern by the judge's own output, and says so`() {
+        text shouldContain "where a step has no diff, by the judge's own output (`errorText`, `failedMessage`)"
+        text shouldContain "say the diff is missing"
+    }
+
     @Test
     fun `it walks the five steps it asks for`() {
         text shouldContain "1. Call stats(groupBy=part), then stats(groupBy=level)."

@@ -5550,3 +5550,14 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - The seven 2026-10-07 ADRs cite the raws that hold their discussion (10-06 kept where the fold is the source, 10-03 added where the frame or the lost run code is); #354's outcome carries its live check, #364's the server-side check with the owner's run pending.
 - Concepts: `assumption-vs-measurement` (the receiving end, corrections that overreached, two counter-practice lines); `orchestrated-implementation` (subagents: what review caught, interruption, a shared scratchpad, workers copying the brief's AI trailer — 117 of 180 commits on main).
 - Inbox: the consumed snapshot `precompact-programmers-tracker-b240e44e.jsonl` deleted; `.inbox.log` kept.
+
+## 2026-10-08 — #370 the first exam_prep run, and the judge's output where no diff exists (branch feat/370-judge-output-when-no-diff)
+- **Acceptance (spec §6) met.** In Claude Code, after `/mcp` → Reconnect, the owner ran `/mcp__programmers-tracker__exam_prep mysql`.
+  - The calls: `stats` by part and by level; `repair_steps`, truncated at 20 of 63, then `limit=63`; `list_problems(untouched, SELECT)`.
+  - The answer: three patterns citing record ids, each with its problem count.
+  - The first attempt had a leading space and was sent as text.
+- **What the run showed.** 58 of 63 steps had no diff, because run code is kept only from 2026-10-07. Every pattern was named from MySQL's `failedMessage`. The five steps with code were measurement runs.
+- **The change.** `ExamPrepPrompt` now says: where a step has no diff, name the pattern by the judge's own output (`errorText`, `failedMessage`) and say the diff is missing.
+  - The new test failed first. adapter.mcp: 296 tests.
+- **Docs.** `docs/mcp.md` and its twin; ADR outcome; raw `docs/llm-wiki/raw/sessions/2026-10-08-the-first-exam-prep-run.md` with its source stub; index; log.
+
