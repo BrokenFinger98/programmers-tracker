@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -472,6 +473,23 @@ class RecordWritesTest {
         refusal.message shouldContain "problems/1-x is a symbolic link"
         refusal.message shouldNotContain outside.toString()
         problems().replaceOrSkip(inProblem("README.md"), "page\n") shouldBe false
+    }
+
+    /**
+     * A refusal is the bound's own answer. Any other failure is not, and reaches the writer as it always did: a
+     * writer that skips refusals still fails on a directory that will not take the file.
+     */
+    @Test
+    fun `a failure that is no refusal is thrown, even to a writer that skips refusals`() {
+        assumeTrue(keepsPosixPermissions(root), "this test changes POSIX permissions")
+        val directory = Files.createDirectories(root.resolve("problems/1-x"))
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("r-x------"))
+        try {
+            assumeTrue(!Files.isWritable(directory), "a superuser writes anyway")
+            shouldThrow<AccessDeniedException> { problems().replaceOrSkip(directory.resolve("README.md"), "page\n") }
+        } finally {
+            Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
+        }
     }
 
     private fun problems() = RecordWrites.underProblems(RecordLayout(root))
