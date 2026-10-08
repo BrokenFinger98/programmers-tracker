@@ -13,8 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
 internal class SaidOnce {
     private val said = ConcurrentHashMap.newKeySet<Any>()
 
-    /** Runs [say] the first time [key] comes to this instance, and never after. */
-    fun say(key: Any, say: () -> Unit) {
-        if (said.add(key)) say()
+    /** Runs [words] the first time [key] comes to this instance, and never after. */
+    fun say(key: Any, words: () -> Unit) {
+        if (said.add(key)) words()
     }
 }
