@@ -33,7 +33,11 @@ the rule alone: git reads none from a `.gitignore` that is a symbolic link, and 
 can put a link, a case variant or a tracked file where `.ps/` was. So the server's own commits leave
 `.ps` and everything under it out, whatever that file says. It runs no commit or push, and stores no
 credential, while `.ps` is not a real directory of its own or git tracks anything under it — under
-any name the filesystem folds to `.ps` — or while git cannot say whether it does. It writes nothing
+any name the filesystem folds to `.ps` — or while git cannot say whether it does. When git tracks
+something there, delete from disk what git put there before you untrack it, and do not skip it. The
+server never replays a raw session git has tracked, but it can tell one from its own only while git's
+history, reflogs included, still names it. An expired reflog or a rewritten history ends that
+([#377](https://github.com/BrokenFinger98/programmers-tracker/issues/377)). It writes nothing
 through a link. And before every commit and every push it searches what it would add or send —
 the file content, and the names of the files a commit adds — for the stored token and for anything
 shaped like a GitHub token, refusing if it finds one or cannot read everything it would send. A push

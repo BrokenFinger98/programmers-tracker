@@ -61,6 +61,20 @@ fun canPlantLinksIn(root: Path): Boolean = root.fileSystem.supportedFileAttribut
 fun keepsPosixPermissions(root: Path): Boolean = root.fileSystem.supportedFileAttributeViews().contains("posix")
 
 /**
+ * [directory] listed and entered but closed to every new file, as `chmod 500` leaves it, while [action] runs — so a
+ * write into it fails as a full disk or a link swapped in would — and given back afterwards. A superuser writes
+ * anyway: a test that needs the write to fail assumes `!Files.isWritable(directory)` inside [action].
+ */
+fun <T> unwritableWhile(directory: Path, action: () -> T): T {
+    Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("r-x------"))
+    try {
+        return action()
+    } finally {
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
+    }
+}
+
+/**
  * [directory] with every permission taken away, as `chmod 000` leaves it, while [action] runs — and given
  * back afterwards, so a `@TempDir` can still be cleaned up. A superuser opens it anyway: a test that needs
  * it unreadable assumes `!Files.isReadable(directory)` inside [action], and skips under root.

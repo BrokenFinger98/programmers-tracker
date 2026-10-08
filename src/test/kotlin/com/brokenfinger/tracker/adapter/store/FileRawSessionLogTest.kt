@@ -5,12 +5,15 @@ import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
+import com.brokenfinger.tracker.support.fixtures.GIT_COULD_NOT_SAY
 import com.brokenfinger.tracker.support.fixtures.NOTHING_TRACKED
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
@@ -441,6 +444,118 @@ class FileRawSessionLogTest {
         heard.last() shouldContain "reached 10 characters"
     }
 
+    /**
+     * Runs set aside and orphans held while `.ps` was refused filled the budget they shared with the gradings in
+     * flight, so a submit's frames were dropped, `complete()` threw and the attempt had no raw copy (#378). They hold
+     * three quarters at most, and the rest stays for the gradings in flight.
+     */
+    @Test
+    fun `runs and orphans held while refused leave a submit room for its frames`() {
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root) { true })
+        repeat(6) { log.orphaned(120804, """{"o":$it}""") }
+        val run = log.start(120805)
+        log.append(run, """{"r":1}""")
+        log.setAside(run)
+        val submit = log.start(131528)
+        log.append(submit, """{"n":1}""")
+
+        val copied = log.complete(submit, root.resolve("problems/131528-x/attempts/001.raw.jsonl"))
+
+        Files.readAllLines(copied) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** Three quarters of 40 characters hold four 7-character orphans; the fifth is dropped, and that is said once. */
+    @Test
+    fun `orphans held while refused take their share and no more, and going over it is said`() {
+        val git = ChangingAnswer(true)
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root, git))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            repeat(6) { log.orphaned(120804, """{"o":$it}""") }
+        }
+        git.answer = false
+        log.orphaned(120805, """{"next":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/120804.jsonl")) shouldHaveSize 4
+        heard.last() shouldContain "reached 30 characters"
+    }
+
+    /**
+     * Written once `.ps` is usable, settled frames leave their share, and a frame dropped over it never entered it:
+     * refused again, the share holds as much as before.
+     */
+    @Test
+    fun `the settled share is free again once what it held is written`() {
+        val git = ChangingAnswer(true)
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root, git))
+        repeat(5) { log.orphaned(120804, """{"o":$it}""") }
+        git.answer = false
+        log.orphaned(120805, """{"next":1}""")
+        git.answer = true
+
+        repeat(4) { log.orphaned(131528, """{"p":$it}""") }
+        git.answer = false
+        log.orphaned(120805, """{"next":2}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/131528.jsonl")) shouldHaveSize 4
+    }
+
+    /** A run set aside that the share cannot take is dropped, and leaves the share as it found it. */
+    @Test
+    fun `a run dropped over the share leaves the share as it found it`() {
+        val git = ChangingAnswer(true)
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root, git))
+        repeat(3) { log.orphaned(120804, """{"o":$it}""") }
+        val run = log.start(120805)
+        log.append(run, """{"r":1}""")
+        log.append(run, """{"r":2}""")
+        log.setAside(run)
+        log.orphaned(131528, """{"p":1}""")
+        git.answer = false
+        log.orphaned(120806, """{"next":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/131528.jsonl")) shouldContainExactly listOf("""{"p":1}""")
+    }
+
+    /** One limit bounds the heap, whatever holds the frames: settled frames count toward it with the live ones. */
+    @Test
+    fun `what is held never passes the limit, settled frames included`() {
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root) { true })
+        repeat(4) { log.orphaned(120804, """{"o":$it}""") }
+        val submit = log.start(131528)
+        repeat(3) { log.append(submit, """{"n":$it}""") }
+
+        val copied = log.complete(submit, root.resolve("problems/131528-x/attempts/001.raw.jsonl"))
+
+        Files.readAllLines(copied) shouldContainExactly listOf("""{"n":0}""")
+    }
+
+    /**
+     * A run set aside while `.ps` was refused left memory before its write, as orphans did, so a write that failed
+     * lost it and stopped the grading that asked for the release (the review of PR #401). It stays held instead.
+     */
+    @Test
+    fun `a run whose release cannot write stays held, and is written later`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val git = ChangingAnswer(true)
+        val log = logGuardedBy(aStateDirectory(root, git))
+        val run = log.start(120804)
+        log.append(run, """{"r":1}""")
+        log.setAside(run)
+        val recorded = Files.createDirectories(root.resolve(".ps/raw/recorded"))
+        git.answer = false
+        val next = log.start(131528)
+
+        unwritableWhile(recorded) {
+            assumeTrue(!Files.isWritable(recorded), "a superuser writes anyway")
+            log.append(next, """{"n":1}""")
+        }
+        log.orphaned(120805, """{"o":1}""")
+
+        Files.readAllLines(stateRaw(next)) shouldContainExactly listOf("""{"n":1}""")
+        Files.readAllLines(recorded.resolve(run.value)) shouldContainExactly listOf("""{"r":1}""")
+    }
+
     @Test
     fun `what is still held when the log closes is said`() {
         val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
@@ -791,6 +906,7 @@ class FileRawSessionLogTest {
 
         Files.exists(session) shouldBe true
         heard.single() shouldContain "1 raw session(s) were left in place and will never be replayed"
+        heard.single() shouldContain "not counted as gaps in the history"
         heard.single() shouldNotContain ".ps/"
     }
 
@@ -820,6 +936,20 @@ class FileRawSessionLogTest {
         git.historyAsked shouldBe 1
     }
 
+    /**
+     * Git's history excludes a session by its whole path. `raw` itself, which a pull may once have delivered as a
+     * link, and a path below a session's name are not the file on the work list, so neither excludes it.
+     */
+    @Test
+    fun `a history path that is no session's own excludes none`() {
+        aSessionLeftBehind()
+        val git = ChangingAnswer(false, history = setOf("raw", "raw/$A_SESSION/x"))
+
+        val replayed = logGuardedBy(aStateDirectory(root, git)).unprocessed()
+
+        replayed.map { it.id.value } shouldContainExactly listOf(A_SESSION)
+    }
+
     /** Unknown is not "never": while git cannot say what it has ever tracked, nothing is replayed, and that is said. */
     @Test
     fun `nothing is replayed while git cannot say what it has ever tracked`() {
@@ -832,6 +962,30 @@ class FileRawSessionLogTest {
         }
 
         heard.single() shouldContain "1 raw session(s) were left in place, not replayed: git could not say"
+        heard.single() shouldContain GIT_COULD_NOT_SAY
+    }
+
+    /**
+     * Skipping the delete, the owner untracked a session a pull delivered, reset past its commit and force-pushed:
+     * only the reflog still named it, and it was replayed (the review of PR #395, measured on real git).
+     */
+    @Test
+    fun `a session git delivered is not replayed once a reset and a force-push leave it to the reflog`(
+        @TempDir base: Path,
+    ) {
+        val repo = GitWorkspace(base)
+        repo.withRemote()
+        val before = repo.git("rev-parse", "HEAD").trim()
+        repo.write(".ps/raw/$A_SESSION", """{"n":1}""" + "\n")
+        repo.git("add", "--force", ".ps/raw/$A_SESSION")
+        repo.git("commit", "--message", "as a pull delivers it")
+        repo.git("rm", "-r", "--cached", "--quiet", ".ps")
+        repo.git("commit", "--message", "untracked, the file left on disk")
+        repo.git("reset", "--quiet", "--hard", before)
+        repo.git("push", "--quiet", "--force", "origin", "main")
+        val state = StateDirectory(repo.root, TrackedStateEntries(repo.root))
+
+        FileRawSessionLog.under(repo.root, Clock.fixed(startedAt, ZoneOffset.UTC), state).unprocessed().shouldBeEmpty()
     }
 
     // What a start leaves unreplayed is kept for the history's readers (#377, #169) ---------------
@@ -851,8 +1005,14 @@ class FileRawSessionLogTest {
         log.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
     }
 
+    /**
+     * A session git has known stays on disk, never replayed, until someone deletes it. Counted, it put a mark on
+     * every MCP answer for good after one pull (the review of PR #395). Git delivered it, so it is no gap in what
+     * this server captured: it is said in the log at each start and not counted. Sessions git could not vouch for
+     * are counted, since a later start replays them.
+     */
     @Test
-    fun `sessions git has known, or could not vouch for, are counted as left`() {
+    fun `sessions git could not vouch for are counted as left, and those it has known are not`() {
         aSessionLeftBehind(120804)
         aSessionLeftBehind(131528)
         val known = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = setOf("raw/$A_SESSION"))))
@@ -861,7 +1021,7 @@ class FileRawSessionLogTest {
         known.unprocessed()
         unanswered.unprocessed()
 
-        known.unreplayed() shouldBe LeftUnreplayed(1, uncounted = false)
+        known.unreplayed() shouldBe LeftUnreplayed.NOTHING
         unanswered.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
     }
 
@@ -958,6 +1118,15 @@ class FileRawSessionLogTest {
         Files.move(raw, raw.resolveSibling("moved-away"))
         aLink(raw, target)
     }
+
+    // A log under the record repository that holds at most [limit] characters while `.ps` is refused.
+    private fun aLogHolding(limit: Long, state: StateDirectory) = FileRawSessionLog(
+        root.resolve(".ps/raw"),
+        Clock.fixed(startedAt, ZoneOffset.UTC),
+        state,
+        heldLimit = limit,
+        recordRoot = root,
+    )
 
     private fun logGuardedBy(state: StateDirectory) =
         FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), state)

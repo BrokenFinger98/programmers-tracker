@@ -115,7 +115,7 @@ class RecordQuery(
      * the learner, and a claim drawn from a history with silent holes is worse than no claim —
      * the reader has to be able to see that the denominator is incomplete.
      */
-    fun orphanedFrames(): List<OrphanedFrames> = raw.orphans()
+    fun orphanedFrames(): Orphans = raw.orphans()
 
     /**
      * Sessions the last start left on the work list rather than replay (#377): gradings no record represents

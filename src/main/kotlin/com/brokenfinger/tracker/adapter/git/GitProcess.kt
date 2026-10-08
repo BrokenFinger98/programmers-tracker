@@ -163,7 +163,9 @@ internal class GitProcess(
             "GIT_NOGLOB_PATHSPECS",
             "GIT_ICASE_PATHSPECS",
         )
-        private const val TIMED_OUT = -1
+
+        /** The exit code a call that did not finish within [TIMEOUT] is answered with. */
+        const val TIMED_OUT = -1
     }
 }
 

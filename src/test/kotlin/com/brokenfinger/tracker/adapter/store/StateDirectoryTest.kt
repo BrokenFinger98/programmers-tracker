@@ -134,8 +134,17 @@ class StateDirectoryTest {
     fun `the way out of a tracked state directory deletes what git put there before untracking it`() {
         val reason = Refusal.TRACKED.reason
 
-        reason shouldContain "Delete from disk any that git put there rather than this server"
-        reason.indexOf("Delete from disk") shouldBeLessThan reason.indexOf(UNTRACK_EVERY_SPELLING)
+        reason shouldContain "First, and without fail, delete from disk every one git put there rather than this server"
+        reason.indexOf("delete from disk") shouldBeLessThan reason.indexOf(UNTRACK_EVERY_SPELLING)
+    }
+
+    /**
+     * Skipped, the delete was made good only while git's history named the file: a reflog that expired, or a history
+     * rewritten with filter-repo or a shallow fetch, let it replay (the review of PR #395, measured). The way out says so.
+     */
+    @Test
+    fun `the way out says why the delete cannot be skipped`() {
+        Refusal.TRACKED.reason shouldContain "an expired reflog or a rewritten history"
     }
 
     /** Removed alone, a linked raw directory takes the sessions behind it off the work list (the review of PR #395). */
@@ -153,6 +162,18 @@ class StateDirectoryTest {
         state.forGit() shouldBe Refused(Refusal.UNANSWERED)
         Refusal.UNANSWERED.transient shouldBe true
         state.forWriting() shouldBe Usable(root.resolve(".ps"))
+    }
+
+    /** A port that throws is answered as one that cannot say, with the exception's kind for why, never its message. */
+    @Test
+    fun `a history the port threw on is answered with why`() {
+        val throwing = object : TrackedState {
+            override fun tracksAnything(): Boolean = false
+
+            override fun pathsEverTracked(): TrackedHistory = throw IllegalStateException("never in a reason")
+        }
+
+        StateDirectory(root, throwing).pathsEverTracked() shouldBe TrackedHistory.Unanswered("IllegalStateException")
     }
 
     @Test

@@ -912,3 +912,255 @@ against the code before it, on behaviour. Where an API was new, it went in first
   refused at the commit now, where only the push refused them.
 - **What HEAD already holds is said, not refused**: a pull that brings in a token-shaped string no longer
   refuses every reconciliation after it.
+
+**#378, with the re-check of #377 folded in** (branch `fix/378-held-frames-and-orphans`, written on #377's
+`f807f77` and replayed onto main `258ed10` before its first push). #378's git items 1 and 4 are #376's.
+
+- **M3, raised to High: `orphans()` read what no write would touch** (`d4de07c`). Every answer asks for the
+  orphans, at boot and for MCP's `incompleteHistory`, and they were read with no guard. Two reviews measured
+  what that let through:
+  - a pulled `1.jsonl -> /proc/self/fd/1` hung the boot and every MCP call in the deployed image (the review
+    of #387);
+  - a link to `/dev/zero` exhausted the heap on each call, in 183–954 ms (the review of PR #395);
+  - a tracked orphans file forged every answer's `incompleteHistory`, and a tracked link counted lines
+    outside `.ps` (the same review).
+
+  The orphans are now read as the work list is: `forWriting()` first, then `pathFor("raw", "orphans")`, and
+  git's history decides which files are read. A file is opened only if it is regular, judged without
+  following a link, and holds 16 MiB at most, and it is opened without following a link. The bound is there
+  because every answer counts the lines again, and a file that is one long line would be read whole.
+
+  What is passed over is counted and never opened. Under a refused `.ps` the files are counted by name where
+  no link is on the way, and a directory that could not be listed is flagged instead. MCP carries the two as
+  `orphanFilesNotRead` and `orphansNotListed`, as it carries `sessionsNotReplayed` and
+  `rawDirectoryNotListed`, and `docs/mcp.md` and its twin describe them. Each refusal is said once, with its
+  reason.
+
+  Ten tests failed against `f807f77`, given the new port types with nothing behind them. The FIFO, the link to
+  one and the MCP call over them timed out (5 s, 5 s, 10 s). The others read the forged frames, and the
+  unlisted case had no `incompleteHistory`. Five more pin the WARNs and the one question to git.
+- **Item 3: an orphan whose file is a link** (`b6877b8`). Decision: the frame is kept, and the link is never
+  replaced.
+  - Before, the append, which never follows a link, threw `Too many levels of symbolic links`, and the
+    frame was lost.
+  - Now the frame is held in memory like a refused one, and written once a regular file or nothing stands
+    there. The WARN is said once and never says where the link leads.
+  - The link is left alone. The file is append-only, and a link there stands for history a replacement
+    would drop.
+  - Found on the way: the throw reached the next grading too. Its first frame releases what is held
+    (`append` → `decided()` → `releaseHeld()`), so a held orphan stopped a live capture. The release now
+    passes over a lesson whose file is not a regular file.
+  - Three tests, each red against `d4de07c`; the mutation check added a fourth, for a link that leads
+    nowhere.
+- **Item 2: held frames and the gradings in flight** (`aa809c8`). While `.ps` was refused, runs set aside and
+  orphans held in memory shared the 8,000,000-character budget with the gradings in flight. Once they filled
+  it, a submit's frames were dropped, and `complete()` threw `NoSuchFileException`, so the attempt had no raw
+  copy. A test reproduced it.
+
+  Measured with the fixtures' frames, each held as its own string (JDK 25.0.3), the full budget retains
+  16.1 MB of heap. That is 2.01 bytes a character, because the Korean result strings make each frame UTF-16.
+  A run's frames are 0.9–1.6 K characters, a submit's 2.1–2.9 K, and the largest capture is 7.8 K.
+
+  The options:
+  - one budget, as it was, is the loss above;
+  - **a quarter kept for the gradings in flight** was chosen. Runs set aside and orphans hold three quarters
+    at most, and going over that is said once. That share fills only after some 3,700 runs or more are held
+    while `.ps` stays refused, and a refused `.ps` blocks every commit and push meanwhile;
+  - spilling to the tool's own state directory was not chosen. That mount is documented as credentials
+    only. A spill would also add a configured path, and a drain across filesystems that needs its own
+    duplicate check after a crash.
+
+  Accepted: what is held is lost if the server stops while `.ps` is refused. The first WARN says so, and
+  `close()` counts what was lost.
+- **The critic's re-check of #377 at `f807f77`** (`011255c`). Four findings were measured on real git, and
+  the fifth is accepted.
+  - **F1, Medium: the reflogs.** A forged commit that every ref drops was replayed when the owner skipped
+    "delete from disk first". The critic measured four routes, each giving `recorded=[131528, 120804]`:
+    - a reset, then a force-push;
+    - an attacker's force-push, then the owner's plain `git pull --rebase`;
+    - `git filter-repo --invert-paths --path .ps`;
+    - `git fetch --depth 1`.
+
+    `--reflog` in the history question closes the first two. Both are pinned at the git level, and the
+    first end to end. Its cost, as the median of 21 runs with a reflog entry for every commit on `main` and
+    `HEAD`, was 9.5 → 10.1 ms on 166 commits and 30.5 → 35.8 ms on 1,660.
+
+    Expiry stays open, since unreachable entries go after 30 days by default, and so do filter-repo and a
+    shallow fetch. The TRACKED reason and `SECURITY.md` therefore make the delete mandatory, and say why:
+    the server tells a delivered file from its own only while git's history names it.
+  - **F2, Low: the reason.** `pathsEverTracked()` answers `Known(paths)` or `Unanswered(reason)`. The reason
+    is git's exit code and its own first line, cut at 200 characters, or the timeout, or the kind of
+    exception when git could not be started. Both WARNs that hold sessions or orphans give it, and neither
+    gives any content.
+  - **F3, Low: not counted.** Of the three options, one WARN at each start and no count was chosen. A session
+    git delivered is never replayed, and is not counted in `sessionsNotReplayed`. An orphans file git has
+    known is neither read nor counted. What git delivered is no gap in what this server captured. A count,
+    or a separate key such as `deliveredByGit`, would mark every answer for as long as the file stays, and
+    the file is the owner's to delete, which the WARN tells them.
+  - **F4, Low: the docs.** `docs/mcp.md` said "four cases" and left out the file that is not regular. It now
+    names the four counted cases: not the tracker's own, git tracking something there, git unable to say
+    what it has tracked, and a file that is not regular. It also says that sessions known to git are not
+    counted. The twin follows.
+  - **F5, Low, accepted.** A `.ps/raw` swapped for a link while git answers the history question, after the
+    listing, is read through, because `NOFOLLOW_LINKS` covers the last component only. It needs a process
+    racing the boot on this machine, and a file at the link's target with exactly the name of a session the
+    listing found.
+
+  Every new test for the four failed against the code before `011255c`, given its new history type with
+  nothing behind it. Those that change a count were red on the old count.
+- **Tests.** The four fixes add 25 tests and rewrite 3. The mutation check below adds 10 more and one
+  assertion (`f582287`).
+- **Mutation.** 51 mutants of this round's code ran against the store, git-history, MCP, application and
+  config tests, 1,175 of them, and 39 failed a test. One of those, a share never freed once its frames are
+  written, failed a pin that was then in the tree and is now in `f582287`. Twelve passed every test, and so
+  did two more written for F2 after the run. Ten of those 14 now fail a test written for each. The last four
+  were run against the whole suite as well, and pass it. Each mutant, with the number of tests it failed in
+  the run that first killed it:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | `orphans()` without asking whether `.ps` is refused | 2 |
+  | a refused orphans path listed anyway | 3 |
+  | a FIFO or a device opened (no regular-file check) | 2, each by its timeout |
+  | no size bound | 1 |
+  | the attributes read through a link | none, see below |
+  | the frames opened through a link | none, see below |
+  | both of those | 2 |
+  | an unlisted orphans directory not flagged | 2 |
+  | orphans under a refused `.ps` not counted | 3 |
+  | under a refused `.ps`, counted through a linked orphans directory | 1, pinned |
+  | an orphans file git has known read | 1 |
+  | git asked when no orphans file waits | 1 |
+  | an unanswered history taken for an empty one | 1 |
+  | files left unread while git cannot say, not counted | 1 |
+  | each of the three orphans WARNs said at every call | 1 each |
+  | orphans git has known never said, or counted as unread | 1 each |
+  | `orphanFilesNotRead` never written, or written with nothing to say | 1 each |
+  | `orphansNotListed` never written | 1 |
+  | `orphansNotListed` written with nothing to say | 1, pinned |
+  | `incompleteHistory` absent when orphans were only passed over, or only unlisted | 1 each |
+  | an orphan written through a link | 2 |
+  | held orphans released through a link | 2 |
+  | the link said at every orphan | 1 |
+  | a link to a regular file taken for one | 3 |
+  | a link to nothing taken for no file, so the append threw | 1, pinned |
+  | no `--reflog` | 3 |
+  | git's reason not carried | 1 |
+  | git's line not cut at 200 characters | 1, pinned |
+  | no reason for a git that could not start, or for a port that threw | 1 each, pinned |
+  | a timeout not named | none, see below |
+  | an empty first line taken for git's reason | none, see below |
+  | either WARN without the reason | 1 each |
+  | sessions git delivered counted as left, or never said | 1 each |
+  | TRACKED without "without fail", or without why | 1 each |
+  | a history path matched by its first segments, so `raw` alone excluded every session, and `raw/orphans` every orphans file | 2, pinned |
+  | a history path matched in its case alone | 1 |
+  | settled frames allowed the whole budget | 2 |
+  | orphans held against the whole budget | 2 |
+  | runs set aside never bounded by the share | 1 |
+  | settled frames written still charged to the share | 1 |
+  | a dropped run still charged to the whole budget | 1 |
+  | a dropped run still charged to the share | 1, pinned |
+  | settled frames not charged to the whole budget | 1, pinned |
+  | a frame refused over the share still charged to it | 1, pinned |
+
+  The four left:
+  - **The orphans reader's two link checks.** One judges the file without following a link, and the open
+    never follows one. Either alone stops a link, so removing one fails nothing, and removing both fails two
+    tests. The race between them, a link swapped in after the check, cannot be pinned.
+  - **A timeout's wording.** It needs a git that outlasts the history question's 60 s, and the question has
+    no seam for a shorter one. `GitProcessTest` pins the timeout itself. Without the wording the reason
+    still gives the exit code.
+  - **An empty first line.** Taken for git's reason, it would leave a reason that ends in `: `, or lose git's
+    words after a leading blank line. No git message that starts with one is known here, and none was looked
+    for.
+- **Comments** (`fc57595`). The KDocs of `TrackedStateEntries` and the `TrackedState` port say the history
+  question reads the reflogs too, and that "ever" goes as far as git remembers.
+- **Gates**, all exit 0, at `fc57595`:
+  - check;
+  - test: 2,329 JUnit tests in 166 classes, 0 failures, 9 skipped as before, and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 85% (687 of 806), `adapter/git` 87% (320 of 365), `adapter/mcp` 92%
+    (340 of 368), every package at or above its floor;
+  - guards: 12 of 12, run again with this page and progress staged.
+- **What remains.**
+  - Frames held in memory while `.ps` is refused are lost if the server stops. The first WARN says so.
+  - A forged session or orphans file that the owner untracked without deleting is replayed or read once git's
+    history stops naming it: an expired reflog entry, a rewritten history, a shallow fetch. The TRACKED
+    reason and `SECURITY.md` make the delete mandatory, and nothing enforces it.
+  - A git that cannot say what it has ever tracked holds every replay and every orphans read. The WARN now
+    says why.
+  - F5's race.
+  - Not measured in the image; CI has not run this branch; not verified live.
+
+**PR #401: CI, and the critic's check at `dd9648b`.** The coordinator rebased the round onto main `258ed10` before
+pushing it, so its commits above carry the names the push gave them. What follows is on top of `dd9648b`, with no
+rebase.
+
+- **CI failed on all three OSes** (`548520a`). The test of the reason's 200-character cut gave git a `.git` file
+  naming a missing directory. Git 2.48.1 here, and 2.53.0 on Ubuntu 26.04 in Docker, name that directory in full;
+  CI's gits printed `fatal: not a git repository: (null)`, and `(NULL)` on Windows, so the cut was never reached.
+  The reason is now built by `TrackedStateEntries.reasonOf` from git's result alone, and pinned there with results
+  made in the test: the cut, the first line that says something, a git that said nothing, and one that timed out.
+  The last two were among the four the mutation check above left. The one real-git test keeps only what every git
+  says, `git log exited 128: fatal: not a git repository`.
+- **CI's Windows leg failed the two new FIFO tests** (`24ae432`, `a1578d2`). Both assumed `madeFifo()`, which
+  trusted `mkfifo`'s exit code. The runner's `mkfifo` is Git for Windows', which exits 0 and leaves a file the JVM
+  reads as a regular one; #398 met it in `WatchTokenTest`. `madeFifo()` now also requires the JVM to read what was
+  made as "other", in the same text #387 carries, and both tests assume `canPlantLinksIn()` first, as the other FIFO
+  tests do.
+- **Medium, measured: a release lost what it could not write** (`8bb62c1`). The critic swapped a link in just after
+  the release's check. In 400 runs the next grading's first `append()` threw 164 times, through `decided()` and
+  `releaseHeld()`, and 376 of 400 held frames were lost: they had left memory before the write. Nothing was written
+  through the link. `ChannelCapture.onFrame` does not catch the throw, so the observation flow would fail and
+  reconnect (inferred).
+  - A release now takes a run's or a lesson's frames, writes them, and on a failure puts them back ahead of anything
+    held since. It never throws, so a live grading never fails over a held frame.
+  - An orphan's own write that fails is held as a refused one is.
+  - The failure is said once, by the exception's kind and never with a path.
+  - An orphan is held inside the map's own step for its lesson, so a release can no longer take a list that a frame
+    is then added to.
+  - Three tests close a directory to writes, which fails the append as any failure would. Each failed before with
+    `AccessDeniedException` thrown out of `append()` or `orphaned()`.
+- **Low, inferred: the link check came before git's history question** (`6960164`). `orphans()` checked `orphans/`,
+  listed it, asked git, and then read. A pull in between could swap in a link, and the files were read through it,
+  since a no-follow open covers the last component alone. Once git has answered, the directory is now checked again
+  and listed anew. The new test swaps the link in during the question; before, the call counted the target's 40
+  lines as orphaned frames.
+- **Accepted, not fixed: a file swapped for a FIFO between the check and the open** hangs `orphans()` for good. Git
+  cannot make a FIFO, so it takes a local process with write access to `.ps`.
+- **Merged** main `40bc5f5` (#387, PR #398) as `b0dea9e`. Its `withdraw` and read-time checks sit beside this
+  branch's orphans guard, settled share and release fix. Three conflicts, each kept both sides.
+- **Tests.** Eight new: four at the reason's seam, three for the release, one for the swap. The bound test that read
+  git's wording is gone, and the real-git reason test now asserts the stable start only.
+- **Mutation**, against the store, git-history, MCP, application and config tests:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | the timeout not named | 1 |
+  | git's line not cut | 1 |
+  | an empty first line taken for git's reason | 2 |
+  | git's line not trimmed | 1 |
+  | no put-back for a lesson's orphans | 2 |
+  | no put-back for a run | 1 |
+  | no catch, so a failed write is thrown at the capture | 3 |
+  | an orphan's own failed write not held | 1 |
+  | the failure said at every write | 1 |
+  | a lesson's orphans, or a run, put back after what was held since | none |
+  | no check after git's history | 1 |
+  | a refused re-check taken for no orphans | 1 |
+
+  The pair left takes a frame held while a write is in flight, a concurrency the tests do not drive. Of the four
+  the earlier check left, the orphans reader's two link checks remain.
+- **Linux.** The changed test classes ran on Ubuntu 26.04 with git 2.53.0, as a non-root user, in
+  `eclipse-temurin:25-jdk`: 353 tests, 0 failed, 4 skipped (a Windows junction, and three that need a filesystem
+  that folds case).
+- **Gates**, all exit 0, at `6960164`:
+  - check;
+  - test: 2,445 JUnit tests in 169 classes, 0 failures, 11 skipped (the 9 before, and #387's two Windows
+    junction tests), and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 86% (716 of 832), `adapter/git` 90% (360 of 400), `adapter/mcp` 92%
+    (340 of 368), every package at or above its floor;
+  - guards: 12 of 12, with this page and progress staged.
+- **What remains**, besides the list above: the FIFO swap; and CI has not run these commits.

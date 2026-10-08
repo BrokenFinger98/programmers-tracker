@@ -73,9 +73,11 @@ class StateDirectory(
 
     /**
      * Every path git has ever tracked below `.ps`, relative to it ([TrackedState.pathsEverTracked], #377): a
-     * file that answers to one may be what a pull delivered. Null when git cannot say. Never throws.
+     * file that answers to one may be what a pull delivered. Unanswered, with git's reason, when it cannot say.
+     * Never throws.
      */
-    fun pathsEverTracked(): Set<String>? = runCatching { tracked.pathsEverTracked() }.getOrNull()
+    fun pathsEverTracked(): TrackedHistory = runCatching { tracked.pathsEverTracked() }
+        .getOrElse { TrackedHistory.Unanswered(it.javaClass.simpleName) }
 
     private fun inspect(whenUnanswered: Inspection?): Inspection {
         val directory =
@@ -137,9 +139,10 @@ class StateDirectory(
             transient = false,
             reason = "git tracks files under .ps, in some spelling of the name, so whatever the server writes " +
                 "there is a change any `commit -a` publishes, the push credential included. " +
-                "`$LIST_EVERY_SPELLING` lists them. Delete from disk any that git put there rather than this " +
-                "server, since one left behind untracked reads as the server's own, then run " +
-                "`$UNTRACK_EVERY_SPELLING` and commit that",
+                "`$LIST_EVERY_SPELLING` lists them. First, and without fail, delete from disk every one git put " +
+                "there rather than this server: left behind untracked, one reads as the server's own, which tells " +
+                "them apart only while git's history names it, and an expired reflog or a rewritten history stops " +
+                "naming it. Then run `$UNTRACK_EVERY_SPELLING` and commit that",
         ),
         HOLDS_A_LINK(
             transient = false,
@@ -177,9 +180,22 @@ fun interface TrackedState {
     fun tracksAnything(): Boolean?
 
     /**
-     * Every path git has ever tracked below the state directory, in any commit a ref reaches, relative to
-     * it and spelled as git stored it (#377): what a pull may have delivered there, whether or not git still
-     * tracks it. Null when git cannot say — and an answer never given is that, so unknown is never "nothing".
+     * Every path git has ever tracked below the state directory, relative to it and spelled as git stored it
+     * (#377): what a pull may have delivered there, whether or not git still tracks it. Ever, as far as git
+     * remembers: a reflog entry that expired, or a history rewritten, names a path no more. When git cannot say,
+     * [TrackedHistory.Unanswered] carries its reason — and an answer never given is that, so unknown is never
+     * "nothing".
      */
-    fun pathsEverTracked(): Set<String>? = null
+    fun pathsEverTracked(): TrackedHistory = TrackedHistory.Unanswered(NEVER_ASKED)
 }
+
+/** What git said of the paths it has ever tracked below `.ps` (#377). */
+sealed interface TrackedHistory {
+    /** Every such path, relative to `.ps`, spelled as git stored it. */
+    data class Known(val paths: Set<String>) : TrackedHistory
+
+    /** Git could not say. [reason] is its own first line, or how it ended — never a file's content. */
+    data class Unanswered(val reason: String) : TrackedHistory
+}
+
+private const val NEVER_ASKED = "nothing answers what git has tracked here"

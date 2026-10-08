@@ -121,7 +121,7 @@ class StartupReconciliation(
      * end with nothing between them.
      */
     private fun reportOrphans() {
-        val orphans = raw.orphans()
+        val orphans = raw.orphans().read
         if (orphans.isEmpty()) return
         logger.warn(
             "{} lesson(s) have frames that belong to no grading and will never become records: {}. " +

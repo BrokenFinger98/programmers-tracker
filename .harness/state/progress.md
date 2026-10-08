@@ -5951,6 +5951,47 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Gates**, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 341/384; `adapter/config` 65% at its floor); guards.
 - **Found, not fixed.** The commit side still reads file content alone, so a file named with a token is committed by a reconciliation and every push is then refused until history is rewritten.
 - Pending: CI; not verified live.
+## 2026-10-08 — #378 held frames and orphans, with the re-check of #377 folded in (branch fix/378-held-frames-and-orphans)
+- **Base.** Written on #377's `f807f77` with PR #395's head `3a0cdfb` merged in, then replayed onto main `258ed10` (where #377 landed as `2edfb2a`) before the first push. Commits on
+  top, no rebase. #378's git items 1 and 4 are #376's, so every commit says `Refs #378`, never `Closes`.
+- `d4de07c` **M3 (High).** `orphans()` reads only where a write may go: `forWriting()`, then
+  `pathFor("raw", "orphans")`, then git's history. Only a regular file of 16 MiB at most, judged and opened
+  without following a link; never a FIFO, a device or a link. What is passed over is counted
+  (`orphanFilesNotRead`), a directory that could not be listed is flagged (`orphansNotListed`), each said once
+  with why; `docs/mcp.md` and its twin. 15 tests; 10 red against `f807f77` with the new port types stubbed
+  (the FIFO, the link to one and the MCP call timed out; the rest read forged frames), 5 pin the WARNs and
+  the one question to git.
+- `b6877b8` **Item 3.** An orphan whose file is a link is held in memory, never written through, and written
+  once a regular file or nothing stands there; the link is never replaced. Found: the throw also stopped the
+  next grading's first frame, through `releaseHeld()`. 3 tests, red.
+- `011255c` **The re-check of #377, folded.** F1: `--reflog` in the history question (reset + force-push and
+  force-push + `pull --rebase` pinned with real git; cost 9.5 → 10.1 ms on 166 commits, 30.5 → 35.8 ms on
+  1,660, median of 21); TRACKED and `SECURITY.md` make the delete from disk mandatory, since expiry,
+  filter-repo and a shallow fetch stay open. F2: `Known(paths)` or `Unanswered(reason)` — git's exit code and
+  first line, the timeout, or the exception's kind — in both WARNs. F3: what git delivered is neither
+  replayed nor counted, said once a start. F4: `docs/mcp.md`'s cases and the twin (blob `6a5a5ce`). F5
+  accepted in the ADR. 5 new tests and 3 rewritten, each red first.
+- `aa809c8` **Item 2.** Runs set aside and orphans hold three quarters of the 8,000,000-character budget at
+  most, so a submit in flight keeps room; red first with `NoSuchFileException` from `complete()`. Measured:
+  the full budget retains 16.1 MB (2.01 bytes a character); a run's frames 0.9–1.6 K characters, a submit's
+  2.1–2.9 K. Spilling to disk rejected; frames held at exit are lost, and said.
+- `f582287` **Mutation pins.** 51 mutants (`mutate378.py` in the scratchpad), each against the store,
+  git-history, MCP, application and config tests (1,175): 39 killed. The other 12, and 2 written for F2 after
+  the run: 10 pinned with 10 new tests and one assertion, each now killed (1,184 tests); 4 left, which pass
+  the whole suite as well (2,329): the orphans reader's two link checks, each alone; a timeout's wording; an
+  empty first line. Per mutant in the ADR.
+- `fc57595` **KDocs.** `TrackedStateEntries` and the `TrackedState` port say the history question reads
+  reflogs, and how far "ever" goes.
+- **Gates**, all exit 0, at `fc57595`: check; test (2,329 JUnit in 166 classes, 0 failures, 9 skipped as before;
+  node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 85%, 687 of 806; `adapter/git` 87%, 320 of 365;
+  `adapter/mcp` 92%, 340 of 368; every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** The #360 ADR's Outcome: M3, items 2 and 3 with their options and measurements, F1–F5, the mutation
+  table. No new ADR: the decisions are the round's own and are recorded there.
+- **Remaining.** Frames held while `.ps` is refused are lost at exit; a forged session the owner only
+  untracked replays once git's history stops naming it (expiry, filter-repo, a shallow fetch); F5's race; the
+  orphans reader's two link checks each stand in for the other. Not measured in the image; CI has not run
+  this branch; not verified live.
+- **Pending.** Not pushed.
 
 ## 2026-10-08 — #376 + #378 items 1 and 4: each gate searches what its destination lacks (branch fix/376-gate-range-and-scope)
 - **The push range** (`4885b82` `RemoteTips`, `3a1b4b8`). `HEAD --not <tips>`, the tips what `ls-remote` lists at each push URL (`remote get-url --push --all`; `ls-remote <name>` asks the fetch URL, measured with a `pushurl` apart), kept where this repository holds them, only what every URL holds. A destination that cannot answer: no push, one WARN until it answers again, never git's words. Cost: `ls-remote` 17.9 ms (local bare path) / 22.7 ms (`file://`) in a shell; `push()` with nothing outgoing 49–63 ms before, 95–133 ms after (+40–70 ms); a real remote adds a round trip, not measured.
@@ -5984,3 +6025,33 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - The ADR's accepted cost is now precise: `sessionsNotReplayed` counts what the last start left, not
   gradings refused while the server runs.
 - **Pending.** Not pushed. CI, the junction tests' first run and the live check, as before.
+## 2026-10-08 — #378 PR #401: CI, the release race, the check after git (branch fix/378-held-frames-and-orphans)
+- **Base.** On `dd9648b`, the coordinator's rebase of the round onto main `258ed10`. Commits on top, no rebase;
+  main `40bc5f5` (#387, PR #398) merged in as `b0dea9e`, three conflicts each keeping both sides.
+- `548520a` **CI, all three OSes.** The cut of git's line in a reason was tested on git's own wording: 2.48.1 here
+  and 2.53.0 in Docker name a missing git directory in full, CI's gits printed `(null)` (`(NULL)` on Windows). The
+  reason is built by `TrackedStateEntries.reasonOf` and pinned there on made results: the cut, the first line that
+  says something, a git that said nothing, a timeout. The real-git test asserts the stable start only.
+- `24ae432`, `a1578d2` **CI, Windows.** The two new FIFO tests trusted `mkfifo`'s exit code; Git for Windows'
+  exits 0 and leaves a regular file. `madeFifo()` requires "other", in #387's text, and both tests assume
+  `canPlantLinksIn()` as the other FIFO tests do.
+- `8bb62c1` **Medium (the critic, measured: 164 throws in 400 runs, 376 of 400 held frames lost).** A release
+  takes, writes, and puts back on a failure; it never throws, so a live grading never fails over a held frame. An
+  orphan's own failed write is held; the failure is said once. Three tests on a directory closed to writes, red
+  with `AccessDeniedException` before.
+- `6960164` **Low (inferred).** `orphans/` is checked again and listed anew once git has answered its history; the
+  new test, red before, counted a swapped link's 40 lines.
+- **Accepted.** A file swapped for a FIFO between the check and the open hangs `orphans()`; it takes a local
+  process with write access to `.ps`, since git cannot make a FIFO.
+- **Mutation** (16, `mutate401.py` in the scratchpad): 14 killed; the put-back order for orphans and runs survives,
+  as it takes a frame held while a write is in flight. The timeout's wording and the empty first line, left by
+  the round's first check, are now killed at the seam.
+- **Linux.** The changed classes on Ubuntu 26.04, git 2.53.0, non-root, `eclipse-temurin:25-jdk`: 353 tests, 0
+  failed, 4 skipped (a Windows junction, three that need a case-folding filesystem).
+- **Gates**, all exit 0, at `6960164`: check; test (2,445 JUnit in 169 classes, 0 failures, 11 skipped: the 9
+  before and #387's two Windows junction tests; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 86%,
+  716 of 832; `adapter/git` 90%, 360 of 400; every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** The #360 ADR's Outcome gains this round, with the FIFO swap accepted.
+- **Remaining.** The FIFO swap; the put-back order under concurrency; CI has not run these commits; not verified
+  live.
+- **Pending.** Not pushed; the coordinator pushes.
