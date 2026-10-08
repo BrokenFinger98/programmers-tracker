@@ -24,10 +24,13 @@ import java.nio.file.attribute.PosixFilePermissions
  */
 internal class SecureDirectoryHandle(private val stream: SecureDirectoryStream<Path>, private val path: Path) :
     DirectoryHandle {
+    // Opened straight away, which is all a directory that is there costs; looked at only when that fails.
     override fun child(name: String): DirectoryHandle? {
-        val attributes = attributesOf(name) ?: return madeThenOpened(name)
-        if (!attributes.isDirectory) return null
-        return opened(name)
+        try {
+            return opened(name)
+        } catch (failure: IOException) {
+            return afterAFailedOpen(name, failure)
+        }
     }
 
     override fun isAt(directory: Path): Boolean {
@@ -90,6 +93,14 @@ internal class SecureDirectoryHandle(private val stream: SecureDirectoryStream<P
         if (there.attributesOf(target)?.isDirectory != true) throw failure
         there.stream.deleteDirectory(nameIn(target))
         renamed(name, there, target)
+    }
+
+    // Nothing there: made. A link, or anything else that is not a directory: none. A directory that would not open:
+    // what stopped it.
+    private fun afterAFailedOpen(name: String, failure: IOException): DirectoryHandle? {
+        val attributes = attributesOf(name) ?: return madeThenOpened(name)
+        if (!attributes.isDirectory) return null
+        throw failure
     }
 
     // No `mkdirat` in the JDK: made by path, then opened through this handle, which finds none made through a link.

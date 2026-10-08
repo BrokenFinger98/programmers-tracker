@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.AccessDeniedException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -87,6 +89,17 @@ class SecureDirectoryHandleTest {
 
         namesIn(outside) shouldContainExactly listOf("raw")
         namesIn(outside.resolve("raw")).shouldBeEmpty()
+    }
+
+    /** A directory that is there and will not open is what stopped it: never taken for absent, or for a link. */
+    @Test
+    fun `a directory below that will not open is thrown`() {
+        val sealed = Files.createDirectory(state.resolve("raw"))
+
+        sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            DirectoryHandles.THROUGH_A_HANDLE.open(state).use { shouldThrow<AccessDeniedException> { it.child("raw") } }
+        }
     }
 
     // The state directory taken away — deleted, as a checkout deletes an ignored one, or moved — and a link put there.
