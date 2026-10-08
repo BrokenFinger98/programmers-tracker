@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.application
 
+import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
@@ -12,11 +13,16 @@ import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
+import com.brokenfinger.tracker.support.logging.loggedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -242,16 +248,55 @@ class CodeAttachmentTest {
     fun `a pass leaves a record whose files were not written pending, and goes on to the next`() = runBlocking<Unit> {
         stored(aPending(attempt = 1, captureKey = CaptureKey("aaaa000000000001")))
         stored(aPending(attempt = 2))
-        val pass = attachment(refusingTheCodeOf(attempt = 1), fetches(CODE_V2))
+        val pass = attachment(failingTheCodeOf(attempt = 1) { IOException(A_PATH_IT_MAY_NAME) }, fetches(CODE_V2))
 
+        val errors = mutableListOf<String>()
         val heard = warningsWhile(CodeAttachment::class) {
-            runBlocking { pass.attachPending() shouldBe AttachReport(attached = 1, deferred = 1) }
+            errors += loggedWhile(CodeAttachment::class, Level.ERROR) {
+                runBlocking { pass.attachPending() shouldBe AttachReport(attached = 1, deferred = 1) }
+            }
         }
 
         resolved(CaptureKey("aaaa000000000001")).codePending shouldBe true
         resolved().codePending shouldBe false
         heard.single() shouldContain "Lesson 120804 keeps its code pending"
         heard.single() shouldContain "IOException"
+        heard.single() shouldNotContain A_PATH_IT_MAY_NAME
+        errors.shouldBeEmpty()
+    }
+
+    /**
+     * Anything that is no I/O failure is a fault in this code, and was swallowed by its class name alone. It is said
+     * as loudly as the log can — an ERROR with its stack — and the pass still goes on, so one bad record cannot end
+     * every boot. The fetch cannot reach that log: `fetched` turns whatever the fetcher throws into an outcome first.
+     */
+    @Test
+    fun `a fault that is no I-O failure is an error with its stack, and the pass goes on`() = runBlocking<Unit> {
+        stored(aPending(attempt = 1, captureKey = CaptureKey("aaaa000000000001")))
+        stored(aPending(attempt = 2))
+        val pass = attachment(failingTheCodeOf(attempt = 1) { IllegalStateException("a bug") }, fetches(CODE_V2))
+
+        val errors = loggedWhile(CodeAttachment::class, Level.ERROR) {
+            runBlocking { pass.attachPending() shouldBe AttachReport(attached = 1, deferred = 1) }
+        }
+
+        resolved(CaptureKey("aaaa000000000001")).codePending shouldBe true
+        resolved().codePending shouldBe false
+        errors.single() shouldContain "Lesson 120804 keeps its code pending"
+        errors.single() shouldContain "IllegalStateException: a bug"
+        errors.single() shouldContain "\tat "
+    }
+
+    /** Cancellation is the coroutine machinery's, not a record's failure: it ends the pass, and no other is tried. */
+    @Test
+    fun `cancellation is never taken for a record's failure`() {
+        stored(aPending(attempt = 1, captureKey = CaptureKey("aaaa000000000001")))
+        stored(aPending(attempt = 2))
+        val pass = attachment(failingTheCodeOf(attempt = 1) { CancellationException("stopping") }, fetches(CODE_V2))
+
+        shouldThrow<CancellationException> { runBlocking { pass.attachPending() } }
+
+        resolved().codePending shouldBe true
     }
 
     // Harness ----------------------------------------------------------------------------------
@@ -300,12 +345,12 @@ class CodeAttachmentTest {
 
     private fun artifacts(): DerivedArtifacts = FileDerivedArtifacts(root, store(), Clock.systemDefaultZone())
 
-    /** The real files, except that one attempt's code cannot be written — the shape a refused write leaves. */
-    private fun refusingTheCodeOf(attempt: Int): DerivedArtifacts {
+    /** The real files, except that one attempt's code fails to be written with what [failure] makes. */
+    private fun failingTheCodeOf(attempt: Int, failure: () -> Exception): DerivedArtifacts {
         val real = artifacts()
         return object : DerivedArtifacts by real {
             override fun writeCode(record: SubmissionRecord, code: String): AttachedCode {
-                if (record.attempt == attempt) throw IOException("not written: a link on its path")
+                if (record.attempt == attempt) throw failure()
                 return real.writeCode(record, code)
             }
         }
@@ -346,5 +391,8 @@ class CodeAttachmentTest {
             """.trimIndent()
 
         val CODE_V2 = CODE_V1.replace("return num1 * num2;", "return (long) num1 * num2;")
+
+        /** What a refused write's message carries: the path it was handed, which can be where a link leads. */
+        const val A_PATH_IT_MAY_NAME = "/elsewhere/problems/120804-x/attempts/001.java: a link on its path"
     }
 }
