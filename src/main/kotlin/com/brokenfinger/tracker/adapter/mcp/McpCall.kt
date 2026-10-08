@@ -114,11 +114,11 @@ data class McpCall(
 
     fun isModern(): Boolean = declaredVersion != null
 
-    // Every reader below casts instead of coercing, and all but one read a member of the wrong JSON
-    // type as absent: it is a malformed request, which has to come back as an absent value we can
-    // refuse cleanly rather than as an exception that would surface to the client as an internal
-    // error. The one that refuses instead is strictArguments(), which every reader of `arguments`
-    // goes through: there an absent value is a whole request, so a malformed one must not read as absent.
+    // Both readers below cast instead of coercing, so a member of the wrong JSON type is a malformed request
+    // answered as one, never an exception that would surface to the client as an internal error. They differ in
+    // what they make of it. name() reads it as absent, which is refused cleanly as an unknown tool or prompt.
+    // strictArguments() refuses it: an absent `arguments` is a whole request, so a malformed one must not read
+    // as absent.
 
     /** `params.name` — the tool a `tools/call` runs, or the prompt a `prompts/get` renders. */
     fun name(): String? = (params["name"] as? JsonPrimitive)?.contentOrNull
@@ -127,8 +127,10 @@ data class McpCall(
      * The arguments of a `tools/call` or a `prompts/get`: the object given, none when absent or null, and a refusal for
      * anything else. Every argument of the prompt and of five of the seven tools is optional, so `{}` is a whole
      * request, and a malformed `arguments` read as `{}` would silently widen the answer to everything on record and
-     * look right (#365). Both requests' schemas type `arguments` as an optional object, so anything else fails the
-     * request's own schema: a protocol error, `-32602`, and not a tool error, which is for a value a model can correct.
+     * look right (#365). Both requests' schemas type `arguments` as an optional object, so a value that is not one
+     * fails the request's own schema: a protocol error, `-32602`, and not a tool error, which is for a value a model
+     * can correct. A JSON `null` fails it too and is read as none on purpose, a leniency toward clients that serialize
+     * an absent field as `null`: it means what leaving the member out means, so it widens nothing an omission does not.
      */
     fun strictArguments(): JsonObject {
         val given = params["arguments"]
