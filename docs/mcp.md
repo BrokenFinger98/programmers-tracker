@@ -303,6 +303,14 @@ record represents** — a grading whose opening frame was missed cannot be turne
 of them exist on the author's machine from defects fixed on 2026-08-11. The field names the
 lessons and counts the frames.
 
+`incompleteHistory` is **the first key of an answer**, ahead of the payload, in `structuredContent`
+and in the text copy of it alike. A client that cuts a large answer cuts its end, and a warning at
+the end was the first thing lost: the counts arrived looking whole. Claude Code caps a tool result at
+25,000 tokens by default, which `get_problem` with `include=runs` and `repair_steps` with long diffs
+can reach. `repair_steps` already led with `count` and `total` for the same reason; the warning goes
+ahead of them. Key order means nothing to a client that parses the answer, so nothing that reads it
+by name changes.
+
 It is absent when there are none, so its presence is the signal. It used to appear on `stats`
 alone, on the argument that a total is where a denominator matters most — true, and not enough: a
 pass whose frames were orphaned is a problem `review_queue` will never schedule and a reading

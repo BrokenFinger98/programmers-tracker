@@ -273,11 +273,18 @@ class McpToolInvoker(private val query: RecordQuery) {
      * **Absent when the history is whole**, which is what makes its presence mean something. This
      * is the one wrap point every result passes through, so putting it here removes a special
      * case rather than adding one per tool.
+     *
+     * **Its key is the first, ahead of the payload (#356).** A client that cuts a large answer cuts its
+     * end — Claude Code caps a tool result at 25,000 tokens by default, and a `repair_steps` answer with long
+     * diffs reaches it — so a warning appended after the payload is the first thing lost, and the counts it
+     * qualifies arrive without it. The text a model reads is this same object serialized, so one order
+     * serves both copies. `repair_steps` already put its `count` and `total` ahead of its steps for the same
+     * reason; the warning goes ahead of them.
      */
     private fun withGaps(payload: JsonObject): JsonObject {
         val orphans = query.orphanedFrames()
         if (orphans.isEmpty()) return payload
-        return JsonObject(payload + ("incompleteHistory" to incompleteHistory(orphans)))
+        return JsonObject(mapOf("incompleteHistory" to incompleteHistory(orphans)) + payload)
     }
 
     private fun failed(message: String): JsonObject = buildJsonObject {
