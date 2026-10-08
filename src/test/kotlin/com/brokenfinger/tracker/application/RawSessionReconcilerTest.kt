@@ -16,13 +16,16 @@ import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
+import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -45,6 +48,9 @@ import java.time.ZoneOffset
 class RawSessionReconcilerTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     private val rawLog by lazy { FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)) }
 
@@ -271,7 +277,28 @@ class RawSessionReconcilerTest {
         reconcile() shouldBe ReconcileReport()
     }
 
+    /**
+     * Replaying a stored session makes a record, so a session that is a link is not replayed (#387): whatever it leads
+     * to — here a grading's frames kept elsewhere — would become this learner's record. It fails, said like any
+     * session that cannot be settled, and stays on the work list.
+     */
+    @Test
+    fun `a stored session that is a link is not replayed, and stays on the work list`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        val session = storedSessions().single()
+        aLink(session, Files.move(session, outside.resolve("frames.jsonl")))
+
+        reconcile() shouldBe ReconcileReport(failed = 1)
+
+        records().shouldBeEmpty()
+        Files.isSymbolicLink(session) shouldBe true
+    }
+
     // Harness --------------------------------------------------------------------------------
+
+    private fun storedSessions(): List<Path> =
+        Files.list(root.resolve(".ps/raw")).use { entries -> entries.filter { Files.isRegularFile(it) }.toList() }
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
     private fun reconcile(): ReconcileReport = runBlocking {

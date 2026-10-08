@@ -4,6 +4,8 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -124,11 +126,20 @@ class RawSessionReconciler(
      * Decoded with replacement rather than reported: a crash can tear a line in the middle of
      * a multi-byte character, and one bad byte must not cost the whole session.
      */
-    private fun linesOf(session: RawSession): List<String> =
-        String(Files.readAllBytes(session.path), StandardCharsets.UTF_8)
-            .lineSequence()
-            .filter { it.isNotBlank() }
-            .toList()
+    private fun linesOf(session: RawSession): List<String> = String(framesOf(session.path), StandardCharsets.UTF_8)
+        .lineSequence()
+        .filter { it.isNotBlank() }
+        .toList()
+
+    /**
+     * Only a regular file, opened without following a link (#387). What replays becomes a record,
+     * and through a link it would be whatever the link leads to; a FIFO would never answer. Such a
+     * session fails like any other that cannot be settled, and stays where it is.
+     */
+    private fun framesOf(file: Path): ByteArray {
+        check(Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) { "the stored session is not a regular file" }
+        return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
+    }
 
     private fun failed(session: RawSession, cause: Throwable): ReconcileReport {
         logger.error("Lesson {} could not be reconciled; its frames are kept", session.lessonId, cause)

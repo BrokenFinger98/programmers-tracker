@@ -188,9 +188,25 @@ class FileRawSessionLog(
 
     override fun unprocessed(): List<RawSession> {
         if (!Files.isDirectory(directory)) return emptyList()
-        return Files.list(directory).use { entries ->
+        val raw = listable() ?: return emptyList()
+        return Files.list(raw).use { entries ->
             entries.toList().mapNotNull { sessionOf(it) }.sortedBy { it.id.value }
         }
+    }
+
+    // Listed only through real directories — `.ps` and `raw`, neither a link (#387). Replaying a session makes a record,
+    // and one behind a link is not the tracker's own. Said once; what is there waits for a boot that can list it.
+    private fun listable(): Path? {
+        val guard = guard ?: return directory
+        return when (val inspection = guard.pathFor(RAW)) {
+            is StateDirectory.Usable -> inspection.directory
+            is StateDirectory.Refused -> unlisted(inspection.refusal)
+        }
+    }
+
+    private fun unlisted(refusal: StateDirectory.Refusal): Path? {
+        sayOnce(UNLISTED) { logger.warn(NOT_LISTED, refusal.reason) }
+        return null
     }
 
     private fun sessionOf(file: Path): RawSession? {
@@ -374,6 +390,10 @@ class FileRawSessionLog(
         private const val LOST_AT_EXIT =
             "Raw frames held in memory were lost when the server stopped, because .ps was not usable: {} of them."
         private const val LIMIT = "limit"
+        private const val UNLISTED = "unlisted"
+        private const val NOT_LISTED =
+            "The raw work list was not read: {}. Its sessions are replayed once it is a real directory again. " +
+                "Said once."
 
         /** What the log holds in memory at most, across every session, while `.ps` is refused. */
         const val HELD_LIMIT = 8_000_000L

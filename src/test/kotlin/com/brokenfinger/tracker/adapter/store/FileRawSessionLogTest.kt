@@ -241,6 +241,26 @@ class FileRawSessionLogTest {
         Files.exists(root.resolve(".ps/raw").resolve(session.value)) shouldBe true
     }
 
+    /**
+     * The work list is listed only through real directories (#387). Replaying a session makes a record, and with `raw`
+     * a link the sessions it leads to are not the tracker's own: whatever stands there would become one. Nothing is
+     * listed while the link stands, that is said, and what lies behind it is left where it is.
+     */
+    @Test
+    fun `a raw directory that is a link lists no work, and says so`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(outside.resolve("raw"))
+        FileRawSessionLog(elsewhere, Clock.fixed(startedAt, ZoneOffset.UTC)).let { it.append(it.start(120804), "{}") }
+        aLink(root.resolve(".ps/raw"), elsewhere)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+
+        val heard = warningsWhile(FileRawSessionLog::class) { log.unprocessed().shouldBeEmpty() }
+
+        heard.single() shouldContain "work list was not read"
+        heard.single() shouldContain "symbolic link"
+        namesIn(elsewhere) shouldHaveSize 1
+    }
+
     private fun logAt(instant: Instant) = FileRawSessionLog(rawDir(), Clock.fixed(instant, ZoneOffset.UTC))
 
     private fun rawDir(): Path = root.resolve("raw")
