@@ -184,6 +184,26 @@ class FileReplacementTest {
         namesIn(root) shouldContainExactly listOf("README.md")
     }
 
+    /**
+     * A clean-up that fails too never takes the failure's place: what the caller sees is what stopped the write, with
+     * the clean-up's own failure kept on it (#386's review). An append-only directory, as `chflags uappnd` makes one on
+     * macOS, lets the temporary file be made and refuses both the move and the removal.
+     */
+    @Test
+    fun `a clean-up that fails too is kept with the failure, never thrown in its place`() {
+        val directory = Files.createDirectory(root.resolve("append-only"))
+        val page = Files.writeString(directory.resolve("README.md"), "before\n")
+        assumeTrue(flagged(directory, "uappnd"), "no chflags on this machine")
+        try {
+            val failure = shouldThrow<IOException> { replacing(FileMode.KEPT_ELSE_PLAIN).replace(page, "after\n") }
+
+            failure.suppressed.single().shouldBeInstanceOf<FileSystemException>()
+        } finally {
+            flagged(directory, "nouappnd")
+        }
+        Files.readString(page) shouldBe "before\n"
+    }
+
     @Test
     fun `a file is written as UTF-8`() {
         replacing(FileMode.OWNER_ONLY).replace(target, "# 두 수의 곱\n")
@@ -192,6 +212,10 @@ class FileReplacementTest {
     }
 
     private fun replacing(mode: FileMode) = FileReplacement(mode)
+
+    // A file flag set or cleared with `chflags`, which macOS and the BSDs have; false where there is none to run.
+    private fun flagged(directory: Path, flag: String): Boolean =
+        runCatching { ProcessBuilder("chflags", flag, directory.toString()).start().waitFor() == 0 }.getOrDefault(false)
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 }

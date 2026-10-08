@@ -29,12 +29,15 @@ import java.nio.file.attribute.PosixFilePermissions
  * the walk that hands it a directory ([RecordBound]), and none of the writers of a page, a note or a state document.
  */
 internal class FileReplacement(private val mode: FileMode) {
-    /** Replaces [target] whole with [text], written beside it and moved over it. */
+    /**
+     * Replaces [target] whole with [text], written beside it and moved over it. What stopped the write is what is
+     * thrown: a clean-up that fails too is kept on it as suppressed, never thrown in its place (#386's review).
+     */
     fun replace(target: Path, text: String) {
         val temp = temporaryBeside(target)
-        runCatching { writtenThenMoved(temp, target, text) }.onFailure {
-            Files.deleteIfExists(temp)
-            throw it
+        runCatching { writtenThenMoved(temp, target, text) }.onFailure { failure ->
+            runCatching { Files.deleteIfExists(temp) }.onFailure(failure::addSuppressed)
+            throw failure
         }
     }
 
