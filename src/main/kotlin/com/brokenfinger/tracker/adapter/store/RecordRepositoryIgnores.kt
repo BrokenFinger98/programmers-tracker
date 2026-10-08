@@ -1,8 +1,11 @@
 package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
+import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 
 /**
  * Guarantees the record repository ignores what is not a record.
@@ -16,7 +19,9 @@ import java.nio.file.Path
  *   inflation [[decisions/2026-08-08-run-raw-sessions]] weighed and rejected. Submits are not
  *   the concern: their frames are copied into `attempts/00N.raw.jsonl` and the source is
  *   discarded, so `recorded/` holds runs and only runs — pinned by `RecordWriterTest` from both
- *   sides, because this comment once said the opposite (#128).
+ *   sides, because this comment once said the opposite (#128). It holds the push token too,
+ *   so reconciliation leaves `.ps/` out by pathspec whatever this file says (#360); the rule
+ *   here is what keeps it out of every other `git add`.
  * - **`.obsidian/`, the vault's editor state** (#234). Which panes are open, where the cursor
  *   was, how the graph is zoomed. On the owner's repository four commits carried it and one —
  *   the 23:00 backup — carried nothing else, under `chore: reconcile uncommitted records`.
@@ -34,6 +39,11 @@ import java.nio.file.Path
  * it, and adding the rule does not untrack what is already tracked: `git rm --cached` is the
  * user's to run, on their own history.
  *
+ * **Never through a link (#360).** Git stores links, so a `.gitignore` can arrive as one, and
+ * reading and writing through it put the rules into whatever it pointed at — while git, which
+ * never follows a linked `.gitignore`, ignored nothing. A `.gitignore` that is not a regular file
+ * is neither read nor written, and said so; one that is gains its missing rules by replacement.
+ *
  * Runs on every boot and appends each rule at most once. Failure is logged, never thrown: a
  * grading Programmers has already broadcast cannot be replayed (protocol §11), and losing one to
  * a `.gitignore` that would not write is the wrong trade in every direction.
@@ -43,17 +53,57 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
         runCatching { addMissingRules() }.onFailure { warn(it) }
     }
 
+    // Asked without following a link: `Files.exists` follows one, and calls a dangling link absent.
     private fun addMissingRules() {
         val file = recordRoot.resolve(GITIGNORE)
-        var text = read(file) ?: ""
-        val added = RULES.filterNot { text.alreadyIgnores(it.rule) }
-        if (added.isEmpty()) return
-        added.forEach { text += it.appendedTo(text) }
-        Files.writeString(file, text)
-        logger.info("Added {} to {} — what is not a record must not be committed", added.map { it.rule }, file)
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return create(file)
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return notRegular(file)
+        extend(file)
     }
 
-    private fun read(file: Path): String? = runCatching { Files.readString(file) }.getOrNull()
+    // CREATE_NEW refuses whatever appeared in the meantime, a link included, rather than writing through it.
+    private fun create(file: Path) {
+        Files.writeString(file, withRules("", RULES), StandardOpenOption.CREATE_NEW)
+        added(RULES, file)
+    }
+
+    /**
+     * Appends what is missing by replacing the file, never by writing into it: a link that appears
+     * between the check and the write is replaced rather than written through. The read refuses a
+     * link as well, and decodes strictly — a file that is there and cannot be read is not an empty
+     * one, and nothing is written over it.
+     */
+    private fun extend(file: Path) {
+        val text = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { strictly(it.readAllBytes()) }
+        val missing = RULES.filterNot { text.alreadyIgnores(it.rule) }
+        if (missing.isEmpty()) return
+        AtomicStateFile(file).write(withRules(text, missing))
+        added(missing, file)
+    }
+
+    // A fresh decoder reports malformed input rather than replacing it, as strict as `Files.readString`.
+    private fun strictly(bytes: ByteArray): String =
+        Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
+
+    private fun withRules(text: String, rules: List<IgnoreRule>): String =
+        rules.fold(text) { sofar, rule -> sofar + rule.appendedTo(sofar) }
+
+    private fun added(rules: List<IgnoreRule>, file: Path) {
+        logger.info("Added {} to {} — what is not a record must not be committed", rules.map { it.rule }, file)
+    }
+
+    /**
+     * A link, a directory, anything but a regular file. Git reads no rules from it — it never
+     * follows a `.gitignore` that is a link — and the server will not write through it either.
+     */
+    private fun notRegular(file: Path) {
+        logger.warn(
+            "{} is not a regular file, so the server will not write through it, and git reads no rules " +
+                "from it. Replace it with a regular file that holds {}.",
+            file,
+            RULES.map { it.rule },
+        )
+    }
 
     // Both spellings mean the same thing to git, and the user may have written either. Only the
     // exact rule counts: `.ps/session` names one file and ignores nothing else.
@@ -84,8 +134,8 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
 
     private fun warn(cause: Throwable) {
         logger.warn(
-            "Could not ensure {} ignores {} ({}). Add the lines by hand — otherwise the server's " +
-                "state and your editor's are committed to your records repository.",
+            "Could not ensure {} ignores {} ({}). Add the lines by hand — otherwise your editor's " +
+                "state is committed with your records, and only the server's own commits leave .ps/ out.",
             recordRoot,
             RULES.map { it.rule },
             cause.javaClass.simpleName,
