@@ -6,8 +6,10 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.ApplicationContext
+import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -24,6 +26,18 @@ import java.nio.file.Path
  * whatever a developer happened to have pending in their own records. A test must not be able
  * to do that. What it does commit is a repository the boot creates for itself inside the
  * scratch directory (#258), which is deleted when the class ends.
+ *
+ * A fourth property is not a place: `tracker.github.token`, pinned to nothing. `application.yml`
+ * reads it from `GITHUB_TOKEN`, and Spring's other sources can set it too: `TRACKER_GITHUB_TOKEN`,
+ * a profile, a config file in the working directory. With a token, the boot of a repository that
+ * has no `origin` creates a private repository on GitHub and pushes to it, and a repository this
+ * test creates never has one.
+ *
+ * **A source is asserted for the token, not a value.** The pinned value is empty, and so is the
+ * unpinned one on every machine that has no token exported. A check on the value would pass
+ * wherever this test is written and fail only where a token is set, after the boot had already
+ * sent its request. Which source answers the key is the same on every machine, and it is the one
+ * thing the pin changes. Proving the pin by exporting a token would send the request it prevents.
  *
  * **One directory per run, not one per machine (#394).** The record repository used to be a
  * fixed path under `java.io.tmpdir`, which every checkout on the machine shares. The lock the
@@ -59,9 +73,27 @@ class TrackerApplicationTests {
         scratch.resolve("records").shouldExist()
     }
 
+    @Test
+    fun `the github token is answered by this test and by nothing in the environment`() {
+        sourceAnswering("tracker.github.token") shouldBe DYNAMIC_SOURCE
+    }
+
     private fun setting(key: String): String? = context.environment.getProperty(key)
 
+    // Boot's `configurationProperties` is a view over all the others, so it answers whatever they
+    // do and says nothing about who holds the key. Left out, a failure names the real holder: the
+    // yml, or `systemEnvironment` when `TRACKER_GITHUB_TOKEN` is exported.
+    private fun sourceAnswering(key: String): String? = (context.environment as ConfigurableEnvironment)
+        .propertySources
+        .filterNot(ConfigurationPropertySources::isAttachedConfigurationPropertySource)
+        .firstOrNull { it.containsProperty(key) }
+        ?.name
+
     companion object {
+        // What `DynamicValuesPropertySource` calls itself in Spring Framework 7. Printed from a
+        // running context, not assumed; a rename shows as the token test failing.
+        private const val DYNAMIC_SOURCE = "Dynamic Test Properties"
+
         // Static, because an instance field is filled in by `beforeEach`, after Spring has built
         // the context for the instance it was just handed. A static one is filled in by
         // `beforeAll`, ahead of both.
@@ -75,6 +107,7 @@ class TrackerApplicationTests {
             registry.add("tracker.record-repo") { scratch.resolve("records").toString() }
             registry.add("tracker.session-file") { scratch.resolve("session").toString() }
             registry.add("tracker.watch.token-file") { scratch.resolve("watch-token").toString() }
+            registry.add("tracker.github.token") { "" }
         }
     }
 }
