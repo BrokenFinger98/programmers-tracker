@@ -62,7 +62,8 @@ import java.util.concurrent.atomic.AtomicReference
  *    as a remote-tracking ref remembers it ([RemoteTips], #376) — and HEAD's own tree at every push,
  *    whatever the destinations say.
  *
- * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
+ * A push also reads the commits it would send — each message, author and committer — and the trees, which
+ * hold the names (#375). What none of this reads: content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
  * is a window the checks do not close. Every refusal is one WARN that names why and never the token,
  * and a false — fail closed.
@@ -247,7 +248,9 @@ class CommandLineGitSync(
      * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
      * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
      * name under `push.default=upstream` is not where this push goes. The search covers what the push's
-     * destinations lack, as each of them says itself (#376).
+     * destinations lack, as each of them says itself (#376). And `--no-follow-tags`: with
+     * `push.followTags=true` in the repository, an annotated tag on the branch went out beside it, its message
+     * never read (#375); now no tag goes.
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
@@ -261,7 +264,7 @@ class CommandLineGitSync(
         val destinations = destinationsOf(remote) ?: return noRemote(remote)
         val held = heldByDestinations(destinations) ?: return false
         if (!searchedClean(SearchedHead(head, destinations, held, fingerprintOfStore()))) return false
-        val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
+        val result = git(listOf("push", "--no-follow-tags", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
 
@@ -384,27 +387,36 @@ class CommandLineGitSync(
      * carry. Two kinds of pattern are searched for: anything shaped like a GitHub token, always, so the
      * gate does not depend on what is stored and finds a token rotated out of the store (the review's R1);
      * and what the store holds, never in argv. It searches the content git would carry, not a path, so it
-     * holds wherever a token turns up — though not in a commit or tag message, which it does not read. A
-     * commit's side is searched by `git grep` ([grepped]), a push's by [OutgoingObjectScan] (#373).
+     * holds wherever a token turns up. A commit's side is searched by `git grep` ([grepped]); a push's by
+     * [OutgoingObjectScan] (#373), which reads the commits it would send as well (#375).
      *
-     * Fails closed, with one WARN that never carries what was searched for, or where it was found: a store
-     * that is there and cannot be read, a search that did not read everything, a match.
+     * Fails closed, with one WARN that never carries what was searched for: a store that is there and cannot
+     * be read, a search that did not read everything, a match. A match in a commit names the commit and the
+     * part of it, never the token, so the owner knows which one to rewrite.
      */
     private fun carriesNoToken(what: String, search: (StoredCredential) -> SearchOutcome): Boolean {
         val stored = credential.stored()
         if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
-        return when (search(stored)) {
-            SearchOutcome.CLEAN -> true
-            SearchOutcome.FOUND -> refused(CREDENTIAL_FOUND, what)
-            SearchOutcome.UNSEARCHED -> refused(CREDENTIAL_UNSEARCHED, what)
+        return when (val outcome = search(stored)) {
+            SearchOutcome.Clean -> true
+            SearchOutcome.FoundInContent -> refused(CREDENTIAL_FOUND, what)
+            is SearchOutcome.FoundInCommit -> refused(outcome, what)
+            SearchOutcome.FoundInName -> refused(CREDENTIAL_IN_A_NAME, what)
+            SearchOutcome.Unsearched -> refused(CREDENTIAL_UNSEARCHED, what)
         }
+    }
+
+    // The commit, by a short id, and the part of it the token is in — never the token: that commit is rewritten.
+    private fun refused(found: SearchOutcome.FoundInCommit, what: String): Boolean {
+        logger.warn(CREDENTIAL_IN_A_COMMIT, what, root, found.part.said, found.commit.take(SHORT_ID))
+        return false
     }
 
     // One `git grep` search of a commit's side, its arguments [search]: a match, a clean end, or neither.
     private fun grepped(stored: StoredCredential, search: List<String>): SearchOutcome {
-        val outcome = greps(stored, search).firstOrNull { it != NO_MATCH } ?: return SearchOutcome.CLEAN
-        if (outcome == MATCH) return SearchOutcome.FOUND
-        return SearchOutcome.UNSEARCHED
+        val outcome = greps(stored, search).firstOrNull { it != NO_MATCH } ?: return SearchOutcome.Clean
+        if (outcome == MATCH) return SearchOutcome.FoundInContent
+        return SearchOutcome.Unsearched
     }
 
     // The token shapes first, then what is stored — the second only runs if the first found nothing. The
@@ -628,6 +640,21 @@ class CommandLineGitSync(
             "git {} refused in {}: what it would send carries a GitHub token — the one stored in " +
                 ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub " +
                 "and remove it from history."
+
+        /** The part of a commit, and the commit by a short id: the owner rewrites that commit (#375). */
+        private const val CREDENTIAL_IN_A_COMMIT =
+            "git {} refused in {}: {} of commit {} carries a GitHub token — the one stored in " +
+                ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub, and " +
+                "rewrite that commit before the next push."
+
+        /** How much of a commit's id a refusal names: more than git abbreviates to, unambiguous in practice. */
+        private const val SHORT_ID = 12
+
+        /** A name, never which: the name would carry the token (#375). */
+        private const val CREDENTIAL_IN_A_NAME =
+            "git {} refused in {}: a file or directory name in what it would send carries a GitHub token — the " +
+                "one stored in .ps/git-credentials, or one shaped like it. It was not sent; revoke the token on " +
+                "GitHub, and rename that file in every commit that has it."
 
         private const val CREDENTIAL_UNREADABLE =
             "git {} refused in {}: .ps/git-credentials is not a regular file, or cannot be read, so the push " +

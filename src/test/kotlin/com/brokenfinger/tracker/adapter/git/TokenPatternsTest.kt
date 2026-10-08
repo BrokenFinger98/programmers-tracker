@@ -141,6 +141,20 @@ class TokenPatternsTest {
         nothingStored.foundIn(windowOf(text)) shouldBe false
     }
 
+    /**
+     * A tree's names cannot hold a NUL, and UTF-16 text of an ASCII character always does, so a tree is read
+     * as its bytes alone (#375): every tree holds NULs, and the UTF-16 view of them cost 5 s on 400 MB.
+     */
+    @Test
+    fun `bytes alone are bytes, never UTF-16`() {
+        val utf16 = windowOf("note ${aGithubShapedToken()}".toByteArray(Charsets.UTF_16LE))
+        val stored = patternsOf(A_PUSH_TOKEN_LINE)
+
+        nothingStored.foundInBytes(utf16) shouldBe false
+        nothingStored.foundInBytes(aGithubShapedToken()) shouldBe true
+        stored.foundInBytes("a/$A_PUSH_CREDENTIAL.md") shouldBe true
+    }
+
     // Parity with git grep, in the C locale ------------------------------------------------------------
 
     /**

@@ -5764,6 +5764,84 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - S5 and Q7: the reads that still follow a link.
 - **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
 
+## 2026-10-08 — #377 a raw session git delivered is never replayed (branch fix/377-raw-replay-guard)
+- **Both findings reproduced** before any change, as tests that failed against `41f713e`:
+  - the reconciler recorded a session under a state directory git tracks anything in, and one behind
+    a linked raw directory (`recorded: expected 0 but was 1`, each);
+  - `unprocessed()` returned a session real git checked out, and sessions behind a linked `.ps` or
+    `.ps/raw`;
+  - once git tracked a file under `.ps` mid-grading, the next frame of the grading in flight was still
+    written to `.ps/raw`.
+- `9c45aa7`: the work list is read only where a frame would be written, through `forWriting()` and then
+  `pathFor("raw")`, the judgement every raw write takes. A refused session is left in place, unread,
+  and one WARN per reason says how many and why. Through a link nothing is listed or counted. The
+  commit adds 11 tests: 9 in the store, one of them against real git, and 2 in the reconciler.
+- `1ce2977`: the session verdict's cache is kept, its bound stated in the KDoc and pinned by 1 test.
+  Measured on the host (APFS, git 2.48.1) with 500 to 5,000 index entries:
+  - `forWriting()`: median 7.2–8.1 ms;
+  - `tracksAnything()`: 6.8–8.0 ms;
+  - `pathFor("raw")`: 0.007 ms;
+  - an append: 0.03 ms.
+
+  The image was not measured, because the sandbox refused to run git in a container.
+- **Mutation.** Each of 12 mutants ran against the whole suite, and all were killed. They were the
+  guard, `forWriting()` and `pathFor("raw")` each removed, `forGit()` in its place, counting through a
+  link, the WARN's silence, once-ness, count and reason, deleting what is refused, and git asked per
+  frame or per log.
+- **Gates**, all exit 0 on the branch rebased onto `ff56a5f` (#392):
+  - check;
+  - test: 2,147 JUnit tests in 161 classes, 0 failures, 9 skipped as before; node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 85% (631 of 742), with all 16 new branches covered;
+  - guards: 12 of 12.
+- **Docs.** An Outcome note in [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]]. No
+  new ADR: the cache is round 4's design, kept with a measured bound.
+- **Remaining, at `4008e8f`.** The review round below closes the first two.
+  - Once `.ps` was untracked, as the TRACKED reason advised, a session git delivered was replayed at
+    the next boot. The WARN named `git ls-files .ps`, which lists no folded spelling.
+  - An untracked link at a session file was listed, and the reconciler read through it.
+  - `orphans()` is unguarded.
+  - #378 items 2–3 are untouched.
+- **Pending.** Pushed as PR #395 by the coordinator; CI was green on `4008e8f`. Not verified live.
+
+## 2026-10-08 — #377 review round: PR #395's M1, M2, M4 and L1–L5 (branch fix/377-raw-replay-guard)
+- **The review.** An adversarial review of PR #395, at `4008e8f`, found nothing blocking. It measured on
+  real git 2.48.1 on APFS that the forged replay was deferred, not blocked: upstream force-added a raw
+  session, the owner pulled, ran the TRACKED advice `git rm -r --cached .ps` and restarted, and the boot
+  recorded the forged PASS (`recorded=1`). Commits on top of `4008e8f`, no rebase. Each fix has a test that
+  failed against the commit before it, on behaviour.
+- `fca29fc` **L2.** Git is asked first, and the link check runs just before the listing. A `.ps/raw` swapped
+  for a link inside the git question was listed through before.
+- `8c24551` **L1.** Only regular files are listed. A session file that is a link was listed and recorded;
+  the reconciler now reads without following a link at the file.
+- `35fc42f` **M1.** `TrackedState.pathsEverTracked()`, answered by one
+  `git log --all -m --root --no-renames --name-only -z`. A session whose `raw/<name>` git's history names,
+  in any case, is never replayed; while git cannot say, none is. Ten tests, the end-to-end one with real
+  git. Measured on this host, median of 21, synthetic histories:
+  - 166 commits (460 KB tree): the question took 10.7 ms; `unprocessed()` with one session waiting 20.1 ms;
+  - 1,660 commits (4.5 MB tree): 33.6 and 40.7 ms;
+  - with nothing waiting git's history is not read (7.9 and 8.4 ms, the index question alone).
+- `bab8bb8` **M2, the TRACKED advice, L3, L5.** The reasons give `git ls-files -- ':(icase).ps'
+  ':(icase).pſ'` and `git rm -r --cached --ignore-unmatch -- ':(icase).ps' ':(icase).pſ'`; TRACKED says to
+  delete from disk what git put there first. A parameterized test runs both commands as the owner reads
+  them, for eight spellings; the old reason had no listing command, and its `git rm -r --cached .ps` left
+  `tracksAnything()` true for `.PS` and `.pſ` entries (probed). HOLDS_A_LINK and NOT_THE_DIRECTORY say to
+  move what lies behind the link first; the uncounted WARN names no link.
+- `0de3f66` **M4.** `RawSessionLog.unreplayed()`; `incompleteHistory` carries `sessionsNotReplayed` and
+  `rawDirectoryNotListed`; `docs/mcp.md` and its twin (blob `70f95ca`). `ec783c3` counts what is left in one
+  place.
+- `8362c46` **Pins.** `--root` under `log.showRoot=false`, the `raw` segment, one WARN.
+- **Mutation.** 32 mutants, each against the whole suite, all killed; the table is in the ADR.
+- **Gates**, all exit 0: check; test (2,181 JUnit in 161 classes, 0 failures, 9 skipped as before; node 4
+  of 4); build; `verifyBranchCoverage` (`adapter/store` 85%, 641 of 754; `adapter/git` 85%, 232 of 270;
+  every package at or above its floor); guards (12 of 12).
+- **Docs.** The #360 ADR's #377 Outcome: the review round, M1's cost, L4's measured collision and the
+  mutation table. No new ADR: these fix the round's own guard; no new decision.
+- **Remaining.** `orphans()` unguarded (M3, for #378); a session git delivered and the owner only untracked
+  stays on disk, never replayed and counted at every start; a git that cannot answer holds the work list;
+  the reflogs are not read; a directory swapped after the listing is read through. Not measured in the
+  image; CI has not run this round; not verified live.
+- **Pending.** Not pushed; the coordinator merges main in and pushes.
 ## 2026-10-08 — #373 the push gate reads each new object once (branch perf/373-scan-new-objects)
 - **Measured on main first.** Synthetic histories shaped like the #360 review's — each commit adds one base64 file, so nothing is token-shaped and every search runs to the end — plus the tracker's own shape, each commit also appending a line to `log/submissions.jsonl`. Through `push()` to a remote with a URL and nothing behind it (git 2.48.1, M4 Pro): first push 25.2 s (1,660 commits, 4.2 MB tree), 252.5 s (5,000 commits, 9.8 MB), 56.3 s (the log history, 729 MB of blob versions); the slowest `git grep` call, replaying the same calls in a shell, 3.3, 16.1 and 6.9 s.
 - **The scan** (`58de882`, wired in `9a79453`). `rev-list --objects <range>` names each object once; `cat-file --batch-check` gives types and sizes (50,000 ids a call); `cat-file --batch` prints the blobs, about 64 MB of content a call, read through `GitProcess.runReading` (`43a111c`, stdout from its temp file as a stream) by `BatchOutput` (`8da5a08`) in 1 MB windows that repeat `TokenPatterns.overlap` bytes (141). The range is unchanged and decided in `outgoingRange` alone; only blobs are read (commit and tag messages stay #375's); the commit side stays `git grep`; the cache key is unchanged. Every failure is `CREDENTIAL_UNSEARCHED`: rev-list or batch-check failing, a description missing an id or saying `missing`, `--batch` failing or timing out, a header not as asked, content cut short, no newline after it, output left over.
@@ -5799,3 +5877,17 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Other variables.** `application.yml` reads 17. Pinned: the four above. The rest cannot reach out from this boot. `TRACKER_CABLE_URL` and `_ORIGIN` are dialled only when `/watch` asks for a subscription. `TRACKER_PAGE_BASE` is fetched only for a record in the log still missing its code or statement, and only with a session file; the log is new, the file is absent, and the boot logged no fetch. `TRACKER_BACKUP_*` decide when a push is due, and a push needs an `origin`. `TRACKER_PORT` and `_BIND_ADDRESS` bind nothing in a mock web environment. `TRACKER_WATCH_TOKEN`, `_RECORD_REPO_LOCK`, `_HEARTBEAT_*` and `_MCP_ALLOWED_ORIGINS` open nothing. The application imports no `.env` (compose reads it), has no catalog fetch (the catalog is a classpath snapshot), and `GitProcess` strips `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` from git's environment.
 - Gates, all exit 0: check; test (2,165 JUnit across 162 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/config` 65%, at its floor, as before); guards. No ADR; the last commit carries `Wiki-Skip`.
 - Pending: CI has not run this branch.
+
+## 2026-10-08 — #375 the push reads commits and names, and sends no tag (branch fix/375-scan-messages)
+- **The gaps.** N6 in #360's review: a token in a commit message, an author or a committer went out, since the push gate read files alone. A token in a file or directory name was invisible to every search, `git grep` included. And with `push.followTags=true` in the records repository, an annotated tag on the pushed branch went out beside it, its message never read (measured: `refs/tags/v1` on the remote, a token in its message).
+- **Commits** (`1aa32b3`). The scan's `cat-file --batch` prints the commits it already lists, through the same `TokenPatterns` (UTF-16 view included). A commit's header, up to the empty line that ends it, is searched apart from its message — a window's seam can split that empty line, and a test puts it there. The refusal names the commit by a 12-character id and the part ("the message", "the author, committer or another header line"), never the token, and still says to revoke it.
+- **Trees, as bytes alone** (`a615a18`). The names live in trees; a hit is "a file or directory name", never which. Object ids cannot make a false match: a token-class run touching an id is cut by the NUL before it and the space after the next mode, 26 bytes at most against 40; measured on the 5,000-commit history, the longest such run in 12,512,500 entries was 10 bytes and no window of its 15,000 trees (382 MB) matched. No UTF-16 view for trees: a name cannot hold a NUL, and the view cost 6.2–7.1 s on those trees against 1.0–2.0 s for the bytes alone.
+- **Tags** (`699102f`). `--no-follow-tags` on the push: no tag goes, so none needs reading. A `mergetag` header is part of its commit and read with it.
+- **Before that**: `7d5e7e0` made `SearchOutcome` a sealed type that can say where; `c88ddda` merged the #373 fix (eb7637a) and main (804215b), `c42a783` merged main with #373 squashed (99cd754, a tree identical to eb7637a, so no file changed). The WIP commit was dropped before the first merge was redone, never pushed.
+- **Red first**: commits — 12 tests against types with no behaviour (pushes went out, `expected:<false> but was:<true>`; a commit hit read as a blob's); trees — the scan answered `Clean` for both names, the push went out, the bytes-alone matcher found the UTF-16 token; tags — the remote held `refs/tags/v1`.
+- **Cost** (whole `push()`): first push 0.44–0.54 / 1.82–2.40 / 4.7–6.9 s (before 0.21–0.28 / 0.50–0.59 / 3.9–9.5; main 25.2 / 252.5 / 56.3); five outgoing 0.14–0.22 / 0.22–0.26 / 0.17–0.19 s (unchanged within noise); nothing outgoing 0.15–0.27 s; slowest call 0.33 s.
+- **Mutation**: 17 mutants of #375's behaviours, each reverted, all killed: commits not read 7 tests; trees not read 4; a commit searched as a blob 11; the header never ended 4; read as message from the first byte 5; the empty line across a seam unseen 2; the header's tail lost 2; the message's tail lost 1; the boundary window's header side unsearched 5; trees with the UTF-16 view 1; a tree searched as a blob 5; bytes alone read as UTF-16 2; tags followed again 1; the whole id named 1; the part unsaid 1; a commit finding said as content 2; a name finding said as content 1. The two tail mutants failed to compile as first written and were rerun once they did.
+- **Docs.** The #373 ADR's Outcome gains the #375 note (decisions, numbers, costs) and its Decision 2 and last cost point there; the #360 ADR's N6 and its "file content, nothing else" cost; `SECURITY.md`; the index line.
+- **Gates**, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 341/384; `adapter/config` 65% at its floor); guards.
+- **Found, not fixed.** The commit side still reads file content alone, so a file named with a token is committed by a reconciliation and every push is then refused until history is rewritten.
+- Pending: CI; not verified live.

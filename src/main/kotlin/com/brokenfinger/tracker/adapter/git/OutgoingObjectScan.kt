@@ -10,12 +10,13 @@ import java.io.InputStream
  * file once per commit: 252 s for 5,000 commits, one call 16 s, on a history shaped like the #360 review's;
  * this scan took 0.5 s there. Here `rev-list --objects` names each object of each listing once, the first
  * time it reaches it — the push lists its range and HEAD's own tree; `cat-file --batch-check` tells each
- * one's type and size; and `cat-file --batch` prints the blobs, in calls of about [bytesPerCall] of content
- * each, which [BatchOutput] searches as it reads them. A blob many commits share, or both listings name, is
- * read once, and no tree or commit is read at all.
+ * one's type and size; and `cat-file --batch` prints the blobs, the commits and the trees, in calls of about
+ * [bytesPerCall] of content each, which [BatchOutput] searches as it reads them — a commit's message apart
+ * from its header, a tree for its names (#375). An object many commits share, or both listings name, is read
+ * once.
  *
  * Fails closed: a listing, a description or a read that fails or does not finish in time, an object git
- * cannot describe or print, and output other than what was asked for are each [SearchOutcome.UNSEARCHED].
+ * cannot describe or print, and output other than what was asked for are each [SearchOutcome.Unsearched].
  */
 internal class OutgoingObjectScan(
     private val git: GitCalls,
@@ -27,11 +28,11 @@ internal class OutgoingObjectScan(
      * shapes and [stored]'s values. What two listings name is read once.
      */
     fun outcome(listings: List<List<String>>, stored: StoredCredential): SearchOutcome {
-        val listed = listings.map { listed(it) ?: return SearchOutcome.UNSEARCHED }.flatten().distinct()
-        val read = described(listed)?.filter { it.type in READ_TYPES } ?: return SearchOutcome.UNSEARCHED
+        val listed = listings.map { listed(it) ?: return SearchOutcome.Unsearched }.flatten().distinct()
+        val read = described(listed)?.filter { it.type in READ_TYPES } ?: return SearchOutcome.Unsearched
         val patterns = TokenPatterns.of(stored)
         val outcomes = calls(read).asSequence().map { searched(it, patterns) }
-        return outcomes.firstOrNull { it != SearchOutcome.CLEAN } ?: SearchOutcome.CLEAN
+        return outcomes.firstOrNull { it != SearchOutcome.Clean } ?: SearchOutcome.Clean
     }
 
     // Every object one listing names, each once: rev-list prints an object the first time it reaches it, and a
@@ -65,7 +66,7 @@ internal class OutgoingObjectScan(
         val read = git.streamed(listOf("cat-file", "--batch", "--buffer"), linesOf(call.map { it.id })) {
             BatchOutput(it, patterns, window).searched(call)
         }
-        return read ?: SearchOutcome.UNSEARCHED
+        return read ?: SearchOutcome.Unsearched
     }
 
     companion object {
@@ -79,8 +80,11 @@ internal class OutgoingObjectScan(
         /** Ids per call: on stdin, so no system's argument limit applies; this keeps each call's input small. */
         private const val IDS_PER_CALL = 50_000
 
-        /** What is read: blobs. Commit and tag messages are not (#375); their types are what would join this. */
-        private val READ_TYPES = setOf("blob")
+        /**
+         * What is read: blobs; commits, which hold a message, an author and a committer; and trees, which hold
+         * the names (#375). A tag is never listed: the push names one branch, and sends no tag.
+         */
+        private val READ_TYPES = setOf("blob", "commit", "tree")
 
         private fun linesOf(ids: List<String>): String = ids.joinToString("\n", postfix = "\n")
     }

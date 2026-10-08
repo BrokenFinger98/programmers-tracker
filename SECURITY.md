@@ -36,7 +36,9 @@ credential, while `.ps` is not a real directory of its own or git tracks anythin
 any name the filesystem folds to `.ps` — or while git cannot say whether it does. It writes nothing
 through a link. And before every commit and every push it searches the file content it would send
 for the stored token and for anything shaped like a GitHub token, refusing if it finds one or
-cannot read everything it would send. Commit and tag messages are not searched. A token that
+cannot read everything it would send. Before a push it also reads the commits it would send —
+messages, authors and committers — and the file and directory names, and it never pushes a tag
+([#375](https://github.com/BrokenFinger98/programmers-tracker/issues/375)). A token that
 reached a commit is revoked on GitHub; removing it from history does not make it secret again
 ([#360](https://github.com/BrokenFinger98/programmers-tracker/issues/360)).
 

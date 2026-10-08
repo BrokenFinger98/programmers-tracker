@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.support.fixtures.aBrokenGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aCaptureKey
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
+import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSensorObservation
@@ -18,6 +19,7 @@ import com.brokenfinger.tracker.support.fixtures.aSubmit
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -45,8 +47,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -320,6 +324,40 @@ class McpToolInvokerTest {
         gaps["lessonsWithOrphanedFrames"]!!.jsonPrimitive.int shouldBe 2
         gaps["frames"]!!.jsonPrimitive.int shouldBe 3
         gaps["lessons"]!!.jsonArray.map { it.jsonPrimitive.long } shouldBe listOf(120802L, 181946L)
+    }
+
+    /**
+     * Sessions a start left on the work list are gradings no record represents until a later start, and every
+     * answer was silent about them: the count reached the log alone (the review of PR #395, against #169).
+     */
+    @Test
+    fun `every tool says so when a start left sessions unreplayed`() {
+        val raw = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root) { true })
+        sessionsLeftUnder(root, 120804, 131528)
+        raw.unprocessed()
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(aSubmissionRecord()).query(raw = raw))
+
+        everyToolCall().forEach { (tool, args) ->
+            val gaps = structured(invoker.call(tool, args))["incompleteHistory"]!!.jsonObject
+            gaps["sessionsNotReplayed"]!!.jsonPrimitive.int shouldBe 2
+            gaps.shouldNotContainKey("rawDirectoryNotListed")
+        }
+    }
+
+    /** Where the raw directory was not listed, how many it holds is unknown, and the answer says only that. */
+    @Test
+    fun `an answer says so when a start could not list the raw directory`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps/raw"), Files.createDirectories(root.resolve("problems/zz")))
+        val raw = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
+        raw.unprocessed()
+        val invoker = McpToolInvoker(aRecordRepository(root).containing(aSubmissionRecord()).query(raw = raw))
+
+        val gaps = structured(invoker.call("stats", arguments("groupBy" to "verdict")))["incompleteHistory"]!!
+            .jsonObject
+
+        gaps["rawDirectoryNotListed"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        gaps.shouldNotContainKey("sessionsNotReplayed")
     }
 
     /** Absence is the signal, so a complete history must not carry the field on any tool. */
@@ -1419,6 +1457,12 @@ class McpToolInvokerTest {
     }
 
     // One call per tool, each with the arguments it needs, so a table over every tool cannot leave one out.
+    // Sessions as a crash leaves them under `.ps/raw`, one per lesson, written by a log with no guard.
+    private fun sessionsLeftUnder(root: Path, vararg lessons: Long) {
+        val log = FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
+        lessons.forEach { log.append(log.start(it), """{"n":1}""") }
+    }
+
     private fun everyToolCall(): List<Pair<String, JsonObject>> = listOf(
         "submissions" to JsonObject(emptyMap()),
         "review_queue" to JsonObject(emptyMap()),
