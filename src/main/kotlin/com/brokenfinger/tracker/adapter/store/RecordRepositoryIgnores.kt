@@ -69,24 +69,36 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
 
     /**
      * Appends what is missing by replacing the file, never by writing into it: a link that appears
-     * between the check and the write is replaced rather than written through. The read refuses a
-     * link as well, and decodes strictly — a file that is there and cannot be read is not an empty
-     * one, and nothing is written over it.
+     * between the check and the write is replaced rather than written through, and the file keeps
+     * the permissions its owner gave it. The read refuses a link as well, and decodes strictly — a
+     * file that is there and cannot be read is not an empty one, and nothing is written over it.
+     *
+     * A file its owner made read-only is left as it is (#360): a replace needs only the directory,
+     * so without this it went through anyway.
      */
     private fun extend(file: Path) {
-        val text = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { strictly(it.readAllBytes()) }
+        val text = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { decodedStrictly(it.readAllBytes()) }
         val missing = RULES.filterNot { text.alreadyIgnores(it.rule) }
         if (missing.isEmpty()) return
+        if (!Files.isWritable(file)) return readOnly(file, missing)
         AtomicStateFile(file, keepsPermissions = true).write(withRules(text, missing))
         added(missing, file)
     }
 
     // A fresh decoder reports malformed input rather than replacing it, as strict as `Files.readString`.
-    private fun strictly(bytes: ByteArray): String =
+    private fun decodedStrictly(bytes: ByteArray): String =
         Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
 
     private fun withRules(text: String, rules: List<IgnoreRule>): String =
-        rules.fold(text) { sofar, rule -> sofar + rule.appendedTo(sofar) }
+        rules.fold(text) { appended, rule -> appended + rule.appendedTo(appended) }
+
+    private fun readOnly(file: Path, missing: List<IgnoreRule>) {
+        logger.warn(
+            "{} is read-only, so the server leaves it as it is. It lacks {}; add them by hand to have them ignored.",
+            file,
+            missing.map { it.rule },
+        )
+    }
 
     private fun added(rules: List<IgnoreRule>, file: Path) {
         logger.info("Added {} to {} — what is not a record must not be committed", rules.map { it.rule }, file)

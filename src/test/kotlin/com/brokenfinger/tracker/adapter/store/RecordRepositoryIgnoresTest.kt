@@ -235,9 +235,27 @@ class RecordRepositoryIgnoresTest {
         val bytes = byteArrayOf(0xC3.toByte(), 0x28, '\n'.code.toByte()) + "# mine\n".toByteArray()
         Files.write(root.resolve(".gitignore"), bytes)
 
-        RecordRepositoryIgnores(root).ensure()
+        val warnings = warningsWhile(RecordRepositoryIgnores::class) { RecordRepositoryIgnores(root).ensure() }
 
         Files.readAllBytes(root.resolve(".gitignore")) shouldBe bytes
+        warnings.single() shouldContain "Could not ensure"
+    }
+
+    /**
+     * An owner who made `.gitignore` read-only meant nothing to rewrite it, and a replace needs only the
+     * directory, so it went through anyway (#360). It is left as it is, and the missing rules are said.
+     */
+    @Test
+    fun `a read-only gitignore is left as it is, and said`() {
+        assumeTrue(canPlantLinksIn(root), "this test sets POSIX permissions")
+        val file = write(".gitignore", "# mine, read-only on purpose\n")
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("r--r--r--"))
+        assumeTrue(!Files.isWritable(file), "a superuser writes it anyway")
+
+        val warnings = warningsWhile(RecordRepositoryIgnores::class) { RecordRepositoryIgnores(root).ensure() }
+
+        read(".gitignore") shouldBe "# mine, read-only on purpose\n"
+        warnings.single() shouldContain "read-only"
     }
 
     /**
