@@ -1878,6 +1878,90 @@ class CommandLineGitSyncTest {
         subjects() shouldContainExactly emptyList()
     }
 
+    // A name the destination already holds is not new (#402) -------------------------------------
+    //
+    // A tree carries every name in its directory, so a file added beside a name a pull brought in sends that
+    // name again. #375 refused every push of it, though the remote held it: the commits here are another
+    // tool's, so the push alone decides.
+
+    /** #402: the new tree beside a pulled token-shaped name was refused at every push. It is said once instead. */
+    @Test
+    fun `a token-shaped name the remote already holds does not stop a push beside it, and is said once`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/${aGithubShapedToken()}.md", "a note\n")
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            committedByAnotherTool("notes/today.md")
+            sync.push() shouldBe true
+            committedByAnotherTool("notes/later.md")
+            sync.push() shouldBe true
+        }
+
+        heard.single() shouldContain "already holds a GitHub token in a file or directory name"
+        heard.single() shouldNotContain aGithubShapedToken()
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /** What is held is each name, not the tree it is in: a new token-shaped name beside a held one is refused. */
+    @Test
+    fun `a new token-shaped name beside a held one is never pushed`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/${aGithubShapedToken()}.md", "a note\n")
+        val pulled = git("rev-parse", "HEAD").trim()
+        committedByAnotherTool("notes/${aGithubShapedToken('B')}.md")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name in what it would send carries a GitHub token"
+        git("rev-parse", "main", at = remote).trim() shouldBe pulled
+    }
+
+    /** A directory's name is a name like a file's: one the remote holds does not stop a file added in it. */
+    @Test
+    fun `a directory named with a token the remote holds does not stop a push of a file added in it`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "${aGithubShapedToken()}/notes.md", "a note\n")
+        committedByAnotherTool("${aGithubShapedToken()}/today.md")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /**
+     * Held is the name, wherever the remote holds it: a directory renamed, with a file added, is a new tree at a
+     * path the remote has no tree at, and the name it carries is still not new to the remote.
+     */
+    @Test
+    fun `a renamed directory whose names the remote holds is pushed`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/${aGithubShapedToken()}.md", "a note\n")
+        git("mv", "notes", "archive")
+        committedByAnotherTool("archive/today.md")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /**
+     * What the remote holds is what it says, through `ls-remote`, as for the range (#376): re-created empty, it
+     * holds no name, though `origin/main` still names the commit that brought the token-shaped one.
+     */
+    @Test
+    fun `a token-shaped name only a stale tracking ref says the remote holds is never pushed`() {
+        val remote = remoteInitialised()
+        committedByAnotherTool("notes/${aGithubShapedToken()}.md")
+        git("push", "--quiet", "origin", "main")
+        recreatedEmpty(remote)
+        committedByAnotherTool("notes/today.md")
+
+        sync().push() shouldBe false
+
+        refsAt(remote) shouldContainExactly emptyList()
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**
@@ -2074,6 +2158,13 @@ class CommandLineGitSyncTest {
         git("commit", "--message", "pasted elsewhere", at = other)
         git("push", "--quiet", at = other)
         git("pull", "--quiet", "--no-rebase", "--ff-only", "origin", "main")
+    }
+
+    /** A note at [relative], committed with plain git, as another tool commits: none of the tracker's gates run. */
+    private fun committedByAnotherTool(relative: String) {
+        written(relative, "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "added by another tool")
     }
 
     /** A clone of [remote] beside the record repository, with an identity of its own. */

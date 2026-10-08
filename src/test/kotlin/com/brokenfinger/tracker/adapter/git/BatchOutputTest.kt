@@ -165,6 +165,102 @@ class BatchOutputTest {
         searched(printed) shouldBe SearchOutcome.Clean
     }
 
+    // Names a destination already holds (#402) -----------------------------------------------------------
+
+    /**
+     * A tree carries every name in its directory, so a new file beside a name the destination already holds sends
+     * that name again. It is not new: not refused, and handed over as sent again, for the notice.
+     */
+    @Test
+    fun `a name the destination already holds is not new, and is sent again`() {
+        val held = Held("${aGithubShapedToken()}.md")
+        val printed = tree(1, entry("100644", "${aGithubShapedToken()}.md"), entry("100644", "today.md"))
+
+        searched(printed, held = held) shouldBe SearchOutcome.Clean
+        held.sent shouldBe listOf(asBytes("${aGithubShapedToken()}.md"))
+    }
+
+    @Test
+    fun `a new name beside one the destination holds is found`() {
+        val held = Held("${aGithubShapedToken()}.md")
+        val beside = entry("100644", aGithubShapedToken('B'))
+        val printed = tree(1, entry("100644", "${aGithubShapedToken()}.md"), beside)
+
+        searched(printed, held = held) shouldBe SearchOutcome.FoundInName
+    }
+
+    /** What is held is a name, whole: a name that holds a held one and more is a new name. */
+    @Test
+    fun `a name that holds a held one and more is new`() {
+        val printed = tree(1, entry("100644", "copy of ${aGithubShapedToken()}.md"))
+
+        searched(printed, held = Held("${aGithubShapedToken()}.md")) shouldBe SearchOutcome.FoundInName
+    }
+
+    /** Whether a name is held costs a listing of the destination's trees, so only a name that matches is asked about. */
+    @Test
+    fun `only a name that carries a token is asked about`() {
+        val held = Held()
+        val token = entry("100644", "${aGithubShapedToken()}.md")
+        val printed = tree(1, entry("100644", "a.md"), token, entry("40000", "notes"))
+
+        searched(printed, held = held)
+
+        held.asked shouldBe listOf(asBytes("${aGithubShapedToken()}.md"))
+    }
+
+    @Test
+    fun `a name the destination cannot say it holds is unsearched`() {
+        val printed = tree(1, entry("100644", "${aGithubShapedToken()}.md"))
+
+        searched(printed, held = Unknown) shouldBe SearchOutcome.Unsearched
+    }
+
+    /** An entry that runs past a window waits for the rest, so its name is matched whole: held, or new. */
+    @Test
+    fun `a name across a seam is matched whole`() {
+        val name = "n".repeat(WINDOW - HALF) + "${aGithubShapedToken()}.md"
+        val printed = tree(1, entry("100644", "a.md"), entry("100644", name))
+
+        searched(printed, held = Held(name)) shouldBe SearchOutcome.Clean
+        searched(printed, held = Held()) shouldBe SearchOutcome.FoundInName
+    }
+
+    /** An id is skipped by its length, whatever its bytes: a space or a NUL in one keeps the entries in step. */
+    @Test
+    fun `an id that holds a space or a NUL keeps the entries in step`() {
+        val awkward = ByteArray(ID_BYTES) { if (it % 2 == 0) ' '.code.toByte() else 0 }
+        val printed = tree(1, entry("100644", "a.md", awkward), entry("100644", "${aGithubShapedToken()}.md"))
+
+        searched(printed, held = Held("${aGithubShapedToken()}.md")) shouldBe SearchOutcome.Clean
+    }
+
+    /** A repository that names objects with SHA-256 stores 32-byte ids in its trees, and they are skipped whole. */
+    @Test
+    fun `a tree whose ids are SHA-256 is read in step`() {
+        val spaced = ByteArray(SHA_256_ID_BYTES) { if (it == ID_BYTES + 2) ' '.code.toByte() else 'x'.code.toByte() }
+        val entries = entry("100644", "a.md", spaced) + entry("100644", "${aGithubShapedToken()}.md", spaced)
+        val printed = Printed(GitObject("e".repeat(SHA_256_ID_LENGTH), "tree", entries.size.toLong()), entries)
+
+        searched(printed, held = Held("${aGithubShapedToken()}.md")) shouldBe SearchOutcome.Clean
+    }
+
+    /** What no entry ends, at the end of a tree, is matched as bytes, as #375 read every tree, and never held. */
+    @Test
+    fun `what runs past a tree's last entry is matched as bytes`() {
+        val printed = tree(1, entry("100644", "a.md"), "100644 ${aGithubShapedToken()}".toByteArray())
+
+        searched(printed, held = Held(aGithubShapedToken())) shouldBe SearchOutcome.FoundInName
+    }
+
+    /** A name no filesystem could hold would be waited on without end: it is not read, and nothing goes out. */
+    @Test
+    fun `an entry longer than any name can be is unsearched`() {
+        val printed = tree(1, entry("100644", "n".repeat(LONGER_THAN_ANY_NAME)))
+
+        searched(printed) shouldBe SearchOutcome.Unsearched
+    }
+
     // Output that is not what was asked for -------------------------------------------------------------
 
     @Test
@@ -265,11 +361,38 @@ class BatchOutputTest {
     private fun blob(n: Int, content: ByteArray): Printed =
         Printed(GitObject(idOf(n), "blob", content.size.toLong()), content)
 
-    private fun searched(vararg printed: Printed, patterns: TokenPatterns = nothingStored): SearchOutcome =
-        searched(printed.map { it.asked }, printed.fold(ByteArray(0)) { all, each -> all + each.bytes }, patterns)
+    private fun searched(
+        vararg printed: Printed,
+        patterns: TokenPatterns = nothingStored,
+        held: NamesHeld = NamesHeld.NONE,
+    ): SearchOutcome {
+        val output = printed.fold(ByteArray(0)) { all, each -> all + each.bytes }
+        return BatchOutput(ByteArrayInputStream(output), patterns, WINDOW, held).searched(printed.map { it.asked })
+    }
 
     private fun searched(asked: List<GitObject>, output: ByteArray, patterns: TokenPatterns = nothingStored) =
         BatchOutput(ByteArrayInputStream(output), patterns, WINDOW).searched(asked)
+
+    /** A destination that holds [names], each as its bytes, and remembers each name asked about, and each sent. */
+    private class Held(vararg names: String) : NamesHeld {
+        private val held = names.map(::asBytes).toSet()
+        val asked = mutableListOf<String>()
+        val sent = mutableListOf<String>()
+
+        override fun holds(name: String): Boolean {
+            asked += name
+            return name in held
+        }
+
+        override fun sent(name: String) {
+            sent += name
+        }
+    }
+
+    /** A destination that cannot say what it holds, as one whose trees git could not list. */
+    private object Unknown : NamesHeld {
+        override fun holds(name: String): Boolean? = null
+    }
 
     /** [match] behind filler, placed so that its last byte is the first byte of a window. */
     private fun endingOneByteIntoAWindow(match: ByteArray): ByteArray {
@@ -297,5 +420,15 @@ class BatchOutputTest {
 
         /** A SHA-1 object id as a tree stores it, raw. */
         const val ID_BYTES = 20
+
+        /** A SHA-256 object id, raw as a tree stores it, and in hex as git prints it. */
+        const val SHA_256_ID_BYTES = 32
+        const val SHA_256_ID_LENGTH = 64
+
+        /** Past what any filesystem lets a name be, 255 bytes, and past what the search waits for. */
+        const val LONGER_THAN_ANY_NAME = 1 shl 17
+
+        /** A name as a tree holds it: its UTF-8 bytes, one ISO-8859-1 character each, as they are read. */
+        fun asBytes(name: String): String = String(name.toByteArray(Charsets.UTF_8), Charsets.ISO_8859_1)
     }
 }

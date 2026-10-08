@@ -157,6 +157,29 @@ class OutgoingObjectScanTest {
         scanned() shouldBe SearchOutcome.FoundInName
     }
 
+    // Names the destination already holds (#402) ----------------------------------------------------------
+
+    /** A new file beside a name the destination holds sends a tree that carries that name again; it is not new. */
+    @Test
+    fun `a name the destination holds goes out again, and is handed over as sent again`() {
+        committed("notes/${aGithubShapedToken()}.md", "a note\n")
+        val held = HeldNames(RecordingCalls(repo.root), setOf(repo.git("rev-parse", "HEAD").trim()))
+        committed("notes/today.md", "a note\n")
+
+        scanned(range = listOf("HEAD", "--not", "HEAD~1"), held = held) shouldBe SearchOutcome.Clean
+        held.sentAgain() shouldBe listOf("${aGithubShapedToken()}.md")
+    }
+
+    /** A held name ends nothing: the rest of what goes out is still read, here a token in the new file. */
+    @Test
+    fun `what else goes out beside a held name is still read`() {
+        committed("notes/${aGithubShapedToken()}.md", "a note\n")
+        val held = HeldNames(RecordingCalls(repo.root), setOf(repo.git("rev-parse", "HEAD").trim()))
+        committed("notes/today.md", "${aGithubShapedToken('B')}\n")
+
+        scanned(range = listOf("HEAD", "--not", "HEAD~1"), held = held) shouldBe SearchOutcome.FoundInContent
+    }
+
     // What is read, and how often ------------------------------------------------------------------------
 
     /** `git grep` over each commit read an unchanged file once per commit; here a blob is read once. */
@@ -368,7 +391,8 @@ class OutgoingObjectScanTest {
         calls: GitCalls = RecordingCalls(repo.root),
         bytesPerCall: Long = OutgoingObjectScan.BYTES_PER_CALL,
         listings: List<List<String>> = listOf(range),
-    ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(listings, stored)
+        held: NamesHeld = NamesHeld.NONE,
+    ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(listings, stored, held)
 
     private fun committed(relative: String, content: String, message: String = "add $relative") =
         committedBytes(relative, content.toByteArray(), message)

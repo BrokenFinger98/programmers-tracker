@@ -83,20 +83,26 @@ class CommandLineGitSync(
 
     private val process = GitProcess(root, environment)
 
-    /**
-     * What a push would send, or a commit would add, searched object by object, through the same calls as
-     * everything else here.
-     */
-    private val outgoing = OutgoingObjectScan(ProcessCalls(process, ::commandFor))
+    /** The git calls the searches make, through the same process and credential as everything else here. */
+    private val calls = ProcessCalls(process, ::commandFor)
+
+    /** What a push would send, or a commit would add, searched object by object. */
+    private val outgoing = OutgoingObjectScan(calls)
 
     /** What a commit would add, staged first in a copy of the index (#376). */
     private val stagingPreview = StagingPreview(root, ::gitWith)
 
     /** What a push's destinations already hold, asked of them through the push's own credential (#376). */
-    private val remoteTips = RemoteTips(ProcessCalls(process, ::commandFor))
+    private val remoteTips = RemoteTips(calls)
 
     /** Whether a destination that could not say what it holds was already said, since it last answered. */
     private val unansweredSaid = AtomicBoolean()
+
+    /**
+     * Each token-shaped name a push sent again, its remote holding it already, that was said (#402) — kept as a
+     * digest, never the name. Bounded by the names a remote holds that carry a token, one or two at most.
+     */
+    private val namesSentAgainSaid = ConcurrentHashMap.newKeySet<String>()
 
     private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
 
@@ -363,13 +369,28 @@ class CommandLineGitSync(
      * ea1357c). Remembered with what was searched (#378): the destinations, the tips they held that the
      * range left out, and the stored token. Keyed on the head alone, a head searched for one remote was sent
      * to another unsearched once `origin` was repointed.
+     *
+     * A name in a tree it sends is new unless the tips its destinations hold already hold it (#402): a tree
+     * carries every name in its directory, and a file added beside a name a pull brought in sent that name
+     * again, refused at every push. One that carries a token goes out again, and is said ([sayNamesSentAgain]).
      */
     private fun searchedClean(head: SearchedHead): Boolean {
         if (lastSearchedClean.get() == head) return true
-        if (!carriesNoToken("push") { outgoing.outcome(listOf(outgoingRange(head.held)), it) }) return false
+        val held = HeldNames(calls, head.held)
+        if (!carriesNoToken("push") { outgoing.outcome(listOf(outgoingRange(head.held)), it, held) }) return false
+        sayNamesSentAgain(held)
         lastSearchedClean.set(head)
         return true
     }
+
+    // Once for each name, by a digest of it: never the name, which carries the token.
+    private fun sayNamesSentAgain(held: HeldNames) {
+        val unsaid = held.sentAgain().map { namesSentAgainSaid.add(digestOf(it)) }
+        if (true in unsaid) logger.warn(NAME_SENT_AGAIN, root)
+    }
+
+    private fun digestOf(name: String): String =
+        MessageDigest.getInstance("SHA-256").digest(name.toByteArray(Charsets.ISO_8859_1)).toHexString()
 
     /**
      * What a push would send, as `rev-list` arguments: HEAD's history, less what the tips its destinations
@@ -711,6 +732,13 @@ class CommandLineGitSync(
 
         /** How much of a commit's id a refusal names: more than git abbreviates to, unambiguous in practice. */
         private const val SHORT_ID = 12
+
+        /** A name its remote holds already, never which (#402): said, and the push goes ahead. */
+        private const val NAME_SENT_AGAIN =
+            "git push in {}: its remote already holds a GitHub token in a file or directory name — the one stored " +
+                "in .ps/git-credentials, or one shaped like it — and the push sends that name again beside what is " +
+                "new. It was not refused, since nothing new goes out, but it was published already: revoke the " +
+                "token on GitHub, and rename that file in every commit that has it. Said once for each such name."
 
         /** A name, never which: the name would carry the token (#375). */
         private const val CREDENTIAL_IN_A_NAME =

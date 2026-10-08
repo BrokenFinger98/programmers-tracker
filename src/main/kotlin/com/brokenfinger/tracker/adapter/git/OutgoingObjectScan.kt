@@ -25,13 +25,18 @@ internal class OutgoingObjectScan(
 ) {
     /**
      * Searches every object [listings] name — each the arguments of one `rev-list --objects` — for the token
-     * shapes and [stored]'s values. What two listings name is read once.
+     * shapes and [stored]'s values. What two listings name is read once. A name in a tree that [held] already
+     * holds is not new (#402).
      */
-    fun outcome(listings: List<List<String>>, stored: StoredCredential): SearchOutcome {
+    fun outcome(
+        listings: List<List<String>>,
+        stored: StoredCredential,
+        held: NamesHeld = NamesHeld.NONE,
+    ): SearchOutcome {
         val listed = listings.map { listed(it) ?: return SearchOutcome.Unsearched }.flatten().distinct()
         val read = described(listed)?.filter { it.type in READ_TYPES } ?: return SearchOutcome.Unsearched
         val patterns = TokenPatterns.of(stored)
-        val outcomes = calls(read).asSequence().map { searched(it, patterns) }
+        val outcomes = calls(read).asSequence().map { searched(it, patterns, held) }
         return outcomes.firstOrNull { it != SearchOutcome.Clean } ?: SearchOutcome.Clean
     }
 
@@ -62,9 +67,9 @@ internal class OutgoingObjectScan(
         return stretches.values.flatMap { it.chunked(IDS_PER_CALL) }
     }
 
-    private fun searched(call: List<GitObject>, patterns: TokenPatterns): SearchOutcome {
+    private fun searched(call: List<GitObject>, patterns: TokenPatterns, held: NamesHeld): SearchOutcome {
         val read = git.streamed(listOf("cat-file", "--batch", "--buffer"), linesOf(call.map { it.id })) {
-            BatchOutput(it, patterns, window).searched(call)
+            BatchOutput(it, patterns, window, held).searched(call)
         }
         return read ?: SearchOutcome.Unsearched
     }
