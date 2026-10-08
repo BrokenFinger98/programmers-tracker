@@ -297,9 +297,11 @@ fi
 #    Two entry forms, both in use: a path ending in `.md` is relative to
 #    docs/llm-wiki/, and a bare `decisions/x` is a wiki page without its suffix.
 #
-#    Scope is deliberately just `sources:`. Checking `[[...]]` targets too would
-#    have to special-case the schema document, which uses `[[concepts/foo]]` as
-#    an example — a guard with an exception list is the kind that gets muted.
+#    Scope is deliberately just `sources:`. Checking `[[...]]` targets across the
+#    wiki would have to special-case the schema document, which uses
+#    `[[concepts/foo]]` as an example — a guard with an exception list is the kind
+#    that gets muted. The links under src/ carry no such examples; §9 checks
+#    those.
 # ---------------------------------------------------------------------------
 resolve_source() {
   case "$1" in
@@ -435,6 +437,93 @@ if printf 'X-Tracker-Token: %s\n' "$canary" | grep -qE 'X-Tracker-Token["'"'"']?
   fi
 else
   report "the watch-token check cannot match a token at all — it would pass any tree"
+fi
+
+# ---------------------------------------------------------------------------
+# 9. Every wiki link under src/ must resolve to a wiki page.
+#    A KDoc linked [[decisions/2026-08-06-record-corrections-by-append]], a page
+#    no commit has ever held: the commit that wrote the link filed the ADR it
+#    meant under another name (#58), and the slug stood in three files with every
+#    gate green (#366). A comment that cites a decision promises the reader can
+#    open it; §6 reads `sources:` and nothing else, so nothing held the promise.
+#
+#    SCOPE IS src/, which applies §6's reason rather than breaking it. §6 left
+#    `[[...]]` alone because the wiki schema's own examples would need an
+#    exception list. Code has none: every link under src/ is a claim (108 links
+#    to 24 pages at adoption). The rest of the tree fails the same reason harder.
+#    With this resolution, outside raw/ (immutable) and this script, 17 links
+#    fail, and 10 are not claims: the schema's two examples, a `[[decisions/…]]`
+#    placeholder, and seven in the vault's own namespace (`[[tags/dp]]`) that
+#    were never wiki pages. The other 7 are real: the dead slug three more
+#    times, and four links to three source pages no commit has ever held. A
+#    check that failed every push on those would not repair them; that is
+#    /wiki-lint's work. And raw/ keeps the dead slug in a record nobody may
+#    edit, which is why §4 leaves dated records out.
+#
+#    A link is `[[kind/target]]` for any alphabetic kind, resolved against
+#    docs/llm-wiki/wiki/<kind>/<target>.md. There is no list of kinds to keep in
+#    step with the wiki, and a typo'd kind fails like a typo'd slug. A `.md`
+#    suffix, an `|alias` and a `#heading` are not part of the target: all three
+#    name the same page to a reader, and six comments spell the suffix for pages
+#    that exist. Failing a link that works is how a guard gets muted.
+#
+#    Pages come from the index, as in §6; text comes from the working tree,
+#    untracked files included, as in §3. An unstaged page therefore cannot
+#    satisfy a link that lands in a commit without it, and the order is the cost:
+#    a link may be written before its ADR, but both must be staged by the push.
+#
+#    What this must not do is fail silently (#123, ADR
+#    2026-08-10-guards-must-prove-they-ran): git grep dying reads as no links, a
+#    pathspec matching nothing reads as all resolved, and a resolver accepting
+#    everything reads the same. A link to a page that cannot exist therefore goes
+#    through the real resolution beside the real ones and must come back
+#    rejected.
+# ---------------------------------------------------------------------------
+wiki_link='\[\[[A-Za-z]+/[^]]+\]\]'
+canary_link='canary:1:[[decisions/never-written-canary]]'
+wiki_pages=$(git ls-files 'docs/llm-wiki/wiki/*.md')
+
+# Takes `path:line:[[link]]` lines and prints those whose page is not tracked.
+unresolved_wiki_links() {
+  LC_ALL=C WIKI_PAGES="$wiki_pages" awk '
+    BEGIN {
+      n = split(ENVIRON["WIKI_PAGES"], t, "\n")
+      for (i = 1; i <= n; i++) known[t[i]] = 1
+    }
+    NF == 0 { next }
+    {
+      match($0, /^[^:]*:[0-9]+:/)
+      where = substr($0, 1, RLENGTH - 1)
+      link = substr($0, RLENGTH + 1)
+      target = link
+      sub(/^\[\[/, "", target)
+      sub(/\]\]$/, "", target)
+      sub(/[|#].*$/, "", target)
+      sub(/\.md$/, "", target)
+      page = "docs/llm-wiki/wiki/" target ".md"
+      if (!(page in known)) print "  " where "  " link "  (" page " is not tracked)"
+    }
+  '
+}
+
+# No `|| true`: git grep exits 0 with matches, 1 with none and higher on error,
+# and collapsing the three is what turned a crash into a pass (§3).
+link_hits=$(LC_ALL=C git grep -noIE --untracked "$wiki_link" -- src)
+link_status=$?
+unresolved=$(printf '%s\n%s\n' "$link_hits" "$canary_link" | unresolved_wiki_links)
+dangling_links=$(printf '%s\n' "$unresolved" | grep -v '^  canary:1  ')
+links_checked=$(printf '%s\n' "$link_hits" | grep -c .)
+
+if [ "$link_status" -gt 1 ]; then
+  report "the wiki-link check could not run — git grep exited $link_status"
+elif [ "$links_checked" -eq 0 ]; then
+  report "the wiki-link check found no links in src/ at all — it would pass any tree"
+elif ! printf '%s\n' "$unresolved" | grep -q '^  canary:1  '; then
+  report "the wiki-link check accepts a page that does not exist — it would pass any link"
+elif [ -n "$dangling_links" ]; then
+  report "a file under src/ links a wiki page that does not exist:"$'\n'"$dangling_links"$'\n'"  Link the page that exists, or stage the one this change adds. Copy a slug from docs/llm-wiki/wiki/; do not recall one."
+else
+  pass "all $links_checked wiki links under src/ resolve"
 fi
 
 printf '\n'

@@ -104,7 +104,7 @@ fun aSqlSubmissionRecord() = aSubmissionRecord(
  *
  * The key is derived from the frame that ended one grading, so two gradings never share one
  * — and since corrections are resolved newest-per-key
- * ([[decisions/2026-08-06-record-corrections-by-append]]), a fixture that handed every record
+ * ([[decisions/2026-08-05-code-pending-correction-append]]), a fixture that handed every record
  * the same key would collapse a whole log into a single record. That is not a hypothetical:
  * a fixed default here made six reader tests pass for the wrong reason until the reader
  * started resolving corrections.

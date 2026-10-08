@@ -214,7 +214,7 @@ class RecordQueryTest {
     //
     // Stage 3 attaches the code after the record is already durable, and the log is
     // append-only, so the correction is a second line carrying the same capture key
-    // ([[decisions/2026-08-06-record-corrections-by-append]]). Every read has to resolve to
+    // ([[decisions/2026-08-05-code-pending-correction-append]]). Every read has to resolve to
     // the newest line per key. These are the shapes that go wrong when it does not, and they
     // are here rather than only in RecordHistoryTest because the defect they prevent is not
     // in the resolver — it is in a reader that forgets to use it.

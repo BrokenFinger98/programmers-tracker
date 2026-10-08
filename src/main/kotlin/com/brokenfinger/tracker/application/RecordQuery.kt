@@ -87,7 +87,7 @@ class RecordQuery(
      *
      * Through [RecordHistory] rather than decoding the lines directly, because the log is
      * append-only and a record that changes after it was written is appended again rather
-     * than edited ([[decisions/2026-08-06-record-corrections-by-append]]). Read the raw lines
+     * than edited ([[decisions/2026-08-05-code-pending-correction-append]]). Read the raw lines
      * and every submission whose code was attached later comes back twice — once pending,
      * once complete — so `submissions` would list it twice and `stats` would count it twice.
      * The write side and the read side have to resolve corrections the same way; there is one

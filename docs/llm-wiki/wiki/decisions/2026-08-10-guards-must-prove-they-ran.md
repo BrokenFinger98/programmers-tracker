@@ -1,10 +1,10 @@
 ---
 type: decision
 project: programmers-tracker
-tags: [ci, guards, tooling, locale, english-only]
+tags: [ci, guards, tooling, locale, english-only, wiki-links]
 author: BrokenFinger98
 created: 2026-08-10
-updated: 2026-08-12
+updated: 2026-10-08
 sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-05-ci-guard-scoping, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-10-sensor-verified.md, raw/sessions/2026-08-11-backfilling-the-raw-layer.md]
 ---
 
@@ -204,3 +204,73 @@ is caught on the machine that has it.
 Negative-tested both ways — the live value planted in a `.mcp.json`, and a token-shaped header in
 a file the token file could not explain — plus a canary asserting the documented placeholder
 still passes, because a rule that rejects its own documentation is one someone will delete.
+
+
+---
+
+## Applied again 2026-10-08 (#366): a citation in a comment is a claim, and nothing read it
+
+A KDoc in `RecordQuery` linked `decisions/2026-08-06-record-corrections-by-append`. No commit on
+any ref has ever touched a page of that name. The link came from #58 (`153695d`, 2026-08-06),
+which wrote it into three files (`RecordQuery.kt`, `RecordQueryTest.kt`,
+`SubmissionRecordFixtures.kt`) and into a progress note as the name of the proposed ADR — and in
+the same commit filed that ADR as [[decisions/2026-08-05-code-pending-correction-append]], the only
+decision whose subject is corrections by append. The planned name was never reconciled with the
+real one, and every gate stayed green for two months.
+
+§6 reads `sources:` and no other link, so a comment promising that the reader could open an ADR
+was a promise nothing held. A plan step had been standing in for the check by hand ("`guards.sh`
+deliberately does not"), and the same one-liner run over all of `src/` reports two pages that
+exist, because it appends `.md` to a slug that already ends in it.
+
+**The decision is the scope.** §6 declined to check `[[…]]` targets because the schema's own
+examples would need an exception list, and a guard with an exception list is the kind that gets
+muted. §9 keeps that reason and applies it: it checks `src/` and nothing else. Measured with the
+same resolution over every tracked file outside `src/`, `raw/` and `guards.sh` itself, 17 links
+fail:
+
+| Kind of failure | Links | What they are |
+|---|---|---|
+| Not a claim | 10 | the schema's two examples, one placeholder with an ellipsis for its slug, and seven wikilinks in the vault's own namespace (`tags/…` and `problems/…` notes) that were never wiki pages |
+| Real breakage | 7 | the dead slug three more times (`progress.md` and two decisions), and four links to three source pages no commit has ever held (three index entries, one concept) |
+
+A docs-wide check would have failed every push on the seven until someone decided what each should
+become, which is `/wiki-lint`'s work and not a guard's. `raw/` is worse: it is immutable by the
+schema and holds the dead slug in `raw/sessions/2026-08-11-expiry-has-no-socket-signal.md`, where
+it can never be fixed. §4 already leaves dated records out for the same reason. Code is the place
+that is maintained as current and carries no illustrations: 108 links to 24 pages, every one a
+claim.
+
+Three smaller decisions, each settled by measuring:
+
+- **A link is a double-bracketed `kind/target` for any alphabetic kind**, resolved to
+  `wiki/<kind>/<target>.md`. There is no list of kinds to keep in step with the wiki, and a typo'd
+  kind fails like a typo'd slug.
+- **A `.md` suffix, an `|alias` and a `#heading` are not part of the target.** All three name the
+  same page to a reader, and six comments spell the suffix for pages that exist. Failing a link
+  that works is how a guard gets muted.
+- **Pages come from the index, text from the working tree, untracked files included** — §6's rule
+  for one and §3's for the other. An unstaged page cannot satisfy a link that lands in a commit
+  without it.
+
+The canary pattern once more, for the three silent deaths this check could have: `git grep`
+dying reads as no links (its exit status is kept apart, as in §3), a pathspec matching nothing
+reads as all resolved (so finding no links at all is a failure), and a resolver that accepts
+everything reads the same (so a link to a page that cannot exist goes through the real resolution
+beside the real ones and must come back rejected).
+
+Verified rather than reasoned about. Red: with the three pre-fix files restored, the guard exits 1
+and names exactly those three sites. Green: 108 links resolve. A scratch file of 15 links, seven
+that must pass and eight that must fail, behaved as labelled. Three mutants, each breaking one of
+the deaths above, each tripped its own message. The resolver prints the same lines under macOS awk
+and Ubuntu's mawk 1.3.4, and the whole script passes in an Ubuntu container on a fresh
+single-commit copy of the tree. The cost is about 40 ms of a 3 s run.
+
+What it leaves unchecked, on purpose:
+
+- **The seven real broken links**, and any future typo in `docs/`. Found by reading, or by
+  `/wiki-lint`.
+- **`build.gradle.kts`**, the one code file outside `src/` that carries a wiki link (it resolves
+  today). Adding it is one word in the pathspec; it was left out because the issue named `src/`.
+- **Order.** A link may be written before its ADR, but both must be staged by the push. A branch
+  that runs the guards between the two sees a failure that is correct and temporary.
