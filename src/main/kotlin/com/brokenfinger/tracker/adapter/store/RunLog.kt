@@ -5,11 +5,9 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -36,16 +34,19 @@ import java.time.format.DateTimeFormatter
  * would name the wrong neighbour. Append-only and idempotent by [SubmissionRecord.recordId]: the
  * retry may attach a run twice. Only complete (newline-terminated) lines count as already written,
  * because a crash can leave a torn prefix of this very run's line.
+ *
+ * Appended through [RecordWrites]: a regular file or none, never through a link (#361). A refusal is
+ * thrown, so the run's record keeps its code pending rather than claiming a line that was not kept.
  */
 class RunLog(private val layout: RecordLayout, private val clock: Clock) {
+    private val writes = RecordWrites.underProblems(layout)
+
     fun append(record: SubmissionRecord, code: String) {
         if (record.action != GradingAction.RUN) return
         val file = layout.runLog(record.lessonId, record.title)
         val id = record.recordId()
         if (alreadyHolds(file, id)) return
-        Files.createDirectories(file.parent)
-        val line = format.encodeToString(RunLine(id, record.language, fetchedNow(), code))
-        Files.writeString(file, heal(file) + line + "\n", CHARSET, *APPEND)
+        writes.appendLine(file, format.encodeToString(RunLine(id, record.language, fetchedNow(), code)))
     }
 
     private fun fetchedNow(): String = OffsetDateTime.now(clock).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
@@ -57,23 +58,8 @@ class RunLog(private val layout: RecordLayout, private val clock: Clock) {
         return complete.any { it.contains(needle) }
     }
 
-    /** A last line cut short by a crash must not have the next one glued onto it. */
-    private fun heal(file: Path): String {
-        val size = if (Files.isRegularFile(file)) Files.size(file) else 0L
-        if (size == 0L) return ""
-        return if (lastByte(file, size) == NEWLINE) "" else "\n"
-    }
-
-    private fun lastByte(file: Path, size: Long): Byte = Files.newByteChannel(file).use { channel ->
-        val buffer = ByteBuffer.allocate(1)
-        channel.position(size - 1).read(buffer)
-        buffer.get(0)
-    }
-
     private companion object {
         val CHARSET = StandardCharsets.UTF_8
-        val APPEND = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
-        const val NEWLINE = '\n'.code.toByte()
         val format = Json
     }
 }

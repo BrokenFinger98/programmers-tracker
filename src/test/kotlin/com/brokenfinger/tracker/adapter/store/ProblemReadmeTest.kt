@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.TestcaseSummary
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
@@ -13,7 +14,11 @@ import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -21,11 +26,15 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 
 class ProblemReadmeTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `the README lands in the problem directory of its lesson`() {
@@ -344,6 +353,54 @@ class ProblemReadmeTest {
         text shouldNotContain "## Problem"
     }
 
+    // Written over a link, never through one (#361) ---------------------------------------------------
+
+    /** Measured in #354's review: this page, written through a link, overwrote the push token. */
+    @Test
+    fun `a README that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val readme = root.resolve("problems/$DIRECTORY/README.md")
+        aLink(readme, token)
+
+        val heard = warningsWhile(RecordWrites::class) { ProblemReadme(RecordLayout(root)).write(listOf(aRecord())) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.isSymbolicLink(readme) shouldBe false
+        Files.readString(readme) shouldContain "lessonId: 120804"
+        heard.single() shouldContain readme.toString()
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /** The page is regenerated at every attachment and boot, so a refused one is skipped, said, and not thrown. */
+    @Test
+    fun `a problem directory that is a link gets no README, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/$DIRECTORY"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            ProblemReadme(RecordLayout(root)).write(listOf(aRecord())).shouldBeNull()
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "problems/$DIRECTORY is a symbolic link"
+    }
+
+    @Test
+    fun `a README that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-page.md")
+        val readme = aLink(root.resolve("problems/$DIRECTORY/README.md"), nowhere)
+
+        val heard = warningsWhile(RecordWrites::class) { ProblemReadme(RecordLayout(root)).write(listOf(aRecord())) }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.readString(readme) shouldContain "lessonId: 120804"
+        heard.single() shouldContain readme.toString()
+    }
+
+    private fun aRecord(): SubmissionRecord = aSubmissionRecord()
+
     private fun writeStatement(text: String) {
         val record = aSubmissionRecord()
         val file = RecordLayout(root).statementFile(record.lessonId, record.title)
@@ -357,7 +414,8 @@ class ProblemReadmeTest {
         render(listOf(aSubmissionRecord())) shouldNotContain "## Problem"
     }
 
-    private fun write(records: List<SubmissionRecord>): Path = ProblemReadme(RecordLayout(root)).write(records)
+    private fun write(records: List<SubmissionRecord>): Path =
+        checkNotNull(ProblemReadme(RecordLayout(root)).write(records))
 
     private fun render(records: List<SubmissionRecord>): String = Files.readString(write(records))
 
@@ -455,5 +513,10 @@ class ProblemReadmeTest {
 
         text shouldContain "(../../tags/binary-search.md)"
         text shouldNotContain "binary_search.md"
+    }
+
+    private companion object {
+        /** Where the default record's problem lives: its lesson id and the slug of its title. */
+        const val DIRECTORY = "120804-두-수의-곱-구하기"
     }
 }

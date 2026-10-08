@@ -2,16 +2,29 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -25,6 +38,9 @@ import java.time.ZoneOffset
 class RunLogTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `a run leaves one line with its name, language and full code`() {
@@ -107,6 +123,54 @@ class RunLogTest {
 
         Files.readAllLines(file) shouldHaveSize 2
         lines().single()["code"] shouldBe "a"
+    }
+
+    // Appended to, never through a link (#361) ------------------------------------------------------
+
+    /**
+     * Measured in #354's review: a run's line was appended to the push token through a linked `runs.jsonl`. It is
+     * refused now, and thrown, so the record keeps its code pending rather than claiming a line that was not kept.
+     */
+    @Test
+    fun `a run log that is a link is refused, and the file it leads to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val runs = aLink(layout().runLog(120804, TITLE), token)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { log().append(aRun(), "select 1\n") }
+        }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        heard.single() shouldContain runs.toString()
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    @Test
+    fun `a problem directory that is a link gets no run log, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/120804-두-수의-곱-구하기"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { log().append(aRun(), "select 1\n") }
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "is a symbolic link"
+    }
+
+    @Test
+    fun `a run log that is a dangling link is refused, and nothing is created where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-run.jsonl")
+        val runs = aLink(layout().runLog(120804, TITLE), nowhere)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { log().append(aRun(), "select 1\n") }
+        }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        heard.single() shouldContain runs.toString()
     }
 
     private fun aRun(ts: String = "2026-10-03T15:21:02+09:00", verdict: Verdict = Verdict.WRONG) = aSubmissionRecord(
