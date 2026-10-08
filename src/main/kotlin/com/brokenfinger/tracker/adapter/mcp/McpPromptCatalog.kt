@@ -60,12 +60,9 @@ object McpPromptCatalog {
         }
     }
 
-    // A key is the client's text, so it is quoted: "a, b" stays one item and a newline cannot break the message.
-    private fun unknownArguments(unknown: Set<String>): String {
-        val received = unknown.sorted().joinToString { JsonPrimitive(it).toString() }
-        val taken = ExamPrepScope.ARGUMENTS.joinToString()
-        return "unknown argument(s): $received; ${ExamPrepPrompt.NAME} takes $taken, in that order"
-    }
+    // Worded as a tool's refusal is, and quoted the same way; "in that order", because a prompt's order is positional.
+    private fun unknownArguments(unknown: Set<String>): String =
+        McpArguments.unknown(ExamPrepPrompt.NAME, unknown, ExamPrepScope.ARGUMENTS) + ", in that order"
 
     // Named, because three String? in a row would compile in any order.
     private fun readScope(arguments: JsonObject): ExamPrepScope = ExamPrepScope(

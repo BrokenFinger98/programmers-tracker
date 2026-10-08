@@ -15,10 +15,13 @@ import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Test
 
 class McpToolCatalogTest {
@@ -71,6 +74,33 @@ class McpToolCatalogTest {
             schema["type"]!!.jsonPrimitive.content shouldBe "object"
             schema["additionalProperties"]!!.jsonPrimitive.booleanOrNull!!.shouldBeFalse()
         }
+    }
+
+    /**
+     * What the invoker lets through, and names when it refuses a key, is read from the schema itself, in the
+     * schema's order: what a call may carry and what `tools/list` offers cannot drift apart (#365).
+     */
+    @Test
+    fun `what a tool takes is its schema's properties, in the order the schema lists them`() {
+        tools.forEach { tool ->
+            withClue(tool.nameOf()) {
+                McpToolCatalog.argumentsOf(tool.nameOf()) shouldBe properties(tool.nameOf()).keys.toList()
+            }
+        }
+    }
+
+    /** No tool takes none today. The specification's schema for one has no `properties`, and it must read as none. */
+    @Test
+    fun `a schema without properties takes no arguments`() {
+        val bare = buildJsonObject {
+            put("name", "get_current_time")
+            putJsonObject("inputSchema") {
+                put("type", "object")
+                put("additionalProperties", false)
+            }
+        }
+
+        McpToolCatalog.argumentsIn(bare) shouldBe emptyList()
     }
 
     /** Drift guard: the schema enumerates the domain, so a new verdict cannot go unlisted. */

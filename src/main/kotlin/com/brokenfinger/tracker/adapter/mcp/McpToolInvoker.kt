@@ -37,13 +37,13 @@ import kotlinx.serialization.json.putJsonArray
  */
 class McpToolInvoker(private val query: RecordQuery) {
     fun call(name: String?, arguments: JsonObject): JsonObject = when (name) {
-        McpToolCatalog.SUBMISSIONS -> executed { submissions(checked(arguments, SUBMISSION_ARGS)) }
-        McpToolCatalog.GET_PROBLEM -> executed { problem(checked(arguments, PROBLEM_ARGS)) }
-        McpToolCatalog.STATS -> executed { stats(checked(arguments, STATS_ARGS)) }
-        McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(arguments, LIST_ARGS)) }
-        McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(arguments, REVIEW_ARGS)) }
-        McpToolCatalog.SLOW_PASSES -> executed { slowPasses(checked(arguments, SLOW_ARGS)) }
-        McpToolCatalog.REPAIR_STEPS -> executed { repairSteps(checked(arguments, REPAIR_ARGS)) }
+        McpToolCatalog.SUBMISSIONS -> executed { submissions(checked(name, arguments)) }
+        McpToolCatalog.GET_PROBLEM -> executed { problem(checked(name, arguments)) }
+        McpToolCatalog.STATS -> executed { stats(checked(name, arguments)) }
+        McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(name, arguments)) }
+        McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(name, arguments)) }
+        McpToolCatalog.SLOW_PASSES -> executed { slowPasses(checked(name, arguments)) }
+        McpToolCatalog.REPAIR_STEPS -> executed { repairSteps(checked(name, arguments)) }
         else -> throw McpFailure(
             McpErrors.INVALID_PARAMS,
             400,
@@ -228,10 +228,12 @@ class McpToolInvoker(private val query: RecordQuery) {
             ?: throw IllegalArgumentException("verdict must be one of ${Verdict.entries.joinToString()}")
 
     // The schemas say `additionalProperties: false`, so the server enforces it rather than
-    // answering a narrower question than the one it was asked.
-    private fun checked(arguments: JsonObject, allowed: Set<String>): JsonObject {
-        val unknown = arguments.keys - allowed
-        require(unknown.isEmpty()) { "unknown argument(s): ${unknown.sorted().joinToString()}" }
+    // answering a narrower question than the one it was asked. It checks against the schema's own
+    // list, and the refusal quotes each key and names that list, in the schema's order (#365).
+    private fun checked(tool: String, arguments: JsonObject): JsonObject {
+        val taken = McpToolCatalog.argumentsOf(tool)
+        val unknown = arguments.keys - taken.toSet()
+        require(unknown.isEmpty()) { McpArguments.unknown(tool, unknown, taken) }
         return arguments
     }
 
@@ -325,15 +327,5 @@ class McpToolInvoker(private val query: RecordQuery) {
         val raw = this[name] ?: return null
         return (raw as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
             ?: throw IllegalArgumentException("$name must be a whole number")
-    }
-
-    private companion object {
-        val SUBMISSION_ARGS = setOf("since", "verdict")
-        val PROBLEM_ARGS = setOf("lessonId", "include")
-        val STATS_ARGS = setOf("groupBy")
-        val LIST_ARGS = setOf("level", "part", "tag", "status")
-        val REVIEW_ARGS = setOf("limit")
-        val SLOW_ARGS = setOf("thresholdMs")
-        val REPAIR_ARGS = setOf("since", "language", "part", "lessonId", "limit")
     }
 }

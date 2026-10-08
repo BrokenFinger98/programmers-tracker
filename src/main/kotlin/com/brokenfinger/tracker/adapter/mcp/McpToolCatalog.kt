@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -61,6 +63,26 @@ object McpToolCatalog {
         add(reviewQueue())
         add(slowPasses())
         add(repairSteps())
+    }
+
+    /**
+     * What [tool] takes, in the order its schema lists it, which is the order `tools/list` shows a client. Read from
+     * the schema itself: the invoker refuses every other key against this list and names it in the refusal, so what a
+     * call may carry, what a refusal says it may carry and what the listing offers are one list (#365).
+     */
+    fun argumentsOf(tool: String): List<String> = ARGUMENTS.getValue(tool)
+
+    /**
+     * A definition's arguments, in its schema's order. A schema without `properties` takes none: that is the shape
+     * the specification recommends for a tool with no arguments, `{"type": "object", "additionalProperties": false}`.
+     */
+    internal fun argumentsIn(definition: JsonObject): List<String> {
+        val schema = definition.getValue("inputSchema").jsonObject
+        return (schema["properties"] as? JsonObject)?.keys.orEmpty().toList()
+    }
+
+    private val ARGUMENTS: Map<String, List<String>> by lazy {
+        definitions().map { it.jsonObject }.associate { it.getValue("name").jsonPrimitive.content to argumentsIn(it) }
     }
 
     private fun repairSteps(): JsonObject = tool(
