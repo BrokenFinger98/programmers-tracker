@@ -159,6 +159,18 @@ class RepositoryHeartbeatTest {
         heard.single() shouldContain marker().toString()
     }
 
+    /** Read through the link, a file that changed while the starter watched made a free repository look held. */
+    @Test
+    fun `a marker that is a link to a changing file does not make the repository look held`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = aFileNotOurs(outside)
+        aLink(marker(), elsewhere)
+
+        heartbeat(onWait = { Files.writeString(elsewhere, "changed by something else\n") }).claim()
+
+        Files.isSymbolicLink(marker()) shouldBe false
+    }
+
     @Test
     fun `a marker that is a dangling link is replaced, and nothing is created where it pointed`() {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
