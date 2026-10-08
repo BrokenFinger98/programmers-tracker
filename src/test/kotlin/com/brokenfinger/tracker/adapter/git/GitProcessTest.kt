@@ -63,6 +63,22 @@ class GitProcessTest {
         answer.stdout shouldContain "notes/today.md"
     }
 
+    /**
+     * The copy of the index a commit is staged in first, so a refusal leaves the real one untouched (#376): one
+     * call is handed it, and the next reads the repository's own again.
+     */
+    @Test
+    fun `a call can be handed an index of its own, and the next call reads the real one`() {
+        val empty = base.resolve("empty-index")
+        val process = GitProcess(repo.root)
+
+        val own = process.run(listOf("git", "ls-files"), variables = mapOf("GIT_INDEX_FILE" to "$empty"))
+        val next = process.run(listOf("git", "ls-files"))
+
+        own.stdout shouldBe ""
+        next.stdout shouldContain "notes/today.md"
+    }
+
     /** `GIT_LITERAL_PATHSPECS=1` reads every `:(…)` as a file name, so no exclusion excludes anything. */
     @Test
     fun `pathspec magic stays on whatever the inherited environment says`() {
@@ -74,8 +90,8 @@ class GitProcessTest {
     }
 
     /**
-     * The tracker reads git's own words: a directory git could not open, an `error:` from a search, the
-     * index lock. A git built with translations says them in the server's language — git 2.48.1 here
+     * The tracker reads git's own words: a directory git could not open, the index lock. A git built with
+     * translations says them in the server's language — git 2.48.1 here
      * answered this status in Korean under `ko_KR.UTF-8` and as "Auf Branch main" under German, and German
      * translates even the `warning:` prefix (#372). Where git has no translations, or the locale is not
      * installed, it answers in English either way, and this cannot fail.
