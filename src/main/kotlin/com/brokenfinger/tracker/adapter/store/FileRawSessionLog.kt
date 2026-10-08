@@ -240,27 +240,33 @@ class FileRawSessionLog(
     // Git is asked what it has ever tracked only when a file waits to be read; unanswered, none is read.
     private fun orphansUnknownToGit(named: List<Path>, guard: StateDirectory): Orphans {
         if (named.isEmpty()) return Orphans.NONE
-        val known = guard.pathsEverTracked() ?: return orphansUnanswered(named.size)
-        return orphansIn(named, known)
+        return when (val history = guard.pathsEverTracked()) {
+            is TrackedHistory.Known -> orphansIn(named, history.paths)
+            is TrackedHistory.Unanswered -> orphansUnanswered(named.size, history.reason)
+        }
     }
 
-    private fun orphansUnanswered(named: Int): Orphans {
-        sayOnce(ORPHANS_UNANSWERED_KEY) { logger.warn(ORPHANS_UNANSWERED, named) }
+    private fun orphansUnanswered(named: Int, reason: String): Orphans {
+        sayOnce(ORPHANS_UNANSWERED_KEY) { logger.warn(ORPHANS_UNANSWERED, named, reason) }
         return Orphans(emptyList(), named, unlisted = false)
     }
 
+    // A file git has known is neither read nor counted: what git delivered is no gap in what this server captured,
+    // and counting it would mark every answer for good. It is said once instead (the review of PR #395).
     private fun orphansIn(named: List<Path>, known: Set<String>): Orphans {
-        val read = named.mapNotNull { orphanOf(it, known) }.sortedBy { it.lessonId }
-        val unread = named.size - read.size
+        val (delivered, ours) = named.partition { file -> known.any { isPath(it, RAW, ORPHANS, "${file.fileName}") } }
+        if (delivered.isNotEmpty()) sayOnce(ORPHANS_KNOWN_KEY) { logger.warn(ORPHANS_KNOWN, delivered.size) }
+        val read = ours.mapNotNull { orphanOf(it) }.sortedBy { it.lessonId }
+        val unread = ours.size - read.size
         if (unread > 0) sayOnce(ORPHANS_PASSED_KEY) { logger.warn(ORPHANS_PASSED_OVER, unread, orphanBytes) }
         return Orphans(read, unread, unlisted = false)
     }
 
     // A count of lines, not of gradings: several gradings sit in one file end to end with no
     // separator, and saying "3 gradings" would be a claim this class cannot support.
-    private fun orphanOf(file: Path, known: Set<String>): OrphanedFrames? {
+    private fun orphanOf(file: Path): OrphanedFrames? {
         val lessonId = lessonIdOf(file) ?: return null
-        if (!isAReadableOrphan(file) || known.any { isPath(it, RAW, ORPHANS, file.fileName.toString()) }) return null
+        if (!isAReadableOrphan(file)) return null
         val frames = runCatching { framesIn(file) }.getOrNull() ?: return null
         return OrphanedFrames(lessonId, frames, file)
     }
@@ -315,14 +321,22 @@ class FileRawSessionLog(
     // file behind: never replayed (#377). One question to git, only when a session waits; unanswered, none is.
     private fun unknownToGit(listed: Listing, guard: StateDirectory): WorkList {
         if (listed.files.isEmpty()) return listed.keeping(emptyList())
-        val known = guard.pathsEverTracked() ?: return unanswered(listed)
-        val (delivered, ours) = listed.files.partition { session -> known.any { isPath(it, RAW, session.id.value) } }
-        if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
-        return listed.keeping(ours)
+        return when (val history = guard.pathsEverTracked()) {
+            is TrackedHistory.Known -> notDelivered(listed, history.paths)
+            is TrackedHistory.Unanswered -> unanswered(listed, history.reason)
+        }
     }
 
-    private fun unanswered(listed: Listing): WorkList {
-        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size) }
+    // A session git has known is never replayed, and not counted as left: git delivered it, so it is no gap in what
+    // this server captured, and counting it would mark every answer for good (the review of PR #395). Said once.
+    private fun notDelivered(listed: Listing, known: Set<String>): WorkList {
+        val (delivered, ours) = listed.files.partition { session -> known.any { isPath(it, RAW, session.id.value) } }
+        if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
+        return listed.without(delivered).keeping(ours)
+    }
+
+    private fun unanswered(listed: Listing, reason: String): WorkList {
+        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size, reason) }
         return listed.keeping(emptyList())
     }
 
@@ -527,6 +541,9 @@ class FileRawSessionLog(
         // [replayable] replayed, and everything else listed here left on the work list, counted in one place.
         fun keeping(replayable: List<RawSession>) =
             WorkList(replayable, LeftUnreplayed(files.size - replayable.size + others, uncounted = false))
+
+        // The same listing less [these], which leave the count altogether.
+        fun without(these: List<RawSession>) = Listing(files - these.toSet(), others)
     }
 
     // What a start replays, and what it leaves on the work list for a later one.
@@ -564,11 +581,11 @@ class FileRawSessionLog(
                 "counted, and it is left as it is. Said once for this reason."
         private const val KNOWN_TO_GIT =
             "{} raw session(s) were left in place and will never be replayed: git has tracked their names under " +
-                ".ps, so each may be what a pull delivered rather than a grading this server captured. They stay " +
-                "where they are, for a person to read. Said once."
+                ".ps, so each may be what a pull delivered rather than a grading this server captured. They are not " +
+                "counted as gaps in the history, and stay where they are for a person to read or delete. Said once."
         private const val HISTORY_UNANSWERED =
             "{} raw session(s) were left in place, not replayed: git could not say what it has ever tracked under " +
-                ".ps, and a session git delivered must never be replayed. They are replayed at the first start " +
+                ".ps ({}), and a session git delivered must never be replayed. They are replayed at the first start " +
                 "where git answers. Said once."
         private const val KNOWN = "known to git"
         private const val UNANSWERED = "history unanswered"
@@ -586,7 +603,12 @@ class FileRawSessionLog(
             "{} orphaned-frame file(s) were not read: each is not a regular file — a link, a FIFO or a device — or " +
                 "holds more than {} bytes, or git has tracked its name. Said once."
         private const val ORPHANS_UNANSWERED =
-            "{} orphaned-frame file(s) were not read: git could not say what it has ever tracked under .ps. Said once."
+            "{} orphaned-frame file(s) were not read: git could not say what it has ever tracked under .ps ({}). " +
+                "Said once."
+        private const val ORPHANS_KNOWN =
+            "{} orphaned-frame file(s) git has tracked were neither read nor counted: each may be what a pull " +
+                "delivered rather than frames this server kept, and none is a gap in the history. Said once."
+        private const val ORPHANS_KNOWN_KEY = "orphans known to git"
         private const val ORPHAN_NOT_A_FILE =
             "An orphaned frame was held in memory rather than written: where its lesson's orphans go is not a " +
                 "regular file — a link, most likely — and an append-only file is never replaced. It is written " +

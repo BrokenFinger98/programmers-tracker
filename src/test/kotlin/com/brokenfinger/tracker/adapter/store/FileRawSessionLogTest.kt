@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
+import com.brokenfinger.tracker.support.fixtures.GIT_COULD_NOT_SAY
 import com.brokenfinger.tracker.support.fixtures.NOTHING_TRACKED
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
@@ -681,6 +682,7 @@ class FileRawSessionLogTest {
 
         Files.exists(session) shouldBe true
         heard.single() shouldContain "1 raw session(s) were left in place and will never be replayed"
+        heard.single() shouldContain "not counted as gaps in the history"
         heard.single() shouldNotContain ".ps/"
     }
 
@@ -722,6 +724,30 @@ class FileRawSessionLogTest {
         }
 
         heard.single() shouldContain "1 raw session(s) were left in place, not replayed: git could not say"
+        heard.single() shouldContain GIT_COULD_NOT_SAY
+    }
+
+    /**
+     * Skipping the delete, the owner untracked a session a pull delivered, reset past its commit and force-pushed:
+     * only the reflog still named it, and it was replayed (the review of PR #395, measured on real git).
+     */
+    @Test
+    fun `a session git delivered is not replayed once a reset and a force-push leave it to the reflog`(
+        @TempDir base: Path,
+    ) {
+        val repo = GitWorkspace(base)
+        repo.withRemote()
+        val before = repo.git("rev-parse", "HEAD").trim()
+        repo.write(".ps/raw/$A_SESSION", """{"n":1}""" + "\n")
+        repo.git("add", "--force", ".ps/raw/$A_SESSION")
+        repo.git("commit", "--message", "as a pull delivers it")
+        repo.git("rm", "-r", "--cached", "--quiet", ".ps")
+        repo.git("commit", "--message", "untracked, the file left on disk")
+        repo.git("reset", "--quiet", "--hard", before)
+        repo.git("push", "--quiet", "--force", "origin", "main")
+        val state = StateDirectory(repo.root, TrackedStateEntries(repo.root))
+
+        FileRawSessionLog.under(repo.root, Clock.fixed(startedAt, ZoneOffset.UTC), state).unprocessed().shouldBeEmpty()
     }
 
     // What a start leaves unreplayed is kept for the history's readers (#377, #169) ---------------
@@ -741,8 +767,14 @@ class FileRawSessionLogTest {
         log.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
     }
 
+    /**
+     * A session git has known stays on disk, never replayed, until someone deletes it. Counted, it put a mark on
+     * every MCP answer for good after one pull (the review of PR #395). Git delivered it, so it is no gap in what
+     * this server captured: it is said in the log at each start and not counted. Sessions git could not vouch for
+     * are counted, since a later start replays them.
+     */
     @Test
-    fun `sessions git has known, or could not vouch for, are counted as left`() {
+    fun `sessions git could not vouch for are counted as left, and those it has known are not`() {
         aSessionLeftBehind(120804)
         aSessionLeftBehind(131528)
         val known = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = setOf("raw/$A_SESSION"))))
@@ -751,7 +783,7 @@ class FileRawSessionLogTest {
         known.unprocessed()
         unanswered.unprocessed()
 
-        known.unreplayed() shouldBe LeftUnreplayed(1, uncounted = false)
+        known.unreplayed() shouldBe LeftUnreplayed.NOTHING
         unanswered.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
     }
 

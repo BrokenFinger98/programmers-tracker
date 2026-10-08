@@ -1,12 +1,16 @@
 package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.adapter.store.StateDirectory
+import com.brokenfinger.tracker.adapter.store.TrackedHistory
+import com.brokenfinger.tracker.adapter.store.TrackedHistory.Known
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -138,19 +142,91 @@ class TrackedStateEntriesTest {
         repo.git("rm", "--cached", "--quiet", "--", *paths.toTypedArray())
         repo.git("commit", "--message", "untracked")
 
-        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/a.jsonl", "raw/b.jsonl", "RAW/c.jsonl")
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe
+            Known(setOf("raw/a.jsonl", "raw/b.jsonl", "RAW/c.jsonl"))
     }
 
     @Test
     fun `a repository with no commit has tracked nothing below the state directory`() {
-        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe emptySet()
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe Known(emptySet())
     }
 
     @Test
     fun `history git cannot read is answered neither`() {
         val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
 
-        TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeNull()
+        TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeInstanceOf<TrackedHistory.Unanswered>()
+    }
+
+    /** A failed history held every session without saying why (the review of PR #395): git's own words say it. */
+    @Test
+    fun `a history git cannot read is answered with git's reason`() {
+        val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
+
+        val reason = TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeInstanceOf<TrackedHistory.Unanswered>()
+            .reason
+
+        reason shouldContain "128"
+        reason shouldContain "not a git repository"
+    }
+
+    /**
+     * Skipping the delete, the owner untracked a pulled session, reset past the commit that delivered it and
+     * force-pushed: no ref reached that commit any more, only the reflog, and the session was replayed (the review
+     * of PR #395, measured on real git). The reflogs are read too.
+     */
+    @Test
+    fun `a path a reset and a force-push left to the reflog alone is answered`() {
+        repo.withRemote()
+        val before = repo.git("rev-parse", "HEAD").trim()
+        delivered(".ps/raw/s.jsonl")
+        repo.git("push", "--quiet", "origin", "main")
+        untrackedWithoutDeleting()
+        repo.git("reset", "--quiet", "--hard", before)
+        repo.git("push", "--quiet", "--force", "origin", "main")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe Known(setOf("raw/s.jsonl"))
+    }
+
+    /** The attacker force-pushed the delivery away, and the owner's plain `pull --rebase` dropped it from every ref. */
+    @Test
+    fun `a path a force-push and a pull with rebase left to the reflog alone is answered`() {
+        val remote = repo.withRemote()
+        val before = repo.git("rev-parse", "HEAD").trim()
+        val attacker = aCloneOf(remote, "attacker")
+        delivered(".ps/raw/s.jsonl", at = attacker)
+        repo.git("push", "--quiet", "origin", "main", at = attacker)
+        repo.git("pull", "--quiet", "--rebase")
+        untrackedWithoutDeleting()
+        repo.git("reset", "--quiet", "--hard", before, at = attacker)
+        repo.git("push", "--quiet", "--force", "origin", "main", at = attacker)
+
+        repo.git("pull", "--quiet", "--rebase")
+
+        repo.git("log", "--all", "--format=%s").trim() shouldBe "init"
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe Known(setOf("raw/s.jsonl"))
+    }
+
+    private fun delivered(path: String, at: Path = repo.root) {
+        val file = at.resolve(path)
+        Files.createDirectories(file.parent)
+        Files.writeString(file, "{}\n")
+        repo.git("add", "--force", path, at = at)
+        repo.git("commit", "--quiet", "--message", "as a pull delivers it", at = at)
+    }
+
+    private fun untrackedWithoutDeleting() {
+        repo.git("rm", "-r", "--cached", "--quiet", ".ps")
+        repo.git("commit", "--quiet", "--message", "untracked, the file left on disk")
+    }
+
+    private fun aCloneOf(remote: Path, name: String): Path {
+        val clone = base.resolve(name)
+        repo.git("clone", "--quiet", remote.toString(), clone.toString(), at = base)
+        repo.git("config", "user.email", "test@example.invalid", at = clone)
+        repo.git("config", "user.name", "Tracker Test", at = clone)
+        repo.git("config", "commit.gpgsign", "false", at = clone)
+        return clone
     }
 
     /** A fetch brings branches nobody checks out, and a pull can be undone while its branch stays. */
@@ -164,7 +240,7 @@ class TrackedStateEntriesTest {
         repo.git("commit", "--message", "upstream only")
         repo.git("checkout", "--quiet", "main")
 
-        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/o.jsonl")
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe Known(setOf("raw/o.jsonl"))
     }
 
     /**
@@ -177,7 +253,7 @@ class TrackedStateEntriesTest {
         tracked(listOf(".ps/raw/r.jsonl"))
         repo.git("commit", "--message", "the first commit")
 
-        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/r.jsonl")
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe Known(setOf("raw/r.jsonl"))
     }
 
     /** A path a merge alone added is in neither parent, so only the merge compared with each parent names it. */
@@ -198,7 +274,7 @@ class TrackedStateEntriesTest {
         tracked(listOf(".ps/raw/m.jsonl"))
         repo.git("commit", "--message", "a merge that adds a session")
 
-        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/m.jsonl")
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe Known(setOf("raw/m.jsonl"))
     }
 
     // The way out the refusal names, under every spelling (#377) ------------------------------------

@@ -314,19 +314,24 @@ of them exist on the author's machine from defects fixed on 2026-08-11. The fiel
 lessons and counts the frames.
 
 It also says so when the last start left raw sessions on its work list rather than replay them, and
-`sessionsNotReplayed` counts them. A start leaves a session where it is in four cases: the state
-directory is not the tracker's own, git tracks something under it, git has ever tracked that session's
-name (a pull can deliver one), or git cannot say what it has tracked. Until a later start replays them,
-they are gradings no record represents. Where the raw directory could not be listed at all, through a link
-or otherwise, nothing there was counted, so `rawDirectoryNotListed` says so instead of a count. Unlike
-orphaned frames, these can still become records: a start that finds the cause gone replays them. A
-session git has tracked is the exception and is never replayed.
+`sessionsNotReplayed` counts them. A start leaves a session where it is, and counts it, in four cases: the
+state directory is not the tracker's own, git tracks something under it, git cannot say what it has
+tracked, or the session is not a regular file. Until a later start replays them, they are gradings no
+record represents. Where the raw directory could not be listed at all, through a link or otherwise,
+nothing there was counted, so `rawDirectoryNotListed` says so instead of a count. Unlike orphaned
+frames, these can still become records: a start that finds the cause gone replays them.
+
+A session whose name git has ever tracked is the exception. A pull can deliver one, so it is never
+replayed. It is not counted either: what git delivered is no gap in what this server captured, and a
+count would mark every answer for as long as the file stays. The server's log says how many there are,
+once at each start.
 
 Orphaned frames are read under the same rule. Some files under `orphans/` are never opened: one that is
-not a regular file (a link, a FIFO or a device), one larger than 16 MiB, and one whose name git has ever
-tracked. A FIFO there once hung every answer. For those files `orphanFilesNotRead` gives a count instead
-of their frames. Where the orphans could not be listed at all, `orphansNotListed` says so. Either way the
-warning is present, because a refusal does not mean the history is whole.
+not a regular file (a link, a FIFO or a device), and one larger than 16 MiB. A FIFO there once hung every
+answer. For those files `orphanFilesNotRead` gives a count instead of their frames. Where the orphans
+could not be listed at all, `orphansNotListed` says so. Either way the warning is present, because a
+refusal does not mean the history is whole. An orphans file whose name git has ever tracked is neither
+opened nor counted, as with sessions.
 
 `incompleteHistory` is **the first key of an answer**, ahead of the payload, in `structuredContent`
 and in the text copy of it alike. A client that cuts a large answer cuts its end, and a warning at

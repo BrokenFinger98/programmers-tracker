@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.adapter.store.StateDirectory
+import com.brokenfinger.tracker.adapter.store.TrackedHistory
 import com.brokenfinger.tracker.adapter.store.TrackedState
 import java.nio.file.Files
 import java.nio.file.Path
@@ -41,7 +42,8 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
      * below it (#377): a pull can deliver a raw session there, and untracking it leaves the file behind. One
      * `git log` over every ref ([HISTORY]); its first segments are judged as [tracksAnything] judges the index.
      */
-    override fun pathsEverTracked(): Set<String>? = runCatching { inHistory() }.getOrNull()
+    override fun pathsEverTracked(): TrackedHistory =
+        runCatching { inHistory() }.getOrElse { TrackedHistory.Unanswered(it.javaClass.simpleName) }
 
     private fun listed(): Boolean? {
         val result = process.run(listOf("git", "ls-files", "-z"))
@@ -49,10 +51,17 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
         return firstSegments(pathsIn(result.stdout)).any { isStateDirectory(it) }
     }
 
-    private fun inHistory(): Set<String>? {
+    private fun inHistory(): TrackedHistory {
         val result = process.run(HISTORY)
-        if (!result.succeeded()) return null
-        return belowStateDirectory(pathsIn(result.stdout))
+        if (!result.succeeded()) return TrackedHistory.Unanswered(reasonOf(result))
+        return TrackedHistory.Known(belowStateDirectory(pathsIn(result.stdout)))
+    }
+
+    // How git ended, and its own first line when it said one: why, never what any file holds (the review of PR #395).
+    private fun reasonOf(result: GitResult): String {
+        if (result.code == GitProcess.TIMED_OUT) return "git log did not finish within ${GitProcess.TIMEOUT.seconds} s"
+        val said = result.stderr.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+        return listOfNotNull("git log exited ${result.code}", said?.take(REASON_LENGTH)).joinToString(": ")
     }
 
     // Each first segment is judged once: the history names the same few thousands of times.
@@ -79,13 +88,19 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
         const val NUL = '\u0000'
 
         /**
-         * Every ref; a merge compared with each parent, so a path a merge alone added is named; the root commit
-         * against nothing; no rename detection, so a moved path is named at both ends; and no colour or signature
-         * among the paths. An unborn repository answers nothing, and exit 0.
+         * Every ref and every reflog entry: a reset and a force-push, or a force-push and a plain `pull --rebase`,
+         * leave the commit that delivered a session in the reflogs alone (the review of PR #395, measured). A merge
+         * is compared with each parent, so a path a merge alone added is named; the root commit against nothing; no
+         * rename detection, so a moved path is named at both ends; and no colour or signature among the paths. An
+         * unborn repository answers nothing, and exit 0. What no reflog holds any more — an expired entry, a
+         * rewritten history — is not named, which is why the owner deletes what git put there first.
          */
         val HISTORY = listOf(
-            "git", "log", "--all", "-m", "--root", "--no-renames", "--no-color", "--no-show-signature",
+            "git", "log", "--all", "--reflog", "-m", "--root", "--no-renames", "--no-color", "--no-show-signature",
             "--name-only", "-z", "--format=",
         )
+
+        /** How much of git's own first line a reason keeps. */
+        const val REASON_LENGTH = 200
     }
 }

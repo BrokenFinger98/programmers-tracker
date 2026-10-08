@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.adapter.git.TrackedStateEntries
 import com.brokenfinger.tracker.application.Orphans
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
+import com.brokenfinger.tracker.support.fixtures.GIT_COULD_NOT_SAY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
@@ -150,12 +151,18 @@ class FileRawSessionLogOrphansTest {
 
     /** Untracked, a file a pull delivered reads like the tracker's own; git's history still names it (#377). */
     @Test
-    fun `an orphans file git has ever tracked is not counted once untracked`() {
+    fun `an orphans file git has ever tracked is neither read nor counted once untracked`() {
         val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
         Files.writeString(orphans.resolve("131528.jsonl"), "{}\n".repeat(40))
         val git = ChangingAnswer(false, history = setOf("raw/orphans/131528.jsonl"))
+        val log = logGuardedBy(aStateDirectory(root, git))
 
-        logGuardedBy(aStateDirectory(root, git)).orphans() shouldBe Orphans(emptyList(), unread = 1, unlisted = false)
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.orphans() shouldBe Orphans.NONE
+            log.orphans() shouldBe Orphans.NONE
+        }
+
+        heard.single() shouldContain "1 orphaned-frame file(s) git has tracked were neither read nor counted"
     }
 
     /** Every MCP answer asks for the orphans, so what is passed over is said once, by how many, never where. */
@@ -221,12 +228,16 @@ class FileRawSessionLogOrphansTest {
 
     /** Git that cannot say what it has ever tracked: none is read, each is counted, and that is said. */
     @Test
-    fun `no orphans file is read while git cannot say what it has ever tracked`() {
+    fun `no orphans file is read while git cannot say what it has ever tracked, and why is said`() {
         val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
         Files.writeString(orphans.resolve("131528.jsonl"), "{}\n")
+        val log = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null)))
 
-        logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null))).orphans() shouldBe
-            Orphans(emptyList(), unread = 1, unlisted = false)
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.orphans() shouldBe Orphans(emptyList(), unread = 1, unlisted = false)
+        }
+
+        heard.single() shouldContain GIT_COULD_NOT_SAY
     }
 
     @Test
