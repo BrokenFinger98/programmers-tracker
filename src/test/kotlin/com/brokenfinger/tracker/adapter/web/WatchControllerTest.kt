@@ -15,6 +15,7 @@ import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aWatchBody
 import com.brokenfinger.tracker.support.fixtures.aWatchCommand
 import com.brokenfinger.tracker.support.fixtures.aWatchStatus
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -26,6 +27,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import jakarta.servlet.ServletException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -43,6 +45,7 @@ import org.springframework.http.MediaType
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
+import java.nio.file.FileSystemException
 
 /**
  * The one Spring slice test the test-environment ADR allows — web controllers only
@@ -303,6 +306,42 @@ class WatchControllerTest {
         coEvery { handler.watch(any()) } returns aWatchStatus(WatchOutcome.REFRESHED)
 
         postWatch(aWatchBody()).jsonBody().shouldNotContainKey("lastRecord")
+    }
+
+    /**
+     * A log the server cannot read costs the answer its last record, and the answer says so (#387's review). Measured:
+     * with `log/` a link, every heartbeat answered 500 with an ERROR stack, the badge read "failed — 500 … no detail",
+     * and the session hand-over, which the extension makes on a good answer only, stopped with it.
+     */
+    @Test
+    fun `a log that cannot be read leaves out the last record, says why, and still answers`() {
+        coEvery { handler.watch(any()) } returns aWatchStatus(session = SessionState.EXPIRED)
+        every { records.lastRecordOf(any()) } throws FileSystemException("log/submissions.jsonl", null, "a link")
+
+        val response = postWatch(aWatchBody())
+
+        response.status shouldBe 200
+        response.jsonBody().shouldNotContainKey("lastRecord")
+        response.jsonBody().stringField("recordsUnread")!! shouldContain "submission log could not be read"
+        response.jsonBody().stringField("session") shouldBe "expired"
+        response.contentAsString shouldNotContain "a link"
+    }
+
+    /** Only a log that could not be read: any other failure is no reason this answer can give. */
+    @Test
+    fun `a failure that is not a read of the log is not answered as one`() {
+        coEvery { handler.watch(any()) } returns aWatchStatus()
+        every { records.lastRecordOf(any()) } throws IllegalStateException("not a read")
+
+        shouldThrow<ServletException> { postWatch(aWatchBody()) }
+    }
+
+    /** And a log that reads says nothing about it. */
+    @Test
+    fun `a log that was read adds no reason`() {
+        coEvery { handler.watch(any()) } returns aWatchStatus()
+
+        postWatch(aWatchBody()).jsonBody().shouldNotContainKey("recordsUnread")
     }
 
     private fun postWatch(body: String, credential: String? = GRANTED): MockHttpServletResponse = mvc.post("/watch") {

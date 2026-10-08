@@ -85,6 +85,13 @@ function subscriptionState(subscription) {
   return null;
 }
 
+// A server that cannot read its own submission log (#387's review): it observes every grading and records none until
+// the log reads again. It used to answer 500 on every heartbeat, which also skipped the session hand-over in watch().
+function recordsUnread(reason) {
+  if (!reason) return null;
+  return ["blind", reason];
+}
+
 function recordState(last) {
   if (!last) return ["watching", ""];
   const when = agoOf(last.at);
@@ -158,7 +165,8 @@ async function watch(body) {
         const value = await readSessionCookie();
         if (value) push(value);
       }
-      const blind = sessionExpired(answer.session) ?? subscriptionState(answer.subscription);
+      const blind = sessionExpired(answer.session) ?? subscriptionState(answer.subscription) ??
+        recordsUnread(answer.recordsUnread);
       if (blind) {
         report(blind[0], `lesson ${answer.lessonId} in ${answer.language} — ${blind[1]}`);
         return;
