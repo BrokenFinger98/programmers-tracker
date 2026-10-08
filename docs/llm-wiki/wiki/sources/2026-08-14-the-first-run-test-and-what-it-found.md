@@ -12,10 +12,10 @@ sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md]
 Continues [[sources/2026-08-14-the-warnings-and-what-was-under-them]] from the owner's correction:
 the remaining risks were mine to close, and the browser-driven first-run test was something the
 owner had already told me to do myself. **Listing a risk is not reporting it; it is deferring it.**
-Six PRs merged. The last coverage exemption was retired, two Lv0 problems were solved against the
-blank vault the wipe had left ([[sources/2026-08-14-the-clean-slate]]), and the test found two
-defects: a pass whose push carried everything except the solution (#316), and a seed that
-Obsidian rewrites when it renders the view (#314).
+The last coverage exemption was retired, two Lv0 problems were solved against the blank vault the
+wipe had left ([[sources/2026-08-14-the-clean-slate]]), and the test found two defects: a pass
+whose push carried everything except the solution (#316), and a seed that Obsidian rewrites when it
+renders the view (#314).
 
 ## Key claims
 
@@ -107,7 +107,8 @@ The reversed push and the failed reproduction are the two cases
 
 ## What found each thing
 
-Again outside references, not re-reading the code:
+The raw closes on the shape of the day, the warnings segment included: six PRs merged, and again
+the findings came from outside references rather than from re-reading code.
 
 | Found by | What it found |
 |---|---|
