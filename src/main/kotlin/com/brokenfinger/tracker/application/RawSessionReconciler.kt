@@ -4,6 +4,8 @@ import com.brokenfinger.tracker.domain.ChannelKey
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -123,12 +125,17 @@ class RawSessionReconciler(
     /**
      * Decoded with replacement rather than reported: a crash can tear a line in the middle of
      * a multi-byte character, and one bad byte must not cost the whole session.
+     *
+     * Read without following a link at the file (#377): the work list holds regular files alone,
+     * and one swapped for a link after it was listed fails here rather than being read through.
      */
-    private fun linesOf(session: RawSession): List<String> =
-        String(Files.readAllBytes(session.path), StandardCharsets.UTF_8)
-            .lineSequence()
-            .filter { it.isNotBlank() }
-            .toList()
+    private fun linesOf(session: RawSession): List<String> = String(bytesOf(session.path), StandardCharsets.UTF_8)
+        .lineSequence()
+        .filter { it.isNotBlank() }
+        .toList()
+
+    private fun bytesOf(file: Path): ByteArray =
+        Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
 
     private fun failed(session: RawSession, cause: Throwable): ReconcileReport {
         logger.error("Lesson {} could not be reconciled; its frames are kept", session.lessonId, cause)

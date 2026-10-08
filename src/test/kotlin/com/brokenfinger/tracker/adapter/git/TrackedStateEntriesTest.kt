@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -118,5 +121,122 @@ class TrackedStateEntriesTest {
         val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
 
         TrackedStateEntries(elsewhere).tracksAnything().shouldBeNull()
+    }
+
+    // What git has ever tracked below the state directory (#377) ----------------------------------
+
+    /**
+     * A pull can deliver a raw session under `.ps`, and untracking it leaves the file where git put it (the
+     * review of PR #395). Git's history still names it, under every spelling that lands in the state directory,
+     * each path relative to it and spelled as committed.
+     */
+    @Test
+    fun `paths git has ever tracked below the state directory are answered after they are untracked`() {
+        val paths = listOf(".ps/raw/a.jsonl", ".PS/raw/b.jsonl", "$A_LONG_S_STATE_DIRECTORY/RAW/c.jsonl")
+        tracked(paths + "problems/1-x/README.md" + ".ps2/raw/d.jsonl")
+        repo.git("commit", "--message", "as a pull delivers it")
+        repo.git("rm", "--cached", "--quiet", "--", *paths.toTypedArray())
+        repo.git("commit", "--message", "untracked")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/a.jsonl", "raw/b.jsonl", "RAW/c.jsonl")
+    }
+
+    @Test
+    fun `a repository with no commit has tracked nothing below the state directory`() {
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe emptySet()
+    }
+
+    @Test
+    fun `history git cannot read is answered neither`() {
+        val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
+
+        TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeNull()
+    }
+
+    /** A fetch brings branches nobody checks out, and a pull can be undone while its branch stays. */
+    @Test
+    fun `a path on a branch never checked out is answered`() {
+        repo.write("notes.md", "a note\n")
+        repo.git("add", "notes.md")
+        repo.git("commit", "--message", "base")
+        repo.git("checkout", "--quiet", "-b", "upstream")
+        tracked(listOf(".ps/raw/o.jsonl"))
+        repo.git("commit", "--message", "upstream only")
+        repo.git("checkout", "--quiet", "main")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/o.jsonl")
+    }
+
+    /**
+     * A path the first commit added has no parent to differ from, and `log.showRoot` off hides that commit's
+     * paths. The owner's own git configuration reaches the tracker's git, so `--root` names them regardless.
+     */
+    @Test
+    fun `a path the first commit added is answered, whatever the log configuration says`() {
+        repo.git("config", "log.showRoot", "false")
+        tracked(listOf(".ps/raw/r.jsonl"))
+        repo.git("commit", "--message", "the first commit")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/r.jsonl")
+    }
+
+    /** A path a merge alone added is in neither parent, so only the merge compared with each parent names it. */
+    @Test
+    fun `a path a merge alone added is answered`() {
+        repo.write("notes.md", "a note\n")
+        repo.git("add", "notes.md")
+        repo.git("commit", "--message", "base")
+        repo.git("checkout", "--quiet", "-b", "side")
+        repo.write("side.md", "side\n")
+        repo.git("add", "side.md")
+        repo.git("commit", "--message", "side")
+        repo.git("checkout", "--quiet", "main")
+        repo.write("main.md", "main\n")
+        repo.git("add", "main.md")
+        repo.git("commit", "--message", "main")
+        repo.git("merge", "--no-ff", "--no-commit", "--quiet", "side")
+        tracked(listOf(".ps/raw/m.jsonl"))
+        repo.git("commit", "--message", "a merge that adds a session")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/m.jsonl")
+    }
+
+    // The way out the refusal names, under every spelling (#377) ------------------------------------
+
+    /**
+     * `git ls-files .ps` listed none of these and `git rm -r --cached .ps` untracked none, so the refusal stood
+     * after the owner followed it (the review of PR #395, measured on APFS). The commands the TRACKED reason
+     * gives, run here exactly as the owner reads them, list each spelling and leave git tracking nothing there.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = [".ps/raw", ".PS/raw", ".Ps/raw", ".pS/raw", ".pſ/raw", ".Pſ/raw", ".PS/RAW", ".pſ/RAW"])
+    fun `the TRACKED reason lists and untracks what git tracks under any spelling of the state directory`(
+        directory: String,
+    ) {
+        tracked(listOf("$directory/x.jsonl"))
+        repo.git("commit", "--message", "as a pull delivers it")
+        val reason = StateDirectory.Refusal.TRACKED.reason
+
+        ran(commandIn(reason, "git ls-files")).trim() shouldBe "$directory/x.jsonl"
+        ran(commandIn(reason, "git rm"))
+
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe false
+    }
+
+    // A command the owner is told to run, as backquoted in [reason].
+    private fun commandIn(reason: String, starting: String): String =
+        Regex("`([^`]+)`").findAll(reason).map { it.groupValues[1] }.first { it.startsWith(starting) }
+
+    // Run as a shell would split it: single quotes keep a word whole. Never through a shell, which Windows lacks.
+    private fun ran(command: String): String {
+        val words = Regex("'([^']*)'|(\\S+)").findAll(command).map { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+        return repo.git(*words.drop(1).toList().toTypedArray())
+    }
+
+    /** [paths] in the index as git would hold them after a checkout, whatever this filesystem folds. */
+    private fun tracked(paths: List<String>) {
+        repo.write("decoy", "decoy\n")
+        val blob = repo.git("hash-object", "-w", "--no-filters", "decoy").trim()
+        paths.forEach { repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$it") }
     }
 }
