@@ -97,7 +97,9 @@ The push searches what `OutgoingObjectScan` reads:
    unchanged — `HEAD --not --remotes=<remote>` — and is decided in `CommandLineGitSync.outgoingRange`
    alone, for #376 and #378 to change. A second listing, `rev-list --objects HEAD^{tree}`, names HEAD's
    own tree at every push, whatever the remote-tracking refs say (added after the review of 315f44e, see
-   the Outcome); an object both name is read once.
+   the Outcome); an object both name is read once. *⚠️ Superseded by
+   [[decisions/2026-10-08-each-gate-searches-what-its-destination-lacks]] (#376): the range leaves out what
+   the push's destinations say they hold, through `ls-remote`, and HEAD's tree is no longer listed.*
 2. `git cat-file --batch-check --buffer` describes each listed object, 50,000 ids to a call. Only blobs
    are read; commit and tag messages are #375's, and their types would join `READ_TYPES`. *Since #375,
    commits and trees are read too, and the push sends no tag — see the Outcome.*
@@ -112,7 +114,9 @@ The push searches what `OutgoingObjectScan` reads:
    WARNs are #360's, and name neither what matched nor where.
 
 The commit side's two searches (`--untracked`, `--cached`) stay `git grep`. `lastSearchedClean` keeps its
-key. The token shapes move to `TokenPatterns.SHAPES`, which the commit side's grep also reads.
+key. The token shapes move to `TokenPatterns.SHAPES`, which the commit side's grep also reads. *Since #376
+the commit side reads with this scan too, and no `git grep` is left; since #378 the key covers what was
+searched.*
 
 The git this relies on: `rev-list --objects`, and `cat-file --batch` and `--batch-check` in their default
 formats, far older than any git the tracker runs with; and `cat-file --buffer`, which came with
@@ -168,9 +172,11 @@ the bytes `BatchOutput` reads.
   outgoing, +0.1–0.25 s with nothing else outgoing, measured above. So a token in a file still in HEAD's
   tree refuses every push until a commit removes it, as #360's search did. What the remote holds only in
   older commits is not read again — the push does not send it, and it was public from its first push.
+  *Gone with #376: HEAD's tree is not listed, and a string the remote already holds no longer refuses.*
 - **The push now finds what a commit does not.** A token in UTF-16 text is refused at the push, while the
   commit side's `git grep` still lets it into a local commit, so every push is refused until the token is
   removed from history. Fail closed, and out of this issue's scope (the commit side stays `git grep`).
+  *Resolved by #376: the commit side reads what it adds with this scan, UTF-16 included.*
 - **Other encodings are not read.** UTF-32, base64, a compressed or encrypted blob: a token in one is
   missed, as `git grep` missed it. A UTF-16 stored value made only of characters with no zero byte in
   either byte order would be missed in a window without a NUL; a GitHub token and the stored line are
@@ -187,7 +193,7 @@ the bytes `BatchOutput` reads.
   refs say — what `git grep` read of HEAD before #373. What is not: a commit behind the stale ref, one the
   ref reaches and the remote lacks, and whatever only it carries. A token in such a commit's tree that
   HEAD's tree no longer holds goes out unsearched. `git grep` did not read it either: it searched only
-  the commits the same range named.
+  the commits the same range named. *Resolved by #376: the range is what the destinations say they hold.*
 - **Commit and tag messages are still not read** (#375). *Resolved by #375, in the Outcome: commits and
   names are read, and no tag is sent.*
 
@@ -301,7 +307,8 @@ Accepted with it:
 
 - **The commit side still reads file content alone.** A file named with a token is committed by a
   reconciliation, and then every push is refused until the history no longer holds the name. Fail closed;
-  the owner rewrites history, as for any token in what is committed.
+  the owner rewrites history, as for any token in what is committed. *Resolved by #376: the paths a
+  commit adds are matched as their bytes, and such a commit is refused.*
 - **The header is one part.** The author, the committer and a merged tag are not told apart; the commit's
   id is what the owner needs, and `git cat-file commit <id>` shows the rest.
 - **A UTF-16 name is read as bytes.** A stored value whose UTF-16 form holds no zero byte would be missed
@@ -325,3 +332,19 @@ said as content 1. Two of them, the tails, failed to compile as first written an
 
 Gates, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build;
 `verifyBranchCoverage` (`adapter/git` 88%, 341 of 384; `adapter/config` 65% at its floor); guards.
+
+**#376 and #378, after #375** (the #376 page, linked from Decision 1; branch
+`fix/376-gate-range-and-scope`). The range this page left to #376 is now what the push's destinations say
+they hold, through `ls-remote` on each push URL, and the cache is keyed on what was searched (#378). The
+commit side reads with this scan as well — what a commit adds, found by `add` on a copy of the index —
+and matches the paths it adds as bytes, which closes the two gaps this page accepted for the commit side:
+UTF-16 text and names.
+
+**HEAD's tree is no longer listed at a push.** It was the cover for a range that trusted stale refs, and
+the range no longer does. It is redundant: the two tests the review of 315f44e left — `set-url` to a new
+remote, the remote re-created empty — pass without it, since the new remote holds nothing and the range is
+then all of HEAD's history; and what HEAD's tree holds and the destinations lack is in the range, while
+what they hold is not sent. It was also contrary to #376's second finding: listed, it refused every push
+for a token-shaped string the remote already held (`a push goes ahead when the remote already holds what
+HEAD carries`, red with it). The Rationale's last column and the cost "HEAD's tree is read at every push"
+are history now.

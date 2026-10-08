@@ -359,6 +359,48 @@ class DailyBackupTest {
     }
 
     /**
+     * Git takes a URL or a path as a branch's remote and pushes to it as it is, with no remote named at all
+     * (#378). The push skipped it as a missing remote, and the backup, which then asks whether there is a
+     * remote, heard none and said nothing: the day never counted, and nothing was said.
+     */
+    @Test
+    fun `a branch whose remote is a URL is backed up there`() {
+        val byUrl = GitWorkspace(base.resolve("by-url"))
+        val target = base.resolve("target.git")
+        byUrl.git("init", "--quiet", "--bare", "-b", "main", target.toString(), at = base)
+        byUrl.git("config", "branch.main.remote", target.toString())
+        byUrl.write(".gitignore", ".ps/\n")
+        byUrl.write("log/submissions.jsonl", A_RECORD)
+        val backup = DailyBackup(sync(byUrl.root), backupLog(), fixedAt(EVENING), zone = SEOUL)
+
+        backup.runIfDue() shouldBe true
+
+        byUrl.subjects(at = target) shouldContainExactly listOf(CommandLineGitSync.RECONCILE_MESSAGE)
+        backupLog().lastSuccessAt() shouldBe EVENING
+    }
+
+    /**
+     * #390 keeps the backup silent for a repository with no remote, and asks the git adapter whether there
+     * is one to tell that apart from a push that failed. A branch whose remote is a URL has one, so a push
+     * there that fails is a fault the backup says — not the remote-less setup it keeps quiet about.
+     */
+    @Test
+    fun `a branch whose remote is a URL that leads nowhere says it could not push`() {
+        val byUrl = GitWorkspace(base.resolve("by-url"))
+        byUrl.git("config", "branch.main.remote", base.resolve("nowhere.git").toString())
+        byUrl.write(".gitignore", ".ps/\n")
+        byUrl.write("log/submissions.jsonl", A_RECORD)
+        val backup = DailyBackup(sync(byUrl.root), backupLog(), fixedAt(EVENING), zone = SEOUL)
+
+        val heard = warnedWhile { backup.runIfDue() shouldBe false }
+
+        heard.size shouldBe 2
+        heard.first() shouldContain "Daily backup could not push"
+        heard.last() shouldContain "could not say what it holds"
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
+    /**
      * A refusal that stands — here a note the content search refuses — held the day, and every check then
      * ran git, the records repository's hooks and the search again, and said why: 1,440 times a day (#390).
      * The backup tries again a minute after the first failure, then twice as long each time, up to an

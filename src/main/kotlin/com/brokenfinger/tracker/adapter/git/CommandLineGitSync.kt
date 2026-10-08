@@ -54,12 +54,13 @@ import java.util.concurrent.atomic.AtomicReference
  *    nothing that is it or under it, under any name the filesystem folds to it ([StateDirectory]).
  * 3. The credential is replaced, never written through a link ([GithubRemote]), and git is only
  *    pointed at it while it is a regular file ([PushCredential]).
- * 4. The content gate: the working tree within a commit's scope before staging, what is staged
- *    before the commit, and every blob a push would send before the push, are searched for the
- *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
- *    remote, and runs with replace refs off, so the search reads the objects the push sends — each
- *    once, for the commits that remote's tracking refs lack, which a stale ref understates
- *    ([OutgoingObjectScan], #373) — and HEAD's own tree at every push, whatever the refs say.
+ * 4. The content gate: what a commit would add — the paths it adds, and its blobs less what HEAD's tree
+ *    already holds — before anything is staged ([StagingPreview], #376), and every object a push would
+ *    send, before the push, are searched for the stored token and for anything shaped like a GitHub token,
+ *    each object once ([OutgoingObjectScan], #373). A push names its one branch and its remote, and runs
+ *    with replace refs off, so the search reads the objects the push sends: what its destinations lack, as
+ *    each says itself, never as a remote-tracking ref remembers it ([RemoteTips], #376). What HEAD already
+ *    holds is said once at reconciliation, and not refused (#376).
  *
  * A push also reads the commits it would send — each message, author and committer — and the trees, which
  * hold the names (#375). What none of this reads: content a filter keeps outside the blob.
@@ -82,8 +83,20 @@ class CommandLineGitSync(
 
     private val process = GitProcess(root, environment)
 
-    /** What a push would send, searched object by object, through the same calls as everything else here. */
+    /**
+     * What a push would send, or a commit would add, searched object by object, through the same calls as
+     * everything else here.
+     */
     private val outgoing = OutgoingObjectScan(ProcessCalls(process, ::commandFor))
+
+    /** What a commit would add, staged first in a copy of the index (#376). */
+    private val stagingPreview = StagingPreview(root, ::gitWith)
+
+    /** What a push's destinations already hold, asked of them through the push's own credential (#376). */
+    private val remoteTips = RemoteTips(ProcessCalls(process, ::commandFor))
+
+    /** Whether a destination that could not say what it holds was already said, since it last answered. */
+    private val unansweredSaid = AtomicBoolean()
 
     private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
 
@@ -111,6 +124,9 @@ class CommandLineGitSync(
     /** The last head a push searched clean, and what it was searched against. */
     private val lastSearchedClean = AtomicReference<SearchedHead?>()
 
+    /** HEAD's tree as reconciliation last searched it for what was already committed (#376). */
+    private val lastSearchedTree = AtomicReference<SearchedTree?>()
+
     override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean =
         inRepository("commit") { commitScoped(record, paths) }
 
@@ -118,13 +134,18 @@ class CommandLineGitSync(
 
     override fun push(): Boolean = inRepository("push") { pushed() }
 
-    // `git remote` lists names and prints nothing when there is none, so an empty answer is the
-    // whole signal. A failure to run it answers false: unknown is not "configured". So does one that
-    // could not start, which threw — with the records directory gone, out of the backup's check (the
-    // review of #399) — and is said, as every other git call here that could not run is.
-    override fun hasRemote(): Boolean = runCatching { remotesListed() }.getOrElse { remoteUnknown(it) }
+    // A remote by name, or a branch whose remote is a URL or a path, which git pushes to as it is (#378). A
+    // failure to run either answers false: unknown is not "configured". So does one that could not start,
+    // which threw — with the records directory gone, out of the backup's check (the review of #399) — and
+    // is said, as every other git call here that could not run is.
+    override fun hasRemote(): Boolean = runCatching { anyRemote() }.getOrElse { remoteUnknown(it) }
 
+    private fun anyRemote(): Boolean = remotesListed() || pushesToUrl()
+
+    // `git remote` lists names and prints nothing when there is none, so an empty answer is the whole signal.
     private fun remotesListed(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+
+    private fun pushesToUrl(): Boolean = currentBranch()?.let { isUrl(pushRemoteOf(it)) } == true
 
     private fun remoteUnknown(cause: Throwable): Boolean {
         logger.warn(REMOTE_UNKNOWN, root, cause.javaClass.simpleName)
@@ -200,9 +221,37 @@ class CommandLineGitSync(
 
     private fun commitEverything(): Boolean {
         warnOnceUnlessStateIgnored()
+        sayWhatIsAlreadyCommitted()
         if (operationInProgress()) return waitingItOut()
         if (!isDirty(RECONCILE_SCOPE)) return true
         return committed("reconcile", RECONCILE_SCOPE, RECONCILE_MESSAGE)
+    }
+
+    /**
+     * A token already committed is a leak to revoke, not a commit to refuse (#376). A pull that brought in a
+     * token-shaped string refused every reconciliation after it, though a commit that does not add it carries
+     * nothing new, and a push never sends it where it is not already ([pushed]). It is said instead — once,
+     * and never what it is or where.
+     *
+     * Each blob and path is searched once, as it enters HEAD's tree: what entered since the tree searched last,
+     * as `diff-tree` names it, less what that tree held anywhere; the whole tree on the first reconciliation,
+     * and again whenever the store changed. Before #376 the commit's own search read all of it every time. A
+     * search that did not run to the end is tried again at the next reconciliation; it never stops one.
+     */
+    private fun sayWhatIsAlreadyCommitted() {
+        val searched = SearchedTree(headTree() ?: return, fingerprintOfStore())
+        val before = lastSearchedTree.get()?.before(searched) ?: emptyTree() ?: return
+        val entered = enteredSince(before, searched.tree) ?: return
+        val outcome = searched(entered, credential.stored())
+        if (outcome == SearchOutcome.Unsearched) return
+        if (outcome != SearchOutcome.Clean) logger.warn(ALREADY_COMMITTED, root)
+        lastSearchedTree.set(searched)
+    }
+
+    // What [tree] holds that [before] did not, as `diff-tree` names it: the blobs it leaves and the paths it adds.
+    private fun enteredSince(before: String, tree: String): Introduced? {
+        val entered = git(listOf("diff-tree", "-r", "-z", "--no-renames", before, tree))
+        return entered.takeIf { it.succeeded() }?.let { Introduced.ofReceived(it.stdout, before) }
     }
 
     /**
@@ -246,21 +295,24 @@ class CommandLineGitSync(
      * `remote.<r>.push` or `push.default=matching` said — branches the search never looked at — so the
      * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
      * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
-     * name under `push.default=upstream` is not where this push goes. The search covers the commits that
-     * remote's own branches lack. And `--no-follow-tags`: with `push.followTags=true` in the repository, an
-     * annotated tag on the branch went out beside it, its message never read (#375); now no tag goes.
+     * name under `push.default=upstream` is not where this push goes. The search covers what the push's
+     * destinations lack, as each of them says itself (#376). And `--no-follow-tags`: with
+     * `push.followTags=true` in the repository, an annotated tag on the branch went out beside it, its message
+     * never read (#375); now no tag goes.
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
      * a documented way to run — is nowhere to push, so nothing is searched for it, and with no remote at
-     * all nothing is said either (#390).
+     * all nothing is said either (#390). A destination that cannot say what it holds is not pushed to: what
+     * the push would send cannot be told (#376).
      */
     private fun pushed(): Boolean {
         val head = headCommit() ?: return true
         val branch = currentBranch() ?: return detached()
         val remote = pushRemoteOf(branch)
-        if (!hasDestination(remote)) return noRemote(remote)
-        if (!searchedClean(SearchedHead(head, remote, fingerprintOfStore()))) return false
+        val destinations = destinationsOf(remote) ?: return noRemote(remote)
+        val held = heldByDestinations(destinations) ?: return false
+        if (!searchedClean(SearchedHead(head, destinations, held, fingerprintOfStore()))) return false
         val result = git(listOf("push", "--no-follow-tags", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
@@ -268,8 +320,34 @@ class CommandLineGitSync(
     private fun headCommit(): String? =
         git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
 
-    private fun hasDestination(remote: String): Boolean =
-        listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
+    /**
+     * Where a push to [remote] goes: its push URLs as git resolves them — `pushurl`, else `url` — or [remote]
+     * itself when it is a URL or a path, which git accepts as a branch's remote (#378). Null for a name with
+     * neither, which is nowhere to push. The push URLs, not the remote's name: `ls-remote <name>` asks the
+     * fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured).
+     */
+    private fun destinationsOf(remote: String): List<String>? {
+        val urls = git(listOf("remote", "get-url", "--push", "--all", remote))
+        if (urls.succeeded()) return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }
+        return listOf(remote).takeIf { isUrl(remote) }
+    }
+
+    // Git's own test: a remote's nickname has no directory separator, so one with a separator, or a colon,
+    // is a URL or a path, and git pushes to it as it is.
+    private fun isUrl(remote: String): Boolean = URL_SIGNS.any { it in remote }
+
+    // What the destinations already hold, said once while one cannot say, until it answers again (#376).
+    private fun heldByDestinations(destinations: List<String>): Set<String>? {
+        val held = remoteTips.heldByAll(destinations) ?: return unanswered()
+        unansweredSaid.set(false)
+        return held
+    }
+
+    // Never with git's own words: they can carry the URL, and a URL can carry a credential.
+    private fun unanswered(): Set<String>? {
+        if (!unansweredSaid.getAndSet(true)) logger.warn(REMOTE_UNANSWERED, root)
+        return null
+    }
 
     // No remote at all is the remote-less way to run, said once at INFO by the boot report and the backup
     // schedule; said here, it was a warning at every push, every minute the backup was due (#390). A
@@ -280,36 +358,33 @@ class CommandLineGitSync(
     }
 
     /**
-     * A head already searched clean — for the same remote, against the same stored token — is not
-     * searched again. A push that kept failing, to a remote that was down, searched the same commits at
-     * every attempt: 23.4 s for 1,660 commits, every minute the backup was due (the review of ea1357c).
+     * A head already searched clean is not searched again. A push that kept failing searched the same
+     * commits at every attempt: 23.4 s for 1,660 commits, every minute the backup was due (the review of
+     * ea1357c). Remembered with what was searched (#378): the destinations, the tips they held that the
+     * range left out, and the stored token. Keyed on the head alone, a head searched for one remote was sent
+     * to another unsearched once `origin` was repointed.
      */
     private fun searchedClean(head: SearchedHead): Boolean {
         if (lastSearchedClean.get() == head) return true
-        if (!carriesNoToken("push") { outgoing.outcome(searchedForPush(head.remote), it) }) return false
+        if (!carriesNoToken("push") { outgoing.outcome(listOf(outgoingRange(head.held)), it) }) return false
         lastSearchedClean.set(head)
         return true
     }
 
     /**
-     * What a push to [remote] is searched for, as `rev-list` argument lists: what it would send, and HEAD's own
-     * tree, whatever the remote-tracking refs say. The tracker never fetches, so a ref stays where the last
-     * push left it: after `remote set-url`, or with the remote re-created empty, it still names commits the
-     * remote does not hold, and the range leaves out what they reach. A token still in HEAD's tree went out
-     * unsearched that way (the review of 315f44e). HEAD's tree is what the search before #373 read of HEAD; a
-     * commit between HEAD and a stale ref was not read then either, and is #376's.
+     * What a push would send, as `rev-list` arguments: HEAD's history, less what the tips its destinations
+     * already hold reach ([RemoteTips], #376). Those tips are what the destinations say, through
+     * `ls-remote`, not the remote-tracking refs: a remote re-created under the same name, or repointed with
+     * `set-url`, left refs that vouched for commits it never received, and a token pushed once was sent to
+     * it unsearched. Another remote's branches never count (the review's N4). A tip leaving more out than
+     * the push would is the one way this could understate, and a tip comes only from what a destination
+     * holds. The one place the range is decided.
+     *
+     * HEAD's own tree is not listed beside it (#376). #373 listed it at every push against stale refs, which
+     * this range no longer trusts: what HEAD's tree holds and the destinations lack is in the range, and what
+     * they hold is not sent. Listed anyway, it refused every push for a string a pull had brought in.
      */
-    private fun searchedForPush(remote: String): List<List<String>> = listOf(outgoingRange(remote), HEAD_TREE)
-
-    /**
-     * What a push to [remote] would send, as `rev-list` arguments: the commits none of its remote-tracking
-     * branches holds, and what they carry. A push updates the branch it pushed, so after the first one this
-     * is what was committed since; with none at all it is every commit. Another remote's branches do not
-     * count — the review's N4: a commit already pushed to a second remote was skipped, and sent here
-     * unsearched. The tracker configures no upstream (`push.default=current`), so `@{u}..HEAD` would name
-     * nothing. The one place the range is decided, so a change to what counts as sent is made here.
-     */
-    private fun outgoingRange(remote: String): List<String> = listOf("HEAD", "--not", "--remotes=$remote")
+    private fun outgoingRange(held: Set<String>): List<String> = listOf("HEAD", "--not") + held.sorted()
 
     // What was stored when a head was searched, kept as a digest rather than as the secret itself.
     private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {
@@ -334,33 +409,65 @@ class CommandLineGitSync(
         git(listOf("config", "--get", key)).takeIf { it.succeeded() }?.stdout?.trim()?.ifEmpty { null }
 
     /**
-     * Searches the working tree within [scope], stages it, searches what is staged, and commits exactly
-     * [scope]. `add` with a pathspec stages removals as well (git 2.0 and later), with or without `--all`.
+     * Searches what a commit of [scope] would add, stages it, and commits exactly [scope]. `add` with a
+     * pathspec stages removals as well (git 2.0 and later), with or without `--all`.
      *
-     * Searched before staging as well as after: a refusal found only after `add` left the file that
-     * carries the token staged, where the next plain `git commit` takes it (the review's M5). Searched
-     * with `--untracked`, which leaves out what git ignores, and the scope leaves `.ps` out besides.
+     * Searched before anything is staged: a refusal found only after `add` left the file that carries the
+     * token staged, where the next plain `git commit` takes it (the review's M5). What `add` would stage is
+     * found by running it on a copy of the index ([StagingPreview], #376), so the search reads the blobs the
+     * commit would carry, filters and links as `add` makes them, and the real index is touched only once the
+     * search is clean. `add` leaves out what git ignores, and the scope leaves `.ps` out besides.
      *
      * `git commit -- <paths>` is a partial commit: it takes those paths from the working tree and
      * ignores the rest of the index, which is what keeps another process's staged file out. On a
      * branch with no commit yet it is still a root commit (measured on git 2.48.1). It reads the
      * working tree again, so a file that changes between the search and the commit is committed
-     * unsearched — which is why the push searches again, what was actually committed.
+     * unsearched — which is why the push searches again, what was actually committed. A second search
+     * after staging, as #360 had, would narrow that window and not close it.
      */
     private fun committed(what: String, scope: List<String>, message: String): Boolean {
-        if (!carriesNoToken(what) { grepped(it, listOf("--untracked", "--") + scope) }) return false
+        if (!searchedBeforeStaging(what, scope)) return false
         if (!retryingOnContention(what) { git(listOf("add", "--all", "--") + scope) }) return false
-        if (!carriesNoToken(what) { grepped(it, listOf("--cached", "--") + scope) }) return false
         return retryingOnContention(what) { git(listOf("commit", "--message", message, "--") + scope) }
     }
+
+    /**
+     * What staging [scope] would add to HEAD's tree, searched (#376): the paths it adds, and the blobs it
+     * leaves where something else was, less what HEAD's tree already holds anywhere. What HEAD already holds
+     * is not this commit's to refuse — the push still refuses to send it where it is not ([pushed]), and
+     * reconciliation says it ([sayWhatIsAlreadyCommitted]). Git's own words when it cannot stage the scope,
+     * as when the real `add` failed: a file it cannot read is named there.
+     */
+    private fun searchedBeforeStaging(what: String, scope: List<String>): Boolean {
+        val base = headTree() ?: emptyTree() ?: return refused(CREDENTIAL_UNSEARCHED, what)
+        return when (val preview = stagingPreview.of(scope, base)) {
+            is Preview.Failed -> failed(what, preview.answer)
+            is Introduced -> carriesNoToken(what) { searched(preview, it) }
+        }
+    }
+
+    // The names first, which are in memory already, then the blobs, through the scan the push reads with.
+    private fun searched(introduced: Introduced, stored: StoredCredential): SearchOutcome {
+        if (introduced.namesHold(TokenPatterns.of(stored))) return SearchOutcome.FoundInName
+        return outgoing.outcome(introduced.listings(), stored)
+    }
+
+    private fun headTree(): String? =
+        git(listOf("rev-parse", "--verify", "--quiet", "HEAD^{tree}")).takeIf { it.succeeded() }?.stdout?.trim()
+
+    // The tree with nothing in it, as this repository's hash names it: computed, never written. Git knows it
+    // without the object, so a branch with no commit yet is compared with it.
+    private fun emptyTree(): String? =
+        git(listOf("hash-object", "-t", "tree", "--stdin"), "").takeIf { it.succeeded() }?.stdout?.trim()
 
     /**
      * The content gate (#360): true when [search] finds no GitHub token in what a commit or a push would
      * carry. Two kinds of pattern are searched for: anything shaped like a GitHub token, always, so the
      * gate does not depend on what is stored and finds a token rotated out of the store (the review's R1);
      * and what the store holds, never in argv. It searches the content git would carry, not a path, so it
-     * holds wherever a token turns up. A commit's side is searched by `git grep` ([grepped]); a push's by
-     * [OutgoingObjectScan] (#373), which reads the commits it would send as well (#375).
+     * holds wherever a token turns up. Both sides are searched by [OutgoingObjectScan]: a commit's for what
+     * it adds, its new paths besides (#376); a push's for what it would send (#373), the commits and the
+     * names in its trees as well (#375).
      *
      * Fails closed, with one WARN that never carries what was searched for: a store that is there and cannot
      * be read, a search that did not read everything, a match. A match in a commit names the commit and the
@@ -382,30 +489,6 @@ class CommandLineGitSync(
     private fun refused(found: SearchOutcome.FoundInCommit, what: String): Boolean {
         logger.warn(CREDENTIAL_IN_A_COMMIT, what, root, found.part.said, found.commit.take(SHORT_ID))
         return false
-    }
-
-    // One `git grep` search of a commit's side, its arguments [search]: a match, a clean end, or neither.
-    private fun grepped(stored: StoredCredential, search: List<String>): SearchOutcome {
-        val outcome = greps(stored, search).firstOrNull { it != NO_MATCH } ?: return SearchOutcome.Clean
-        if (outcome == MATCH) return SearchOutcome.FoundInContent
-        return SearchOutcome.Unsearched
-    }
-
-    // The token shapes first, then what is stored — the second only runs if the first found nothing. The
-    // stored values go on stdin as fixed strings, never in argv.
-    private fun greps(stored: StoredCredential, search: List<String>): Sequence<Int> = sequence {
-        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TokenPatterns.SHAPES.flatMap { listOf("-e", it) } + search)))
-        if (stored is Patterns) yield(outcomeOf(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput())))
-    }
-
-    /**
-     * What a grep's ending means for the gate. One that could not read a blob says so on stderr and
-     * exits 1, the code for "nothing found" (measured on 2.48.1 and 2.53.0) — not a search that ran to
-     * the end. A warning, such as a `.gitignore` git cannot follow, is not an error.
-     */
-    private fun outcomeOf(result: GitResult): Int {
-        if (result.code == NO_MATCH && result.stderr.lines().any { it.startsWith("error:") }) return UNREAD
-        return result.code
     }
 
     /** One WARN naming why — never what was searched for, or where it matched — and false. */
@@ -519,6 +602,10 @@ class CommandLineGitSync(
     /** One `git` invocation, as [GitProcess] runs every one of them. */
     private fun git(args: List<String>, input: String? = null): GitResult = process.run(commandFor(args), input)
 
+    /** One `git` invocation with [variables] for it alone: the copy of the index a commit is staged in first. */
+    private fun gitWith(args: List<String>, variables: Map<String, String>): GitResult =
+        process.run(commandFor(args), null, variables)
+
     /**
      * The exact argument list handed to the process, credential prefix included. Internal
      * because it is the wiring itself: [PushCredential] computing the right `-c` is worth
@@ -576,6 +663,13 @@ class CommandLineGitSync(
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
 
+        private const val REMOTE_UNANSWERED =
+            "git push skipped in {}: its remote could not say what it holds, so what a push would send could not " +
+                "be told, and nothing was sent. This is said once, until the remote answers again."
+
+        /** What git's own test for a remote's nickname rules out: a directory separator, and a colon besides. */
+        private val URL_SIGNS = listOf('/', '\\', ':')
+
         private const val REMOTE_UNKNOWN =
             "git remote could not run in {} ({}), so whether it has a remote is unknown, and it is answered as none."
 
@@ -632,18 +726,15 @@ class CommandLineGitSync(
             "git {} refused in {}: the search for the push token did not run to the end, and nothing goes " +
                 "out unsearched."
 
-        /** `git grep -q` exits 0 when something matched and 1 when nothing did; anything else is an error. */
-        private const val MATCH = 0
-        private const val NO_MATCH = 1
-
-        /** A grep that exited as if nothing matched, after failing to read something it was asked to search. */
-        private const val UNREAD = -2
+        /** Said once for each token as it enters HEAD, and never what it is or where (#376). */
+        private const val ALREADY_COMMITTED =
+            "{} already holds a GitHub token in what is committed — in a file or in a name, the one stored in " +
+                ".ps/git-credentials or one shaped like it. A commit that does not add it goes ahead, and a push " +
+                "never sends it where it is not already; where it is, it is published: revoke the token on GitHub " +
+                "and remove it from history. This is said once, when the tracker first sees it."
 
         /** Where a push goes when git names no other remote for the branch. */
         private const val DEFAULT_REMOTE = "origin"
-
-        /** HEAD's own tree, and everything under it, as `rev-list --objects` takes it. */
-        private val HEAD_TREE = listOf("HEAD^{tree}")
 
         /** `git check-ignore` exits 1 for a path no rule ignores; 0 is ignored, 128 is an error. */
         private const val NO_RULE_MATCHED = 1
@@ -664,5 +755,19 @@ class CommandLineGitSync(
     }
 }
 
-/** A head searched clean: the commit, the remote it was searched for, and a digest of what was stored. */
-private data class SearchedHead(val commit: String, val remote: String, val store: String)
+/**
+ * A head searched clean, with what it was searched against (#378): the push's destinations, the tips they
+ * held that the range left out, and a digest of what was stored.
+ */
+private data class SearchedHead(
+    val commit: String,
+    val destinations: List<String>,
+    val held: Set<String>,
+    val store: String,
+)
+
+/** HEAD's tree as it was searched for what was already committed, with a digest of what was stored then (#376). */
+private data class SearchedTree(val tree: String, val store: String) {
+    /** The tree to search [next] from: this one when it was searched for the same store, else none at all. */
+    fun before(next: SearchedTree): String? = tree.takeIf { store == next.store }
+}

@@ -1059,8 +1059,8 @@ class CommandLineGitSyncTest {
      * The `LC_ALL=C` pin's second reason (the review of #389). In a UTF-8 locale macOS's regex stops at a
      * byte that is not UTF-8, so `git grep -E` missed a token after one on the same line, exited 1 and
      * said nothing: measured with Homebrew git 2.48.1 here, and by the review with Apple's git as well. The
-     * fixed-string search for the stored value found it either way. In the C locale the token is found.
-     * glibc made no difference, so on Linux this passes with the pin or without it.
+     * fixed-string search for the stored value found it either way. In the C locale the token was found.
+     * glibc made no difference. Since #376 the commit's search reads the bytes in the JVM, in any locale.
      */
     @Test
     fun `a token after a byte that is not UTF-8 is never committed, whatever the locale`() {
@@ -1124,8 +1124,7 @@ class CommandLineGitSyncTest {
     fun `a token in a UTF-16 file is never pushed`() {
         val remote = remoteInitialised()
         written(".gitignore", ".ps/\n")
-        val powershell = byteArrayOf(-1, -2) + "${aGithubShapedToken()}\r\n".toByteArray(Charsets.UTF_16LE)
-        Files.write(Files.createDirectories(root.resolve("notes")).resolve("powershell.txt"), powershell)
+        writtenAsPowershellDoes("notes/powershell.txt", "${aGithubShapedToken()}\r\n")
         git("add", "--all")
         git("commit", "--message", "a note another tool committed")
 
@@ -1253,7 +1252,7 @@ class CommandLineGitSyncTest {
      * The tracker never fetches, so a remote-tracking ref stays where the last push left it. Pointed at a new
      * remote, `origin/main` still named a commit whose tree held a token, the range left that blob out, and
      * the push sent it there (the review of 315f44e; refused before #373, whose search read every outgoing
-     * commit's whole tree). HEAD's tree is searched at every push, whatever the refs say.
+     * commit's whole tree). The range is what the remote says it holds, not what a ref remembers (#376).
      */
     @Test
     fun `a token in HEAD's tree is found, though a stale ref says it was pushed`() {
@@ -1389,14 +1388,20 @@ class CommandLineGitSyncTest {
         subjects(at = remote) shouldContainExactly listOf("init")
     }
 
-    /** Commits that cannot be listed cannot be searched: a remote-tracking ref naming no object stops the push. */
+    /**
+     * Commits that cannot be listed cannot be searched: a commit in the range whose object is gone stops the
+     * push. (Until #376 this was a remote-tracking ref naming no object; the range no longer reads them.)
+     */
     @Test
     fun `outgoing commits that cannot be listed stop the push`() {
         val remote = remoteInitialised()
         written("notes/today.md", "a note\n")
         git("add", "--all")
         git("commit", "--message", "a record")
-        Files.writeString(root.resolve(".git/refs/remotes/origin/main"), "0123456789abcdef0123456789abcdef01234567\n")
+        written("notes/tomorrow.md", "another note\n")
+        git("add", "--all")
+        git("commit", "--message", "another record")
+        deletedObject("HEAD~1")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
 
@@ -1462,17 +1467,19 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * A push that keeps failing — a remote that is down — searched the same commits at every attempt.
-     * A head already searched clean, for the same remote and the same stored token, is not searched
-     * again: a blob that went missing since would have failed a second search.
+     * A push that keeps failing searched the same commits at every attempt. A head already searched clean —
+     * for the same destination, the same tips it holds and the same stored token — is not searched again: a
+     * blob that went missing since would have failed a second search. The failing push is a rejected one,
+     * from a remote that moved ahead: since #376 a remote that is not there is not searched for at all.
      */
     @Test
     fun `a head already searched clean is not searched again`() {
+        val remote = remoteInitialised()
+        remoteMovedAhead(remote)
         written(".gitignore", ".ps/\n")
         written("notes/today.md", "a note\n")
         git("add", "--all")
         git("commit", "--message", "a record")
-        git("remote", "add", "origin", base.resolve("down.git").toString())
         val sync = sync()
         sync.push() shouldBe false
         deletedObject("HEAD:notes/today.md")
@@ -1498,6 +1505,377 @@ class CommandLineGitSyncTest {
         sync.push() shouldBe false
 
         everythingAt(remote) shouldNotContain aGithubShapedToken()
+    }
+
+    // What a push would not send again is what its destination holds (#376, #378) -------------
+    //
+    // Each starts from the same history: another tool committed a token and pushed it to the first
+    // remote, then the token was removed in a new commit. HEAD's tree is clean, the token is in its
+    // history, and only a destination that already holds that history may be spared its search.
+
+    /**
+     * The remote was deleted and made again under the same name and URL. The remote-tracking ref still
+     * said it held the token's commit, so that commit was left out of the search and sent to the new
+     * remote with the rest.
+     */
+    @Test
+    fun `a remote re-created under the same name is searched for what it no longer holds`() {
+        val remote = remoteInitialised()
+        aTokenPushedThenRemoved()
+        recreatedEmpty(remote)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(remote) shouldContainExactly emptyList()
+    }
+
+    /** `git remote set-url` keeps the remote-tracking refs, and they vouched for the old remote's commits. */
+    @Test
+    fun `a remote whose URL changed is searched for what the new one holds`() {
+        remoteInitialised()
+        aTokenPushedThenRemoved()
+        val second = bareAt("second.git")
+        git("remote", "set-url", "origin", second.toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(second) shouldContainExactly emptyList()
+    }
+
+    /**
+     * #378: a head searched clean was remembered by itself, the remote's name and the store. Pushed to the
+     * first remote, which already held the token's commit, it was searched without it; repointed to another
+     * remote and fetched with `--prune`, the same server sent it there unsearched. A fresh server refused.
+     */
+    @Test
+    fun `a head searched clean for one remote is searched again before it goes to another`() {
+        remoteInitialised()
+        aTokenPushedThenRemoved()
+        val sync = sync()
+        sync.push() shouldBe true
+        val second = bareAt("second.git")
+        git("remote", "set-url", "origin", second.toString())
+        git("fetch", "--quiet", "--prune", "origin")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(second) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The same server, the same URL: the remote was re-created between two pushes. What it held is part of
+     * what the head was searched against, so a head remembered as clean is searched again.
+     */
+    @Test
+    fun `a head searched clean is searched again once its remote no longer holds what it did`() {
+        val remote = remoteInitialised()
+        aTokenPushedThenRemoved()
+        val sync = sync()
+        sync.push() shouldBe true
+        recreatedEmpty(remote)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(remote) shouldContainExactly emptyList()
+    }
+
+    /**
+     * `git ls-remote origin` asks the fetch URL, and a push goes to the push URL (measured: with `pushurl`
+     * set apart, `ls-remote` listed the fetch URL's refs). The range is what the push URL holds.
+     */
+    @Test
+    fun `a push URL apart from the fetch URL is searched for what it holds`() {
+        remoteInitialised()
+        aTokenPushedThenRemoved()
+        val pushedTo = bareAt("pushed-to.git")
+        git("config", "remote.origin.pushurl", pushedTo.toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(pushedTo) shouldContainExactly emptyList()
+    }
+
+    /**
+     * A destination that cannot say what it holds leaves the range unknown: nothing goes, fail closed, and
+     * the server says so once — the backup tries again and again while it is due — never with git's words,
+     * which can carry a URL.
+     */
+    @Test
+    fun `a destination that cannot say what it holds is not pushed to, and that is said once`() {
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        git("remote", "add", "origin", base.resolve("nowhere.git").toString())
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.push() shouldBe false } }
+
+        heard.single() shouldContain "could not say what it holds"
+        heard.single() shouldNotContain "nowhere.git"
+    }
+
+    /** Once the destination answered, a destination that stops answering is said again. */
+    @Test
+    fun `a destination that answered and then cannot is said again`() {
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        val away = base.resolve("away.git")
+        git("remote", "add", "origin", away.toString())
+        val sync = sync()
+        sync.push() shouldBe false
+        git("init", "--quiet", "--bare", "-b", "main", away.toString(), at = base)
+        sync.push() shouldBe true
+        deleted(away)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "could not say what it holds"
+    }
+
+    /** #378: git accepts a URL or a path as a branch's remote, and the push skipped it as a missing remote. */
+    @Test
+    fun `a branch whose remote is a URL is pushed there`() {
+        val target = bareAt("by-url.git")
+        written(".gitignore", ".ps/\n")
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "records")
+        git("config", "branch.main.remote", target.toString())
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = target).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /** The same remote, asked whether there is one at all: the backup and its report treat it as a remote (#390). */
+    @Test
+    fun `a branch whose remote is a URL has a remote`() {
+        git("config", "branch.main.remote", bareAt("by-url.git").toString())
+
+        sync().hasRemote() shouldBe true
+    }
+
+    /**
+     * A push sends what its remote lacks, and a pulled string the remote already holds is not sent again.
+     * #373 read HEAD's whole tree at every push besides, which refused every push for it.
+     */
+    @Test
+    fun `a push goes ahead when the remote already holds what HEAD carries`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/pasted.md", "${aGithubShapedToken()}\n")
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "a record")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    // A commit is searched for what it adds; what HEAD already holds is said, not refused (#376) --
+    //
+    // A pull can bring in a file with a token-shaped string in it. Searched whole, every reconciliation
+    // after it was refused with "revoke the token", though a commit adds nothing of it and a push sends
+    // nothing of it that the remote lacks.
+
+    /**
+     * #376: the commit gate searched everything in its scope, so a token-shaped string a pull brought in
+     * refused every reconciliation from then on. A commit is searched for the content it adds; what HEAD
+     * already holds is a leak to revoke, said once and without what it is.
+     */
+    @Test
+    fun `a token-shaped string a pull brought in does not stop reconciliation, and is said once`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/pasted.md", "${aGithubShapedToken()}\n")
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            written("log/submissions.jsonl", RECORD)
+            sync.reconcile() shouldBe true
+            written("log/submissions.jsonl", "$RECORD\n$RECORD")
+            sync.reconcile() shouldBe true
+        }
+
+        heard.single() shouldContain "already holds a GitHub token"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects().take(2) shouldContainExactly List(2) { CommandLineGitSync.RECONCILE_MESSAGE }
+    }
+
+    /** Each string is said when it enters HEAD, so one pulled after the first was said is said as well. */
+    @Test
+    fun `a token-shaped string pulled later is said as well`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/pasted.md", "${aGithubShapedToken()}\n")
+        val sync = sync()
+        sync.reconcile() shouldBe true
+        pulledFrom(remote, "notes/again.md", "${aGithubShapedToken('B')}\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+    }
+
+    /**
+     * What HEAD holds was searched for what was stored at the time. A value stored since, already in a
+     * committed file, is said at the next reconciliation: a changed store has HEAD searched whole again.
+     */
+    @Test
+    fun `a token stored after it was committed is said`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/old.md", "the token: $A_PUSH_CREDENTIAL\n")
+        git("add", "--all")
+        git("commit", "--message", "a note another tool committed")
+        val sync = sync()
+        sync.reconcile() shouldBe true
+        aPushTokenIn(root)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /**
+     * A search of what is committed that could not run is not remembered as one that did: with an object git
+     * could not read, nothing is said, and the next reconciliation searches it again and says what it holds.
+     */
+    @Test
+    fun `what is committed is searched again after a search of it could not run`() {
+        written(".gitignore", ".ps/\n")
+        val pasted = written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        val sync = sync()
+        deletedObject("HEAD:notes/pasted.md")
+        warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true } shouldContainExactly emptyList()
+        git("hash-object", "-w", root.relativize(pasted).toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+    }
+
+    /** What HEAD's tree already holds is not added by a commit that moves it, wherever it goes. */
+    @Test
+    fun `a token-shaped string HEAD already holds is not refused where a commit moves it`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        Files.move(root.resolve("notes/pasted.md"), root.resolve("notes/moved.md"))
+
+        sync().reconcile() shouldBe true
+
+        git("ls-tree", "-r", "--name-only", "HEAD").lines().filter { it.isNotBlank() } shouldContainExactly
+            listOf(".gitignore", "notes/moved.md")
+    }
+
+    /**
+     * `git grep` finds no token in UTF-16 text, so a commit took one in, and every push after it was refused
+     * (#373's accepted cost). What a commit adds is read as the push reads it, before anything is staged.
+     */
+    @Test
+    fun `a token in a UTF-16 file is never committed, and nothing is left staged`() {
+        written(".gitignore", ".ps/\n")
+        writtenAsPowershellDoes("notes/powershell.txt", "${aGithubShapedToken()}\r\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        subjects() shouldContainExactly emptyList()
+        git("diff", "--cached", "--name-only").trim() shouldBe ""
+    }
+
+    /**
+     * `git grep` reads content only, so a reconciliation committed a file named with a token, and every push
+     * after it was refused (#375). The paths a commit adds are read as their bytes, and the refusal names "a
+     * file or directory name", never which: the name would carry the token.
+     */
+    @Test
+    fun `a file named with a token is never committed, and nothing is left staged`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/${aGithubShapedToken()}.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects() shouldContainExactly emptyList()
+        git("diff", "--cached", "--name-only").trim() shouldBe ""
+    }
+
+    /** A directory's name is in the path of everything under it, and the stored value is searched for there too. */
+    @Test
+    fun `a directory named with the stored token is never committed`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("$A_PUSH_CREDENTIAL/notes.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name"
+        subjects() shouldContainExactly emptyList()
+    }
+
+    /** A name HEAD already holds is not added by a commit that changes the file: it is said, not refused. */
+    @Test
+    fun `a file named with a token HEAD already holds does not stop a commit that changes it`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/${aGithubShapedToken()}.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        written("notes/${aGithubShapedToken()}.md", "a note, changed\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true }
+
+        heard.single() shouldContain "already holds a GitHub token"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects().first() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
+    }
+
+    /**
+     * What a commit adds is staged first in a copy of the index, and a file git cannot read fails that
+     * staging as it fails the real one. Git's own words say which file, as they did when the real one failed.
+     */
+    @Test
+    fun `a file git cannot read stops the commit in git's own words`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a file's permissions away")
+        written(".gitignore", ".ps/\n")
+        val sealed = written("notes/sealed.md", "a note\n")
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+        }
+
+        heard.single() shouldContain "git reconcile failed"
+        heard.single() shouldContain "notes/sealed.md"
+    }
+
+    /**
+     * A preview git cannot make refuses the commit, though the real staging would have gone through: what
+     * could not be staged in the copy was never searched. Here a required clean filter fails only where git
+     * is pointed at another index, as the copy is, and the real `add` and the commit run it without one.
+     */
+    @Test
+    fun `a commit whose preview git cannot make is refused, in git's own words`() {
+        assumeTrue(canPlantLinksIn(root), "this test runs a shell filter")
+        written(".gitignore", ".ps/\n")
+        git("config", "filter.gate.clean", "sh -c '[ -z \"\$GIT_INDEX_FILE\" ] && cat'")
+        git("config", "filter.gate.required", "true")
+        written(".gitattributes", "notes/*.md filter=gate\n")
+        written("notes/today.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "clean filter 'gate' failed"
+        subjects() shouldContainExactly emptyList()
     }
 
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
@@ -1621,6 +1999,40 @@ class CommandLineGitSyncTest {
     }
 
     /**
+     * Another tool committed a token and pushed it to `origin`, then the token was removed in a new commit:
+     * HEAD's tree is clean, and the token is in its history and on `origin`.
+     */
+    private fun aTokenPushedThenRemoved() {
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "a token another tool committed")
+        git("push", "--quiet", "origin", "main")
+        git("rm", "--quiet", "notes/pasted.md")
+        git("commit", "--message", "the token removed")
+    }
+
+    /** An empty bare repository called [name], beside the record repository. */
+    private fun bareAt(name: String): Path =
+        base.resolve(name).also { git("init", "--quiet", "--bare", "-b", "main", it.toString(), at = base) }
+
+    /** The refs [repository] holds, by name: none for one that never received anything. */
+    private fun refsAt(repository: Path): List<String> =
+        git("for-each-ref", "--format=%(refname)", at = repository).lines().filter { it.isNotBlank() }
+
+    /** [remote] deleted and made again, empty, at the same path. */
+    private fun recreatedEmpty(remote: Path) {
+        deleted(remote)
+        git("init", "--quiet", "--bare", "-b", "main", remote.toString(), at = base)
+    }
+
+    /** [remote] deleted; git writes objects read-only, which Windows will not delete, so each is made writable first. */
+    private fun deleted(remote: Path) {
+        remote.toFile().walkBottomUp().forEach { it.setWritable(true) }
+        remote.toFile().deleteRecursively() shouldBe true
+    }
+
+    /**
      * A token in `leak.md`, pushed to origin by another tool, so `origin/main` names its commit; then a clean
      * commit on top, whose tree still holds the file. Returns the remote.
      */
@@ -1639,15 +2051,46 @@ class CommandLineGitSyncTest {
 
     /** Someone else pushed meanwhile, which is what makes the next push a non-fast-forward. */
     private fun remoteMovedAhead(remote: Path) {
-        val other = base.resolve("other-clone")
-        git("clone", remote.toString(), other.toString(), at = base)
-        git("config", "user.email", "other@example.invalid", at = other)
-        git("config", "user.name", "Other", at = other)
-        git("config", "commit.gpgsign", "false", at = other)
+        val other = anotherCloneOf(remote)
         Files.writeString(other.resolve("elsewhere.md"), "someone else's work")
         git("add", "--all", at = other)
         git("commit", "--message", "elsewhere", at = other)
         git("push", at = other)
+    }
+
+    /**
+     * [content] at [relative], committed in another clone of [remote], pushed there and pulled here: HEAD's
+     * tree holds it, and so does the remote. The clone is made once and brought up to date after that, and
+     * its `.gitignore` holds the state directory's rule, as the tracker seeds it.
+     */
+    private fun pulledFrom(remote: Path, relative: String, content: String) {
+        val other = base.resolve("other-clone").takeIf { Files.exists(it) } ?: anotherCloneOf(remote)
+        git("pull", "--quiet", "--no-rebase", "--ff-only", at = other)
+        Files.writeString(other.resolve(".gitignore"), ".ps/\n")
+        val file = other.resolve(relative)
+        Files.createDirectories(file.parent)
+        Files.writeString(file, content)
+        git("add", "--all", at = other)
+        git("commit", "--message", "pasted elsewhere", at = other)
+        git("push", "--quiet", at = other)
+        git("pull", "--quiet", "--no-rebase", "--ff-only", "origin", "main")
+    }
+
+    /** A clone of [remote] beside the record repository, with an identity of its own. */
+    private fun anotherCloneOf(remote: Path): Path {
+        val other = base.resolve("other-clone")
+        git("clone", "--quiet", remote.toString(), other.toString(), at = base)
+        git("config", "user.email", "other@example.invalid", at = other)
+        git("config", "user.name", "Other", at = other)
+        git("config", "commit.gpgsign", "false", at = other)
+        return other
+    }
+
+    /** [text] at [relative] as Windows PowerShell 5.1 writes it with `>`: UTF-16LE behind a byte order mark. */
+    private fun writtenAsPowershellDoes(relative: String, text: String) {
+        val file = root.resolve(relative)
+        Files.createDirectories(file.parent)
+        Files.write(file, byteArrayOf(-1, -2) + text.toByteArray(Charsets.UTF_16LE))
     }
 
     private fun subjects(at: Path = root): List<String> {

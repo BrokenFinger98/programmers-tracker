@@ -20,7 +20,10 @@ internal sealed interface SearchOutcome {
     /** A token shape or a stored value was found in [part] of the commit [commit], its id (#375). */
     data class FoundInCommit(val commit: String, val part: CommitPart) : SearchOutcome
 
-    /** A token shape or a stored value was found in a file or directory name: a tree's entries (#375). */
+    /**
+     * A token shape or a stored value was found in a file or directory name: a tree's entries (#375), or a
+     * path a commit adds (#376).
+     */
     data object FoundInName : SearchOutcome
 }
 
