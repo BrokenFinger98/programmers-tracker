@@ -10,8 +10,9 @@ import java.nio.file.StandardOpenOption
 /**
  * Guarantees the record repository ignores what is not a record.
  *
- * Reconciliation is `git add --all`, so anything sitting in the vault is committed under a
- * message that says records. Two directories are in the vault and are not records:
+ * Reconciliation stages the whole vault, `git add --all` with only `.ps` left out by pathspec, so
+ * anything else sitting in it is committed under a message that says records. Two directories are
+ * in the vault and are not records:
  *
  * - **`.ps/`, the tracker's own state** (design §5.1). It holds frames still being captured,
  *   per-problem timers and the raw-run queue — and `.ps/raw/recorded/` keeps a session per
