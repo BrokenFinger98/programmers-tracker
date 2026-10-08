@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.IOException
 import java.nio.file.FileSystemException
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -53,6 +54,22 @@ class FileReplacementTest {
         temp.parent shouldBe target.toAbsolutePath().parent
         temp.fileName.toString() shouldStartWith ".README.md."
         temp.fileName.toString() shouldEndWith FileReplacement.TEMP_SUFFIX
+    }
+
+    /**
+     * A bare name has no parent of its own — `tracker.watch.token-file=watch-token` is one — so its temporary file is
+     * made in the directory the name resolves against, never in the system's temporary directory, from which the
+     * move would cross to another filesystem (#386's review). A zip file system stands in for the working directory,
+     * which a test does not write into: its own resolves a bare name against `/`.
+     */
+    @Test
+    fun `a bare name's temporary file is made where the name resolves`() {
+        FileSystems.newFileSystem(root.resolve("names.zip"), mapOf("create" to "true")).use { zip ->
+            val temp = replacing(FileMode.KEPT_ELSE_PLAIN).temporaryBeside(zip.getPath("README.md"))
+
+            temp.fileSystem shouldBe zip
+            temp.parent shouldBe zip.getPath("/")
+        }
     }
 
     // The three modes, from the moment the temporary file is made ---------------------------------

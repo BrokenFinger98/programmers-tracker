@@ -469,6 +469,19 @@ class CommandLineGitSyncTest {
     }
 
     /**
+     * Nor is every name with the tracker's ending: a replace makes its temporary file hidden, so only a hidden one is
+     * left out, and a visible file of the owner's that happens to end the same way is committed (#386's review).
+     */
+    @Test
+    fun `a visible file of the owner's with the tracker's ending is committed as any other`() {
+        written("notes/report${FileReplacement.TEMP_SUFFIX}", "a report\n")
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("notes/report${FileReplacement.TEMP_SUFFIX}")
+    }
+
+    /**
      * An exclusion that names an ignored path makes `add --all` exit 1, which is why `.ps` is spelled as a glob. This
      * one names no path before its first wildcard, so an owner's rule that ignores the same files changes nothing.
      */

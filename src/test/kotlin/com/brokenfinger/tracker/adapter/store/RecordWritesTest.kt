@@ -725,6 +725,38 @@ class RecordWritesTest {
         warnings.size shouldBe 1
     }
 
+    /** Once for each path, not once for the writer: a link at another path is said too (#386's review). */
+    @Test
+    fun `a link replaced at each of two paths is said for each`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val writes = problems()
+        val page = aLink(inProblem("README.md"), aFileNotOurs(outside))
+        val examples = aLink(inProblem("examples.json"), aFileNotOurs(outside, "other.md"))
+
+        val warnings = warningsWhile(RecordWrites::class) {
+            writes.replace(page, "page\n")
+            writes.replace(examples, "[]")
+        }
+
+        warnings.size shouldBe 2
+    }
+
+    /** Once for each reason, not once for the writer: a refusal for another reason is said too (#386's review). */
+    @Test
+    fun `a refusal for each of two reasons is said for each`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/1-x"), outside)
+        Files.createDirectories(root.resolve("problems/2-y/README.md"))
+        val writes = problems()
+
+        val warnings = warningsWhile(RecordWrites::class) {
+            writes.replaceOrSkip(inProblem("README.md"), "page\n")
+            writes.replaceOrSkip(root.resolve("problems/2-y/README.md"), "page\n")
+        }
+
+        warnings.size shouldBe 2
+    }
+
     @Test
     fun `a file is written as UTF-8`() {
         problems().replace(inProblem("README.md"), "# 두 수의 곱\n")
