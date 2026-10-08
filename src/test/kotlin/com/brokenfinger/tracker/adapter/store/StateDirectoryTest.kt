@@ -73,6 +73,20 @@ class StateDirectoryTest {
         StateDirectory(root).verified().shouldBeNull()
     }
 
+    /**
+     * The root's own listing decides, on every platform. Where a filesystem folds `.PS` to `.ps`, the
+     * listing shows the name on disk, while Linux over a macOS mount answers a folded alias's real path
+     * as `.ps` (measured in the tracker's image), so the real-path comparison alone let it through.
+     * macOS hides that by answering the real path with the name on disk, and Linux CI cannot fold at
+     * all, so the listing is handed in here and the check is pinned wherever the tests run.
+     */
+    @Test
+    fun `a directory the root does not list under exactly that name is not the state directory`() {
+        Files.createDirectory(root.resolve(".ps"))
+
+        StateDirectory(root, listing = { setOf(".PS") }).verified().shouldBeNull()
+    }
+
     @Test
     fun `a records directory that cannot hold one is answered, never thrown`() {
         val notADirectory = Files.writeString(root.resolve("records"), "a file\n")
@@ -104,7 +118,7 @@ class StateDirectoryTest {
     fun `anything git tracks inside refuses, with how to stop it being tracked`() {
         Files.createDirectory(root.resolve(".ps"))
 
-        val reason = refusalOf(StateDirectory(root) { true })
+        val reason = refusalOf(StateDirectory(root, TrackedState { true }))
 
         reason shouldContain "git tracks files under .ps"
         reason shouldContain "git rm -r --cached .ps"
@@ -115,7 +129,7 @@ class StateDirectoryTest {
     fun `git that cannot say refuses`() {
         Files.createDirectory(root.resolve(".ps"))
 
-        refusalOf(StateDirectory(root) { null }) shouldContain "could not say"
+        refusalOf(StateDirectory(root, TrackedState { null })) shouldContain "could not say"
     }
 
     @Test

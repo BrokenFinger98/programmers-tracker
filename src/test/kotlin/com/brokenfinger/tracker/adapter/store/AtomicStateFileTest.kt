@@ -169,7 +169,7 @@ class AtomicStateFileTest {
     /** A file git tracks below `.ps` is a change any `commit -a` publishes, so nothing is written. */
     @Test
     fun `a state file is not written while git tracks something under the state directory`() {
-        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root) { true })
+        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, TrackedState { true }))
 
         val heard = warningsWhile(AtomicStateFile::class) { timers.write("""{"a":1}""") }
 
@@ -180,7 +180,7 @@ class AtomicStateFileTest {
     /** Git that cannot be asked does not cost a capture its state; it is commits and pushes that refuse. */
     @Test
     fun `a state file is written when git cannot say what it tracks`() {
-        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root) { null })
+        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, TrackedState { null }))
 
         timers.write("""{"a":1}""")
 

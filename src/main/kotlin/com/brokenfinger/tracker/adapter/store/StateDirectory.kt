@@ -39,7 +39,11 @@ import java.nio.file.Path
  * write and says so once, rather than land state where a commit can carry it. The credential and git
  * itself ask [inspected].
  */
-class StateDirectory(private val recordRoot: Path, private val tracked: TrackedState = TrackedState.UNASKED) {
+class StateDirectory(
+    private val recordRoot: Path,
+    private val tracked: TrackedState = TrackedState.UNASKED,
+    private val listing: (Path) -> Set<String> = ::namesOnDisk,
+) {
     /** The state directory, created if absent, or null when what answers to [NAME] is not it. Never throws. */
     fun verified(): Path? = runCatching { verify(recordRoot.resolve(NAME)) }.getOrNull()
 
@@ -82,8 +86,9 @@ class StateDirectory(private val recordRoot: Path, private val tracked: TrackedS
         return directory
     }
 
-    private fun listedByItsOwnName(): Boolean =
-        Files.newDirectoryStream(recordRoot).use { entries -> entries.any { it.fileName.toString() == NAME } }
+    // The root's own listing, as stored on disk. Handed in so a test can pin this check on a
+    // filesystem that cannot fold names, where nothing else would show it at work (#360).
+    private fun listedByItsOwnName(): Boolean = NAME in listing(recordRoot)
 
     sealed interface Inspection
 
@@ -118,6 +123,9 @@ class StateDirectory(private val recordRoot: Path, private val tracked: TrackedS
         const val NOT_INSPECTED = "what lies under .ps could not be read through"
     }
 }
+
+private fun namesOnDisk(directory: Path): Set<String> =
+    Files.newDirectoryStream(directory).use { entries -> entries.map { it.fileName.toString() }.toSet() }
 
 /**
  * Whether git tracks anything under the state directory — a question for git, which this package
