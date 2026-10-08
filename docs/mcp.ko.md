@@ -1,4 +1,4 @@
-<!-- translated-from: mcp.md@d1659c8c34f444b01614e9a7a6a23cd5c47cfddb -->
+<!-- translated-from: mcp.md@847ce6bbb8393c73201381afcfa75a9d56d13a23 -->
 
 # MCP — AI 클라이언트에서 내 기록 읽기
 
@@ -211,7 +211,10 @@ step 하나, 줄여서:
 나 `part`, 날짜가 아닌 `since`, 받지 않는 이름 — 는 무엇이 틀렸는지 말하는 툴 에러(`isError: true`)로
 돌아오므로 모델이 고칠 수 있습니다. JSON `null` 은 "주지 않음" 입니다. 올바른 인자 뒤에서 우리 쪽이 고장 난
 경우는 예외 내용을 하나도 담지 않은 내부 에러(JSON-RPC `-32603`)로 답하며, 멀쩡한 인자를 고치라는 조언으로
-답하지 않습니다. 각 규칙이 왜 이런지는
+답하지 않습니다. 이 에러는 요청의 `id` 를 담고 두 시대 모두 HTTP 200 으로 옵니다: 최신 바인딩은 이 코드에
+상태를 정해 두지 않았고, 500 이면 Claude Code 같은 클라이언트는 에러 대신 전송 장애를 보기 때문입니다
+([`decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200`](llm-wiki/wiki/decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200.md)).
+나머지 규칙이 왜 이런지는
 [`decisions/2026-10-07-repair-steps-are-served-not-judged`](llm-wiki/wiki/decisions/2026-10-07-repair-steps-are-served-not-judged.md)
 에 있습니다.
 
@@ -402,7 +405,8 @@ MCP에는 날짜가 붙은 버전이 있고, 형태가 바뀌었습니다: 개�
   나오지 않습니다. 이렇게 거부한 파일은 경로와 이유만 로그에 남기고, 내용은 남기지 않습니다.
 - **프로그래머스 세션 쿠키는 어떤 로그 레벨에서도 이 경로에 오르지 않습니다.**
 - 정상 경로에서는 아무것도 로그하지 않습니다 — 요청도, 응답도. 모든 응답이 풀이 이력의 조각이기
-  때문입니다.
+  때문입니다. 우리 쪽 고장은 예외의 클래스 이름만 로그에 남깁니다. 예외 메시지에는 툴이 읽은 내용이
+  담길 수 있기 때문입니다.
 
 ---
 

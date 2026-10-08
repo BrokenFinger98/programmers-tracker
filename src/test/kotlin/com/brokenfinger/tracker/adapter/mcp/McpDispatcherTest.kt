@@ -1,13 +1,17 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import ch.qos.logback.classic.Level
+import com.brokenfinger.tracker.support.fixtures.FailingGradingCodes
 import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aModernCall
 import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
+import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import com.brokenfinger.tracker.support.fixtures.anInitializeParams
 import com.brokenfinger.tracker.support.fixtures.headersFor
+import com.brokenfinger.tracker.support.logging.loggedWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.maps.shouldContainKey
@@ -15,8 +19,11 @@ import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -391,7 +398,68 @@ class McpDispatcherTest {
         dispatcher.dispatch(call, headersFor(call).copy(name = wrapped)).status shouldBe 200
     }
 
+    // ---------------------------------------------------------------- a fault of ours
+
+    /**
+     * A fault behind a call is answered to that call (#355): its id, the internal error, and HTTP 200, the
+     * status a handshake client reads. Nothing of the exception goes with it.
+     */
+    @Test
+    fun `a fault of ours is answered to the handshake call that met it, on 200 with its id`() {
+        val call = aLegacyCall("tools/call", aToolCallParams("repair_steps"), id = 41)
+
+        val response = faultingDispatcher().dispatch(call, McpHeaders())
+
+        response.shouldBeTheInternalErrorOf(id = 41)
+    }
+
+    /**
+     * The modern binding assigns `-32603` no status, and the client in use reads a non-2xx as JSON-RPC only
+     * when it is a 400, so a fault travels on 200 here too
+     * ([[decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200]]).
+     */
+    @Test
+    fun `a fault of ours is answered to the modern call that met it, on 200 with its id as well`() {
+        val call = aModernCall("tools/call", aToolCallParams("repair_steps"), id = 42)
+
+        val response = faultingDispatcher().dispatch(call, headersFor(call))
+
+        response.shouldBeTheInternalErrorOf(id = 42)
+    }
+
+    /** The log is where a fault of ours is noticed, by its class: its message can carry what the tool read. */
+    @Test
+    fun `a fault of ours is logged once by its class and never by its message`() {
+        val call = aLegacyCall("tools/call", aToolCallParams("repair_steps"))
+
+        val logged = loggedWhile(McpFailure::class, Level.ERROR) { faultingDispatcher().dispatch(call, McpHeaders()) }
+
+        logged.single() shouldContain "IllegalStateException"
+        logged.single() shouldNotContain FAULT
+    }
+
+    // Two failed runs of one problem make a step, so repair_steps asks the code store for code, and it throws.
+    private fun faultingDispatcher(): McpDispatcher {
+        val runs = arrayOf(aRun(at = "2026-10-07T10:00:00+09:00"), aRun(at = "2026-10-07T10:01:00+09:00"))
+        val codes = FailingGradingCodes(IllegalStateException(FAULT))
+        val query = aRecordRepository(root.resolve("faulting")).containing(*runs).query(codes = codes)
+        return McpDispatcher(McpToolInvoker(query))
+    }
+
+    // The id first: it is what the client matches the answer to its call by.
+    private fun McpHttpResponse.shouldBeTheInternalErrorOf(id: Int) {
+        body!!["id"] shouldBe JsonPrimitive(id)
+        status shouldBe 200
+        errorOf(this)["code"]!!.jsonPrimitive.int shouldBe McpErrors.INTERNAL
+        body.toString() shouldNotContain FAULT
+    }
+
     private fun resultOf(response: McpHttpResponse): JsonObject = response.body!!["result"]!!.jsonObject
 
     private fun errorOf(response: McpHttpResponse): JsonObject = response.body!!["error"]!!.jsonObject
+
+    private companion object {
+        /** What a fault of ours says, standing in for what the tool had read; it must reach no answer and no log. */
+        const val FAULT = "fault-marker-7c1e: what the tool had read"
+    }
 }

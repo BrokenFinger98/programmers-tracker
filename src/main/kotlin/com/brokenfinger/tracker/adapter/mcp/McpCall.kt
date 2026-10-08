@@ -9,6 +9,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import org.slf4j.LoggerFactory
 
 /** One HTTP answer: the status the binding requires, and the body, absent for a 202. */
 data class McpHttpResponse(val status: Int, val body: JsonObject? = null)
@@ -46,7 +47,26 @@ class McpFailure(
             "this endpoint does not serve browser origins",
         )
 
-        fun internal() = McpFailure(McpErrors.INTERNAL, 500, "the server failed to handle the request")
+        /**
+         * A fault of ours, on HTTP 200 in both eras. The binding assigns `-32603` no status, and Claude Code
+         * reads a non-2xx answer as JSON-RPC only when it is a 400; anything else is a transport fault to it,
+         * so on a 500 the error, and the id that ties it to its call, would go unread
+         * ([[decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200]]).
+         */
+        fun internal() = McpFailure(McpErrors.INTERNAL, 200, "the server failed to handle the request")
+
+        /**
+         * [thrown] as the refusal it is answered with: itself when it is one, and otherwise a fault of ours,
+         * logged here by its class and nothing else. Its message can carry what a tool had read, which is
+         * solving history; the answer says nothing of it either.
+         */
+        fun from(thrown: Throwable): McpFailure {
+            if (thrown is McpFailure) return thrown
+            log.error("An MCP request failed: {}", thrown.javaClass.simpleName)
+            return internal()
+        }
+
+        private val log = LoggerFactory.getLogger(McpFailure::class.java)!!
     }
 }
 
