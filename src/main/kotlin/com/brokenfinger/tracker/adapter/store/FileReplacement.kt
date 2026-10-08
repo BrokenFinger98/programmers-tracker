@@ -56,8 +56,13 @@ internal class FileReplacement(private val mode: FileMode) {
     }
 
     companion object {
-        /** What the name of every temporary file a replace makes ends with. */
-        const val TEMP_SUFFIX = ".tmp"
+        /**
+         * What the name of every temporary file a replace makes ends with, and nothing else's (#386). A process killed
+         * between the write and the move leaves the temporary file behind, and a reconcile racing a live write sees one,
+         * so git's reconciliation leaves out every hidden file with this ending; the name has to be the tracker's own,
+         * or a file of the owner's would be left out with it.
+         */
+        const val TEMP_SUFFIX = ".programmers-tracker.tmp"
     }
 }
 

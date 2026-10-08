@@ -53,7 +53,9 @@ adapter owns** — never for its behaviour, which goes through a port the compos
 (`adapter/config`) wires. Three such edges exist, and a new one is added to this list:
 
 - `git → store` — `StateDirectory`, `AtomicStateFile` and the `TrackedState` port: whether `.ps`
-  is the tracker's own directory, and the write that never follows a link (#360).
+  is the tracker's own directory, and the write that never follows a link (#360); and
+  `FileReplacement.TEMP_SUFFIX`, the name of the temporary file a replace makes, which
+  reconciliation leaves out as it leaves out `.ps` (#386).
 - `mcp → web` — `WatchToken` and `UnauthorizedWatchException`: the one token check both
   endpoints answer to (since #46).
 - `web → store` — `AtomicStateFile`: the `/watch` token written beside its file and moved into
