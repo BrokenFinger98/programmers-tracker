@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.NOT_OURS
 import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
+import com.brokenfinger.tracker.support.fixtures.aJunction
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
@@ -20,6 +21,8 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.AccessDeniedException
 import java.nio.file.Files
@@ -180,6 +183,25 @@ class RecordReadsTest {
         }
 
         refusal.message shouldContain "log resolves to another path"
+    }
+
+    /** The case above, made for real on windows-latest: a junction is read through until something asks where it leads. */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    fun `a junction where log should be is refused, and what lies behind it is not read`() {
+        aFileNotOurs(outside, "submissions.jsonl")
+        val junction = aJunction(root.resolve("log"), outside)
+        try {
+            Files.readString(junction.resolve("submissions.jsonl")) shouldBe NOT_OURS
+
+            val refusal = shouldThrow<RefusedReadException> {
+                logReads().readAllBytes(junction.resolve("submissions.jsonl"))
+            }
+
+            refusal.message shouldContain "log resolves to another path"
+        } finally {
+            Files.deleteIfExists(junction)
+        }
     }
 
     /**
