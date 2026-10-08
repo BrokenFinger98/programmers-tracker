@@ -890,10 +890,10 @@ against the code before it, on behaviour. Where an API was new, it went in first
     the file itself never is. That needs a process racing the boot on this machine.
   - This round was not measured in the image, CI has not run it, and it was not verified live.
 
-**#378, with the re-check of #377 folded in** (branch `fix/378-held-frames-and-orphans`, cut from `f807f77`,
-`3a0cdfb` merged in, no rebase). #378's git items 1 and 4 are #376's.
+**#378, with the re-check of #377 folded in** (branch `fix/378-held-frames-and-orphans`, written on #377's
+`f807f77` and replayed onto main `258ed10` before its first push). #378's git items 1 and 4 are #376's.
 
-- **M3, raised to High: `orphans()` read what no write would touch** (`8134559`). Every answer asks for the
+- **M3, raised to High: `orphans()` read what no write would touch** (`d4de07c`). Every answer asks for the
   orphans, at boot and for MCP's `incompleteHistory`, and they were read with no guard. Two reviews measured
   what that let through:
   - a pulled `1.jsonl -> /proc/self/fd/1` hung the boot and every MCP call in the deployed image (the review
@@ -916,7 +916,7 @@ against the code before it, on behaviour. Where an API was new, it went in first
   Ten tests failed against `f807f77`, given the new port types with nothing behind them. The FIFO, the link to
   one and the MCP call over them timed out (5 s, 5 s, 10 s). The others read the forged frames, and the
   unlisted case had no `incompleteHistory`. Five more pin the WARNs and the one question to git.
-- **Item 3: an orphan whose file is a link** (`65e282b`). Decision: the frame is kept, and the link is never
+- **Item 3: an orphan whose file is a link** (`b6877b8`). Decision: the frame is kept, and the link is never
   replaced.
   - Before, the append, which never follows a link, threw `Too many levels of symbolic links`, and the
     frame was lost.
@@ -927,9 +927,9 @@ against the code before it, on behaviour. Where an API was new, it went in first
   - Found on the way: the throw reached the next grading too. Its first frame releases what is held
     (`append` → `decided()` → `releaseHeld()`), so a held orphan stopped a live capture. The release now
     passes over a lesson whose file is not a regular file.
-  - Three tests, each red against `8134559`; the mutation check added a fourth, for a link that leads
+  - Three tests, each red against `d4de07c`; the mutation check added a fourth, for a link that leads
     nowhere.
-- **Item 2: held frames and the gradings in flight** (`b2856a5`). While `.ps` was refused, runs set aside and
+- **Item 2: held frames and the gradings in flight** (`aa809c8`). While `.ps` was refused, runs set aside and
   orphans held in memory shared the 8,000,000-character budget with the gradings in flight. Once they filled
   it, a submit's frames were dropped, and `complete()` threw `NoSuchFileException`, so the attempt had no raw
   copy. A test reproduced it.
@@ -949,7 +949,7 @@ against the code before it, on behaviour. Where an API was new, it went in first
 
   Accepted: what is held is lost if the server stops while `.ps` is refused. The first WARN says so, and
   `close()` counts what was lost.
-- **The critic's re-check of #377 at `f807f77`** (`84eaa56`). Four findings were measured on real git, and
+- **The critic's re-check of #377 at `f807f77`** (`011255c`). Four findings were measured on real git, and
   the fifth is accepted.
   - **F1, Medium: the reflogs.** A forged commit that every ref drops was replayed when the owner skipped
     "delete from disk first". The critic measured four routes, each giving `recorded=[131528, 120804]`:
@@ -983,13 +983,13 @@ against the code before it, on behaviour. Where an API was new, it went in first
     racing the boot on this machine, and a file at the link's target with exactly the name of a session the
     listing found.
 
-  Every new test for the four failed against the code before `84eaa56`, given its new history type with
+  Every new test for the four failed against the code before `011255c`, given its new history type with
   nothing behind it. Those that change a count were red on the old count.
 - **Tests.** The four fixes add 25 tests and rewrite 3. The mutation check below adds 10 more and one
-  assertion (`e39b261`).
+  assertion (`f582287`).
 - **Mutation.** 51 mutants of this round's code ran against the store, git-history, MCP, application and
   config tests, 1,175 of them, and 39 failed a test. One of those, a share never freed once its frames are
-  written, failed a pin that was then in the tree and is now in `e39b261`. Twelve passed every test, and so
+  written, failed a pin that was then in the tree and is now in `f582287`. Twelve passed every test, and so
   did two more written for F2 after the run. Ten of those 14 now fail a test written for each. The last four
   were run against the whole suite as well, and pass it. Each mutant, with the number of tests it failed in
   the run that first killed it:
@@ -1051,9 +1051,9 @@ against the code before it, on behaviour. Where an API was new, it went in first
   - **An empty first line.** Taken for git's reason, it would leave a reason that ends in `: `, or lose git's
     words after a leading blank line. No git message that starts with one is known here, and none was looked
     for.
-- **Comments** (`a5ea2ad`). The KDocs of `TrackedStateEntries` and the `TrackedState` port say the history
+- **Comments** (`fc57595`). The KDocs of `TrackedStateEntries` and the `TrackedState` port say the history
   question reads the reflogs too, and that "ever" goes as far as git remembers.
-- **Gates**, all exit 0, at `a5ea2ad`:
+- **Gates**, all exit 0, at `fc57595`:
   - check;
   - test: 2,329 JUnit tests in 166 classes, 0 failures, 9 skipped as before, and node 4 of 4;
   - build;
