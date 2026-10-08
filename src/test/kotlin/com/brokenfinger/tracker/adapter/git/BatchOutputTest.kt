@@ -136,6 +136,35 @@ class BatchOutputTest {
         searched(printed) shouldBe SearchOutcome.FoundInCommit(idOf(1), CommitPart.MESSAGE)
     }
 
+    // Trees: what is found in one is found in a name (#375) ----------------------------------------------
+
+    @Test
+    fun `a token in a tree's entry name is found in a name`() {
+        val printed = tree(1, entry("100644", "${aGithubShapedToken()}.md"), entry("40000", "notes"))
+
+        searched(printed) shouldBe SearchOutcome.FoundInName
+    }
+
+    /** A name cannot hold a NUL, so a tree is read as bytes alone: UTF-16 bytes in one are never a token. */
+    @Test
+    fun `a tree is read as its bytes alone`() {
+        val printed = tree(1, entry("100644", "a.md"), "note ${aGithubShapedToken()}".toByteArray(UTF_16LE))
+
+        searched(printed) shouldBe SearchOutcome.Clean
+    }
+
+    /**
+     * The id after a name is 20 raw bytes: a run of token characters in it ends at the NUL before it and at the
+     * space after the next entry's mode, 26 bytes at most, and a token needs 40. Here the id is all letters.
+     */
+    @Test
+    fun `an object id never completes a token`() {
+        val letters = ByteArray(ID_BYTES) { 'A'.code.toByte() }
+        val printed = tree(1, entry("100644", "ghp_", letters), entry("100644", "b.md"))
+
+        searched(printed) shouldBe SearchOutcome.Clean
+    }
+
     // Output that is not what was asked for -------------------------------------------------------------
 
     @Test
@@ -218,6 +247,14 @@ class BatchOutputTest {
     private fun commit(n: Int, content: String): Printed =
         content.toByteArray().let { Printed(GitObject(idOf(n), "commit", it.size.toLong()), it) }
 
+    private fun tree(n: Int, vararg entries: ByteArray): Printed =
+        entries.fold(ByteArray(0)) { all, each -> all + each }
+            .let { Printed(GitObject(idOf(n), "tree", it.size.toLong()), it) }
+
+    /** One tree entry as git stores it: its mode, a space, its name, a NUL, and a 20-byte object id. */
+    private fun entry(mode: String, name: String, id: ByteArray = ByteArray(ID_BYTES) { 7 }): ByteArray =
+        "$mode $name".toByteArray() + byteArrayOf(0) + id
+
     /**
      * A commit's header, [length] characters with the newline that ends it: a tree line, then an author whose
      * name fills it out. The empty line that ends the header is the next character, the message's own.
@@ -257,5 +294,8 @@ class BatchOutputTest {
 
         /** A header well inside one window. */
         const val SHORT_HEADER = 60
+
+        /** A SHA-1 object id as a tree stores it, raw. */
+        const val ID_BYTES = 20
     }
 }

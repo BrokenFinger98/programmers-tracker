@@ -19,6 +19,9 @@ internal sealed interface SearchOutcome {
 
     /** A token shape or a stored value was found in [part] of the commit [commit], its id (#375). */
     data class FoundInCommit(val commit: String, val part: CommitPart) : SearchOutcome
+
+    /** A token shape or a stored value was found in a file or directory name: a tree's entries (#375). */
+    data object FoundInName : SearchOutcome
 }
 
 /** Which part of a commit a token was found in, as a refusal names it (#375). */
@@ -65,9 +68,10 @@ internal class BatchOutput(
         return SearchOutcome.Clean
     }
 
-    // How [asked]'s content is searched: a commit's header apart from its message, anything else as a whole.
+    // How [asked]'s content is searched: a commit's header apart from its message, a tree for names, a blob whole.
     private fun searchFor(asked: GitObject): ContentSearch {
         if (asked.type == COMMIT) return CommitSearch(asked.id, patterns)
+        if (asked.type == TREE) return NameSearch(patterns)
         return BlobSearch(patterns)
     }
 
@@ -114,6 +118,8 @@ internal class BatchOutput(
         private const val END = -1
 
         private const val COMMIT = "commit"
+
+        private const val TREE = "tree"
     }
 }
 
@@ -123,14 +129,20 @@ private interface ContentSearch {
     fun next(window: String): SearchOutcome
 }
 
-/** Text searched a window at a time, each repeating the end of the one before, so nothing across a seam is missed. */
-private class Stretch(private val patterns: TokenPatterns) {
+/**
+ * Text searched a window at a time by [matches], each window repeating the end of the one before, so nothing
+ * across a seam is missed. [matches] is [TokenPatterns.foundIn] unless the text is a tree's.
+ */
+private class Stretch(
+    private val patterns: TokenPatterns,
+    private val matches: (String) -> Boolean = patterns::foundIn,
+) {
     private var tail = ""
 
     /** Whether [text], the next characters of this stretch, completes a match. */
     fun found(text: String): Boolean {
         val joined = tail + text
-        if (patterns.foundIn(joined)) return true
+        if (matches(joined)) return true
         tail = joined.takeLast(patterns.overlap)
         return false
     }
@@ -142,6 +154,18 @@ private class BlobSearch(patterns: TokenPatterns) : ContentSearch {
 
     override fun next(window: String): SearchOutcome =
         SearchOutcome.FoundInContent.takeIf { content.found(window) } ?: SearchOutcome.Clean
+}
+
+/**
+ * A tree: its entries, each a mode, a name, a NUL and a binary object id, read as bytes alone (#375). A run of
+ * token characters that touches an id ends at the NUL before it and the space after the next mode — 26 bytes at
+ * most, against the 40 a token needs — so what is found is found in a name.
+ */
+private class NameSearch(patterns: TokenPatterns) : ContentSearch {
+    private val names = Stretch(patterns, patterns::foundInBytes)
+
+    override fun next(window: String): SearchOutcome =
+        SearchOutcome.FoundInName.takeIf { names.found(window) } ?: SearchOutcome.Clean
 }
 
 /**

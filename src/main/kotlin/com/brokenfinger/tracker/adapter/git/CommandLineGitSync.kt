@@ -61,8 +61,8 @@ import java.util.concurrent.atomic.AtomicReference
  *    once, for the commits that remote's tracking refs lack, which a stale ref understates
  *    ([OutgoingObjectScan], #373) — and HEAD's own tree at every push, whatever the refs say.
  *
- * A push also reads the commits it would send — each message, author and committer (#375). What none of
- * this reads: content a filter keeps outside the blob.
+ * A push also reads the commits it would send — each message, author and committer — and the trees, which
+ * hold the names (#375). What none of this reads: content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
  * is a window the checks do not close. Every refusal is one WARN that names why and never the token,
  * and a false — fail closed.
@@ -357,6 +357,7 @@ class CommandLineGitSync(
             SearchOutcome.Clean -> true
             SearchOutcome.FoundInContent -> refused(CREDENTIAL_FOUND, what)
             is SearchOutcome.FoundInCommit -> refused(outcome, what)
+            SearchOutcome.FoundInName -> refused(CREDENTIAL_IN_A_NAME, what)
             SearchOutcome.Unsearched -> refused(CREDENTIAL_UNSEARCHED, what)
         }
     }
@@ -597,6 +598,12 @@ class CommandLineGitSync(
 
         /** How much of a commit's id a refusal names: more than git abbreviates to, unambiguous in practice. */
         private const val SHORT_ID = 12
+
+        /** A name, never which: the name would carry the token (#375). */
+        private const val CREDENTIAL_IN_A_NAME =
+            "git {} refused in {}: a file or directory name in what it would send carries a GitHub token — the " +
+                "one stored in .ps/git-credentials, or one shaped like it. It was not sent; revoke the token on " +
+                "GitHub, and rename that file in every commit that has it."
 
         private const val CREDENTIAL_UNREADABLE =
             "git {} refused in {}: .ps/git-credentials is not a regular file, or cannot be read, so the push " +

@@ -1141,6 +1141,25 @@ class CommandLineGitSyncTest {
         subjects(at = remote) shouldContainExactly listOf("init")
     }
 
+    /**
+     * A name is invisible to `git grep`, which reads content; a tree holds the names, and the push reads the
+     * trees it would send (#375). The warning says a name, never which.
+     */
+    @Test
+    fun `a token in a file name is never pushed, and the name is said`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        written("notes/${aGithubShapedToken()}.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "a note another tool committed")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name in what it would send carries a GitHub token"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
     /** A repository with nothing token-shaped in it is untouched: near misses are not tokens. */
     @Test
     fun `strings that only resemble a token are not refused`() {

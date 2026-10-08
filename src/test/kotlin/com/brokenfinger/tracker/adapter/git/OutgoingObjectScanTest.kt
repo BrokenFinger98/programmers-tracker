@@ -141,6 +141,22 @@ class OutgoingObjectScanTest {
         scanned() shouldBe SearchOutcome.FoundInCommit(commit, CommitPart.HEADER)
     }
 
+    // Trees, which hold the names (#375) ----------------------------------------------------------------
+
+    @Test
+    fun `a token in a file name is found in a name`() {
+        committed("notes/${aGithubShapedToken()}.md", "a note\n", message = "a note")
+
+        scanned() shouldBe SearchOutcome.FoundInName
+    }
+
+    @Test
+    fun `a token in a directory name is found in a name`() {
+        committed("notes/${aFineGrainedShapedToken()}/today.md", "a note\n", message = "a note")
+
+        scanned() shouldBe SearchOutcome.FoundInName
+    }
+
     // What is read, and how often ------------------------------------------------------------------------
 
     /** `git grep` over each commit read an unchanged file once per commit; here a blob is read once. */
@@ -158,13 +174,13 @@ class OutgoingObjectScanTest {
     }
 
     @Test
-    fun `blobs and commits are read, never trees`() {
+    fun `every object a push sends is read, blobs, trees and commits`() {
         repeat(COMMITS) { committed("notes/$it.md", "note $it\n") }
         val calls = RecordingCalls(repo.root)
 
         scanned(calls = calls)
 
-        calls.read() shouldContainExactlyInAnyOrder objectsIn(listOf("HEAD"), setOf("blob", "commit"))
+        calls.read() shouldContainExactlyInAnyOrder objectsIn(listOf("HEAD"), setOf("blob", "tree", "commit"))
     }
 
     @Test
