@@ -15,9 +15,12 @@ val NOTHING_TRACKED = TrackedState { false }
 /** The state directory of [root], with git answering [tracked]. */
 fun aStateDirectory(root: Path, tracked: TrackedState = NOTHING_TRACKED): StateDirectory = StateDirectory(root, tracked)
 
-/** Git's answer about `.ps`, changed between calls the way a pull or the owner's `git rm --cached` changes it. */
-class ChangingAnswer(var answer: Boolean?) : TrackedState {
-    override fun tracksAnything(): Boolean? = answer
+/**
+ * Git's answer about `.ps`, changed between calls the way a pull or the owner's `git rm --cached` changes it.
+ * [whileAsked] runs during the question, as another process can act while git is being asked.
+ */
+class ChangingAnswer(var answer: Boolean?, private val whileAsked: () -> Unit = {}) : TrackedState {
+    override fun tracksAnything(): Boolean? = answer.also { whileAsked() }
 }
 
 /** A root listing whose first read fails, as a passing I/O error does, and then answers from disk. */

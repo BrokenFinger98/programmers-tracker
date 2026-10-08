@@ -201,15 +201,15 @@ class FileRawSessionLog(
      * git tracking nothing there, no link on the way — what [StateDirectory.forWriting] and
      * [StateDirectory.pathFor] answer every write. A pull can deliver a file whose name parses as a session,
      * and a replay records it as a grading of the owner's. Otherwise nothing is read: each session is left
-     * where it is, never moved or deleted, since it may be the owner's own.
+     * where it is, never moved or deleted, since it may be the owner's own. Git is asked first and the links
+     * checked after, just before the listing, so a link swapped in while git answers is not listed through.
      */
     override fun unprocessed(): List<RawSession> {
         if (!Files.isDirectory(directory)) return emptyList()
         val guard = guard ?: return sessionsIn(directory)
-        val raw = guard.pathFor(RAW)
         val state = guard.forWriting()
-        if (state is StateDirectory.Refused) return leftInPlace(state.refusal, raw)
-        return when (raw) {
+        if (state is StateDirectory.Refused) return leftInPlace(state.refusal, guard.pathFor(RAW))
+        return when (val raw = guard.pathFor(RAW)) {
             is StateDirectory.Usable -> sessionsIn(raw.directory)
             is StateDirectory.Refused -> leftInPlace(raw.refusal, raw)
         }

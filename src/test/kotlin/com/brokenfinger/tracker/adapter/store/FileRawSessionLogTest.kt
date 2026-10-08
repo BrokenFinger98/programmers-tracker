@@ -561,6 +561,21 @@ class FileRawSessionLogTest {
         heard.single() shouldNotContain "120804"
     }
 
+    /**
+     * The link check ran before git was asked, so a raw directory swapped for a link during the git call was
+     * listed through it (the review of PR #395, measured). It runs after git answers, just before the listing.
+     */
+    @Test
+    fun `a raw directory swapped for a link while git answers is not listed through`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aSessionLeftBehind()
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve(A_SESSION), """{"n":1}""" + "\n")
+        val swapping = ChangingAnswer(false) { swapForALink(root.resolve(".ps/raw"), elsewhere) }
+
+        logGuardedBy(aStateDirectory(root, swapping)).unprocessed().shouldBeEmpty()
+    }
+
     /** Counting them would list a directory through a link, so they are said to be left, not counted. */
     @Test
     fun `sessions behind a link are said to be left, and are not counted through it`() {
@@ -639,6 +654,13 @@ class FileRawSessionLogTest {
         val session = log.start(lessonId)
         log.append(session, """{"n":1}""")
         return root.resolve(".ps/raw").resolve(session.value)
+    }
+
+    // What another process could do while git answers: the raw directory moved away, a link left in its place.
+    private fun swapForALink(raw: Path, target: Path) {
+        if (Files.isSymbolicLink(raw)) return
+        Files.move(raw, raw.resolveSibling("moved-away"))
+        aLink(raw, target)
     }
 
     private fun logGuardedBy(state: StateDirectory) =
