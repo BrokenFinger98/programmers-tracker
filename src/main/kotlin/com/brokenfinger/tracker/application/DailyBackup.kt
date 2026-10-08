@@ -41,7 +41,10 @@ class DailyBackup(
      */
     private val zone: ZoneId,
 ) {
-    /** The scheduled backup last said to be held back, so a check every minute says it once for each. */
+    /**
+     * The scheduled backup this process last said was held back, so a check every minute says it once for
+     * each. Kept in memory: a restart says it again.
+     */
     private val heldSaidFor = AtomicReference<Instant?>()
 
     /** Backs up when the most recent scheduled hour has not been. Returns whether a backup was recorded. */
@@ -100,7 +103,7 @@ class DailyBackup(
     }
 
     // Why a record stayed uncommitted is said where it happened, and a merge wait only once; the check
-    // runs every minute while the day is due, so this is said once for each scheduled backup.
+    // runs every minute while the day is due, so this process says it once for each scheduled backup.
     private fun heldBack(due: Instant): Boolean {
         if (heldSaidFor.getAndSet(due) != due) logger.warn(HELD_BACK)
         return false
@@ -110,9 +113,9 @@ class DailyBackup(
         val logger = LoggerFactory.getLogger(DailyBackup::class.java)
 
         const val HELD_BACK =
-            "Daily backup held back: the push landed, but records are left uncommitted, and the " +
-                "reconciliation's own warning says why. The day stays due and every check tries again; " +
-                "this is said once for each scheduled backup."
+            "Daily backup held back: records are left uncommitted, and the reconciliation's own warning " +
+                "says why; whatever was already committed is pushed. The day stays due and every check " +
+                "tries again. This process says so once for each scheduled backup."
     }
 }
 
