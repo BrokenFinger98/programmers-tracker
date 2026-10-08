@@ -201,8 +201,12 @@ internal class PathDirectoryHandle(private val directory: Path) : DirectoryHandl
     }
 }
 
-/** A new file, never made where anything stands, a link included. */
-internal val NEW_FILE: Set<OpenOption> = setOf(CREATE_NEW, WRITE, NOFOLLOW_LINKS)
+/**
+ * A new file, never made where anything stands, a link included: `CREATE_NEW` is `O_EXCL`, which no link passes, as
+ * `Files.createTempFile` makes one. No `NOFOLLOW_LINKS` beside it, which adds nothing to it and which a file system
+ * without links, such as a zip one, refuses.
+ */
+internal val NEW_FILE: Set<OpenOption> = setOf(CREATE_NEW, WRITE)
 
 /** An existing file, emptied and written, never through a link. */
 internal val REWRITTEN_FILE: Set<OpenOption> = setOf(WRITE, TRUNCATE_EXISTING, NOFOLLOW_LINKS)

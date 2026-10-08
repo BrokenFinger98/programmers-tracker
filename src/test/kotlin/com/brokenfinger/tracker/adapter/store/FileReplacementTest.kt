@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldEndWith
@@ -210,6 +211,59 @@ class FileReplacementTest {
 
         Files.readAllBytes(target).decodeToString() shouldBe "# 두 수의 곱\n"
     }
+
+    // The same write, through a directory held open (#374) ----------------------------------------
+
+    @Test
+    fun `a replace through a held directory replaces the file whole, leaving nothing beside it`() {
+        Files.writeString(target, "first, and the longer of the two\n")
+
+        held().use { replacing(FileMode.OWNER_ONLY).replace(it, "README.md", "second\n") }
+
+        Files.readString(target) shouldBe "second\n"
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    @Test
+    fun `a replace through a held directory keeps a regular file's mode where its mode says so`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+        Files.writeString(target, "old\n")
+        Files.setPosixFilePermissions(target, PosixFilePermissions.fromString("rw-rw-r--"))
+
+        held().use { replacing(FileMode.KEPT_ELSE_PLAIN).replace(it, "README.md", "new\n") }
+
+        permissionsOf(target) shouldBe "rw-rw-r--"
+    }
+
+    @Test
+    fun `a replace through a held directory that fails takes its temporary file away`() {
+        Files.writeString(Files.createDirectory(target).resolve("inside.md"), "inside\n")
+
+        held().use { directory ->
+            shouldThrow<FileSystemException> { replacing(FileMode.OWNER_ONLY).replace(directory, "README.md", "new\n") }
+        }
+
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    /** Swapped for a link once it is held, the directory is still the one written in: never where the link leads. */
+    @Test
+    fun `a replace through a held directory swapped for a link lands in the directory held`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val state = Files.createDirectory(root.resolve(".ps"))
+        val aside = root.resolve("aside")
+
+        DirectoryHandles.THROUGH_A_HANDLE.open(state).use { directory ->
+            Files.move(state, aside)
+            aLink(state, outside)
+            replacing(FileMode.OWNER_ONLY).replace(directory, "timers.json", "{}")
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        namesIn(aside) shouldContainExactly listOf("timers.json")
+    }
+
+    private fun held(): DirectoryHandle = DirectoryHandles.THROUGH_A_HANDLE.open(root)
 
     private fun replacing(mode: FileMode) = FileReplacement(mode)
 
