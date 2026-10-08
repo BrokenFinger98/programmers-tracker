@@ -87,6 +87,7 @@ kover {
             // Programmers server and run only when somebody names them (development-rules §6.5).
             // A line only an integration test reached would also have counted toward a floor.
             // Measured on Kover 0.9.9 (#362): with this line the task leaves all three graphs.
+            // The check under the `integrationTest` task fails the build if that stops holding.
             disabledForTestTasks.add("integrationTest")
         }
     }
@@ -238,6 +239,34 @@ tasks.register<Test>("integrationTest") {
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     shouldRunAfter(tasks.test)
+}
+
+// development-rules §6.5: the integration tests connect to the real Programmers server, so they
+// run when somebody names the task and never because another task needed it. Kover was that other
+// task (#362), and `disabledForTestTasks` in the `kover` block is what stops it. This is what
+// notices when that stops holding: a Kover release that reads the setting differently, a deleted
+// block, the task renamed on one side only.
+//
+// It asks the scheduled graph, because the graph is what will run and the script only says what
+// was meant. And it asks who *depends on* the task rather than whether the task is scheduled: a
+// task named on the command line has no dependents, so `./gradlew integrationTest check` still
+// works, and no spelling of the name (`iT` is a legal one) has to be parsed. Nor is it limited to
+// the coverage tasks — `check` and the `build` gate reached the tests through Kover without ever
+// naming a report. The graph is ready before any task has executed, so a failure here has not
+// yet reached Programmers.
+//
+// `named` fails this script when the task is renamed or removed, instead of leaving a check that
+// looks for something no longer there and so finds nothing.
+val integrationTestName = tasks.named("integrationTest").name
+gradle.taskGraph.whenReady {
+    val integration = allTasks.firstOrNull { it.name == integrationTestName } ?: return@whenReady
+    val dependents = allTasks.filter { integration in getDependencies(it) }
+    check(dependents.isEmpty()) {
+        "this build would run ${integration.path}, the tests that connect to the real Programmers " +
+            "server, because of ${dependents.joinToString { it.path }}. They run only when named " +
+            "(development-rules §6.5). If Kover is pulling it in, " +
+            "kover.currentProject.instrumentation.disabledForTestTasks must name it (#362)."
+    }
 }
 
 val packageRoot = "com/brokenfinger/tracker/"
