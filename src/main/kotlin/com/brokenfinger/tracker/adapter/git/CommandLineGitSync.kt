@@ -61,7 +61,8 @@ import java.util.concurrent.atomic.AtomicReference
  *    once, for the commits that remote's tracking refs lack, which a stale ref understates
  *    ([OutgoingObjectScan], #373) — and HEAD's own tree at every push, whatever the refs say.
  *
- * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
+ * A push also reads the commits it would send — each message, author and committer (#375). What none of
+ * this reads: content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
  * is a window the checks do not close. Every refusal is one WARN that names why and never the token,
  * and a false — fail closed.
@@ -342,20 +343,28 @@ class CommandLineGitSync(
      * carry. Two kinds of pattern are searched for: anything shaped like a GitHub token, always, so the
      * gate does not depend on what is stored and finds a token rotated out of the store (the review's R1);
      * and what the store holds, never in argv. It searches the content git would carry, not a path, so it
-     * holds wherever a token turns up — though not in a commit or tag message, which it does not read. A
-     * commit's side is searched by `git grep` ([grepped]), a push's by [OutgoingObjectScan] (#373).
+     * holds wherever a token turns up. A commit's side is searched by `git grep` ([grepped]); a push's by
+     * [OutgoingObjectScan] (#373), which reads the commits it would send as well (#375).
      *
-     * Fails closed, with one WARN that never carries what was searched for, or where it was found: a store
-     * that is there and cannot be read, a search that did not read everything, a match.
+     * Fails closed, with one WARN that never carries what was searched for: a store that is there and cannot
+     * be read, a search that did not read everything, a match. A match in a commit names the commit and the
+     * part of it, never the token, so the owner knows which one to rewrite.
      */
     private fun carriesNoToken(what: String, search: (StoredCredential) -> SearchOutcome): Boolean {
         val stored = credential.stored()
         if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
-        return when (search(stored)) {
+        return when (val outcome = search(stored)) {
             SearchOutcome.Clean -> true
             SearchOutcome.FoundInContent -> refused(CREDENTIAL_FOUND, what)
+            is SearchOutcome.FoundInCommit -> refused(outcome, what)
             SearchOutcome.Unsearched -> refused(CREDENTIAL_UNSEARCHED, what)
         }
+    }
+
+    // The commit, by a short id, and the part of it the token is in — never the token: that commit is rewritten.
+    private fun refused(found: SearchOutcome.FoundInCommit, what: String): Boolean {
+        logger.warn(CREDENTIAL_IN_A_COMMIT, what, root, found.part.said, found.commit.take(SHORT_ID))
+        return false
     }
 
     // One `git grep` search of a commit's side, its arguments [search]: a match, a clean end, or neither.
@@ -579,6 +588,15 @@ class CommandLineGitSync(
             "git {} refused in {}: what it would send carries a GitHub token — the one stored in " +
                 ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub " +
                 "and remove it from history."
+
+        /** The part of a commit, and the commit by a short id: the owner rewrites that commit (#375). */
+        private const val CREDENTIAL_IN_A_COMMIT =
+            "git {} refused in {}: {} of commit {} carries a GitHub token — the one stored in " +
+                ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub, and " +
+                "rewrite that commit before the next push."
+
+        /** How much of a commit's id a refusal names: more than git abbreviates to, unambiguous in practice. */
+        private const val SHORT_ID = 12
 
         private const val CREDENTIAL_UNREADABLE =
             "git {} refused in {}: .ps/git-credentials is not a regular file, or cannot be read, so the push " +

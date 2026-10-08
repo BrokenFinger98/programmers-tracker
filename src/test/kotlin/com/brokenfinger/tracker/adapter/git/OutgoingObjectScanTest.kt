@@ -110,6 +110,37 @@ class OutgoingObjectScanTest {
         scanned() shouldBe SearchOutcome.FoundInContent
     }
 
+    // Commits, which hold a message, an author and a committer (#375) -------------------------------------
+
+    /** N6 in #360's review: a token pasted into a commit message went out, since only files were read. */
+    @Test
+    fun `a token in a commit message is found in that commit's message`() {
+        committed("notes/today.md", "a note\n", message = "note: ${aGithubShapedToken()}")
+        val commit = repo.git("rev-parse", "HEAD").trim()
+
+        scanned() shouldBe SearchOutcome.FoundInCommit(commit, CommitPart.MESSAGE)
+    }
+
+    @Test
+    fun `the stored value in a commit message is found`() {
+        committed("notes/today.md", "a note\n", message = "remember $A_PUSH_CREDENTIAL")
+        val commit = repo.git("rev-parse", "HEAD").trim()
+
+        scanned(stored = StoredCredential.of("$A_PUSH_TOKEN_LINE\n")) shouldBe
+            SearchOutcome.FoundInCommit(commit, CommitPart.MESSAGE)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["author", "committer"])
+    fun `a token in a commit's author or committer is found in that commit's header`(who: String) {
+        repo.write("notes/today.md", "a note\n")
+        repo.git("add", "--all")
+        repo.git(*commitWithA(who, aGithubShapedToken()).toTypedArray())
+        val commit = repo.git("rev-parse", "HEAD").trim()
+
+        scanned() shouldBe SearchOutcome.FoundInCommit(commit, CommitPart.HEADER)
+    }
+
     // What is read, and how often ------------------------------------------------------------------------
 
     /** `git grep` over each commit read an unchanged file once per commit; here a blob is read once. */
@@ -127,13 +158,13 @@ class OutgoingObjectScanTest {
     }
 
     @Test
-    fun `trees and commits are never read, only blobs`() {
+    fun `blobs and commits are read, never trees`() {
         repeat(COMMITS) { committed("notes/$it.md", "note $it\n") }
         val calls = RecordingCalls(repo.root)
 
         scanned(calls = calls)
 
-        calls.read() shouldContainExactlyInAnyOrder blobsIn(listOf("HEAD"))
+        calls.read() shouldContainExactlyInAnyOrder objectsIn(listOf("HEAD"), setOf("blob", "commit"))
     }
 
     @Test
@@ -323,21 +354,28 @@ class OutgoingObjectScanTest {
         listings: List<List<String>> = listOf(range),
     ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(listings, stored)
 
-    private fun committed(relative: String, content: String) = committedBytes(relative, content.toByteArray())
+    private fun committed(relative: String, content: String, message: String = "add $relative") =
+        committedBytes(relative, content.toByteArray(), message)
 
-    private fun committedBytes(relative: String, content: ByteArray) {
+    private fun committedBytes(relative: String, content: ByteArray, message: String = "add $relative") {
         val file = repo.root.resolve(relative)
         Files.createDirectories(file.parent)
         Files.write(file, content)
         repo.git("add", "--", relative)
-        repo.git("commit", "--quiet", "--message", "add $relative")
+        repo.git("commit", "--quiet", "--message", message)
     }
 
-    /** Every blob [revisions] reach, as git itself lists and types them. */
-    private fun blobsIn(revisions: List<String>): List<String> {
+    /** A commit whose author, or whose committer, is named [name]; the other is the workspace's own. */
+    private fun commitWithA(who: String, name: String): List<String> {
+        if (who == "author") return listOf("commit", "--quiet", "--author", "$name <a@example.invalid>", "-m", "a note")
+        return listOf("-c", "user.name=$name", "commit", "--quiet", "--author", AN_AUTHOR, "-m", "a note")
+    }
+
+    /** Every object of [types] that [revisions] reach, as git itself lists and types them. */
+    private fun objectsIn(revisions: List<String>, types: Set<String>): List<String> {
         val ids = repo.git(*(listOf("rev-list", "--objects") + revisions).toTypedArray()).lines()
             .filter { it.isNotBlank() }.map { it.substringBefore(' ') }
-        return ids.filter { repo.git("cat-file", "-t", it).trim() == "blob" }
+        return ids.filter { repo.git("cat-file", "-t", it).trim() in types }
     }
 
     /** [revision]'s loose object, deleted; it is read-only, as git writes it, which Windows will not delete. */
@@ -361,6 +399,9 @@ class OutgoingObjectScanTest {
     private companion object {
         /** The argument that makes a call a read of content rather than a question about type and size. */
         const val READ = "--batch"
+
+        /** The author of a commit whose committer carries the token. */
+        const val AN_AUTHOR = "Tracker Test <test@example.invalid>"
 
         /** HEAD's tree as the push lists it beside its range. */
         val HEAD_TREE = listOf("HEAD^{tree}")

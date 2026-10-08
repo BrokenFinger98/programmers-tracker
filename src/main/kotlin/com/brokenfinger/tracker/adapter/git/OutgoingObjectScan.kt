@@ -10,9 +10,9 @@ import java.io.InputStream
  * file once per commit: 252 s for 5,000 commits, one call 16 s, on a history shaped like the #360 review's;
  * this scan took 0.5 s there. Here `rev-list --objects` names each object of each listing once, the first
  * time it reaches it — the push lists its range and HEAD's own tree; `cat-file --batch-check` tells each
- * one's type and size; and `cat-file --batch` prints the blobs, in calls of about [bytesPerCall] of content
- * each, which [BatchOutput] searches as it reads them. A blob many commits share, or both listings name, is
- * read once, and no tree or commit is read at all.
+ * one's type and size; and `cat-file --batch` prints the blobs and the commits, in calls of about
+ * [bytesPerCall] of content each, which [BatchOutput] searches as it reads them — a commit's message apart
+ * from its header (#375). A blob many commits share, or both listings name, is read once.
  *
  * Fails closed: a listing, a description or a read that fails or does not finish in time, an object git
  * cannot describe or print, and output other than what was asked for are each [SearchOutcome.Unsearched].
@@ -79,8 +79,11 @@ internal class OutgoingObjectScan(
         /** Ids per call: on stdin, so no system's argument limit applies; this keeps each call's input small. */
         private const val IDS_PER_CALL = 50_000
 
-        /** What is read: blobs. Commit and tag messages are not (#375); their types are what would join this. */
-        private val READ_TYPES = setOf("blob")
+        /**
+         * What is read: blobs, and commits, which hold a message, an author and a committer (#375). A tag is
+         * never listed: the push names one branch, and sends no tag.
+         */
+        private val READ_TYPES = setOf("blob", "commit")
 
         private fun linesOf(ids: List<String>): String = ids.joinToString("\n", postfix = "\n")
     }

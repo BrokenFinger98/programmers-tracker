@@ -90,6 +90,52 @@ class BatchOutputTest {
         searched(blob(1, token.take(HALF)), blob(2, token.drop(HALF))) shouldBe SearchOutcome.Clean
     }
 
+    // Commits: a match is said as the part of the commit it is in (#375) ---------------------------------
+
+    @Test
+    fun `a token in a commit message is found in that commit's message`() {
+        val printed = commit(1, headerOfLength(SHORT_HEADER) + "\nnote: ${aGithubShapedToken()}\n")
+
+        searched(printed) shouldBe SearchOutcome.FoundInCommit(idOf(1), CommitPart.MESSAGE)
+    }
+
+    @Test
+    fun `a token in a commit's author is found in that commit's header`() {
+        val printed = commit(1, "tree ${"0".repeat(ID_LENGTH)}\nauthor ${aGithubShapedToken()} <a@b.invalid>\n\nnote\n")
+
+        searched(printed) shouldBe SearchOutcome.FoundInCommit(idOf(1), CommitPart.HEADER)
+    }
+
+    @Test
+    fun `a commit that holds no token is clean`() {
+        searched(commit(1, headerOfLength(SHORT_HEADER) + "\na note\n\nwith a second paragraph\n")) shouldBe
+            SearchOutcome.Clean
+    }
+
+    /** The empty line that ends the header falls across a seam: its first newline is a window's last byte. */
+    @Test
+    fun `a header that ends on a seam ends there`() {
+        val printed = commit(1, headerOfLength(WINDOW) + "\nnote: ${aGithubShapedToken()}\n")
+
+        searched(printed) shouldBe SearchOutcome.FoundInCommit(idOf(1), CommitPart.MESSAGE)
+    }
+
+    @Test
+    fun `a token across a seam in a commit's header is found there`() {
+        val author = "a".repeat(2 * WINDOW + 1 - CLASSIC - HEADER_START) + aGithubShapedToken()
+        val printed = commit(1, "tree ${"0".repeat(ID_LENGTH)}\nauthor $author <a@b.invalid>\n\nnote\n")
+
+        searched(printed) shouldBe SearchOutcome.FoundInCommit(idOf(1), CommitPart.HEADER)
+    }
+
+    @Test
+    fun `a token across a seam in a commit message is found there`() {
+        val filler = ".".repeat(3 * WINDOW + 1 - CLASSIC - (WINDOW + 1))
+        val printed = commit(1, headerOfLength(WINDOW) + "\n" + filler + aGithubShapedToken() + "\n")
+
+        searched(printed) shouldBe SearchOutcome.FoundInCommit(idOf(1), CommitPart.MESSAGE)
+    }
+
     // Output that is not what was asked for -------------------------------------------------------------
 
     @Test
@@ -169,6 +215,16 @@ class BatchOutputTest {
 
     private fun blob(n: Int, content: String): Printed = blob(n, content.toByteArray())
 
+    private fun commit(n: Int, content: String): Printed =
+        content.toByteArray().let { Printed(GitObject(idOf(n), "commit", it.size.toLong()), it) }
+
+    /**
+     * A commit's header, [length] characters with the newline that ends it: a tree line, then an author whose
+     * name fills it out. The empty line that ends the header is the next character, the message's own.
+     */
+    private fun headerOfLength(length: Int): String =
+        "tree ${"0".repeat(ID_LENGTH)}\nauthor " + "a".repeat(length - HEADER_START - 1) + "\n"
+
     private fun blob(n: Int, content: ByteArray): Printed =
         Printed(GitObject(idOf(n), "blob", content.size.toLong()), content)
 
@@ -192,5 +248,14 @@ class BatchOutputTest {
         const val ID_LENGTH = 40
         const val HALF = 20
         const val LONGER_THAN_A_SHAPE = 200
+
+        /** `ghp_` and 36 characters, as [aGithubShapedToken] builds it. */
+        const val CLASSIC = 40
+
+        /** Where an author's name starts in a commit: after `tree <40 zeros>\n` and `author `. */
+        const val HEADER_START = 53
+
+        /** A header well inside one window. */
+        const val SHORT_HEADER = 60
     }
 }

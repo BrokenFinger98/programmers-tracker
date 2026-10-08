@@ -1103,6 +1103,44 @@ class CommandLineGitSyncTest {
         subjects(at = remote) shouldContainExactly listOf("init")
     }
 
+    // Commits a push would send: their messages, authors and committers (#375) ------------------------
+
+    /**
+     * N6 in #360's review: a token pasted into a commit message went out, since only files were searched. The
+     * refusal names the commit, short, and the part of it, so the owner rewrites that one; never the token.
+     */
+    @Test
+    fun `a token in a commit message is never pushed, and the commit is named`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "my token is ${aGithubShapedToken()}")
+        val commit = git("rev-parse", "HEAD").trim()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "the message of commit ${commit.take(SHORT_ID)} carries a GitHub token"
+        heard.single() shouldContain "revoke the token on GitHub"
+        heard.single() shouldNotContain commit
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
+    @Test
+    fun `a token in a commit's author is never pushed, and the header is named`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--author", "${aGithubShapedToken()} <a@example.invalid>", "--message", "a note")
+        val commit = git("rev-parse", "HEAD").trim()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "the author, committer or another header line of commit ${commit.take(SHORT_ID)}"
+        heard.single() shouldNotContain aGithubShapedToken()
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
     /** A repository with nothing token-shaped in it is untouched: near misses are not tokens. */
     @Test
     fun `strings that only resemble a token are not refused`() {
@@ -1591,5 +1629,8 @@ class CommandLineGitSyncTest {
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2
+
+        /** How much of a commit's id a refusal names (#375). */
+        const val SHORT_ID = 12
     }
 }
