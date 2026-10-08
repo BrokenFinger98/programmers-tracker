@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
@@ -28,6 +29,7 @@ import io.kotest.matchers.string.shouldMatch
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -165,6 +167,93 @@ class FileRawSessionLogTest {
 
         Files.readString(destination) shouldBe "older\n"
         lines(session) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    // A copy already made, as a crash between the copy and its record leaves it (#403) ---------------------------
+
+    /**
+     * A crash after the copy and before the record left the copy behind, and the replay's own copy met it and was
+     * refused, so the grading was recorded with no raw path. A regular file already holding exactly these frames is
+     * that copy: it is pointed at, and left as it is.
+     */
+    @Test
+    fun `complete points at a copy that already holds the same frames`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val left = log.complete(session, attemptFile())
+
+        log.complete(session, attemptFile()) shouldBe attemptFile()
+
+        Files.readAllLines(left) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    @Test
+    fun `a bare log points at a copy that already holds the same frames`() {
+        val log = logAt(startedAt)
+        val session = sessionOf(log)
+        val destination = log.complete(session, root.resolve("attempts/001.raw.jsonl"))
+
+        log.complete(session, destination) shouldBe destination
+    }
+
+    /** As long, and different: another grading's frames, never pointed at and never replaced. */
+    @Test
+    fun `a copy as long as these frames and different from them is refused`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val other = aCopyHolding("""{"n":2}""" + "\n")
+
+        shouldThrow<FileAlreadyExistsException> { log.complete(session, attemptFile()) }
+
+        Files.readString(other) shouldBe """{"n":2}""" + "\n"
+    }
+
+    /** These frames and more after them are not these frames. */
+    @Test
+    fun `a copy that starts with these frames and goes on is refused`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        aCopyHolding("""{"n":1}""" + "\n{}\n")
+
+        shouldThrow<FileAlreadyExistsException> { log.complete(session, attemptFile()) }
+    }
+
+    /** Only a regular file can be the copy: a link to the very same bytes is not, and is never followed to them. */
+    @Test
+    fun `a link to the same frames is not taken for the copy`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        aLink(attemptFile(), Files.writeString(outside.resolve("same.jsonl"), """{"n":1}""" + "\n"))
+
+        shouldThrow<FileAlreadyExistsException> { log.complete(session, attemptFile()) }
+
+        Files.isSymbolicLink(attemptFile()) shouldBe true
+    }
+
+    /** Nor through a directory: the same frames behind an `attempts/` that is a link are not the copy, and not written. */
+    @Test
+    fun `the same frames behind an attempts directory that is a link are not taken for the copy`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        Files.writeString(outside.resolve(attemptFile().fileName), """{"n":1}""" + "\n")
+        aLink(attemptFile().parent, outside)
+
+        shouldThrow<RefusedWriteException> { log.complete(session, attemptFile()) }
+    }
+
+    /** A FIFO where the copy goes is never opened to compare it: the call returns, and refuses. */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO where the copy goes is refused without being opened`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        Files.createDirectories(attemptFile().parent)
+        assumeTrue(madeFifo(attemptFile()), "no mkfifo on this machine")
+
+        shouldThrow<FileAlreadyExistsException> { log.complete(session, attemptFile()) }
     }
 
     @Test
@@ -709,6 +798,10 @@ class FileRawSessionLogTest {
         log.start(120804).also { log.append(it, """{"n":1}""") }
 
     private fun attemptFile(): Path = root.resolve("problems/120804-x/attempts/002.raw.jsonl")
+
+    // A regular file already where the copy goes, holding [text].
+    private fun aCopyHolding(text: String): Path =
+        Files.writeString(Files.createDirectories(attemptFile().parent).resolve(attemptFile().fileName), text)
 
     // A boot replays only what a write would accept (#377) ---------------------------------------
 

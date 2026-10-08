@@ -150,15 +150,30 @@ class FileRawSessionLog(
         }
     }
 
+    /**
+     * Copies the frames to [destination], or points at a regular file already there holding exactly them: the copy a
+     * crash left between itself and its record, which the replay's own copy met and was refused by (#403). Anything
+     * else there is never replaced — an attempt file holds frames that can never be captured again (protocol doc §11) —
+     * since the copy is only ever created new: a [FileAlreadyExistsException].
+     */
     override fun complete(session: RawSessionId, destination: Path): Path {
-        // Never replace: the destination is an attempt file, and overwriting one would
-        // destroy frames that can never be captured again (protocol doc §11).
-        if (Files.exists(destination)) throw FileAlreadyExistsException("$destination")
+        val frames = framesOf(session)
+        if (copiedAlready(destination, frames)) return destination
+        return written(destination, frames)
+    }
+
+    // What was on disk, then what was held, in arrival order; none at all is a session never seen.
+    private fun framesOf(session: RawSessionId): ByteArray {
         val state = live[session.value]
         val onDisk = framesOnDisk(session, state)
         val held = state?.let { synchronized(it) { it.frames.toList() } }.orEmpty()
         if (onDisk == null && held.isEmpty()) throw NoSuchFileException("${directory.resolve(session.value)}")
-        return written(destination, framesOf(onDisk, held))
+        return framesOf(onDisk, held)
+    }
+
+    private fun copiedAlready(destination: Path, frames: ByteArray): Boolean {
+        val bounded = attempts ?: return holdsExactly(destination, frames)
+        return bounded.holds(destination, frames)
     }
 
     override fun discard(session: RawSessionId) {

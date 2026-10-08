@@ -40,6 +40,10 @@ interface RawSessionLog {
      * it must survive until the record line naming this destination is durable, or an
      * interrupted write loses the grading with nowhere left to look (#95). [discard]
      * retires it afterwards.
+     *
+     * So a crash between the copy and the record leaves the copy, and the replay meets it: a
+     * regular file already holding exactly these frames is that copy, and is returned as it is
+     * (#403). Anything else at [destination] is never replaced.
      */
     fun complete(session: RawSessionId, destination: Path): Path
 

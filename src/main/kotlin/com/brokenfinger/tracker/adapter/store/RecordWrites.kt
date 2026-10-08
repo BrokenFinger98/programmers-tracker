@@ -92,6 +92,15 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
     }
 
     /**
+     * Whether [target] is a regular file holding exactly [bytes], its directory walked through no link and nothing
+     * made on the way (#403). Anything else there, or a directory on the way that is refused, is not: false.
+     */
+    fun holds(target: Path, bytes: ByteArray): Boolean {
+        val directory = runCatching { bounded(target) { bound.existing(target.toAbsolutePath().parent) } }.getOrNull()
+        return directory != null && holdsExactly(directory.resolve(target.fileName), bytes)
+    }
+
+    /**
      * Deletes each of [names] in [directory], best effort. A name that is a link is deleted as one; a directory that is
      * not there, or is refused, deletes nothing.
      */
@@ -252,6 +261,18 @@ internal fun removedIfRegular(file: Path): Boolean {
     Files.deleteIfExists(file)
     return true
 }
+
+/**
+ * [file] a regular file, judged without following a link, holding exactly [bytes] (#403). Opened only when its size
+ * is theirs, and read no further than one byte past it, so a FIFO is never opened and a large file never read whole.
+ */
+internal fun holdsExactly(file: Path, bytes: ByteArray): Boolean = runCatching {
+    val attributes = Files.readAttributes(file, BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+    attributes.isRegularFile && attributes.size() == bytes.size.toLong() && bytes.contentEquals(firstOf(file, bytes))
+}.getOrDefault(false)
+
+private fun firstOf(file: Path, bytes: ByteArray): ByteArray =
+    Files.newInputStream(file, NOFOLLOW_LINKS).use { it.readNBytes(bytes.size + 1) }
 
 /**
  * A write [RecordWrites] refused (#361). Its message names the path the writer was handed and which part of that

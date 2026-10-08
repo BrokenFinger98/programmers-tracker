@@ -37,6 +37,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
@@ -411,16 +412,39 @@ class RawSessionReconcilerTest {
         reconcile(listedBeforeTheSwap) shouldBe ReconcileReport(failed = 1)
     }
 
+    // A crash between the copy and the record (#403) ---------------------------------------------
+
+    /**
+     * A crash after a submit's frames were copied beside the record, and before the record was appended, left a copy
+     * no record named. The replay at the next start made the copy again, met the one left behind, was refused, and
+     * recorded the grading with no raw path (the re-check of #387, measured). The copy left behind holds the replay's
+     * very bytes, so the record points at it. The crash is a clock that fails where the record is stamped, after the
+     * copy and before the append, so nothing the writer does after a failed append runs — as after a real one.
+     */
+    @Test
+    fun `a submit a crash cut off between its copy and its record is replayed with that copy`() {
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        reconcile(writer = writer(clock = DiesAfterTheCopy)) shouldBe ReconcileReport(failed = 1)
+        val copy = RecordLayout(root).rawAttemptFile(LESSON_ID, aCatalogEntry().title, 1)
+        val left = Files.readAllBytes(copy)
+        records().shouldBeEmpty()
+
+        reconcile() shouldBe ReconcileReport(recorded = 1)
+
+        root.resolve(records().single().rawPath!!) shouldBe copy
+        Files.readAllBytes(copy) shouldBe left
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     private fun storedSessions(): List<Path> =
         Files.list(root.resolve(".ps/raw")).use { entries -> entries.filter { Files.isRegularFile(it) }.toList() }
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
-    private fun reconcile(log: RawSessionLog = rawLog): ReconcileReport = runBlocking {
+    private fun reconcile(log: RawSessionLog = rawLog, writer: RecordWriter = writer()): ReconcileReport = runBlocking {
         RawSessionReconciler(
             log,
-            writer(),
+            writer,
             StaleTimer(ELAPSED_SEC),
             aFrameReader(),
             aCatalogOf(aCatalogEntry()),
@@ -429,7 +453,7 @@ class RawSessionReconcilerTest {
             .reconcile()
     }
 
-    private fun writer() = RecordWriter.of(
+    private fun writer(clock: Clock = this.clock) = RecordWriter.of(
         store = JsonlRecordStore.under(root),
         rawLog = rawLog,
         rawAttemptPath = AttemptRawPath(RecordLayout(root)::rawAttemptFile),
@@ -470,6 +494,18 @@ class RawSessionReconcilerTest {
         /** The name a session opened at [SESSION_START] for [LESSON_ID] gets. */
         const val A_SESSION = "20260805T090000000Z-120804.jsonl"
     }
+}
+
+/**
+ * The writer reads its clock once, to stamp the record — after the frames are copied and before the record is
+ * appended — so a clock that fails is the process dying there (#403). Nothing after it runs.
+ */
+private object DiesAfterTheCopy : Clock() {
+    override fun instant(): Instant = throw IllegalStateException("the process died after the copy")
+
+    override fun getZone(): ZoneId = ZoneOffset.UTC
+
+    override fun withZone(zone: ZoneId): Clock = this
 }
 
 /**
