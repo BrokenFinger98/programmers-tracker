@@ -531,7 +531,8 @@ Two pin that a healthy repository still commits and pushes with a credential sto
   elsewhere, such as a Windows junction (untested).
 - **Refusals repeat.** The daily backup retries every minute while due, so a persistent refusal is
   logged at every attempt, beside the backup's own line, as a failing push already was. The merge
-  wait and each writer's skip are said once.
+  wait and each writer's skip are said once. *Since #390 the attempts back off, a minute to an hour
+  apart — see the Outcome's last note.*
 - **`adapter/git` depends on `adapter/store`** (`StateDirectory`, `AtomicStateFile`, the
   `TrackedState` port). It is not the first edge between adapters: `adapter/mcp` has imported
   `adapter/web`'s `WatchToken` since 2026-08-06 (#46). Both go one way, `adapter/store` imports no
@@ -700,7 +701,9 @@ reconciliation (1).
 - **Known cost, left to #390.** A held day now retries every minute, so the content gate's
   `CREDENTIAL_FOUND` warning, and a failing pre-commit hook, repeat every minute while it is held,
   where before the day was recorded and they came once a day. #390 takes it with the per-minute
-  warnings of a repository with no remote.
+  warnings of a repository with no remote. *Done in #390: a held day is tried on a backoff, a minute
+  to an hour apart, about 29 times a day —
+  [[decisions/2026-10-08-a-backup-that-did-not-count-backs-off]].*
 
 Mutants of this round, each failing a test: the pin removed again (3 tests, the bytes test among
 them); the date ignored, so once per process (2); the dedupe removed (3); the directory holding the

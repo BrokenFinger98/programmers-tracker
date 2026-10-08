@@ -26,8 +26,8 @@ class BackupRetryTest {
     }
 
     /**
-     * The doubling stops at the hour, every time after the seventh failure: a shift by the failure count
-     * alone wraps at 64 bits, and the 65th would wait a minute again.
+     * The doubling stops at the hour, every time after the seventh failure. A minute doubled once per
+     * failure no longer fits a `Duration` from the 59th on, so the shift itself has to stop too.
      */
     @Test
     fun `a long run of failures waits an hour every time`() {

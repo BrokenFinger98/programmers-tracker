@@ -91,8 +91,8 @@ class DailyBackup(
      *
      * **One exception: a directory git cannot open.** Reconciliation does not see it, commits the rest
      * and answers true, so the day is recorded without what it holds. Holding the day for it would retry
-     * every minute for what only the owner can fix. Instead the git adapter says it once a day while it
-     * lasts, so every day recorded without it has said so (the review of #389).
+     * all day, on the backoff, for what only the owner can fix. Instead the git adapter says it once a day
+     * while it lasts, so every day recorded without it has said so (the review of #389).
      */
     private fun performed(due: Instant): Boolean {
         val reconciled = git.reconcile()
