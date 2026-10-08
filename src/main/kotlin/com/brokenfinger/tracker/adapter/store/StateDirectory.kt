@@ -71,6 +71,12 @@ class StateDirectory(
     fun pathFor(vararg segments: String): Inspection = runCatching { realDirectories(segments.toList()) }
         .getOrElse { Refused(Refusal.NOT_INSPECTED) }
 
+    /**
+     * Every path git has ever tracked below `.ps`, relative to it ([TrackedState.pathsEverTracked], #377): a
+     * file that answers to one may be what a pull delivered. Null when git cannot say. Never throws.
+     */
+    fun pathsEverTracked(): Set<String>? = runCatching { tracked.pathsEverTracked() }.getOrNull()
+
     private fun inspect(whenUnanswered: Inspection?): Inspection {
         val directory =
             runCatching { verified(recordRoot.resolve(NAME)) }.getOrElse { return Refused(Refusal.NOT_INSPECTED) }
@@ -160,4 +166,11 @@ internal fun namesOnDisk(directory: Path): Set<String> =
 fun interface TrackedState {
     /** True when git tracks such an entry; false when none; null when git cannot say. */
     fun tracksAnything(): Boolean?
+
+    /**
+     * Every path git has ever tracked below the state directory, in any commit a ref reaches, relative to
+     * it and spelled as git stored it (#377): what a pull may have delivered there, whether or not git still
+     * tracks it. Null when git cannot say — and an answer never given is that, so unknown is never "nothing".
+     */
+    fun pathsEverTracked(): Set<String>? = null
 }

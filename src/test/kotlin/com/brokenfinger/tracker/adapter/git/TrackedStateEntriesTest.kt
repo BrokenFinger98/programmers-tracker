@@ -119,4 +119,76 @@ class TrackedStateEntriesTest {
 
         TrackedStateEntries(elsewhere).tracksAnything().shouldBeNull()
     }
+
+    // What git has ever tracked below the state directory (#377) ----------------------------------
+
+    /**
+     * A pull can deliver a raw session under `.ps`, and untracking it leaves the file where git put it (the
+     * review of PR #395). Git's history still names it, under every spelling that lands in the state directory,
+     * each path relative to it and spelled as committed.
+     */
+    @Test
+    fun `paths git has ever tracked below the state directory are answered after they are untracked`() {
+        val paths = listOf(".ps/raw/a.jsonl", ".PS/raw/b.jsonl", "$A_LONG_S_STATE_DIRECTORY/RAW/c.jsonl")
+        tracked(paths + "problems/1-x/README.md" + ".ps2/raw/d.jsonl")
+        repo.git("commit", "--message", "as a pull delivers it")
+        repo.git("rm", "--cached", "--quiet", "--", *paths.toTypedArray())
+        repo.git("commit", "--message", "untracked")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/a.jsonl", "raw/b.jsonl", "RAW/c.jsonl")
+    }
+
+    @Test
+    fun `a repository with no commit has tracked nothing below the state directory`() {
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe emptySet()
+    }
+
+    @Test
+    fun `history git cannot read is answered neither`() {
+        val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
+
+        TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeNull()
+    }
+
+    /** A fetch brings branches nobody checks out, and a pull can be undone while its branch stays. */
+    @Test
+    fun `a path on a branch never checked out is answered`() {
+        repo.write("notes.md", "a note\n")
+        repo.git("add", "notes.md")
+        repo.git("commit", "--message", "base")
+        repo.git("checkout", "--quiet", "-b", "upstream")
+        tracked(listOf(".ps/raw/o.jsonl"))
+        repo.git("commit", "--message", "upstream only")
+        repo.git("checkout", "--quiet", "main")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/o.jsonl")
+    }
+
+    /** A path a merge alone added is in neither parent, so only the merge compared with each parent names it. */
+    @Test
+    fun `a path a merge alone added is answered`() {
+        repo.write("notes.md", "a note\n")
+        repo.git("add", "notes.md")
+        repo.git("commit", "--message", "base")
+        repo.git("checkout", "--quiet", "-b", "side")
+        repo.write("side.md", "side\n")
+        repo.git("add", "side.md")
+        repo.git("commit", "--message", "side")
+        repo.git("checkout", "--quiet", "main")
+        repo.write("main.md", "main\n")
+        repo.git("add", "main.md")
+        repo.git("commit", "--message", "main")
+        repo.git("merge", "--no-ff", "--no-commit", "--quiet", "side")
+        tracked(listOf(".ps/raw/m.jsonl"))
+        repo.git("commit", "--message", "a merge that adds a session")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/m.jsonl")
+    }
+
+    /** [paths] in the index as git would hold them after a checkout, whatever this filesystem folds. */
+    private fun tracked(paths: List<String>) {
+        repo.write("decoy", "decoy\n")
+        val blob = repo.git("hash-object", "-w", "--no-filters", "decoy").trim()
+        paths.forEach { repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$it") }
+    }
 }

@@ -299,6 +299,21 @@ class RawSessionReconcilerTest {
         namesIn(elsewhere) shouldHaveSize 1
     }
 
+    /**
+     * The forged PASS of the review of PR #395: delivered by a pull and untracked as the advice said, it was
+     * recorded at the next start. A session git has ever tracked is never replayed; it stays where it is.
+     */
+    @Test
+    fun `a session git has ever tracked is not replayed`() {
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        git.history = setOf("raw/$A_SESSION")
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(root.resolve(".ps/raw")) shouldHaveSize 1
+    }
+
     /** Linked to frames in the tree, a session file was replayed from them (the review of PR #395, measured). */
     @Test
     fun `a session file that is a link is not replayed`() {

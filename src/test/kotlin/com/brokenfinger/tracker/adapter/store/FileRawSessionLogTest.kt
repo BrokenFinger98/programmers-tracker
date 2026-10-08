@@ -633,12 +633,95 @@ class FileRawSessionLogTest {
         log.unprocessed().map { it.lessonId } shouldContainExactly listOf(120804L)
     }
 
-    /** The same judgement a write takes: git that cannot say stops neither a capture nor its replay. */
+    /** The same judgement a write takes: git that cannot say what it tracks now stops neither a capture nor its replay. */
     @Test
     fun `git that cannot say what it tracks does not stop a replay`() {
         aSessionLeftBehind()
 
-        logGuardedBy(aStateDirectory(root) { null }).unprocessed() shouldHaveSize 1
+        logGuardedBy(aStateDirectory(root, ChangingAnswer(null))).unprocessed() shouldHaveSize 1
+    }
+
+    // A session git has ever tracked is never replayed (#377, the review of PR #395) --------------
+
+    /**
+     * Upstream committed a forged session under `.ps/raw`, the owner pulled, followed the TRACKED advice to
+     * untrack it and restarted, and the forged PASS was recorded (the review of PR #395, measured end to end).
+     * Untracked, it reads like the tracker's own; git's history still names it, and that decides.
+     */
+    @Test
+    fun `a session git checked out and the owner then untracked is not replayed`(@TempDir base: Path) {
+        val repo = GitWorkspace(base)
+        repo.write(".gitignore", ".ps/\n")
+        val pulled = repo.write(".ps/raw/$A_SESSION", """{"n":1}""" + "\n")
+        repo.git("add", ".gitignore")
+        repo.git("add", "--force", ".ps/raw/$A_SESSION")
+        repo.git("commit", "--message", "as a pull delivers it")
+        repo.git("rm", "-r", "--cached", "--quiet", ".ps")
+        repo.git("commit", "--message", "the advice followed")
+        val state = StateDirectory(repo.root, TrackedStateEntries(repo.root))
+
+        FileRawSessionLog.under(repo.root, Clock.fixed(startedAt, ZoneOffset.UTC), state).unprocessed().shouldBeEmpty()
+
+        Files.exists(pulled) shouldBe true
+    }
+
+    @Test
+    fun `a session git has ever tracked is left in place, never replayed, and said once`() {
+        val session = aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = setOf("raw/$A_SESSION"))))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
+        }
+
+        Files.exists(session) shouldBe true
+        heard.single() shouldContain "1 raw session(s) were left in place and will never be replayed"
+        heard.single() shouldNotContain ".ps/"
+    }
+
+    /** Git keeps a name as it was committed, and a filesystem that folds case answers it for ours. */
+    @Test
+    fun `a session git has tracked in another case is not replayed either`() {
+        aSessionLeftBehind()
+        val history = setOf("RAW/" + A_SESSION.lowercase())
+
+        logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = history))).unprocessed().shouldBeEmpty()
+    }
+
+    /** One question to git a start, whatever the work list holds, and only the sessions it names stay. */
+    @Test
+    fun `a session git has never tracked is replayed beside one it has`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val git = ChangingAnswer(false, history = setOf("raw/$A_SESSION", "git-credentials", "raw/recorded/x.jsonl"))
+
+        val replayed = logGuardedBy(aStateDirectory(root, git)).unprocessed()
+
+        replayed.map { it.lessonId } shouldContainExactly listOf(131528L)
+        git.historyAsked shouldBe 1
+    }
+
+    /** Unknown is not "never": while git cannot say what it has ever tracked, nothing is replayed, and that is said. */
+    @Test
+    fun `nothing is replayed while git cannot say what it has ever tracked`() {
+        aSessionLeftBehind()
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null))).unprocessed().shouldBeEmpty()
+        }
+
+        heard.single() shouldContain "1 raw session(s) were left in place, not replayed: git could not say"
+    }
+
+    @Test
+    fun `git is not asked what it has ever tracked when nothing waits to be replayed`() {
+        Files.createDirectories(root.resolve(".ps/raw"))
+        val git = ChangingAnswer(false)
+
+        logGuardedBy(aStateDirectory(root, git)).unprocessed().shouldBeEmpty()
+
+        git.historyAsked shouldBe 0
     }
 
     // A session's verdict holds for its own grading, and the next one asks again (#377) ----------

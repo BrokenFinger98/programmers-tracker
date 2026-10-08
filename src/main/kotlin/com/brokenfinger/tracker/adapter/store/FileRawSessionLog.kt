@@ -50,7 +50,9 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * **A boot replays only what a write would accept (#377).** [unprocessed] lists the work list only while
  * the [guard] would let a frame be written there: what it refuses is left where it is, unread, and said
- * once with how many.
+ * once with how many. Only regular files are listed, and never a session git has ever tracked, under any
+ * spelling: untracked, one a pull delivered reads like the tracker's own. Git is asked once, and only when a
+ * session waits; while it cannot say, nothing is replayed.
  *
  * **The copy beside the record goes through [RecordWrites] when the log knows its [recordRoot]** — as
  * [under], and so the composition root, builds it (#361). The copy never replaced anything, a link
@@ -210,9 +212,32 @@ class FileRawSessionLog(
         val state = guard.forWriting()
         if (state is StateDirectory.Refused) return leftInPlace(state.refusal, guard.pathFor(RAW))
         return when (val raw = guard.pathFor(RAW)) {
-            is StateDirectory.Usable -> sessionsIn(raw.directory)
+            is StateDirectory.Usable -> unknownToGit(sessionsIn(raw.directory), guard)
             is StateDirectory.Refused -> leftInPlace(raw.refusal, raw)
         }
+    }
+
+    // A session git has ever tracked, in any spelling, may be what a pull delivered, and untracking it leaves the
+    // file behind: never replayed (#377). One question to git, only when a session waits; unanswered, none is.
+    private fun unknownToGit(sessions: List<RawSession>, guard: StateDirectory): List<RawSession> {
+        if (sessions.isEmpty()) return sessions
+        val known = guard.pathsEverTracked() ?: return unanswered(sessions)
+        val (delivered, ours) = sessions.partition { session -> known.any { isPathOf(session, it) } }
+        if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
+        return ours
+    }
+
+    private fun unanswered(sessions: List<RawSession>): List<RawSession> {
+        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, sessions.size) }
+        return emptyList()
+    }
+
+    // `raw/<name>` below the state directory, in any case: git keeps a name as it was committed, and a filesystem
+    // that folds case answers it for the session's own.
+    private fun isPathOf(session: RawSession, path: String): Boolean {
+        val segments = path.split('/')
+        if (segments.size != 2) return false
+        return segments[0].equals(RAW, ignoreCase = true) && segments[1].equals(session.id.value, ignoreCase = true)
     }
 
     // Regular files alone (#377): the tracker writes no link there, so one named like a session is not its own,
@@ -428,6 +453,16 @@ class FileRawSessionLog(
         private const val LEFT_BEHIND_A_LINK =
             "Raw sessions were not replayed: {}. Nothing behind the link was read or counted, and it is left " +
                 "as it is. Said once for this reason."
+        private const val KNOWN_TO_GIT =
+            "{} raw session(s) were left in place and will never be replayed: git has tracked their names under " +
+                ".ps, so each may be what a pull delivered rather than a grading this server captured. They stay " +
+                "where they are, for a person to read. Said once."
+        private const val HISTORY_UNANSWERED =
+            "{} raw session(s) were left in place, not replayed: git could not say what it has ever tracked under " +
+                ".ps, and a session git delivered must never be replayed. They are replayed at the first start " +
+                "where git answers. Said once."
+        private const val KNOWN = "known to git"
+        private const val UNANSWERED = "history unanswered"
         private const val NOT_REGULAR_FILES =
             "{} raw session(s) were not replayed because each is not a regular file — a link, most likely, which " +
                 "this server never writes there — and none was read. Said once."
