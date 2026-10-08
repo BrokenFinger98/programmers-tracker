@@ -221,8 +221,8 @@ class FileRawSessionLog(
     override fun unreplayed(): LeftUnreplayed = left
 
     private fun workList(): WorkList {
-        if (!Files.isDirectory(directory)) return WorkList.leaving(0)
-        val guard = guard ?: return everyFileIn(sessionsIn(directory))
+        if (!Files.isDirectory(directory)) return WorkList(emptyList(), LeftUnreplayed.NOTHING)
+        val guard = guard ?: return sessionsIn(directory).let { it.keeping(it.files) }
         val state = guard.forWriting()
         if (state is StateDirectory.Refused) return leftInPlace(state.refusal, guard.pathFor(RAW))
         return when (val raw = guard.pathFor(RAW)) {
@@ -231,23 +231,19 @@ class FileRawSessionLog(
         }
     }
 
-    // Built bare, as tests build it, the log has no guard and replays every regular file.
-    private fun everyFileIn(listed: Listing): WorkList =
-        WorkList(listed.files, LeftUnreplayed(listed.others, uncounted = false))
-
     // A session git has ever tracked, in any spelling, may be what a pull delivered, and untracking it leaves the
     // file behind: never replayed (#377). One question to git, only when a session waits; unanswered, none is.
     private fun unknownToGit(listed: Listing, guard: StateDirectory): WorkList {
-        if (listed.files.isEmpty()) return WorkList.leaving(listed.others)
+        if (listed.files.isEmpty()) return listed.keeping(emptyList())
         val known = guard.pathsEverTracked() ?: return unanswered(listed)
         val (delivered, ours) = listed.files.partition { session -> known.any { isPathOf(session, it) } }
         if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
-        return WorkList(ours, LeftUnreplayed(delivered.size + listed.others, uncounted = false))
+        return listed.keeping(ours)
     }
 
     private fun unanswered(listed: Listing): WorkList {
         sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size) }
-        return WorkList.leaving(listed.files.size + listed.others)
+        return listed.keeping(emptyList())
     }
 
     // `raw/<name>` below the state directory, in any case: git keeps a name as it was committed, and a filesystem
@@ -278,7 +274,7 @@ class FileRawSessionLog(
         if (listed.files.isNotEmpty()) {
             sayOnce("$NOT_REPLAYED${refusal.name}") { logger.warn(LEFT_IN_PLACE, listed.files.size, refusal.reason) }
         }
-        return WorkList.leaving(listed.files.size + listed.others)
+        return listed.keeping(emptyList())
     }
 
     // Nothing is listed through a link or where the directory could not be inspected, so nothing is counted, and
@@ -445,14 +441,14 @@ class FileRawSessionLog(
     private enum class Verdict { UNDECIDED, DISK, MEMORY }
 
     // Named like sessions in a raw directory: the regular files, and how many others were passed over.
-    private class Listing(val files: List<RawSession>, val others: Int)
+    private class Listing(val files: List<RawSession>, val others: Int) {
+        // [replayable] replayed, and everything else listed here left on the work list, counted in one place.
+        fun keeping(replayable: List<RawSession>) =
+            WorkList(replayable, LeftUnreplayed(files.size - replayable.size + others, uncounted = false))
+    }
 
     // What a start replays, and what it leaves on the work list for a later one.
-    private class WorkList(val replayable: List<RawSession>, val left: LeftUnreplayed) {
-        companion object {
-            fun leaving(count: Int) = WorkList(emptyList(), LeftUnreplayed(count, uncounted = false))
-        }
-    }
+    private class WorkList(val replayable: List<RawSession>, val left: LeftUnreplayed)
 
     companion object {
         // Basic ISO, UTC, millisecond precision: sortable as text and colon-free, because
