@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
+import java.io.IOException
 
 /**
  * What `/watch` answers on success. `status` distinguishes a new subscription from a
@@ -40,16 +41,28 @@ data class WatchAccepted(
     val session: String,
     /** The newest grading recorded for this problem. Absent when there is none (#156). */
     val lastRecord: RecordedGrading? = null,
+    /**
+     * Why [lastRecord] is absent although the problem may have records: the submission log could not be read, and
+     * nothing is recorded until it can be (#387's review). Absent when the log was read. The server's own log says
+     * what stands in its way; this never does.
+     */
+    val recordsUnread: String? = null,
 ) {
     companion object {
-        fun of(command: WatchCommand, status: WatchStatus, last: SubmissionRecord?) = WatchAccepted(
+        /** [last] is the newest record, or the failure to read the log that kept it from this answer. */
+        fun of(command: WatchCommand, status: WatchStatus, last: Result<SubmissionRecord?>) = WatchAccepted(
             status = status.outcome.name.lowercase(),
             lessonId = command.lessonId,
             language = command.language,
             subscription = status.health.name.lowercase(),
             session = status.session.name.lowercase(),
-            lastRecord = last?.let(RecordedGrading::from),
+            lastRecord = last.getOrNull()?.let(RecordedGrading::from),
+            recordsUnread = last.exceptionOrNull()?.let { RECORDS_UNREAD },
         )
+
+        private const val RECORDS_UNREAD =
+            "the submission log could not be read, so the last record is unknown and no grading is recorded until " +
+                "it can be; the server's log says why"
     }
 }
 
@@ -110,7 +123,20 @@ class WatchController(
         val status = runBlocking { watcher.watch(command) }
         // Read after the subscription, so a heartbeat that arrives while a grading is settling
         // reports the record once it exists rather than a stale one from before it.
-        return WatchAccepted.of(command, status, records.lastRecordOf(command.lessonId))
+        return WatchAccepted.of(command, status, lastRecordOf(command.lessonId))
+    }
+
+    /**
+     * The newest record, or the failure to read the log: a log the heartbeat cannot read costs the answer its last
+     * record, never the answer (#387's review). A 500 here skipped the session hand-over, which the extension makes on
+     * a good answer only, and logged a stack every 30 s; the store says once why it refused. Only a read that failed:
+     * any other failure is no reason this answer can give.
+     */
+    private fun lastRecordOf(lessonId: Long): Result<SubmissionRecord?> {
+        val last = runCatching { records.lastRecordOf(lessonId) }
+        val failure = last.exceptionOrNull() ?: return last
+        if (failure !is IOException) throw failure
+        return last
     }
 
     companion object {

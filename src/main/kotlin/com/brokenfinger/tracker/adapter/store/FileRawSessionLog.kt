@@ -165,6 +165,20 @@ class FileRawSessionLog(
         releaseHeld()
     }
 
+    /**
+     * The copy goes unless it is the one copy on disk of frames held in memory (#387's review). Through [RecordWrites]
+     * when the log knows its root, so nothing is deleted through a link; built bare, where it was made.
+     */
+    override fun withdraw(session: RawSessionId, copy: Path): Boolean {
+        if (holdsInMemory(session)) return false
+        val bounded = attempts ?: return removedIfRegular(copy)
+        return bounded.removeFile(copy)
+    }
+
+    // Frames of this session held while `.ps` was refused: the copy holds them, and the work list does not.
+    private fun holdsInMemory(session: RawSessionId): Boolean =
+        live[session.value]?.let { synchronized(it) { it.frames.isNotEmpty() } } == true
+
     // A sub-directory again, for the same reason `setAside` uses one: the work-list walk keeps
     // only direct children whose name parses as a session.
     override fun orphaned(lessonId: Long, frameText: String) {

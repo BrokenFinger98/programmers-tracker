@@ -21,7 +21,7 @@ Three secrets, in three places, on purpose.
 | | What it is | Where it lives |
 |---|---|---|
 | **Session cookie** | Your Programmers login | `.ps/session` in this repository's checkout — never in the record repository. The sensor extension hands a fresh one to `POST /session` on loopback, under the `/watch` token, and the server writes it there itself; pasting it by hand is the fallback |
-| **`/watch` token** | Generated; gates the endpoint the browser extension calls | `.ps/watch-token`, same place, owner-only |
+| **`/watch` token** | Generated; gates the endpoint the browser extension calls | `.ps/watch-token`, same place, owner-only from the moment it is created |
 | **GitHub token** | Optional, first boot only; creates and wires the record repository | `.env`, then a credential store at `<records>/.ps/git-credentials`, owner-only |
 
 **Two of them deliberately do not live with the records.** The record repository is pushed; a
@@ -83,6 +83,12 @@ Stated where it is implemented rather than repeated here:
   refused — though each check is of a path at one moment, so a process racing the server on your
   machine is not stopped by it
   ([#361](https://github.com/BrokenFinger98/programmers-tracker/issues/361)).
+- **Reads of your records** — what those writers keep is read through the same walk, so a link a
+  clone or pull planted is never read as your history. A submission log that cannot be read is an
+  error wherever it is asked for — every MCP tool answers a fault rather than a count — and never an
+  empty history; the server keeps running, and keeps each grading's frames for the first start after
+  the log reads again to record
+  ([#387](https://github.com/BrokenFinger98/programmers-tracker/issues/387)).
 - **This repository** — `scripts/guards.sh` fails the build on a committed record, a
   session-cookie-shaped string or the live `/watch` token, and the pre-push hook runs it.
 

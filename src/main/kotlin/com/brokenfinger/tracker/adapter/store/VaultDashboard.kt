@@ -47,25 +47,36 @@ import java.nio.file.Path
  * seed and the write created the file it named. A link is also something someone made, which a
  * seed never replaces. A seed that is written goes through [RecordWrites], so it is replaced
  * whole beside its own name rather than written in place.
+ *
+ * A seed is read once, through [RecordReads], the bound its writer takes (#387): only a regular
+ * file is read — a FIFO there blocked the boot — and anything else standing there is refused,
+ * which leaves it alone and is said, as a seed that could not be written always was. [SeedLedger]
+ * hashes those bytes; it read the file again itself, following a link.
  */
 class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
     private val writes = RecordWrites.underRoot(recordRoot, SEEDS.toSet())
+    private val reads = RecordReads.underRoot(recordRoot, SEEDS.toSet())
 
     fun ensure() {
         SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }
     }
 
+    // Read once, through the bound its writer takes: a seed that is no regular file is refused, which leaves it alone.
     private fun seed(seed: String) {
         val file = recordRoot.resolve(seed)
         if (Files.isSymbolicLink(file)) return leftAlone(file)
         val shipped = shipped(seed)
-        if (adopted(seed, file, shipped)) return
-        if (Files.exists(file) && !ledger.isUnchanged(seed, file)) return
-        val fresh = !Files.exists(file)
-        if (!fresh && Files.readString(file) == shipped) return
+        val current = reads.readAllBytes(file)
+        if (current != null && !replaceable(seed, current, shipped)) return
         if (!writes.replaceOrSkip(file, shipped)) return
         ledger.record(seed, shipped)
-        announced(file, fresh)
+        announced(file, fresh = current == null)
+    }
+
+    // Ours to replace only when still exactly as this server last wrote it, and not when it already is what we ship.
+    private fun replaceable(seed: String, current: ByteArray, shipped: String): Boolean {
+        if (adopted(seed, current, shipped)) return false
+        return ledger.isUnchanged(seed, current)
     }
 
     private fun leftAlone(file: Path) {
@@ -92,9 +103,9 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
      * Recorded only when the ledger disagrees, so a settled vault does not rewrite `.ps/seeds.json`
      * on every boot.
      */
-    private fun adopted(seed: String, file: Path, shipped: String): Boolean {
-        if (!Files.exists(file) || Files.readString(file) != shipped) return false
-        if (!ledger.isUnchanged(seed, file)) ledger.record(seed, shipped)
+    private fun adopted(seed: String, current: ByteArray, shipped: String): Boolean {
+        if (!current.contentEquals(shipped.toByteArray())) return false
+        if (!ledger.isUnchanged(seed, current)) ledger.record(seed, shipped)
         return true
     }
 

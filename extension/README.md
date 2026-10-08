@@ -28,7 +28,7 @@ Then open any Programmers problem. The toolbar badge is the status:
 | green `●` | watching — the server accepted the announcement, and nothing is recorded for this problem yet |
 | green `✓` | the last grading on this problem **was recorded**, whatever its verdict |
 | purple `?` | recorded, but the server could not classify it — `UNKNOWN` or `INCOMPLETE` |
-| red `!` | the server is up, but **this problem is not being observed** — hover for which credential to fix |
+| red `!` | the server is up, but **this problem is not being observed** — hover for which credential to fix — or it cannot read its own submission log, so nothing it observes is recorded |
 | orange `!` | no token configured yet |
 | red `×` | the server refused or could not be reached; hover for its own message |
 | no badge | the content script never ran — you are not on a problem page, or the extension is not loaded in this profile |

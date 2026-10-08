@@ -21,6 +21,7 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -30,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -51,6 +53,9 @@ import java.time.ZoneOffset
 class RawSessionReconcilerTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     /** What git answers about `.ps`: nothing tracked, unless a test says a pull changed that. */
     private val git = ChangingAnswer(false)
@@ -355,7 +360,61 @@ class RawSessionReconcilerTest {
         reconcile() shouldBe ReconcileReport()
     }
 
+    /**
+     * Replaying a stored session makes a record, so a session that is a link is not replayed (#387): whatever it leads
+     * to — here a grading's frames kept elsewhere — would become this learner's record. Since #377 the work list lists
+     * regular files alone, so it is passed over there rather than failed at the read, and it stays on the work list.
+     */
+    @Test
+    fun `a stored session that is a link is not replayed, and stays on the work list`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        val session = storedSessions().single()
+        aLink(session, Files.move(session, outside.resolve("frames.jsonl")))
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        Files.isSymbolicLink(session) shouldBe true
+    }
+
+    /**
+     * A FIFO on the work list would hold the boot for a writer that never comes. The listing passes it over, as it
+     * does anything that is not a regular file (#377): the pass returns, the timeout failing it otherwise, and nothing
+     * is replayed.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a stored session that is a FIFO is passed over, not waited on`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val fifo = Files.createDirectories(root.resolve(".ps/raw")).resolve(A_SESSION)
+        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+
+        reconcile() shouldBe ReconcileReport()
+    }
+
+    /**
+     * And a session listed as a file and swapped for a FIFO before it is read is not waited on either (#387): only a
+     * regular file is read. What this pins is that the pass returns at all — the timeout fails it if the read's own
+     * check is removed — with the session failed, as one that cannot be settled.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a stored session that is a FIFO is not waited on, and fails as one that cannot be settled`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val fifo = Files.createDirectories(root.resolve(".ps/raw")).resolve(A_SESSION)
+        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+        val listedBeforeTheSwap = object : RawSessionLog by rawLog {
+            override fun unprocessed() = listOf(RawSession(RawSessionId(A_SESSION), LESSON_ID, SESSION_START, fifo))
+        }
+
+        reconcile(listedBeforeTheSwap) shouldBe ReconcileReport(failed = 1)
+    }
+
     // Harness --------------------------------------------------------------------------------
+
+    private fun storedSessions(): List<Path> =
+        Files.list(root.resolve(".ps/raw")).use { entries -> entries.filter { Files.isRegularFile(it) }.toList() }
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
     private fun reconcile(log: RawSessionLog = rawLog): ReconcileReport = runBlocking {

@@ -134,8 +134,16 @@ class RawSessionReconciler(
         .filter { it.isNotBlank() }
         .toList()
 
-    private fun bytesOf(file: Path): ByteArray =
-        Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
+    /**
+     * Only a regular file, opened without following a link (#377, #387). What replays becomes a record,
+     * and through a link it would be whatever the link leads to; a FIFO would never answer. The work
+     * list holds regular files alone, so this is what stands against one swapped in after the listing:
+     * such a session fails like any other that cannot be settled, and stays where it is.
+     */
+    private fun bytesOf(file: Path): ByteArray {
+        check(Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) { "the stored session is not a regular file" }
+        return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
+    }
 
     private fun failed(session: RawSession, cause: Throwable): ReconcileReport {
         logger.error("Lesson {} could not be reconciled; its frames are kept", session.lessonId, cause)

@@ -214,7 +214,8 @@ is written once, read normally from then on, and the backfill's count becomes tr
   list until the link is gone. The live path logs an ERROR for each. The copy beside the record is
   made before the append (#95's order), so each such submit leaves an `attempts/NNN.raw.jsonl` that no
   record names. The attempt counter also moves on in memory. Both were already true of any failing
-  append.
+  append. Since #387 the log's read is refused too, so nothing serves its lines meanwhile, and the
+  writer counts from the log at the first grading after the link is gone (Outcome).
 - **A failed attachment at boot is retried at every boot.** That is one fetch per boot per such
   record, as for any pending record. The same holds for the statement of a problem whose directory is
   refused, within the backfill's cap.
@@ -246,7 +247,7 @@ is written once, read normally from then on, and the backfill's count becomes tr
   a linked log's target as the history. Lines of that file that parse as records reach MCP and the
   attempt counter. No such line is pushed: the appends are refused, and git commits the link as a
   link. `RunLog`'s idempotency check reads a boolean from a linked run log. Both are readers, outside
-  #354's `problems/` bound and this issue's scope.
+  #354's `problems/` bound and this issue's scope. ⚠️ Resolved by #387 (Outcome).
 - **A replace over a file another process holds open fails on Windows** (Q4; filed). Windows refuses
   to rename over an open file unless it was opened to share deletion, so a page an editor holds
   open is not rewritten. The failure is an I/O error, which a skipping writer does not skip.
@@ -256,14 +257,16 @@ is written once, read normally from then on, and the backfill's count becomes tr
   per-directory checks, the rename, and a warn-once set each. Only the directory listing is shared,
   since the review round. Merging the rest is a refactor of its own.
 - **`WatchToken` writes its token with `writeText`, which follows a link** (S4; filed). It lives in
-  the tool's own `.ps/`, outside the records root and this issue's scope.
+  the tool's own `.ps/`, outside the records root and this issue's scope. ⚠️ Resolved by #387
+  (Outcome).
 - **A bind mount under the root is a directory to every check.** Making one needs root on this
-  machine. A junction is refused by the real-path comparison, untested on Windows.
+  machine. A junction is refused by the real-path comparison, untested on Windows. Since #387 a test
+  makes one on windows-latest (Outcome).
 - **Built bare, `FileRawSessionLog` copies unbounded.** That is the bare constructor, which tests
   use with destinations of their own. The composition root builds it `under` the records root, as it
   does for the guard.
 - **Windows CI runs none of the link tests.** They skip through `canPlantLinksIn`, so on Windows only
-  the normal-file paths of the walk run.
+  the normal-file paths of the walk run. Since #387 two junction tests run there alone.
 
 ## Outcome
 
@@ -431,3 +434,15 @@ CI has not run the branch.
 server should write byte-identical pages and code files with the same modes. `git status` in the
 records repository should stay clean after a boot with nothing to recover. A normal boot should log
 no `Not writing` or `Replacing` line.
+
+**The reads, 2026-10-08 (#387).** The reads S5 and Q7 named now walk this bound. The walk was taken out
+of `RecordWrites` into `RecordBound`, with `RecordWritesTest` passing unchanged, and shared with a reader,
+`RecordReads`, so a file a writer here refuses is one its reader refuses. The audit found two more reads
+to bring under it, the raw work list's replay, which makes records, and `VaultDashboard`'s own reads of a
+seed, and a way of reading wrong several shared: existence answered by `Files.exists`, which reads a
+directory that cannot be searched as "nothing there". A refused read of the log is thrown rather than answered as empty: MCP answers a fault,
+the writer records nothing and keeps each grading's frames until the log reads again, and the boot goes
+on. `WatchToken` (S4) is written beside and moved by `AtomicStateFile`, owner-only from creation, and a
+link there is replaced. A junction where a problem directory should be is refused in a test that runs on
+windows-latest, not yet run. The audit, the options and each reader's posture:
+[[decisions/2026-10-08-a-refused-read-is-not-an-empty-one]].

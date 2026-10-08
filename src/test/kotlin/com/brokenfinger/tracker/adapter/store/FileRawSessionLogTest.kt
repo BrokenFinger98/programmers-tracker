@@ -245,6 +245,27 @@ class FileRawSessionLogTest {
         Files.exists(root.resolve(".ps/raw").resolve(session.value)) shouldBe true
     }
 
+    /**
+     * The work list is listed only through real directories (#387, and #377's guard since). Replaying a session makes a
+     * record, and with `raw` a link the sessions it leads to are not the tracker's own: whatever stands there would
+     * become one. Nothing is listed while the link stands, that is said in #377's words, and what lies behind it is
+     * left where it is.
+     */
+    @Test
+    fun `a raw directory that is a link lists no work, and says so`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(outside.resolve("raw"))
+        FileRawSessionLog(elsewhere, Clock.fixed(startedAt, ZoneOffset.UTC)).let { it.append(it.start(120804), "{}") }
+        aLink(root.resolve(".ps/raw"), elsewhere)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+
+        val heard = warningsWhile(FileRawSessionLog::class) { log.unprocessed().shouldBeEmpty() }
+
+        heard.single() shouldContain "Their directory was not listed"
+        heard.single() shouldContain "symbolic link"
+        namesIn(elsewhere) shouldHaveSize 1
+    }
+
     private fun logAt(instant: Instant) = FileRawSessionLog(rawDir(), Clock.fixed(instant, ZoneOffset.UTC))
 
     private fun rawDir(): Path = root.resolve("raw")
@@ -484,6 +505,95 @@ class FileRawSessionLogTest {
 
         Files.exists(nowhere, LinkOption.NOFOLLOW_LINKS) shouldBe false
     }
+
+    // A copy taken back when its record was not appended (#387's review) ----------------------------------------
+
+    /** The copy goes, so a replay can make it again under the number it is then given; the work list keeps the frames. */
+    @Test
+    fun `a copy whose every frame is on the work list is taken back, and the frames stay there`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+
+        log.withdraw(session, copy) shouldBe true
+
+        Files.exists(copy, LinkOption.NOFOLLOW_LINKS) shouldBe false
+        Files.readAllLines(stateRaw(session)) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** Frames held in memory while `.ps` was refused have no other copy on disk, so theirs is kept. */
+    @Test
+    fun `a copy holding frames held only in memory is kept, as their one copy on disk`() {
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+
+        log.withdraw(session, copy) shouldBe false
+
+        Files.readAllLines(copy) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** Only this log's own copy: something else standing where it was — a link — is not its to delete. */
+    @Test
+    fun `what stands where the copy was and is no regular file is kept`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.delete(copy)
+        aLink(copy, Files.writeString(outside.resolve("not-ours.jsonl"), "kept\n"))
+
+        log.withdraw(session, copy) shouldBe false
+
+        Files.isSymbolicLink(copy) shouldBe true
+        Files.readString(outside.resolve("not-ours.jsonl")) shouldBe "kept\n"
+    }
+
+    /** And nothing is deleted through a directory that became a link after the copy was made. */
+    @Test
+    fun `nothing is taken back through an attempts directory that became a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.move(copy.parent, root.resolve("moved-attempts"))
+        Files.writeString(outside.resolve(copy.fileName.toString()), "not ours\n")
+        aLink(copy.parent, outside)
+
+        shouldThrow<RefusedWriteException> { log.withdraw(session, copy) }
+
+        Files.readString(outside.resolve(copy.fileName.toString())) shouldBe "not ours\n"
+    }
+
+    @Test
+    fun `a copy already gone is nothing to take back`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.delete(copy)
+
+        log.withdraw(session, copy) shouldBe true
+    }
+
+    /** Built bare, as the guard can be, it takes back its copy where it was told to make it. */
+    @Test
+    fun `a bare log takes its copy back where it made it`() {
+        val log = logAt(startedAt)
+        val session = sessionOf(log)
+        val copy = log.complete(session, root.resolve("attempts/001.raw.jsonl"))
+
+        log.withdraw(session, copy) shouldBe true
+
+        Files.exists(copy) shouldBe false
+    }
+
+    private fun boundedLog(): FileRawSessionLog =
+        FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+
+    private fun sessionOf(log: FileRawSessionLog): RawSessionId =
+        log.start(120804).also { log.append(it, """{"n":1}""") }
+
+    private fun attemptFile(): Path = root.resolve("problems/120804-x/attempts/002.raw.jsonl")
 
     // A boot replays only what a write would accept (#377) ---------------------------------------
 

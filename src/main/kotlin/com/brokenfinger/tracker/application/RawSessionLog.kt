@@ -56,6 +56,17 @@ interface RawSessionLog {
     fun setAside(session: RawSessionId)
 
     /**
+     * Takes back the [copy] that [complete] made for [session] when the record naming it was never appended, and
+     * answers whether nothing is left there (#387's review). The source stays on the work list, so a replay makes the
+     * copy again under the number it is then given; a copy left behind took that number from every later grading.
+     *
+     * Only this log's own copy, and only while every frame in it is also on the work list: one that holds frames kept
+     * only in memory is their one copy on disk, and is kept — false, as for anything at [copy] that is not a regular
+     * file.
+     */
+    fun withdraw(session: RawSessionId, copy: Path): Boolean
+
+    /**
      * Keeps a frame that belongs to no grading, so a missed `start` costs the verdict but
      * not the evidence (#107).
      *
