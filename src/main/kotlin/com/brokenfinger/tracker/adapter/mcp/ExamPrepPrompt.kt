@@ -33,8 +33,9 @@ object ExamPrepPrompt {
     private const val REPAIR_STEP = "When an answer says `truncated`, call again with `limit` set to its " +
         "`total`; if that is too many to read, narrow with `since` and say so. Group the steps into recurring " +
         "patterns — an argument order, a method name, an off-by-one bound, a missing table alias, a syntax " +
-        "slip. Name each pattern by what its diffs show, cite the record ids behind it, and say how many " +
-        "problems it spans. A pattern seen once is not a pattern."
+        "slip. Name each pattern by what its diffs show, or, where a step has no diff, by the judge's own " +
+        "output (`errorText`, `failedMessage`), and say the diff is missing; cite the record ids behind it, " +
+        "and say how many problems it spans. A pattern seen once is not a pattern."
 
     private val LATER_STEPS = listOf(
         "3. For each pattern: the problems to re-solve (its steps' lessonId and title), and up to three " +
