@@ -119,8 +119,19 @@ class CommandLineGitSync(
     override fun push(): Boolean = inRepository("push") { pushed() }
 
     // `git remote` lists names and prints nothing when there is none, so an empty answer is the
-    // whole signal. A failure to run it answers false: unknown is not "configured".
-    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+    // whole signal. A failure to run it answers false: unknown is not "configured". So does one that
+    // could not start, which threw — with the records directory gone, out of the backup's check (the
+    // review of #399) — and is said, as every other git call here that could not run is.
+    override fun hasRemote(): Boolean = runCatching { remotesListed() }.getOrElse { remoteUnknown(it) }
+
+    private fun remotesListed(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+
+    private fun remoteUnknown(cause: Throwable): Boolean {
+        logger.warn(REMOTE_UNKNOWN, root, cause.javaClass.simpleName)
+        return false
+    }
+
+    override fun hasPushCredential(): Boolean = credential.isStored()
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
@@ -241,7 +252,8 @@ class CommandLineGitSync(
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
-     * a documented way to run — is nowhere to push, so nothing is searched for it.
+     * a documented way to run — is nowhere to push, so nothing is searched for it, and with no remote at
+     * all nothing is said either (#390).
      */
     private fun pushed(): Boolean {
         val head = headCommit() ?: return true
@@ -259,8 +271,11 @@ class CommandLineGitSync(
     private fun hasDestination(remote: String): Boolean =
         listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
 
+    // No remote at all is the remote-less way to run, said once at INFO by the boot report and the backup
+    // schedule; said here, it was a warning at every push, every minute the backup was due (#390). A
+    // remote that exists while the push goes to another name, which has no URL, is a fault, and is said.
     private fun noRemote(remote: String): Boolean {
-        logger.warn(NO_REMOTE, root, remote)
+        if (hasRemote()) logger.warn(NO_REMOTE, root, remote)
         return false
     }
 
@@ -560,6 +575,9 @@ class CommandLineGitSync(
 
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
+
+        private const val REMOTE_UNKNOWN =
+            "git remote could not run in {} ({}), so whether it has a remote is unknown, and it is answered as none."
 
         /**
          * Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]).

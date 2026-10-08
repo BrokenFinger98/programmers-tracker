@@ -109,6 +109,8 @@ class BackupReporterTest {
 
         override fun hasRemote(): Boolean = present
 
+        override fun hasPushCredential(): Boolean = false
+
         override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean = true
 
         override fun reconcile(): Boolean = true

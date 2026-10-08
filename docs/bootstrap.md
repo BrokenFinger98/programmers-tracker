@@ -380,7 +380,8 @@ if the machine was asleep).
 | `curl: (7) Failed to connect` | The server is not running, or `TRACKER_PORT` differs. |
 | `Session file not found` | Step 3 was skipped and the sensor has not handed a cookie over yet — sign in to Programmers with the extension loaded, or paste one; under compose the file is `<TRACKER_STATE_DIR>/session`, natively `TRACKER_SESSION_FILE`. |
 | `not a git repository` warning at start | `TRACKER_RECORD_REPO` is not pointing at a git repository. Records are still written; nothing is committed. |
-| `git push failed with 128: ... No configured push destination` | No remote. Expected if you skipped that part of step 2. |
+| `The record repository has no remote, so records stay on this machine` (INFO, at start) | No remote. Expected if you skipped that part of step 2: records are committed here, never pushed, and nothing more is said about it. |
+| `Daily backup could not push: the record repository has no remote, yet a push credential is stored or a backup was recorded before` | A remote was meant to be there: the GitHub wiring at start failed (its own warning says why), or the remote was removed. Add it back, or restart with `GITHUB_TOKEN` set to wire one. To keep the records on this machine alone instead, take `GITHUB_TOKEN` out of `.env` and delete `.ps/git-credentials` and `.ps/backup.json` in the record repository. Said once a day while it lasts, and again after a restart. |
 | `git reconcile failed with 128: Author identity unknown` | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` are unset. Records are written but never committed. |
 | You submitted and nothing was recorded | The problem was not registered via `/watch`, or the server was down at that moment. **That grading is gone** — it cannot be recovered after the fact, by design. |
 

@@ -200,11 +200,13 @@ class GithubRemote(
     private fun git(vararg args: String): String = GitProcess(recordRoot).run(listOf("git") + args).output
 
     // The token itself must not appear here, and GithubToken.toString() makes sure a lazy
-    // interpolation could not leak it either.
+    // interpolation could not leak it either. It says only what holds whatever the backup does: it
+    // promised the backup would say so until a remote existed, and since #390 a backup with no remote
+    // speaks only when one was evidently wanted (the review of #399).
     private fun warn(cause: Throwable) {
         logger.warn(
-            "Could not wire the GitHub remote ({}). Records stay local; the daily backup will " +
-                "say so until a remote exists.",
+            "Could not wire the GitHub remote ({}). Records stay on this machine until it is wired; " +
+                "restart with the token still set to try again.",
             cause.javaClass.simpleName,
         )
     }

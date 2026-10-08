@@ -226,12 +226,43 @@ class CommandLineGitSyncTest {
     }
 
     @Test
-    fun `a push with nowhere to push is reported, never thrown`() {
+    fun `a push with nowhere to push answers false, never throws`() {
         written("problems/120804/Solution.java", CODE)
 
         sync().reconcile() shouldBe true
 
         sync().push() shouldBe false
+    }
+
+    /**
+     * Nothing on the port throws, and `hasRemote()` was the one method left unguarded: with the records
+     * directory gone, `git remote` cannot even start there, and the daily backup's check threw (the
+     * review of #399). Unknown is answered as no remote, as a `git remote` that failed already is, and
+     * said.
+     */
+    @Test
+    fun `a remote that cannot be asked about is answered as none, said, and never thrown`() {
+        val sync = sync()
+        root.toFile().deleteRecursively()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.hasRemote() shouldBe false }
+
+        heard.single() shouldContain "git remote could not run"
+    }
+
+    /**
+     * A stored push credential is the evidence that a remote was wanted, which the daily backup asks for
+     * when there is none (the review of #399). Answered at each call, as the store can be written while
+     * the server runs.
+     */
+    @Test
+    fun `a push credential is reported once one is stored`() {
+        val sync = sync()
+        sync.hasPushCredential() shouldBe false
+
+        aPushTokenIn(root)
+
+        sync.hasPushCredential() shouldBe true
     }
 
     @Test
@@ -1400,19 +1431,34 @@ class CommandLineGitSyncTest {
      * Records kept with no remote are a documented way to run (bootstrap), and the daily backup asks
      * every minute while it is due: each push searched all of history first — 23.4 s for 1,660
      * commits (the review of ea1357c) — and then failed as before. With no remote nothing would be
-     * sent, so nothing is searched.
+     * sent, so nothing is searched. Nor is anything said (#390): the boot report and the backup
+     * schedule say it once, at INFO, and a warning at every push was 1,440 lines a day.
      */
     @Test
-    fun `a repository with no remote fails its push without searching`() {
+    fun `a repository with no remote fails its push without searching, and says nothing`() {
         written(".gitignore", ".ps/\n")
         written("notes/pasted.md", "${aGithubShapedToken()}\n")
         git("add", "--all")
         git("commit", "--message", "history a search would refuse")
 
+        warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false } shouldContainExactly emptyList()
+    }
+
+    /**
+     * A remote exists, but the branch pushes to `origin`, which has none: not the remote-less setup but a
+     * push that cannot go where it is meant to. That is said, and nothing is searched for it (#390).
+     */
+    @Test
+    fun `a push remote with no URL beside another remote is said, and nothing is searched`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "history a search would refuse")
+        git("remote", "add", "backup", base.resolve("backup.git").toString())
+
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
 
-        heard.single() shouldContain "no remote"
-        heard.single() shouldNotContain "token"
+        heard.single() shouldContain "no remote named origin has a URL"
     }
 
     /**

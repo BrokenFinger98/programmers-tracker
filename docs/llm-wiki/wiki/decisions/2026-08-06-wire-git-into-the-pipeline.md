@@ -82,7 +82,10 @@ in the earlier work said what happens when it is never made a repository.
    recent 23:00 Asia/Seoul is later than the last successful backup — `null` counts as due.
    `BackupSchedule` ticks once a minute and asks; `StartupReconciliation` asks once at boot.
    Only a push that landed is recorded, so a failed one leaves the day due. *Amended 2026-10-08
-   (#372): and only when reconciliation succeeded as well — see the Outcome.*
+   (#372): and only when reconciliation succeeded as well — see the Outcome. And (#390): a day that
+   did not count is tried again on a backoff rather than at every tick, and a repository nobody gave
+   a remote says nothing, while one whose remote was evidently wanted says so once a day —
+   [[decisions/2026-10-08-a-backup-that-did-not-count-backs-off]].*
 5. **`StartupReconciliation` sequences the three recoveries in one place**: raw sessions become
    records, `git.reconcile()` commits whatever is uncommitted, then the backup catches up.
    The order is load-bearing — reconcile first and it misses the records the sessions were
@@ -117,7 +120,9 @@ in the earlier work said what happens when it is never made a repository.
   hour.
 - **A repository with no remote logs a failed push once per start and once per day.** Honest
   (nothing left the machine) but it is a log line for a configuration many users will have
-  deliberately.
+  deliberately. *Not so in practice: the day never counted, so from the hour on it logged at every
+  one-minute check, two lines each. Since #390 it says nothing, unless a remote was evidently
+  wanted (decision 4's pointer).*
 - **A directory that becomes a repository while the process runs stays uncommitted until
   restart.** The message says so; the records are on disk either way.
 - **The context test now redirects every path into a scratch directory.** Booting Spring runs
@@ -161,11 +166,14 @@ push usually sends nothing, but each is a round trip to the remote. A persistent
 warned about at every check by the reconciliation, as a failing push already was — the content
 gate's `CREDENTIAL_FOUND`, and a failing pre-commit hook, now repeat every minute while the day is
 held, where before the day was recorded and they came once a day (the review of #389; left to
-#390, with the per-minute warnings of a repository with no remote). A directory git cannot open
+#390, with the per-minute warnings of a repository with no remote). *Since #390 a held day is
+tried on a backoff, about 29 times a day, and a repository nobody gave a remote says nothing.* A
+directory git cannot open
 does not hold the day: reconciliation commits the rest and answers true, so the day is recorded
 without what it holds, and the directory is named once a day while it lasts
 ([[decisions/2026-10-08-reconcile-never-stages-the-state-directory]], its F8). Holding the day for
-it would retry every minute for what only the owner can fix. The exception is stated in `GitSync`
+it would retry all day — every minute then, on the backoff since #390 — for what only the owner can
+fix. The exception is stated in `GitSync`
 and `DailyBackup.performed`, and a `DailyBackupTest` case pins it: both evenings recorded, the
 directory named at each (red first, said once per process: expected 2, was 1).
 
