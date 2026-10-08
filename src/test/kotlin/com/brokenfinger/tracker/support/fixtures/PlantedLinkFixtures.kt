@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.git.PushCredential
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
 
 // Object mother for a planted link (dev rules §6.4, #354). Git stores symbolic links, so a records
@@ -89,9 +90,20 @@ fun aJunction(link: Path, target: Path): Path {
     return link
 }
 
-/** [path] made a FIFO, which only `mkfifo` makes; false where there is none to run. Its parent must exist. */
+/**
+ * [path] made a FIFO, which only `mkfifo` makes; false where there is none to run, and false where what it made is no
+ * FIFO to the JVM. A Windows runner has Git for Windows' `mkfifo` on its path: it exits 0 and leaves a file the JVM
+ * reads as a regular one, so a test that assumed a FIFO ran against a plain file and failed (#387's CI). Its parent
+ * must exist.
+ */
 fun madeFifo(path: Path): Boolean =
-    runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false)
+    runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false) &&
+        isFifo(path)
+
+// A FIFO is neither a regular file, a directory nor a link to the JVM: it reads as "other".
+private fun isFifo(path: Path): Boolean = runCatching {
+    Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS).isOther
+}.getOrDefault(false)
 
 /** `.p` and U+017F, LATIN SMALL LETTER LONG S, which case-folds to `s`: APFS answers `.ps` with it (#360). */
 const val A_LONG_S_STATE_DIRECTORY = ".pſ"
