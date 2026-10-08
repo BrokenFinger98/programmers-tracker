@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.OffsetDateTime
@@ -37,9 +36,15 @@ import java.time.format.DateTimeFormatter
  *
  * Appended through [RecordWrites]: a regular file or none, never through a link (#361). A refusal is
  * thrown, so the run's record keeps its code pending rather than claiming a line that was not kept.
+ *
+ * Read for the duplicate check through [ProblemFiles], #354's bound, as every reader under
+ * `problems/` is (#387). Read through a link, a file elsewhere that held this run's id made the
+ * append be skipped as done, with nothing refused. A link out now reads as no line, so the append
+ * runs, and its own bound refuses the link and throws.
  */
 class RunLog(private val layout: RecordLayout, private val clock: Clock) {
     private val writes = RecordWrites.underProblems(layout)
+    private val files = ProblemFiles(layout)
 
     fun append(record: SubmissionRecord, code: String) {
         if (record.action != GradingAction.RUN) return
@@ -52,9 +57,9 @@ class RunLog(private val layout: RecordLayout, private val clock: Clock) {
     private fun fetchedNow(): String = OffsetDateTime.now(clock).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     private fun alreadyHolds(file: Path, recordId: String): Boolean {
-        if (!Files.isRegularFile(file)) return false
+        val bytes = files.readAllBytes(file) ?: return false
         val needle = "\"recordId\":${format.encodeToString(recordId)}"
-        val complete = String(Files.readAllBytes(file), CHARSET).split('\n').dropLast(1)
+        val complete = String(bytes, CHARSET).split('\n').dropLast(1)
         return complete.any { it.contains(needle) }
     }
 
