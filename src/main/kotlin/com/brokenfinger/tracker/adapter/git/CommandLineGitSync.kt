@@ -61,6 +61,9 @@ class CommandLineGitSync(
     /** Whether git's ignore rules for `.ps/` were already asked about — once, like [isRepository]. */
     private val stateIgnoreAsked = AtomicBoolean()
 
+    /** Whether waiting out the user's merge, cherry-pick, revert or rebase was already said. */
+    private val waitingSaid = AtomicBoolean()
+
     override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean =
         inRepository("commit") { commitScoped(record, paths) }
 
@@ -132,6 +135,7 @@ class CommandLineGitSync(
 
     private fun commitEverything(): Boolean {
         warnOnceUnlessStateIgnored()
+        if (operationInProgress()) return waitingItOut()
         if (!isDirty(RECONCILE_SCOPE)) return true
         return committed("reconcile", RECONCILE_SCOPE, RECONCILE_MESSAGE)
     }
@@ -151,6 +155,24 @@ class CommandLineGitSync(
         if (stateIgnoreAsked.getAndSet(true)) return
         if (git(listOf("check-ignore", "--quiet", "--no-index", STATE_DIRECTORY)).code != NOT_IGNORED) return
         logger.warn(STATE_NOT_IGNORED, root)
+    }
+
+    /**
+     * A merge, cherry-pick, revert or rebase the user has open. Git refuses a partial commit inside one
+     * ("cannot do a partial commit during a merge"), and the staging before it would already have marked
+     * every conflict resolved. Asked where git keeps its state, which in a worktree is not `.git/`.
+     */
+    private fun operationInProgress(): Boolean {
+        val paths = git(listOf("rev-parse") + IN_PROGRESS.flatMap { listOf("--git-path", it) })
+        if (!paths.succeeded()) return false
+        return paths.stdout.lines().filter { it.isNotBlank() }.any { Files.exists(root.resolve(it.trim())) }
+    }
+
+    // Records stay uncommitted until the user finishes or aborts; the next reconciliation after that
+    // picks them up. Said once, because the backup asks every minute while it is due.
+    private fun waitingItOut(): Boolean {
+        if (!waitingSaid.getAndSet(true)) logger.warn(OPERATION_IN_PROGRESS, root)
+        return false
     }
 
     // The push's half of the gate: nothing is sent until every commit it would send was searched.
@@ -240,9 +262,12 @@ class CommandLineGitSync(
      * not a change: while `.gitignore` is a link, git warns on every call, and that warning once
      * made a clean tree look dirty and every reconciliation an empty commit that failed (#360). A
      * status that failed still counts as dirty, so the staging that follows runs and reports why.
+     *
+     * Untracked files are always listed: `status.showUntrackedFiles=no` is the user's setting, and
+     * honoured here it made every new record look like nothing to reconcile (#360).
      */
     private fun isDirty(scope: List<String>): Boolean {
-        val status = git(listOf("status", "--porcelain", "--") + scope)
+        val status = git(listOf("status", "--porcelain", "--untracked-files=all", "--") + scope)
         return !status.succeeded() || status.stdout.isNotBlank()
     }
 
@@ -250,15 +275,19 @@ class CommandLineGitSync(
 
     // Forward slashes on every host, as git wants them. A path that escapes the record
     // repository is dropped rather than staged: committing a file the user never meant to
-    // publish is not a failure we get to make quietly.
+    // publish is not a failure we get to make quietly. So is one under the state directory, in any
+    // case a filesystem may fold to it (#360): no record lives there.
     private fun relativeOf(path: Path): String? {
         val relative = root.toAbsolutePath().relativize(path.toAbsolutePath())
-        if (relative.startsWith("..")) return outside()
+        if (relative.startsWith("..")) return notStaged("outside the record repository")
+        if (relative.getName(0).toString().equals(StateDirectory.NAME, ignoreCase = true)) {
+            return notStaged("under the state directory")
+        }
         return relative.joinToString("/")
     }
 
-    private fun outside(): String? {
-        logger.warn("A path outside the record repository was not staged")
+    private fun notStaged(where: String): String? {
+        logger.warn("A path {} was not staged", where)
         return null
     }
 
@@ -375,6 +404,15 @@ class CommandLineGitSync(
 
         /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
         private const val STATE_DIRECTORY = ".ps/"
+
+        private const val OPERATION_IN_PROGRESS =
+            "{} has a merge, cherry-pick, revert or rebase in progress, so reconciliation waits rather " +
+                "than commit inside it: records stay uncommitted until it is finished or aborted. " +
+                "This is said only once."
+
+        /** Where git marks an operation the user has open, as `git rev-parse --git-path` names them. */
+        private val IN_PROGRESS =
+            listOf("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply")
 
         private const val STATE_DIRECTORY_REFUSED =
             "git {} refused in {}: what answers to .ps there is not the tracker's own state directory — a " +

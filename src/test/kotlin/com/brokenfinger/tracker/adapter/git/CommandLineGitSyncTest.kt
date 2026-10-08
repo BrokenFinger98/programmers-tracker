@@ -570,6 +570,71 @@ class CommandLineGitSyncTest {
         subjects(at = remote).first() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
     }
 
+    // What the user's own git settings and work must not change (#360) ---------------------------
+
+    /** `status.showUntrackedFiles=no` is the user's to set; read as "clean", it hid every new record. */
+    @Test
+    fun `a status that hides untracked files does not hide records from reconciliation`() {
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "init")
+        git("config", "status.showUntrackedFiles", "no")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+    }
+
+    /**
+     * Git refuses a partial commit in the middle of a merge, a cherry-pick, a revert or a rebase — and
+     * the staging before it marked every conflict resolved, at every reconciliation. Reconciliation
+     * waits instead: it says so once and leaves the user's merge exactly as it was.
+     */
+    @Test
+    fun `reconciliation waits out a merge in progress and leaves it untouched`() {
+        written(".gitignore", ".ps/\n")
+        written("notes.md", "base\n")
+        git("add", "--all")
+        git("commit", "--message", "base")
+        git("checkout", "-b", "other")
+        written("notes.md", "theirs\n")
+        git("commit", "--all", "--message", "theirs")
+        git("checkout", "main")
+        written("notes.md", "ours\n")
+        git("commit", "--all", "--message", "ours")
+        run(listOf("merge", "other"), root).first shouldBe 1
+        written("log/submissions.jsonl", RECORD)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe false } }
+
+        heard.single() shouldContain "in progress"
+        statusOf("notes.md") shouldBe "UU notes.md"
+        subjects().first() shouldBe "ours"
+    }
+
+    /**
+     * A record never names a state file, and if it ever did, the submit commit would not carry it: a
+     * path whose first segment is `.ps` in any case is dropped before staging, like one outside the
+     * repository.
+     */
+    @Test
+    fun `a submit never stages a path under the state directory, in any case`() {
+        Files.createDirectory(root.resolve(".ps"))
+        val state = written(".ps/timers.json", "{}")
+        val aliased = written(".PS/seeds.json", "{}")
+        val solution = written("problems/120804/Solution.java", CODE)
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync().commitSubmission(aWrongSubmit(), listOf(state, aliased, solution)) shouldBe true
+        }
+
+        filesInHead() shouldContainExactly listOf("problems/120804/Solution.java")
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "state directory" }
+    }
+
     // The state directory is the real one, or git is not run at all (#360) ----------------------
     //
     // No credential is stored in these, so the content gate has nothing to search for: what keeps the
