@@ -2,9 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.domain.calc.Since
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -71,17 +69,12 @@ object McpPromptCatalog {
         part = arguments.given("part"),
     )
 
-    // Strings, by the specification, refused in the tools' words otherwise. A blank one is not given —
-    // where a tool refuses a blank — on an assumption: a client that shows arguments as a form may send
-    // an empty field as "". None was measured, and Claude Code never sends one. Values are trimmed as
+    // Strings, by the specification, read and refused by the tools' own reader, so in the tools' words. A blank
+    // one is not given — where a tool refuses a blank — on an assumption: a client that shows arguments as a form
+    // may send an empty field as "". None was measured, and Claude Code never sends one. Values are trimmed as
     // they are read here; the tools trim when they parse or match.
-    private fun JsonObject.given(name: String): String? {
-        val value = this[name]
-        if (value == null || value is JsonNull) return null
-        val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
-            ?: throw IllegalArgumentException("$name must be text")
-        return text.trim().takeIf { it.isNotEmpty() }
-    }
+    private fun JsonObject.given(name: String): String? =
+        McpArguments.optionalText(this, name)?.trim()?.takeIf { it.isNotEmpty() }
 
     private fun answer(text: String): JsonObject = buildJsonObject {
         put("description", DESCRIPTION)

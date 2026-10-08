@@ -1,7 +1,16 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Test
 
 class McpArgumentsTest {
@@ -35,5 +44,35 @@ class McpArgumentsTest {
     fun `an owner that takes no arguments says so`() {
         McpArguments.unknown("ping", setOf("x"), emptyList()) shouldBe
             "unknown argument(s): \"x\"; ping takes no arguments"
+    }
+
+    /** Absent and JSON null both say "not given", and neither is read as the text "null". */
+    @Test
+    fun `a text argument that is absent or null is not given`() {
+        val arguments = buildJsonObject { put("language", JsonNull) }
+
+        McpArguments.optionalText(arguments, "language").shouldBeNull()
+        McpArguments.optionalText(arguments, "part").shouldBeNull()
+    }
+
+    /** As it came: what a blank or padded value means is each path's to decide, not the reader's. */
+    @Test
+    fun `a text argument is read as it came, blank and padding included`() {
+        listOf("java", "", "  ", " GROUP BY ").forEach { given ->
+            McpArguments.optionalText(buildJsonObject { put("part", given) }, "part") shouldBe given
+        }
+    }
+
+    /** A number is not the text of its digits: `language: 5` is a mistake to say so, under the argument's name. */
+    @Test
+    fun `a text argument that is not a JSON string is refused under its name`() {
+        listOf(JsonPrimitive(5), JsonPrimitive(true), JsonArray(listOf(JsonPrimitive("java"))), JsonObject(emptyMap()))
+            .forEach { notText ->
+                withClue("language = $notText") {
+                    shouldThrow<IllegalArgumentException> {
+                        McpArguments.optionalText(buildJsonObject { put("language", notText) }, "language")
+                    }.message shouldBe "language must be text"
+                }
+            }
     }
 }
