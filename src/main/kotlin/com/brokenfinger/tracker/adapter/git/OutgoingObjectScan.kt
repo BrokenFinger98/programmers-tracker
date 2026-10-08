@@ -7,11 +7,11 @@ import java.io.InputStream
  * GitHub's token shapes and the stored values (#373).
  *
  * `git grep` over each outgoing commit read every commit's whole tree, so a first push read each unchanged
- * file once per commit: 252 s for 5,000 commits on the #360 review's synthetic history, one call 16 s. Here
- * `rev-list --objects` names each object of the range once, the first time it reaches it; `cat-file
- * --batch-check` tells each one's type and size; and `cat-file --batch` prints the blobs, in calls of about
- * [bytesPerCall] of content each, which [BatchOutput] searches as it reads them. A blob many commits share is
- * read once, and no tree or commit is read at all.
+ * file once per commit: 252 s for 5,000 commits, one call 16 s, on a history shaped like the #360 review's;
+ * this scan took 0.5 s there. Here `rev-list --objects` names each object of the range once, the first time
+ * it reaches it; `cat-file --batch-check` tells each one's type and size; and `cat-file --batch` prints the
+ * blobs, in calls of about [bytesPerCall] of content each, which [BatchOutput] searches as it reads them. A
+ * blob many commits share is read once, and no tree or commit is read at all.
  *
  * Fails closed: a listing, a description or a read that fails or does not finish in time, an object git
  * cannot describe or print, and output other than what was asked for are each [SearchOutcome.UNSEARCHED].
@@ -66,9 +66,9 @@ internal class OutgoingObjectScan(
 
     companion object {
         /**
-         * Content per `cat-file --batch` call. A call of this size took well under a second (measured on the
-         * review's histories), far inside [GitProcess.TIMEOUT]; its output waits in a temporary file of about
-         * this size until it is read.
+         * Content per `cat-file --batch` call. A call of this size took 0.4–1.0 s, the search of its output
+         * included, on a history whose every commit added to a growing log (#373) — far inside
+         * [GitProcess.TIMEOUT]. Its output waits in a temporary file of about this size until it is read.
          */
         const val BYTES_PER_CALL = 64L shl 20
 

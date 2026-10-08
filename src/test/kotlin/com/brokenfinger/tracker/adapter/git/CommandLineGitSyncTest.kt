@@ -1051,6 +1051,58 @@ class CommandLineGitSyncTest {
         sync().reconcile() shouldBe false
     }
 
+    /**
+     * The review's middle commit: a token committed, and deleted in the next. HEAD's tree holds nothing,
+     * and the push still sends the blob, so the search still finds it.
+     */
+    @Test
+    fun `a token only in a middle commit, deleted since, is never pushed`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "pasted")
+        git("rm", "--quiet", "notes/pasted.md")
+        git("commit", "--message", "removed")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        everythingAt(remote) shouldNotContain aGithubShapedToken()
+    }
+
+    @Test
+    fun `a fine-grained token another tool committed is never pushed`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        written("notes.md", "${aFineGrainedShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "a note another tool committed")
+
+        sync().push() shouldBe false
+
+        everythingAt(remote) shouldNotContain aFineGrainedShapedToken()
+    }
+
+    /**
+     * `git grep` finds no token in UTF-16 text, in any locale (#372's review), and Windows PowerShell 5.1
+     * writes UTF-16 with every `>`. The push reads what it would send as bytes and as UTF-16 (#373).
+     */
+    @Test
+    fun `a token in a UTF-16 file is never pushed`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        val powershell = byteArrayOf(-1, -2) + "${aGithubShapedToken()}\r\n".toByteArray(Charsets.UTF_16LE)
+        Files.write(Files.createDirectories(root.resolve("notes")).resolve("powershell.txt"), powershell)
+        git("add", "--all")
+        git("commit", "--message", "a note another tool committed")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
     /** A repository with nothing token-shaped in it is untouched: near misses are not tokens. */
     @Test
     fun `strings that only resemble a token are not refused`() {
