@@ -64,6 +64,11 @@ class DailyBackup(
      * the push: what is committed still goes up meanwhile. Nothing to reconcile is a reconciliation that
      * succeeded, and a branch with no commit yet and nothing to commit holds nothing to back up — that
      * push answers "nothing to push" (#360), and the day counts.
+     *
+     * **One exception: a directory git cannot open.** Reconciliation does not see it, commits the rest
+     * and answers true, so the day is recorded without what it holds. Holding the day for it would retry
+     * every minute for what only the owner can fix. Instead the git adapter says it once a day while it
+     * lasts, so every day recorded without it has said so (the review of #389).
      */
     private fun performed(due: Instant): Boolean {
         val reconciled = git.reconcile()

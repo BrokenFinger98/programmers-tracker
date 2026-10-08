@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.time.Clock
 import java.time.Duration
+import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -66,6 +68,8 @@ import java.util.concurrent.atomic.AtomicReference
 class CommandLineGitSync(
     private val root: Path,
     environment: Map<String, String> = System.getenv(),
+    /** Whose date decides when a directory git cannot open is said again (#372). */
+    private val clock: Clock = Clock.systemDefaultZone(),
     private val waitFor: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GitSync {
     /**
@@ -92,8 +96,12 @@ class CommandLineGitSync(
     /** Whether waiting out the user's merge, cherry-pick, revert or rebase was already said. */
     private val waitingSaid = AtomicBoolean()
 
-    /** Each directory git said it could not open, once said (#372). */
-    private val unreadableSaid: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /**
+     * Each directory git said it could not open, with the date it was last said (#372). Bounded by the
+     * records repository itself: one entry per directory git has named, a handful per problem at most. An
+     * entry outlives its directory opening again, so one that comes and goes is still said once a day.
+     */
+    private val unreadableSaidOn = ConcurrentHashMap<String, LocalDate>()
 
     /** The last head a push searched clean, and what it was searched against. */
     private val lastSearchedClean = AtomicReference<SearchedHead?>()
@@ -398,9 +406,14 @@ class CommandLineGitSync(
      * A directory git cannot open is reported on stderr alone: status exits 0 and lists nothing under it
      * (`warning: could not open directory 'problems/120804/': Permission denied`, git 2.48.1). Read from
      * stdout, what it holds was left out of every commit without a word (#372, the review's F8 of #360).
-     * Each is said once per instance, by the path git names, and nothing under it is read. A warning and
-     * not a failure: the rest is committed. Read as a change, as before #360, it made every reconciliation
-     * an empty commit that failed — which would now hold the daily backup at every check.
+     * Each is said by the path git names, and nothing under it is read. A warning and not a failure: the
+     * rest is committed. Read as a change, as before #360, it made every reconciliation an empty commit
+     * that failed — which would now hold the daily backup at every check.
+     *
+     * Said once a day while it lasts, by the date on [clock], not once per process: reconciliation answers
+     * true around it, so every day's backup is recorded without what it holds, and a server that runs for
+     * weeks said it on the first day only (the review of #389). Once a day, so every day a backup is
+     * recorded without it has said so — without this adapter knowing the schedule.
      *
      * Git's other warning that names a path it cannot read, `unable to access '<path>'`, is about a file
      * git reads for itself: the `.gitignore` of a directory it can list but not enter, or a linked one
@@ -408,9 +421,15 @@ class CommandLineGitSync(
      * has its own warning.
      */
     private fun sayUnreadable(stderr: String) {
-        stderr.lines().mapNotNull { UNREADABLE_DIRECTORY.matchEntire(it.trimEnd())?.groupValues }
-            .filter { (_, directory) -> unreadableSaid.add(directory) }
-            .forEach { (_, directory, reason) -> logger.warn(UNREADABLE, directory, root, reason) }
+        stderr.lines().mapNotNull { UNREADABLE_DIRECTORY.matchEntire(it.trimEnd()) }.forEach(::sayOnceToday)
+    }
+
+    // `put` answers the date it replaced, so the same date means this directory was said today already.
+    private fun sayOnceToday(line: MatchResult) {
+        val directory = line.groups["directory"]?.value ?: return
+        val today = LocalDate.now(clock)
+        if (unreadableSaidOn.put(directory, today) == today) return
+        logger.warn(UNREADABLE, directory, root, line.groups["reason"]?.value)
     }
 
     private fun insideRoot(paths: List<Path>): List<String> = paths.mapNotNull { relativeOf(it) }.distinct()
@@ -516,12 +535,18 @@ class CommandLineGitSync(
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
 
-        /** Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]). */
-        private val UNREADABLE_DIRECTORY = Regex("""warning: could not open directory '(.+)': ([^']*)""")
+        /**
+         * Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]).
+         * The path is printed raw inside git's quotes, quotes of its own included (`'it's/'`, measured), so it
+         * runs to the last `': `; the reason, an `strerror` text, holds no quote.
+         */
+        private val UNREADABLE_DIRECTORY =
+            Regex("""warning: could not open directory '(?<directory>.+)': (?<reason>[^']*)""")
 
         private const val UNREADABLE =
-            "git cannot open {} in {} ({}), so nothing under it is committed or pushed until it can: make it " +
-                "readable to the user the tracker runs as. This is said once per directory."
+            "git cannot open {} in {} ({}), so no new file or change under it is committed or pushed until it " +
+                "can, while what was committed before still goes up: make it readable to the user the tracker " +
+                "runs as. This is said once a day while it lasts."
 
         private const val OPERATION_IN_PROGRESS =
             "{} has a merge, cherry-pick, revert or rebase in progress, so the tracker's commits wait " +

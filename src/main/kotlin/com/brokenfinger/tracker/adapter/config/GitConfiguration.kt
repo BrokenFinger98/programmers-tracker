@@ -61,9 +61,13 @@ class GitConfiguration {
     ): GithubRemote =
         GithubRemote(recordRoot(recordRepo), token.trim().ifEmpty { null }?.let(::GithubToken)).also { it.ensure() }
 
+    /** On the process's clock, whose date says when a directory git cannot open is said again (#372). */
     @Bean
-    fun gitSync(init: RecordRepositoryInit, @Value("\${tracker.record-repo}") recordRepo: String): GitSync =
-        CommandLineGitSync(recordRoot(recordRepo))
+    fun gitSync(
+        init: RecordRepositoryInit,
+        @Value("\${tracker.record-repo}") recordRepo: String,
+        clock: Clock,
+    ): GitSync = CommandLineGitSync(recordRoot(recordRepo), clock = clock)
 
     /**
      * The state directory, with git's answer to what it tracks there: one for every writer of state,

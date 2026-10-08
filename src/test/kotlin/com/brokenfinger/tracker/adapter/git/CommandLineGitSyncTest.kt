@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
+import com.brokenfinger.tracker.support.fixtures.MovableClock
 import com.brokenfinger.tracker.support.fixtures.aFineGrainedShapedToken
 import com.brokenfinger.tracker.support.fixtures.aGithubShapedToken
 import com.brokenfinger.tracker.support.fixtures.aLink
@@ -825,6 +826,30 @@ class CommandLineGitSyncTest {
         heard.single() shouldContain "problems/120804/"
         heard.single() shouldNotContain RAW_FRAME
         filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
+    /**
+     * Said once per process, a directory that stayed unreadable was never said again, while each day's
+     * backup was recorded without what it holds (the review of #389). It is said again on a later date as
+     * long as git still cannot open it — and still once a day, however often that day reconciles.
+     */
+    @Test
+    fun `a directory git still cannot open is said again on a later day`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a directory's permissions away")
+        written(".gitignore", ".ps/\n")
+        val sealed = written("problems/120804/attempts/001.raw.jsonl", RAW_FRAME).parent.parent
+        val clock = MovableClock(Instant.parse("2026-08-05T14:30:00Z"))
+        val sync = CommandLineGitSync(root, clock = clock, waitFor = {})
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            val first = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+            clock.now = clock.now.plus(Duration.ofDays(1))
+            first + warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+        }
+
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "problems/120804/" }
     }
 
     /**

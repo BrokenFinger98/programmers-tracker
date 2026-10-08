@@ -3,11 +3,15 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
 import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
+import com.brokenfinger.tracker.support.fixtures.MovableClock
 import com.brokenfinger.tracker.support.fixtures.aGithubShapedToken
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -223,6 +227,34 @@ class DailyBackupTest {
         next.single() shouldContain "uncommitted"
     }
 
+    /**
+     * The one exception to the rule above (the review of #389): a directory git cannot open is not seen
+     * at all, so reconciliation commits the rest, answers true, and the day is recorded without what that
+     * directory holds. Holding the day for it would retry every minute for something only the owner can
+     * fix. What keeps it from passing unseen is the warning, said again at each day's backup while git
+     * still cannot open it, not once per process.
+     */
+    @Test
+    fun `a directory git cannot open does not hold the day, and each backup says it again`() {
+        assumeTrue(keepsPosixPermissions(repo.root), "this test takes a directory's permissions away")
+        repo.write(".gitignore", ".ps/\n")
+        val sealed = repo.write("problems/120804/attempts/001.raw.jsonl", A_RECORD).parent.parent
+        val clock = MovableClock(EVENING)
+        val git = CommandLineGitSync(repo.root, clock = clock, waitFor = {})
+        val backup = DailyBackup(git, backupLog(), clock, zone = SEOUL)
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            val evening = warningsWhile(CommandLineGitSync::class) { backup.runIfDue() shouldBe true }
+            clock.now = NEXT_EVENING
+            evening + warningsWhile(CommandLineGitSync::class) { backup.runIfDue() shouldBe true }
+        }
+
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "problems/120804/" }
+        backupLog().lastSuccessAt() shouldBe NEXT_EVENING
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     /**
@@ -244,15 +276,6 @@ class DailyBackupTest {
     private fun succeededAt(instant: Instant) = backupLog().succeededAt(instant)
 
     private fun fixedAt(instant: Instant): Clock = Clock.fixed(instant, ZoneOffset.UTC)
-
-    /** A clock a test moves on to another day while the same backup keeps running. */
-    private class MovableClock(var now: Instant) : Clock() {
-        override fun instant(): Instant = now
-
-        override fun getZone(): ZoneId = ZoneOffset.UTC
-
-        override fun withZone(zone: ZoneId?): Clock = this
-    }
 
     private companion object {
         const val A_RECORD = """{"lessonId":120804}"""
