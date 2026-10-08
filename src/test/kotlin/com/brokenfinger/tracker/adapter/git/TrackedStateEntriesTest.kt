@@ -167,6 +167,19 @@ class TrackedStateEntriesTest {
         TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/o.jsonl")
     }
 
+    /**
+     * A path the first commit added has no parent to differ from, and `log.showRoot` off hides that commit's
+     * paths. The owner's own git configuration reaches the tracker's git, so `--root` names them regardless.
+     */
+    @Test
+    fun `a path the first commit added is answered, whatever the log configuration says`() {
+        repo.git("config", "log.showRoot", "false")
+        tracked(listOf(".ps/raw/r.jsonl"))
+        repo.git("commit", "--message", "the first commit")
+
+        TrackedStateEntries(repo.root).pathsEverTracked() shouldBe setOf("raw/r.jsonl")
+    }
+
     /** A path a merge alone added is in neither parent, so only the merge compared with each parent names it. */
     @Test
     fun `a path a merge alone added is answered`() {

@@ -693,12 +693,16 @@ class FileRawSessionLogTest {
         logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = history))).unprocessed().shouldBeEmpty()
     }
 
-    /** One question to git a start, whatever the work list holds, and only the sessions it names stay. */
+    /**
+     * One question to git a start, whatever the work list holds, and only the sessions it names stay. A path
+     * elsewhere below `.ps` that ends in a session's name is not that session.
+     */
     @Test
     fun `a session git has never tracked is replayed beside one it has`() {
         aSessionLeftBehind(120804)
         aSessionLeftBehind(131528)
-        val git = ChangingAnswer(false, history = setOf("raw/$A_SESSION", "git-credentials", "raw/recorded/x.jsonl"))
+        val elsewhere = listOf("git-credentials", "raw/recorded/x.jsonl", "recorded/20260805T142301123Z-131528.jsonl")
+        val git = ChangingAnswer(false, history = setOf("raw/$A_SESSION") + elsewhere)
 
         val replayed = logGuardedBy(aStateDirectory(root, git)).unprocessed()
 
@@ -710,9 +714,11 @@ class FileRawSessionLogTest {
     @Test
     fun `nothing is replayed while git cannot say what it has ever tracked`() {
         aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null)))
 
         val heard = warningsWhile(FileRawSessionLog::class) {
-            logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null))).unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
         }
 
         heard.single() shouldContain "1 raw session(s) were left in place, not replayed: git could not say"
