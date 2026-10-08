@@ -235,7 +235,8 @@ class CommandLineGitSync(
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
-     * a documented way to run — is nowhere to push, so nothing is searched for it.
+     * a documented way to run — is nowhere to push, so nothing is searched for it, and with no remote at
+     * all nothing is said either (#390).
      */
     private fun pushed(): Boolean {
         val head = headCommit() ?: return true
@@ -253,8 +254,11 @@ class CommandLineGitSync(
     private fun hasDestination(remote: String): Boolean =
         listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
 
+    // No remote at all is the remote-less way to run, said once at INFO by the boot report and the backup
+    // schedule; said here, it was a warning at every push, every minute the backup was due (#390). A
+    // remote that exists while the push goes to another name, which has no URL, is a fault, and is said.
     private fun noRemote(remote: String): Boolean {
-        logger.warn(NO_REMOTE, root, remote)
+        if (hasRemote()) logger.warn(NO_REMOTE, root, remote)
         return false
     }
 
