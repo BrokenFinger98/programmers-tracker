@@ -51,12 +51,27 @@ class RecordWriter private constructor(
     private val git: GitSync,
     private val submissionLog: Path,
     private val examples: ExampleStore,
-    private val attempts: AttemptAuthority,
-    private val gaps: SubmissionGaps,
-    private val captured: MutableSet<CaptureKey>,
     private val clock: Clock,
     private val writerDispatcher: CoroutineDispatcher,
 ) {
+    /**
+     * The attempt counter, the gaps and the capture keys, as the log restores them — the one authority for each
+     * (decisions 2 and 6). Read when the first grading needs them rather than when the writer is built, and read again
+     * at the next grading while a read fails, since a failure is never kept (#387).
+     *
+     * A log that cannot be read — one a link stands in for is refused — gives no attempt number, and a number counted
+     * from nothing could take an attempt that exists and replace that attempt's code. So nothing is recorded meanwhile:
+     * each grading throws, as a failed append does, and keeps its frames on the work list. The first grading after the
+     * log reads again is numbered from it, with no restart.
+     */
+    private val restored = lazy { Restored.of(store.read()) }
+
+    private val attempts: AttemptAuthority get() = restored.value.attempts
+
+    private val gaps: SubmissionGaps get() = restored.value.gaps
+
+    private val captured: MutableSet<CaptureKey> get() = restored.value.captured
+
     /**
      * Records one settled grading and returns it, or null when it was a duplicate an
      * earlier capture already recorded.
@@ -238,10 +253,11 @@ class RecordWriter private constructor(
             "Raw frames for lesson {} were not copied beside the record ({}); they are kept with the runs instead"
 
         /**
-         * Opens the writer over an existing record repository, restoring **both** in-memory
-         * indexes from `log/submissions.jsonl` — the attempt counter and the dedup keys.
-         * The log is the single authority for each, so a restart continues the numbering it
-         * finds there rather than rebuilding it from a directory scan (decisions 2 and 6).
+         * Opens the writer over an existing record repository, which restores **both** in-memory
+         * indexes from `log/submissions.jsonl` — the attempt counter and the dedup keys — when its
+         * first grading needs them. The log is the single authority for each, so a restart
+         * continues the numbering it finds there rather than rebuilding it from a directory scan
+         * (decisions 2 and 6).
          */
         @OptIn(ExperimentalCoroutinesApi::class)
         fun of(
@@ -254,23 +270,17 @@ class RecordWriter private constructor(
             examples: ExampleStore = ExampleStore { _, _, _ -> },
             clock: Clock = Clock.systemDefaultZone(),
             writerDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
-        ): RecordWriter {
-            val history = store.read()
-            return RecordWriter(
-                store = store,
-                rawLog = rawLog,
-                rawAttemptPath = rawAttemptPath,
-                recordRoot = recordRoot,
-                git = git,
-                examples = examples,
-                submissionLog = submissionLog,
-                attempts = AttemptAuthority.from(history),
-                gaps = SubmissionGaps.from(history),
-                captured = keysOf(history),
-                clock = clock,
-                writerDispatcher = writerDispatcher,
-            )
-        }
+        ): RecordWriter = RecordWriter(
+            store = store,
+            rawLog = rawLog,
+            rawAttemptPath = rawAttemptPath,
+            recordRoot = recordRoot,
+            git = git,
+            examples = examples,
+            submissionLog = submissionLog,
+            clock = clock,
+            writerDispatcher = writerDispatcher,
+        )
 
         /**
          * The keys already recorded. Read straight from the stored line rather than from the
@@ -292,6 +302,18 @@ class RecordWriter private constructor(
         )
 
         private const val KEY_FIELD = "captureKey"
+    }
+
+    /** The writer's in-memory indexes, restored together from one read of the log. */
+    private class Restored(
+        val attempts: AttemptAuthority,
+        val gaps: SubmissionGaps,
+        val captured: MutableSet<CaptureKey>,
+    ) {
+        companion object {
+            fun of(history: List<RecordedSubmission>): Restored =
+                Restored(AttemptAuthority.from(history), SubmissionGaps.from(history), keysOf(history))
+        }
     }
 }
 

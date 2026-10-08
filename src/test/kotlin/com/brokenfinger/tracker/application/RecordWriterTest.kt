@@ -275,6 +275,26 @@ class RecordWriterTest {
         Files.exists(rawDirectory().resolve("live-1.jsonl")) shouldBe true
     }
 
+    /**
+     * The log is the one authority for the attempt number, and a log that cannot be read gives none (#387). Numbered
+     * from nothing, a grading could take an attempt that exists and replace that attempt's code. So nothing is recorded
+     * while the log cannot be read — the grading throws, and its frames stay on the work list — and the first grading
+     * after it reads again is numbered from it, with no restart.
+     */
+    @Test
+    fun `a log that cannot be read records nothing, and the first grading after it reads is numbered from it`() =
+        runBlocking<Unit> {
+            writer().write(aSubmit(1))
+            val log = UnreadableStore(JsonlRecordStore.under(root))
+            val writer = writer(log)
+
+            shouldThrow<IOException> { writer.write(aSubmit(2)) }
+            log.unreadable = false
+
+            writer.write(aSubmit(2))!!.attempt shouldBe 2
+            logLines() shouldHaveSize 2
+        }
+
     private fun writer(
         store: RecordStore = JsonlRecordStore.under(root),
         clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC),
@@ -404,6 +424,18 @@ class RecordWriterTest {
 
     private companion object {
         val NOW: Instant = Instant.parse("2026-08-04T05:23:01Z")
+    }
+}
+
+/** Cannot read the log until told otherwise — the shape a log a link stands in for leaves behind (#387). */
+private class UnreadableStore(private val delegate: RecordStore) : RecordStore {
+    var unreadable = true
+
+    override fun append(line: String) = delegate.append(line)
+
+    override fun read(): List<RecordedSubmission> {
+        if (unreadable) throw IOException("the log could not be read")
+        return delegate.read()
     }
 }
 
