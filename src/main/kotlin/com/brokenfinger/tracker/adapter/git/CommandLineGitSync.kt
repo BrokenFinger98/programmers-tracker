@@ -198,13 +198,38 @@ class CommandLineGitSync(
         return false
     }
 
-    // The push's half of the gate: nothing is sent until every commit it would send was searched.
+    /**
+     * One branch to one remote, named on the command line (#360). A bare `git push` sent whatever
+     * `remote.<r>.push` or `push.default=matching` said — branches the search never looked at — so the
+     * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
+     * search covers the commits that remote's own branches lack. Before the first commit there is
+     * nothing to push, and that is not a failure.
+     */
     private fun pushed(): Boolean {
-        if (!carriesNoCredential("push") { outgoingSearches() }) return false
-        val result = git(listOf("push"))
+        if (!git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).succeeded()) return true
+        val branch = currentBranch() ?: return detached()
+        val remote = pushRemoteOf(branch)
+        if (!carriesNoCredential("push") { outgoingSearches(remote) }) return false
+        val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
         if (result.succeeded()) return true
         return failed("push", result)
     }
+
+    private fun currentBranch(): String? =
+        git(listOf("symbolic-ref", "--quiet", "--short", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
+
+    private fun detached(): Boolean {
+        logger.warn("git push skipped in {}: HEAD is detached, so there is no branch to push", root)
+        return false
+    }
+
+    // The remote git itself would push the branch to, in git's own order of precedence.
+    private fun pushRemoteOf(branch: String): String =
+        listOf("branch.$branch.pushRemote", "remote.pushDefault", "branch.$branch.remote")
+            .firstNotNullOfOrNull { configured(it) } ?: DEFAULT_REMOTE
+
+    private fun configured(key: String): String? =
+        git(listOf("config", "--get", key)).takeIf { it.succeeded() }?.stdout?.trim()?.ifEmpty { null }
 
     /**
      * Stages [scope], searches what is staged there for the push token, and commits exactly [scope].
@@ -248,14 +273,15 @@ class CommandLineGitSync(
         git(listOf("grep", "-q", "-F", "-f", "-") + search, patterns.asInput()).code
 
     /**
-     * One search per batch of the commits a push would send. A commit no remote-tracking branch holds
-     * is one the remote is not known to have — a push updates the branch it pushed, so after the first
-     * one this is what was committed since. The tracker configures no upstream (`push.default=current`),
-     * so `@{u}..HEAD` would name nothing; with no remote-tracking branch at all it is every commit.
-     * Null when they cannot be listed.
+     * One search per batch of the commits a push to [remote] would send: those none of its
+     * remote-tracking branches holds. A push updates the branch it pushed, so after the first one this
+     * is what was committed since; with none at all it is every commit. Another remote's branches do
+     * not count — the review's N4: a commit already pushed to a second remote was skipped, and sent here
+     * unsearched. The tracker configures no upstream (`push.default=current`), so `@{u}..HEAD` would
+     * name nothing. Null when they cannot be listed.
      */
-    private fun outgoingSearches(): List<List<String>>? {
-        val listed = git(listOf("rev-list", "HEAD", "--not", "--remotes"))
+    private fun outgoingSearches(remote: String): List<List<String>>? {
+        val listed = git(listOf("rev-list", "HEAD", "--not", "--remotes=$remote"))
         if (!listed.succeeded()) return null
         return listed.stdout.lines().filter { it.isNotBlank() }.chunked(REVISIONS_PER_SEARCH) { it + "--" }
     }
@@ -466,6 +492,9 @@ class CommandLineGitSync(
         /** `git grep -q` exits 0 when something matched and 1 when nothing did; anything else is an error. */
         private const val MATCH = 0
         private const val NO_MATCH = 1
+
+        /** Where a push goes when git names no other remote for the branch. */
+        private const val DEFAULT_REMOTE = "origin"
 
         /** Commits per `git grep`, which keeps every argument list far below any system's limit. */
         private const val REVISIONS_PER_SEARCH = 256

@@ -639,6 +639,8 @@ class CommandLineGitSyncTest {
     @Test
     fun `a credential store that is not a regular file refuses every commit and push`() {
         written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "ignore the state")
         Files.createDirectories(root.resolve(PushCredential.FILE))
         written("log/submissions.jsonl", RECORD)
         val sync = sync()
@@ -650,7 +652,7 @@ class CommandLineGitSyncTest {
 
         heard.size shouldBe 2
         heard.forEach { it shouldContain "is not a regular file" }
-        subjects() shouldContainExactly emptyList()
+        subjects() shouldContainExactly listOf("ignore the state")
     }
 
     @Test
@@ -817,6 +819,80 @@ class CommandLineGitSyncTest {
 
         heard.single() shouldContain "is not the tracker's own state directory"
         subjects() shouldContainExactly listOf("as a clone delivers it")
+    }
+
+    // What a push sends, and to where (#360) ----------------------------------------------------
+
+    /**
+     * A commit another remote already holds was left out of the search, yet the push to this one sends
+     * it. The range is what this remote's own branches lack, not what any remote has.
+     */
+    @Test
+    fun `a commit another remote holds is still searched before it is pushed here`() {
+        val remote = remoteInitialised()
+        val backup = base.resolve("backup.git")
+        git("init", "--bare", "-b", "main", backup.toString(), at = base)
+        git("remote", "add", "backup", backup.toString())
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("notes.md", "my token is $A_PUSH_CREDENTIAL\n")
+        git("add", "--all")
+        git("commit", "--message", "a note")
+        git("push", "--quiet", "backup", "main")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "git push refused"
+        everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /**
+     * `remote.origin.push` or `push.default=matching` sends branches the search never looked at. The
+     * push names its one refspec, the current branch, and nothing else goes.
+     */
+    @Test
+    fun `a push sends the current branch alone, whatever the push settings say`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "ignore the state")
+        aPushTokenIn(root)
+        git("config", "remote.origin.push", "refs/heads/*:refs/heads/*")
+        git("config", "push.default", "matching")
+        git("checkout", "--quiet", "-b", "drafts")
+        written("notes.md", "my token is $A_PUSH_CREDENTIAL\n")
+        git("add", "--all")
+        git("commit", "--message", "a draft")
+        git("checkout", "--quiet", "main")
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "records")
+
+        sync().push() shouldBe true
+
+        val sent = git("for-each-ref", "--format=%(refname)", at = remote).trim().lines()
+        sent shouldContainExactly listOf("refs/heads/main")
+        everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /** Before the first commit there is nothing to push, and no failure to report. */
+    @Test
+    fun `a branch with no commit yet has nothing to push, and says nothing`() {
+        written("log/submissions.jsonl", RECORD)
+
+        warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe true } shouldContainExactly emptyList()
+    }
+
+    /** No branch, no branch to push to: said, and nothing sent. */
+    @Test
+    fun `a detached head is not pushed`() {
+        val remote = remoteInitialised()
+        git("checkout", "--quiet", "--detach")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "detached"
+        subjects(at = remote) shouldContainExactly listOf("init")
     }
 
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
