@@ -1160,6 +1160,27 @@ class CommandLineGitSyncTest {
         subjects(at = remote) shouldContainExactly listOf("init")
     }
 
+    /**
+     * The push names one branch, yet `push.followTags=true` in the records repository sent an annotated tag
+     * on it as well, its message never read (#375). The push says `--no-follow-tags`: no tag goes, whatever
+     * the configuration, so no tag needs reading.
+     */
+    @Test
+    fun `an annotated tag is never pushed, even when the repository says to follow tags`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "records")
+        git("config", "push.followTags", "true")
+        git("config", "tag.gpgSign", "false")
+        git("tag", "--annotate", "v1", "--message", "my token is ${aGithubShapedToken()}")
+
+        sync().push() shouldBe true
+
+        git("for-each-ref", "refs/tags", at = remote).trim() shouldBe ""
+        subjects(at = remote).first() shouldBe "records"
+    }
+
     /** A repository with nothing token-shaped in it is untouched: near misses are not tokens. */
     @Test
     fun `strings that only resemble a token are not refused`() {

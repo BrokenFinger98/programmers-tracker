@@ -236,7 +236,8 @@ class CommandLineGitSync(
      * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
      * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
      * name under `push.default=upstream` is not where this push goes. The search covers the commits that
-     * remote's own branches lack.
+     * remote's own branches lack. And `--no-follow-tags`: with `push.followTags=true` in the repository, an
+     * annotated tag on the branch went out beside it, its message never read (#375); now no tag goes.
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
@@ -248,7 +249,7 @@ class CommandLineGitSync(
         val remote = pushRemoteOf(branch)
         if (!hasDestination(remote)) return noRemote(remote)
         if (!searchedClean(SearchedHead(head, remote, fingerprintOfStore()))) return false
-        val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
+        val result = git(listOf("push", "--no-follow-tags", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
 
