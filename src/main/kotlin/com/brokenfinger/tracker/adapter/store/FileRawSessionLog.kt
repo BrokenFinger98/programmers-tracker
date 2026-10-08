@@ -37,6 +37,12 @@ import java.util.concurrent.atomic.AtomicLong
  * them a link — which costs a stat each, so a link swapped in between two frames is never written
  * through.
  *
+ * **So the answer a session's first frame got holds for that grading alone (#377).** Asking git at every
+ * frame would cost a median of 7–8 ms a frame against 0.03 ms for the append itself (measured on the host,
+ * 500 to 5,000 index entries). What a pull can change unseen meanwhile is whether git tracks something else
+ * under `.ps`: the grading in flight then finishes in its own file, which git does not track unless the pull
+ * delivered that very name, which carries the millisecond the grading started. The next session asks again.
+ *
  * While the state directory is refused, frames are **held in memory** instead, within [heldLimit]
  * characters across the log. A submit's frames go to its attempt file at [complete], which lies outside
  * `.ps`; a run set aside and an orphan are written into `.ps` the first time it is usable again, and

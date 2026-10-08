@@ -605,6 +605,34 @@ class FileRawSessionLogTest {
         logGuardedBy(aStateDirectory(root) { null }).unprocessed() shouldHaveSize 1
     }
 
+    // A session's verdict holds for its own grading, and the next one asks again (#377) ----------
+
+    /**
+     * Whether `.ps` may be written is asked at a session's first frame and kept for that grading: asking at
+     * every frame would cost a git call each, a median of 7–8 ms on the host against 0.03 ms for the append.
+     * Every frame still checks its own path, so a link is never written through (the swap test above).
+     * What a pull can change unseen is git's answer: the grading in flight finishes in its own file, which
+     * git does not track, and the next session asks again and is held. What is held is not lost.
+     */
+    @Test
+    fun `git tracking something mid-grading is seen by the next session, not by the one in flight`() {
+        val git = ChangingAnswer(false)
+        val log = logGuardedBy(aStateDirectory(root, git))
+        val inFlight = log.start(120804)
+        log.append(inFlight, """{"n":1}""")
+        Files.writeString(root.resolve(".ps/raw/pulled.jsonl"), "{}\n")
+        git.answer = true
+
+        log.append(inFlight, """{"n":2}""")
+        val next = log.start(120805)
+        log.append(next, """{"m":1}""")
+        val copied = log.complete(next, root.resolve("problems/120805-y/attempts/001.raw.jsonl"))
+
+        Files.readAllLines(stateRaw(inFlight)) shouldContainExactly listOf("""{"n":1}""", """{"n":2}""")
+        namesIn(root.resolve(".ps/raw")) shouldContainExactly listOf(inFlight.value, "pulled.jsonl")
+        Files.readAllLines(copied) shouldContainExactly listOf("""{"m":1}""")
+    }
+
     /** A session as a crash leaves it, or a pull delivers it: a file under `.ps/raw` the work list parses. */
     private fun aSessionLeftBehind(lessonId: Long = 120804): Path {
         val log = FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC))
