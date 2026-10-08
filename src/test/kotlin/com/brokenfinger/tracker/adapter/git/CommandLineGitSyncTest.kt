@@ -496,6 +496,18 @@ class CommandLineGitSyncTest {
         filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
     }
 
+    /** Nor does the rule the server seeds for that very name (#386's review): the exclusion still names no path. */
+    @Test
+    fun `the seeded rule for the temporary file does not stop reconciliation`() {
+        written(".gitignore", ".*${FileReplacement.TEMP_SUFFIX}\n")
+        leftBehind("problems/120804/README.md")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
     /** A timer ticked or a frame landed, and nothing else moved: that is nothing to reconcile, not an empty commit. */
     @Test
     fun `a change under the state directory alone is nothing to reconcile`() {
