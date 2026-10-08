@@ -89,6 +89,22 @@ fun <T> sealedWhile(directory: Path, action: () -> T): T {
 }
 
 /**
+ * [link] made a Windows junction to the directory [target]: a directory that leads elsewhere without being a symbolic
+ * link, so no link check sees one (#387). `mklink /J` needs no privilege, unlike a symbolic link. It fails loudly where
+ * the junction cannot be made: a test that needs one runs on Windows alone, and a skip there would leave the junction
+ * untested in the one place it can exist.
+ */
+fun aJunction(link: Path, target: Path): Path {
+    Files.createDirectories(link.parent)
+    val mklink = ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString())
+        .redirectErrorStream(true)
+        .start()
+    val said = mklink.inputStream.bufferedReader().use { it.readText() }
+    check(mklink.waitFor() == 0) { "mklink /J could not make $link: $said" }
+    return link
+}
+
+/**
  * [path] made a FIFO, which only `mkfifo` makes; false where there is none to run, and false where what it made is no
  * FIFO to the JVM. A Windows runner has Git for Windows' `mkfifo` on its path: it exits 0 and leaves a file the JVM
  * reads as a regular one, so a test that assumed a FIFO ran against a plain file and failed (#387's CI). Its parent

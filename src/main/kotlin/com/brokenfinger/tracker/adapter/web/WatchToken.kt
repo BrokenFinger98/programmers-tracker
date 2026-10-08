@@ -1,18 +1,16 @@
 package com.brokenfinger.tracker.adapter.web
 
+import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.HexFormat
-import kotlin.io.path.createParentDirectories
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 
 /** The caller presented no token, or the wrong one. Carries no detail on purpose. */
 class UnauthorizedWatchException : RuntimeException("a valid ${WatchController.TOKEN_HEADER} header is required")
@@ -30,6 +28,16 @@ class UnauthorizedWatchException : RuntimeException("a valid ${WatchController.T
  * every heartbeat into a silent 401. The value is never logged — only the path is, so the
  * user can copy it into the extension.
  *
+ * **Owner-only from creation, and never through a link** (#387). The token is written into a
+ * temporary file beside its own, created owner-only (`rw-------`), and moved over it, by
+ * [AtomicStateFile] — as the push credential is. It used to be written in place and narrowed
+ * after, so it sat in a file others could read until the narrowing, and went through a link or
+ * into every other name the file had. A link where the token should be reads as no token, and
+ * the new one replaces it: said, since the extension's copy then stops matching. So does a FIFO,
+ * which is never opened: opening one to read waited for a writer, and held the server's start
+ * (#387's review). On Windows, which has no POSIX permissions, the file gets what its directory
+ * gives a new one, as before.
+ *
  * It stays beside the tool rather than joining the state that moved into the record
  * repository (#126): that state describes the records and travels with them, while this is a
  * credential and the record repository is pushed.
@@ -39,7 +47,9 @@ class WatchToken(
     @Value("\${tracker.watch.token:}") configured: String,
     @Value("\${tracker.watch.token-file:.ps/watch-token}") tokenFile: String,
 ) {
-    private val expected: ByteArray = resolve(configured.trim(), Path.of(tokenFile)).toByteArray(UTF_8)
+    private val file: Path = Path.of(tokenFile)
+    private val state = AtomicStateFile(file)
+    private val expected: ByteArray = resolve(configured.trim()).toByteArray(UTF_8)
 
     /** @throws UnauthorizedWatchException when the presented value is absent or does not match. */
     fun verify(presented: String?) {
@@ -51,37 +61,43 @@ class WatchToken(
     /** Masked like SessionCookie — a credential must not be printable by accident (dev rules §7.2). */
     override fun toString(): String = "WatchToken(***)"
 
-    private fun resolve(configured: String, file: Path): String {
+    private fun resolve(configured: String): String {
         if (configured.isNotBlank()) return configured
-        return persistedIn(file) ?: generateInto(file)
+        return persisted() ?: generated()
     }
 
-    private fun persistedIn(file: Path): String? = runCatching { file.readText() }
-        .getOrNull()
-        ?.trim()
-        ?.takeIf { it.isNotBlank() }
+    // Read without following a link: one where the token should be reads as no token, which the new one replaces.
+    private fun persisted(): String? = runCatching { state.read() }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
 
-    private fun generateInto(file: Path): String {
+    private fun generated(): String {
         val generated = HexFormat.of().formatHex(ByteArray(TOKEN_BYTES).also(SecureRandom()::nextBytes))
-        store(generated, file)
+        store(generated)
         return generated
     }
 
-    private fun store(generated: String, file: Path) {
-        runCatching { writeOwnerOnly(generated, file) }
+    private fun store(generated: String) {
+        replaced()?.let { log.warn(REPLACING, file, it) }
+        runCatching { state.write(generated) }
             .onSuccess { log.info("Generated a local /watch token at {} — paste it into the extension.", file) }
             .onFailure { log.warn("Could not persist the generated /watch token at {}: {}", file, it.message) }
     }
 
-    private fun writeOwnerOnly(generated: String, file: Path) {
-        file.createParentDirectories()
-        file.writeText(generated)
-        runCatching { Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-------")) }
+    // What stands where the token goes and is no regular file — a link, a FIFO (#387's review) — which the new one
+    // replaces, never read or written through.
+    private fun replaced(): String? {
+        if (Files.isSymbolicLink(file)) return "a symbolic link"
+        if (Files.exists(file, NOFOLLOW_LINKS) && !Files.isRegularFile(file, NOFOLLOW_LINKS)) return NOT_A_FILE
+        return null
     }
 
     private companion object {
         /** 256 bits. The token guards a process holding a session cookie; do not shrink it. */
         const val TOKEN_BYTES = 32
+        const val NOT_A_FILE = "not a regular file"
+        const val REPLACING =
+            "Replacing {}, which is {}, with a new /watch token rather than reading or writing through it " +
+                "(#387). Paste the new one into the extension; to keep the token elsewhere, point " +
+                "tracker.watch.token-file at that file itself."
         val log = LoggerFactory.getLogger(WatchToken::class.java)!!
     }
 }

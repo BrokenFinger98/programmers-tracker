@@ -50,12 +50,15 @@ The dependency direction is `adapter → application → domain`, and `protocol 
 
 **Adapters depend on each other one way, never in a cycle, and only for a primitive the other
 adapter owns** — never for its behaviour, which goes through a port the composition root
-(`adapter/config`) wires. Two such edges exist, and a new one is added to this list:
+(`adapter/config`) wires. Three such edges exist, and a new one is added to this list:
 
 - `git → store` — `StateDirectory`, `AtomicStateFile` and the `TrackedState` port: whether `.ps`
   is the tracker's own directory, and the write that never follows a link (#360).
 - `mcp → web` — `WatchToken` and `UnauthorizedWatchException`: the one token check both
   endpoints answer to (since #46).
+- `web → store` — `AtomicStateFile`: the `/watch` token written beside its file and moved into
+  place, owner-only from creation and never through a link, rather than a fourth copy of that
+  write (#387).
 
 `adapter/store` imports no other adapter. When it needs an answer only git has, it declares the
 port (`TrackedState`) and `adapter/config` hands it the git adapter's implementation.

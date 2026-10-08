@@ -5,6 +5,7 @@ import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -14,6 +15,7 @@ import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -74,6 +76,25 @@ class VaultDashboardTest {
         Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
         Files.isSymbolicLink(dashboard) shouldBe true
         heard.single() shouldContain dashboard.toString()
+    }
+
+    /**
+     * A seed is read once, through the bound its writer takes (#387), and only a regular file is read: a FIFO would
+     * block the boot for a writer that never comes. So what this pins is that the call returns at all — the timeout
+     * fails it if the check is removed — and that what stands there is left alone and said.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a seed that is not a regular file is left alone, said, and not waited on`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        assumeTrue(madeFifo(dashboard), "no mkfifo on this machine")
+
+        val heard = warningsWhile(RecordReads::class) {
+            VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+        }
+
+        Files.isRegularFile(dashboard, NOFOLLOW_LINKS) shouldBe false
+        heard.single() shouldContain "dashboard.base is not a regular file"
     }
 
     @Test
@@ -229,7 +250,8 @@ class VaultDashboardTest {
 
         VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
-        SeedLedger(root, aStateDirectory(root)).isUnchanged("dashboard.base", dashboard).shouldBeTrue()
+        SeedLedger(root, aStateDirectory(root)).isUnchanged("dashboard.base", Files.readAllBytes(dashboard))
+            .shouldBeTrue()
         Files.readString(dashboard) shouldBe ours
     }
 

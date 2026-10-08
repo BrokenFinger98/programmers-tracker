@@ -4,7 +4,6 @@ import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.application.RecordedSubmission
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -25,9 +24,17 @@ import java.nio.file.Path
  * can deliver the log as a link; the append is then refused and thrown, as any failed append is:
  * nothing is appended where the link leads, and the writer leaves the grading's frames on the
  * work list to be replayed.
+ *
+ * **And read through none** (#387), by the same walk, so the read refuses what the append does.
+ * Read on through a link, the history was whatever it led to while nothing more was recorded.
+ * A log not written yet is empty; one that is there and cannot be read as this repository's own
+ * — a link, a directory, a `log/` that cannot be searched — is thrown, never answered as empty,
+ * which every reader of the history would take for "no submissions". The writer then records
+ * nothing and keeps each grading's frames, MCP answers a fault, and the boot goes on.
  */
 class JsonlRecordStore(private val file: Path, root: Path = file.toAbsolutePath().parent.parent) : RecordStore {
     private val writes = RecordWrites.underRoot(root, setOf(RecordLayout.LOG))
+    private val reads = RecordReads.underRoot(root, setOf(RecordLayout.LOG))
 
     override fun append(line: String) {
         val record = line.trimEnd('\r', '\n')
@@ -39,10 +46,10 @@ class JsonlRecordStore(private val file: Path, root: Path = file.toAbsolutePath(
     }
 
     override fun read(): List<RecordedSubmission> {
-        if (!Files.isRegularFile(file)) return emptyList()
+        val bytes = reads.readAllBytes(file) ?: return emptyList()
         // Decoded with replacement rather than reported: a crash can tear a line in the middle
         // of a multi-byte character, and one bad byte must not cost the whole log.
-        val lines = String(Files.readAllBytes(file), CHARSET).lineSequence().filter { it.isNotBlank() }.toList()
+        val lines = String(bytes, CHARSET).lineSequence().filter { it.isNotBlank() }.toList()
         val records = lines.mapNotNull { RecordedSubmission.ofReceived(it) }
         if (records.size < lines.size) {
             logger.warn("Submission log had unreadable lines; kept {} of {}", records.size, lines.size)
