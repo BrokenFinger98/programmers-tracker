@@ -27,7 +27,9 @@ interface GitSync {
      *
      * Returns whether the record is now committed, which includes "there was nothing to
      * commit". A push that failed afterwards does not make it false — the commit is the
-     * durable part, and pushing is retried later.
+     * durable part, and pushing is retried later. A path under a directory git cannot open is
+     * not seen at all, so it reads as nothing to commit and does not make this false either;
+     * it is warned about instead (#372).
      */
     fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean
 
@@ -38,12 +40,23 @@ interface GitSync {
      *
      * The tracker's own state, the push credential among it, is never part of it, whatever
      * the repository's ignore rules say (#360).
+     *
+     * Returns whether nothing it covers is left uncommitted, which includes "there was nothing
+     * to commit"; false when something may be — a commit that was refused, waited out the
+     * user's merge, or failed. The daily backup counts a day only on true (#372).
+     *
+     * **One exception: a directory git cannot open.** It is not seen at all, so what is under
+     * it does not make this false, and the daily backup records the day without it. It is
+     * warned about instead, once a day while it lasts.
      */
     fun reconcile(): Boolean
 
     /**
      * Pushes the current branch. Called on a pass and available as a manual trigger
      * (MCP `push()`, design §4.6).
+     *
+     * Returns whether the branch is on the remote, which includes "there is nothing to push":
+     * a branch with no commit yet (#360).
      */
     fun push(): Boolean
 

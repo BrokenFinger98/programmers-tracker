@@ -3,11 +3,19 @@ package com.brokenfinger.tracker.application
 import com.brokenfinger.tracker.adapter.git.CommandLineGitSync
 import com.brokenfinger.tracker.adapter.store.AtomicStateFile
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
+import com.brokenfinger.tracker.support.fixtures.MovableClock
+import com.brokenfinger.tracker.support.fixtures.aGithubShapedToken
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -117,6 +125,136 @@ class DailyBackupTest {
         backupLog().lastSuccessAt() shouldBe null
     }
 
+    // A day counts only once its records are committed (#372) --------------------------------
+    //
+    // The push alone used to decide, so a day whose records stayed uncommitted was logged as backed
+    // up, and the next check found nothing due. Each case below leaves a record uncommitted while the
+    // push lands.
+
+    /** The content gate refuses to commit a note that carries a token-shaped string (#360). */
+    @Test
+    fun `a reconciliation the token search refused leaves the day due`() {
+        repo.write("log/submissions.jsonl", A_RECORD)
+        repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+
+        backup(at = EVENING).runIfDue() shouldBe false
+
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
+    /** Reconciliation waits out a merge the user left open rather than commit inside it (#360). */
+    @Test
+    fun `a reconciliation that waits out a merge leaves the day due`() {
+        repo.mergeLeftInConflict("notes.md")
+        repo.write("log/submissions.jsonl", A_RECORD)
+
+        backup(at = EVENING).runIfDue() shouldBe false
+
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
+    /** Another process holds the index for longer than reconciliation's bounded retries. */
+    @Test
+    fun `a reconciliation the index lock never let through leaves the day due`() {
+        repo.write("log/submissions.jsonl", A_RECORD)
+        Files.createFile(repo.root.resolve(".git/index.lock"))
+
+        backup(at = EVENING).runIfDue() shouldBe false
+
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
+    /**
+     * The backup holds the record, not the push: what is already committed still leaves the machine
+     * while the day stays due, so a note the gate refuses does not keep a day's attempts at home.
+     */
+    @Test
+    fun `what is committed still goes up while the day stays due`() {
+        repo.write("log/submissions.jsonl", A_RECORD)
+        repo.git("add", "--all")
+        repo.git("commit", "--message", "a submit no pass pushed")
+        repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+
+        backup(at = EVENING).runIfDue() shouldBe false
+
+        repo.subjects(at = remote).first() shouldBe "a submit no pass pushed"
+    }
+
+    /**
+     * Since #360 a branch with no commit yet answers a push with "nothing to push", which succeeds. That
+     * must not stand for a reconciliation that was refused: the records are on disk and nowhere else.
+     */
+    @Test
+    fun `a branch with no commit yet whose reconciliation was refused is not backed up`() {
+        val fresh = GitWorkspace(base.resolve("fresh"))
+        fresh.write("log/submissions.jsonl", A_RECORD)
+        fresh.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+
+        backup(at = EVENING, root = fresh.root).runIfDue() shouldBe false
+
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
+    /**
+     * A branch with no commit yet and nothing to commit holds no record anywhere, so there is nothing to
+     * back up and the day counts. Kept due, it would be tried at every check until the first record.
+     */
+    @Test
+    fun `a branch with no commit yet and nothing to commit is backed up`() {
+        val fresh = GitWorkspace(base.resolve("fresh"))
+
+        backup(at = EVENING, root = fresh.root).runIfDue() shouldBe true
+
+        backupLog().lastSuccessAt() shouldBe EVENING
+    }
+
+    /**
+     * The check runs every minute while a day is due, and the reason a record stayed uncommitted is
+     * said where it happened. That the day is held is said once for each scheduled backup, not at every
+     * check: a merge left open overnight would otherwise say it hundreds of times.
+     */
+    @Test
+    fun `a day held back is said once for each scheduled backup`() {
+        repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
+
+        val evening = warningsWhile(DailyBackup::class) { repeat(3) { backup.runIfDue() shouldBe false } }
+        clock.now = NEXT_EVENING
+        val next = warningsWhile(DailyBackup::class) { repeat(2) { backup.runIfDue() shouldBe false } }
+
+        evening.single() shouldContain "uncommitted"
+        next.single() shouldContain "uncommitted"
+    }
+
+    /**
+     * The one exception to the rule above (the review of #389): a directory git cannot open is not seen
+     * at all, so reconciliation commits the rest, answers true, and the day is recorded without what that
+     * directory holds. Holding the day for it would retry every minute for something only the owner can
+     * fix. What keeps it from passing unseen is the warning, said again at each day's backup while git
+     * still cannot open it, not once per process.
+     */
+    @Test
+    fun `a directory git cannot open does not hold the day, and each backup says it again`() {
+        assumeTrue(keepsPosixPermissions(repo.root), "this test takes a directory's permissions away")
+        repo.write(".gitignore", ".ps/\n")
+        val sealed = repo.write("problems/120804/attempts/001.raw.jsonl", A_RECORD).parent.parent
+        val clock = MovableClock(EVENING)
+        val git = CommandLineGitSync(repo.root, clock = clock, waitFor = {})
+        val backup = DailyBackup(git, backupLog(), clock, zone = SEOUL)
+
+        val heard = sealedWhile(sealed) {
+            assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+            val evening = warningsWhile(CommandLineGitSync::class) { backup.runIfDue() shouldBe true }
+            clock.now = NEXT_EVENING
+            evening + warningsWhile(CommandLineGitSync::class) { backup.runIfDue() shouldBe true }
+        }
+
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "problems/120804/" }
+        backupLog().lastSuccessAt() shouldBe NEXT_EVENING
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     /**
@@ -126,7 +264,11 @@ class DailyBackupTest {
      * UTC runners the moment the default changed (#243). A test whose answer depends on where it
      * runs is a test about the machine.
      */
-    private fun backup(at: Instant) = DailyBackup(CommandLineGitSync(repo.root), backupLog(), fixedAt(at), zone = SEOUL)
+    private fun backup(at: Instant, root: Path = repo.root) =
+        DailyBackup(sync(root), backupLog(), fixedAt(at), zone = SEOUL)
+
+    /** Real git that never sleeps between its retries, so a lock that never clears costs no time. */
+    private fun sync(root: Path) = CommandLineGitSync(root, waitFor = {})
 
     /** File-backed on purpose: every test above is really asking what a restart would read. */
     private fun backupLog(): BackupLog = FileBackupLog(AtomicStateFile(base.resolve("state/backup.json")))
@@ -143,6 +285,9 @@ class DailyBackupTest {
 
         /** 2026-08-05, 23:30 in Seoul — half an hour past the scheduled hour. */
         val EVENING: Instant = Instant.parse("2026-08-05T14:30:00Z")
+
+        /** 2026-08-06, 23:30 in Seoul — the evening after [EVENING], past the next scheduled hour. */
+        val NEXT_EVENING: Instant = Instant.parse("2026-08-06T14:30:00Z")
 
         /** 2026-08-05, 22:00 in Seoul — an hour short of it. */
         val BEFORE_THE_HOUR: Instant = Instant.parse("2026-08-05T13:00:00Z")
