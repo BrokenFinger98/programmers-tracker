@@ -42,6 +42,7 @@ class FileBackupLog(private val file: AtomicStateFile) : BackupLog {
         private val logger = LoggerFactory.getLogger(FileBackupLog::class.java)
 
         /** Backup state lives under the record repository with the other state (design §5.1). */
-        fun under(recordRoot: Path): FileBackupLog = FileBackupLog(AtomicStateFile.under(recordRoot, BACKUP))
+        fun under(recordRoot: Path, state: StateDirectory = StateDirectory(recordRoot)): FileBackupLog =
+            FileBackupLog(AtomicStateFile.under(recordRoot, BACKUP, state))
     }
 }

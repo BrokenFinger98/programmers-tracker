@@ -31,9 +31,12 @@ class StateLocationTest {
 
     private fun recordRepo(): Path = scratch.resolve("ps-records")
 
+    /** The bean every writer of state is handed, built as production builds it. */
+    private fun state() = GitConfiguration().stateDirectory(recordRepo().toString())
+
     @Test
     fun `raw frames are written under the record repository`() {
-        val log = CaptureConfiguration().rawSessionLog(recordRepo().toString(), clock)
+        val log = CaptureConfiguration().rawSessionLog(recordRepo().toString(), clock, state())
 
         log.append(log.start(181947), """{"identifier":"x"}""")
 
@@ -42,7 +45,7 @@ class StateLocationTest {
 
     @Test
     fun `problem timers are written under the record repository`() {
-        val timer = CaptureConfiguration().problemTimer(recordRepo().toString(), clock)
+        val timer = CaptureConfiguration().problemTimer(recordRepo().toString(), clock, state())
 
         timer.startIfAbsent(181947)
 
@@ -51,7 +54,7 @@ class StateLocationTest {
 
     @Test
     fun `the backup marker is written under the record repository`() {
-        val log = GitConfiguration().backupLog(recordRepo().toString())
+        val log = GitConfiguration().backupLog(recordRepo().toString(), state())
 
         log.succeededAt(clock.instant())
 
@@ -69,7 +72,7 @@ class StateLocationTest {
         val home = System.getProperty("user.home")
         System.setProperty("user.home", scratch.toString())
         try {
-            CaptureConfiguration().problemTimer("~/ps-records", clock).startIfAbsent(181947)
+            CaptureConfiguration().problemTimer("~/ps-records", clock, state()).startIfAbsent(181947)
 
             recordRepo().resolve(".ps/timers.json").shouldExist()
         } finally {

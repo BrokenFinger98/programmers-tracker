@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.adapter.store.FileProblemTimer
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.application.BackupReporter
 import com.brokenfinger.tracker.application.ChannelCapture
 import com.brokenfinger.tracker.application.ChannelSubscriber
@@ -120,12 +121,18 @@ class CaptureConfiguration {
      * and this repository is pushed.
      */
     @Bean
-    fun rawSessionLog(@Value("\${tracker.record-repo}") recordRepo: String, clock: Clock): RawSessionLog =
-        FileRawSessionLog.under(recordRoot(recordRepo), clock)
+    fun rawSessionLog(
+        @Value("\${tracker.record-repo}") recordRepo: String,
+        clock: Clock,
+        stateDirectory: StateDirectory,
+    ): RawSessionLog = FileRawSessionLog.under(recordRoot(recordRepo), clock, stateDirectory)
 
     @Bean
-    fun problemTimer(@Value("\${tracker.record-repo}") recordRepo: String, clock: Clock): ProblemTimer =
-        FileProblemTimer.under(recordRoot(recordRepo), clock)
+    fun problemTimer(
+        @Value("\${tracker.record-repo}") recordRepo: String,
+        clock: Clock,
+        stateDirectory: StateDirectory,
+    ): ProblemTimer = FileProblemTimer.under(recordRoot(recordRepo), clock, stateDirectory)
 
     /**
      * Depends on the lock by name rather than by argument: this is the first bean that reads

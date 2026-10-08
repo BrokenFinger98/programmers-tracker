@@ -2,6 +2,9 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -9,7 +12,9 @@ import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.FileAlreadyExistsException
@@ -279,6 +284,29 @@ class FileRawSessionLogTest {
         val restarted = logAt(sameMillisecond)
 
         restarted.start(120805) shouldNotBe taken
+    }
+
+    /**
+     * `.ps/raw` a tracked link into the tree, as a pull can deliver it: frames appended through it are
+     * paths git tracks, and the server's own reconciliation committed and pushed them. Nothing is
+     * written there, and the skip is said once for the log (#360).
+     */
+    @Test
+    fun `no frame is written through a link where the raw directory was`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw"), tracked)
+        val log = FileRawSessionLog.under(root, Clock.fixed(sameMillisecond, ZoneOffset.UTC))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            val session = log.start(120804)
+            log.append(session, """{"a":1}""")
+            log.append(session, """{"b":2}""")
+            log.orphaned(120804, """{"c":3}""")
+        }
+
+        Files.list(tracked).use { it.count() } shouldBe 0L
+        heard.single() shouldContain "holds a symbolic link"
     }
 
     /** One instant, so every session opened with it collides unless the log prevents it. */

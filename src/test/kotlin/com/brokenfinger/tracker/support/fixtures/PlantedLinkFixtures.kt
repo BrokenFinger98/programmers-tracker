@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.support.fixtures
 
+import com.brokenfinger.tracker.adapter.git.PushCredential
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -17,7 +18,7 @@ const val A_PUSH_TOKEN_LINE = "https://x-access-token:$A_PUSH_CREDENTIAL@github.
 
 /** The push token where the records repository really keeps it — `.ps/git-credentials`, beside `problems/`. */
 fun aPushTokenIn(root: Path): Path {
-    val file = root.resolve(".ps/git-credentials")
+    val file = root.resolve(PushCredential.FILE)
     Files.createDirectories(file.parent)
     return Files.writeString(file, "$A_PUSH_TOKEN_LINE\n")
 }

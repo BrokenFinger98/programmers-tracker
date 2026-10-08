@@ -19,7 +19,8 @@ import java.nio.file.Path
  *   and APFS answers it with `.pſ` too (U+017F folds to `s`). Git sees the name on disk, which the
  *   ignore rule and the pathspec do not name.
  *
- * So the directory is verified rather than assumed. Absent, it is created as a real directory.
+ * So the directory is verified rather than assumed. Absent, it is created as a real directory, with the
+ * record repository above it if that is not there yet, as every writer of state always did.
  * Present, it must be listed by exactly that name, be a directory without following a link, and have
  * the real root with `.ps` appended as its real path. The listing is what catches a folded alias
  * everywhere: `readdir` returns the name on disk, while `toRealPath` returns the name as asked for on
@@ -32,6 +33,11 @@ import java.nio.file.Path
  * tree — and git runs, and the credential is stored, only while nothing below `.ps` is a link and git
  * tracks nothing there. What git tracks is git's to say: [TrackedState] is answered by the git adapter
  * and handed in by the composition root, so this package runs no git.
+ *
+ * **Every writer of state asks it too ([forWriting])** — raw frames, timers, the backup marker, the
+ * seed ledger. While `.ps` is not the real directory, or holds a link or a tracked file, each skips its
+ * write and says so once, rather than land state where a commit can carry it. The credential and git
+ * itself ask [inspected].
  */
 class StateDirectory(private val recordRoot: Path, private val tracked: TrackedState = TrackedState.UNASKED) {
     /** The state directory, created if absent, or null when what answers to [NAME] is not it. Never throws. */
@@ -42,17 +48,26 @@ class StateDirectory(private val recordRoot: Path, private val tracked: TrackedS
      * with no link anywhere below it, and nothing below it tracked by git. Never throws; a refusal
      * carries a reason a WARN can say, which names no path below `.ps` and no content.
      */
-    fun inspected(): Inspection {
+    fun inspected(): Inspection = inspect { Refused(UNANSWERED) }
+
+    /**
+     * For a writer of state: [inspected], except that git which cannot say what it tracks does not
+     * stop the write. Captures, timers and the ledger must not depend on git working; commits and
+     * pushes refuse in that case instead.
+     */
+    fun forWriting(): Inspection = inspect { directory -> Usable(directory) }
+
+    private fun inspect(unanswered: (Path) -> Inspection): Inspection {
         val directory = verified() ?: return Refused(NOT_THE_DIRECTORY)
         val linked = runCatching { holdsALink(directory) }.getOrNull() ?: return Refused(NOT_INSPECTED)
         if (linked) return Refused(HOLDS_A_LINK)
-        return trackedOrNot(directory)
+        return trackedOrNot(directory, unanswered)
     }
 
-    private fun trackedOrNot(directory: Path): Inspection = when (tracked.any()) {
+    private fun trackedOrNot(directory: Path, unanswered: (Path) -> Inspection): Inspection = when (tracked.any()) {
         false -> Usable(directory)
         true -> Refused(TRACKED)
-        null -> Refused(UNANSWERED)
+        null -> unanswered(directory)
     }
 
     // Walked without following a link, so a link is seen as one and never entered.
@@ -60,7 +75,7 @@ class StateDirectory(private val recordRoot: Path, private val tracked: TrackedS
         Files.walk(directory).use { paths -> paths.anyMatch { Files.isSymbolicLink(it) } }
 
     private fun verify(directory: Path): Path? {
-        if (!Files.exists(directory, NOFOLLOW_LINKS)) Files.createDirectory(directory)
+        if (!Files.exists(directory, NOFOLLOW_LINKS)) Files.createDirectories(directory)
         if (!listedByItsOwnName()) return null
         if (!Files.isDirectory(directory, NOFOLLOW_LINKS)) return null
         if (directory.toRealPath() != recordRoot.toRealPath().resolve(NAME)) return null

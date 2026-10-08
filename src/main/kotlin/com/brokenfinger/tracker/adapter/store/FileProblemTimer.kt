@@ -139,7 +139,10 @@ class FileProblemTimer(private val file: AtomicStateFile, private val clock: Clo
         private val logger = LoggerFactory.getLogger(FileProblemTimer::class.java)
 
         /** Timers live under the record repository, next to the records they describe (design §5.1). */
-        fun under(recordRoot: Path, clock: Clock): FileProblemTimer =
-            FileProblemTimer(AtomicStateFile.under(recordRoot, TIMERS), clock)
+        fun under(
+            recordRoot: Path,
+            clock: Clock,
+            state: StateDirectory = StateDirectory(recordRoot),
+        ): FileProblemTimer = FileProblemTimer(AtomicStateFile.under(recordRoot, TIMERS, state), clock)
     }
 }

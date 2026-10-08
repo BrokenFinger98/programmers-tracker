@@ -417,7 +417,11 @@ class CommandLineGitSync(
          * real directory in its place, it found a directory where a link was tracked and stopped —
          * "'.ps' does not have a commit checked out" (measured on 2.48.1 and 2.53.0).
          */
-        private val RECONCILE_SCOPE = listOf(".", ":(exclude,glob,icase)[.]ps", ":(exclude,glob,icase)[.]ps/**")
+        private val RECONCILE_SCOPE = listOf(
+            ".",
+            ":(exclude,glob,icase)${StateDirectory.GLOB}",
+            ":(exclude,glob,icase)${StateDirectory.GLOB}/**",
+        )
 
         /** Said once per process, so it stays readable instead of drowning every other line. */
         const val NOT_A_REPOSITORY =
@@ -433,7 +437,7 @@ class CommandLineGitSync(
                 "This is said only once."
 
         /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
-        private const val STATE_DIRECTORY = ".ps/"
+        private const val STATE_DIRECTORY = "${StateDirectory.NAME}/"
 
         private const val OPERATION_IN_PROGRESS =
             "{} has a merge, cherry-pick, revert or rebase in progress, so reconciliation waits rather " +

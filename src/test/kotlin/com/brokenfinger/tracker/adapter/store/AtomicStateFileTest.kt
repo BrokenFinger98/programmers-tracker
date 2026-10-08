@@ -2,10 +2,12 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -139,6 +141,50 @@ class AtomicStateFileTest {
 
         Files.isSymbolicLink(path()) shouldBe false
         permissionsOf(path()) shouldBe "rw-------"
+    }
+
+    // Under the record repository, only into the real state directory (#360) ------------------
+
+    /**
+     * `.ps` swapped for a tracked link into the tree: a state file written through it would be a path
+     * git tracks, and once the link was gone a reconciliation committed what had piled up there. So
+     * nothing is written, and the skip is said once for the file.
+     */
+    @Test
+    fun `a state file is not written while the state directory is not its own`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps"), tracked)
+        val timers = AtomicStateFile.under(root, "timers.json")
+
+        val heard = warningsWhile(AtomicStateFile::class) {
+            timers.write("""{"a":1}""")
+            timers.write("""{"b":2}""")
+        }
+
+        Files.list(tracked).use { it.count() } shouldBe 0L
+        heard.single() shouldContain "is not the tracker's own state directory"
+    }
+
+    /** A file git tracks below `.ps` is a change any `commit -a` publishes, so nothing is written. */
+    @Test
+    fun `a state file is not written while git tracks something under the state directory`() {
+        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root) { true })
+
+        val heard = warningsWhile(AtomicStateFile::class) { timers.write("""{"a":1}""") }
+
+        Files.exists(root.resolve(".ps/timers.json")) shouldBe false
+        heard.single() shouldContain "git tracks files under .ps"
+    }
+
+    /** Git that cannot be asked does not cost a capture its state; it is commits and pushes that refuse. */
+    @Test
+    fun `a state file is written when git cannot say what it tracks`() {
+        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root) { null })
+
+        timers.write("""{"a":1}""")
+
+        Files.readString(root.resolve(".ps/timers.json")) shouldBe """{"a":1}"""
     }
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))

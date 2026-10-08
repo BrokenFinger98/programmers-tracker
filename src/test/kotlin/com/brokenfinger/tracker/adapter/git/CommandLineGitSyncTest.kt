@@ -1,5 +1,11 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.FileBackupLog
+import com.brokenfinger.tracker.adapter.store.FileProblemTimer
+import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
+import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
+import com.brokenfinger.tracker.adapter.store.SeedLedger
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
@@ -21,7 +27,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 
 /**
  * Layer test for [CommandLineGitSync], driving **real git repositories** under a [TempDir]
@@ -810,6 +818,67 @@ class CommandLineGitSyncTest {
         heard.single() shouldContain "is not the tracker's own state directory"
         subjects() shouldContainExactly listOf("as a clone delivers it")
     }
+
+    // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
+
+    /**
+     * One name for the state directory, from every writer through the ignore rule to the pathspec:
+     * each writes below [StateDirectory.NAME], git ignores each, and a reconciliation commits none.
+     */
+    @Test
+    fun `every state writer, the ignore rule and the pathspec agree on one directory`() {
+        RecordRepositoryIgnores(root).ensure()
+        everyStateWriter()
+        aPushTokenIn(root)
+        written("log/submissions.jsonl", RECORD)
+
+        val state = Files.walk(root.resolve(StateDirectory.NAME)).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.toList()
+        }
+
+        state.size shouldBe 5
+        state.forEach { ignoredByGit(it) shouldBe true }
+        sync().reconcile() shouldBe true
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
+    /**
+     * While `.ps` was a tracked link into the tree, every state write landed there, and once the link
+     * was removed through git the next reconciliation committed what had piled up: raw frames, timers,
+     * the backup marker, the seed ledger (measured by the review). Nothing is written while it is not
+     * the real directory, so nothing is left to commit afterwards (#360).
+     */
+    @Test
+    fun `nothing piles up where the state directory pointed while it was a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        written(".gitignore", ".ps/\n")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        written("problems/zz/README.md", "decoy\n")
+        aLink(root.resolve(".ps"), tracked)
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        everyStateWriter()
+        git("rm", "--quiet", ".ps")
+        git("commit", "--message", "the link removed through git")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+        Files.list(tracked).use { entries -> entries.map { it.fileName.toString() }.toList() } shouldBe
+            listOf("README.md")
+    }
+
+    /** One write from each writer of state the server has, each through its own factory. */
+    private fun everyStateWriter() {
+        FileRawSessionLog.under(root).let { log -> log.append(log.start(120804), RAW_FRAME) }
+        FileProblemTimer.under(root, Clock.systemUTC()).startIfAbsent(120804)
+        FileBackupLog.under(root).succeededAt(Instant.EPOCH)
+        SeedLedger(root).record("dashboard.base", "seeded")
+    }
+
+    private fun ignoredByGit(file: Path): Boolean =
+        run(listOf("check-ignore", "--quiet", "--no-index", root.relativize(file).joinToString("/")), root).first == 0
 
     private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor)
 

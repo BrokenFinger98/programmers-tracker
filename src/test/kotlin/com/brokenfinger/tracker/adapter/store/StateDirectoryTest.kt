@@ -74,8 +74,10 @@ class StateDirectoryTest {
     }
 
     @Test
-    fun `a records directory that is not there is answered, never thrown`() {
-        StateDirectory(root.resolve("no/such/records")).verified().shouldBeNull()
+    fun `a records directory that cannot hold one is answered, never thrown`() {
+        val notADirectory = Files.writeString(root.resolve("records"), "a file\n")
+
+        StateDirectory(notADirectory).verified().shouldBeNull()
     }
 
     // Whether git may run over it: nothing linked or tracked inside (#360) ----------------------

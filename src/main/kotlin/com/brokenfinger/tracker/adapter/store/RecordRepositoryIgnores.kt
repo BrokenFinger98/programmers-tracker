@@ -160,7 +160,7 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
 
         private val RULES = listOf(
             IgnoreRule(
-                rule = ".ps/",
+                rule = "${StateDirectory.NAME}/",
                 because = "# The tracker's working state, added by the server itself. It lives here so that it sits\n" +
                     "# beside the records it describes, and it is not records: frames still being captured,\n" +
                     "# per-problem timers, when the last push succeeded. `.ps/raw/recorded/` keeps one file\n" +

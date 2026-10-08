@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.RawSessionLog
+import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -17,6 +18,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * File-backed [RawSessionLog]: one `.jsonl` per live session under [directory]
@@ -24,10 +26,26 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * [clock] is injected because the file name carries the start instant — reading the
  * system clock inside would make the name untestable.
+ *
+ * **Under the record repository ([under]) it writes only into the real state directory (#360).** A pull
+ * can deliver `.ps/raw` as a tracked link into the tree, and frames appended through it were committed
+ * and pushed by the server itself. Its [guard] is asked at a session's first frame — once, because
+ * asking walks `.ps` and asks git, and a grading sends a frame per testcase — and before every other
+ * write. While it refuses, frames are skipped and that is said once for the log; the record is still
+ * written from the grading itself, without its raw copy.
  */
-class FileRawSessionLog(private val directory: Path, private val clock: Clock = Clock.systemUTC()) : RawSessionLog {
+class FileRawSessionLog(
+    private val directory: Path,
+    private val clock: Clock = Clock.systemUTC(),
+    private val guard: StateDirectory? = null,
+) : RawSessionLog {
     /** Names this log has handed out. One instance serves every channel, so this is the whole set. */
     private val issued = ConcurrentHashMap.newKeySet<String>()
+
+    /** Whether each live session may be written, asked at its first frame. */
+    private val writable = ConcurrentHashMap<String, Boolean>()
+
+    private val skipSaid = AtomicBoolean()
 
     /**
      * A name no other session holds.
@@ -66,6 +84,7 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         Files.exists(directory.resolve(name)) || Files.exists(directory.resolve(RETIRED).resolve(name))
 
     override fun append(session: RawSessionId, frameText: String) {
+        if (!writable.computeIfAbsent(session.value) { mayWrite() }) return
         Files.createDirectories(directory)
         // Written verbatim: re-serializing would silently rewrite whatever Programmers
         // actually sent (dev rules §2.4). Only a trailing line break is dropped, so a
@@ -84,14 +103,16 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
     }
 
     override fun discard(session: RawSessionId) {
+        writable.remove(session.value)
         Files.deleteIfExists(fileOf(session))
     }
 
     // A sub-directory, so `unprocessed` stops seeing it: that walk keeps only direct children
     // whose name parses as a session, and a directory never does.
     override fun setAside(session: RawSessionId) {
+        writable.remove(session.value)
         val source = fileOf(session)
-        if (!Files.exists(source)) return
+        if (!Files.exists(source) || !mayWrite()) return
         val retired = directory.resolve(RETIRED)
         Files.createDirectories(retired)
         Files.move(source, retired.resolve(session.value), StandardCopyOption.REPLACE_EXISTING)
@@ -100,6 +121,7 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
     // A sub-directory again, for the same reason `setAside` uses one: the work-list walk keeps
     // only direct children whose name parses as a session.
     override fun orphaned(lessonId: Long, frameText: String) {
+        if (!mayWrite()) return
         val orphans = directory.resolve(ORPHANS)
         Files.createDirectories(orphans)
         Files.writeString(
@@ -144,6 +166,12 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
 
     private fun fileOf(session: RawSessionId): Path = directory.resolve(session.value)
 
+    private fun mayWrite(): Boolean {
+        val refusal = guard?.forWriting() as? StateDirectory.Refused ?: return true
+        if (!skipSaid.getAndSet(true)) logger.warn(NOT_WRITTEN, refusal.reason)
+        return false
+    }
+
     companion object {
         // Basic ISO, UTC, millisecond precision: sortable as text and colon-free, because
         // Windows rejects a colon in a file name and CI runs windows-latest.
@@ -157,7 +185,10 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         private val APPEND_MODE = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
         private val CHARSET = StandardCharsets.UTF_8
         private const val SUFFIX = ".jsonl"
-        private const val RAW_DIRECTORY = ".ps/raw"
+        private const val RAW = "raw"
+        private const val NOT_WRITTEN = "Raw frames are not being kept: {}. Said once for this log."
+
+        private val logger = LoggerFactory.getLogger(FileRawSessionLog::class.java)
 
         /** Where a session goes once its record is durable but nothing copied it. */
         const val RETIRED = "recorded"
@@ -166,7 +197,10 @@ class FileRawSessionLog(private val directory: Path, private val clock: Clock = 
         const val ORPHANS = "orphans"
 
         /** Raw logs live under the record repository, not next to the tool (design §5.1). */
-        fun under(recordRoot: Path, clock: Clock = Clock.systemUTC()): FileRawSessionLog =
-            FileRawSessionLog(recordRoot.resolve(RAW_DIRECTORY), clock)
+        fun under(
+            recordRoot: Path,
+            clock: Clock = Clock.systemUTC(),
+            state: StateDirectory = StateDirectory(recordRoot),
+        ): FileRawSessionLog = FileRawSessionLog(recordRoot.resolve(StateDirectory.NAME).resolve(RAW), clock, state)
     }
 }

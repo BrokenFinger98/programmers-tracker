@@ -1,7 +1,13 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -88,4 +94,25 @@ class SeedLedgerTest {
     }
 
     private fun ledger() = SeedLedger(root)
+
+    /**
+     * `.ps/seeds.json` a link to a file outside the repository, as a pull can deliver it: the ledger
+     * overwrote that file at every boot. Nothing is written through it or over it (#360).
+     */
+    @Test
+    fun `the ledger writes nothing through a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val outside = Files.writeString(
+            Files.createDirectories(root.resolve("elsewhere")).resolve("owners-file"),
+            "theirs\n",
+        )
+        val records = Files.createDirectories(root.resolve("records"))
+        val ledgerFile = aLink(records.resolve(".ps/seeds.json"), outside)
+
+        val heard = warningsWhile(AtomicStateFile::class) { SeedLedger(records).record("dashboard.base", "seeded") }
+
+        Files.readString(outside) shouldBe "theirs\n"
+        Files.isSymbolicLink(ledgerFile) shouldBe true
+        heard.single() shouldContain "holds a symbolic link"
+    }
 }
