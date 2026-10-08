@@ -651,6 +651,98 @@ class RecordWritesTest {
         }
     }
 
+    // What a replace does that no case above says, pinned before #386 shares the write -----------
+
+    /** Replaced rather than written into, so a second name for the old file keeps what it held. */
+    @Test
+    fun `a replaced file with a second name is broken from it, and the other name keeps its bytes`() {
+        val file = inProblem("README.md")
+        problems().replace(file, "page\n")
+        val secondName = outside.resolve("second-name.md")
+        assumeTrue(runCatching { Files.createLink(secondName, file) }.isSuccess, "no hard link between the two")
+
+        problems().replace(file, "page again\n")
+
+        Files.readString(secondName) shouldBe "page\n"
+        Files.readString(file) shouldBe "page again\n"
+    }
+
+    /** What is not a regular file and not a link — here a FIFO — is replaced too, and said as what it is. */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO where a replaced file should be is replaced, and said as not a regular file`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val fifo = Files.createDirectories(root.resolve("problems/1-x")).resolve("README.md")
+        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+
+        val warning = warningsWhile(RecordWrites::class) { problems().replace(fifo, "page\n") }.single()
+
+        Files.readString(fifo) shouldBe "page\n"
+        warning shouldContain "which is not a regular file"
+    }
+
+    /** Once for the path for this instance, however often a link comes to stand there again. */
+    @Test
+    fun `a link replaced at one path is said once, however often one stands there again`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val writes = problems()
+        val file = inProblem("README.md")
+
+        val warnings = warningsWhile(RecordWrites::class) {
+            repeat(2) {
+                Files.deleteIfExists(file)
+                aLink(file, aFileNotOurs(outside, "not-ours-$it.md"))
+                writes.replace(file, "page\n")
+            }
+        }
+
+        warnings.size shouldBe 1
+    }
+
+    @Test
+    fun `a file is written as UTF-8`() {
+        problems().replace(inProblem("README.md"), "# 두 수의 곱\n")
+
+        Files.readAllBytes(inProblem("README.md")).decodeToString() shouldBe "# 두 수의 곱\n"
+    }
+
+    /** The directories a write makes on its way get what a plain mkdir gives one, as before the walk. */
+    @Test
+    fun `a directory made on the way gets what a plain mkdir gives one`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+        val plain = Files.createDirectory(outside.resolve("plain"))
+
+        problems().replace(inProblem("attempts/001.java"), "code\n")
+
+        permissionsOf(inProblem("attempts")) shouldBe permissionsOf(plain)
+        permissionsOf(root.resolve("problems")) shouldBe permissionsOf(plain)
+    }
+
+    /** The words of a refusal, which each instance says once for its reason. */
+    @Test
+    fun `a refusal is said in exactly these words`() {
+        val target = root.resolve(".ps/git-credentials")
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { problems().replace(target, "x\n") }
+        }
+
+        heard.single() shouldBe "Not writing $target: it lies outside problems/. The records repository is written " +
+            "only through real directories, never through a link (#361). Said once for this reason."
+    }
+
+    /** The words of a replaced link, which each instance says once for its path. */
+    @Test
+    fun `a replaced link is said in exactly these words`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val file = aLink(inProblem("README.md"), aFileNotOurs(outside))
+
+        val heard = warningsWhile(RecordWrites::class) { problems().replace(file, "page\n") }
+
+        heard.single() shouldBe "Replacing $file, which is a symbolic link, with the file itself rather than " +
+            "writing through it (#361). Said once for this path."
+    }
+
     private fun problems() = RecordWrites.underProblems(RecordLayout(root))
 
     private fun problems(disk: DiskAnswers) = RecordWrites.underProblems(RecordLayout(root), disk = disk)

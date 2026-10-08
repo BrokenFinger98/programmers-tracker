@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -225,6 +227,31 @@ class StateDirectoryTest {
         Files.isDirectory(root.resolve(".ps/raw/orphans"), LinkOption.NOFOLLOW_LINKS) shouldBe true
     }
 
+    // Pinned before #386 shares the creation --------------------------------------------------------
+
+    /** A writer's path that cannot be made says nothing about the repository: asked again, never thrown. */
+    @Test
+    fun `a writer's directories under a records path that is a file are not inspected, and that can pass`() {
+        val notADirectory = Files.writeString(root.resolve("records"), "a file\n")
+
+        val refusal = aStateDirectory(notADirectory).pathFor("raw").shouldBeInstanceOf<Refused>().refusal
+
+        refusal shouldBe Refusal.NOT_INSPECTED
+        refusal.transient shouldBe true
+    }
+
+    /** The state directory and a writer's directories get what a plain mkdir gives one. */
+    @Test
+    fun `the directories made for state get what a plain mkdir gives one`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+        val plain = Files.createDirectory(root.resolve("plain"))
+
+        aStateDirectory(root).pathFor("raw", "orphans")
+
+        permissionsOf(root.resolve(".ps")) shouldBe permissionsOf(plain)
+        permissionsOf(root.resolve(".ps/raw/orphans")) shouldBe permissionsOf(plain)
+    }
+
     /** Nothing is created through a link: the check stops at the first segment that is not a real directory. */
     @Test
     fun `nothing is created below a link`() {
@@ -236,4 +263,6 @@ class StateDirectoryTest {
 
         Files.exists(tracked.resolve("orphans")) shouldBe false
     }
+
+    private fun permissionsOf(path: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(path))
 }
