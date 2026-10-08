@@ -26,7 +26,7 @@ import java.nio.file.attribute.PosixFilePermissions
  *
  * Every operation on the target's directory is here, and only here: making the temporary file, writing it, setting its
  * mode, the move, the clean-up. Writing through a directory handle rather than a path (#374) changes this class and
- * none of the writers that use it.
+ * the walk that hands it a directory ([RecordBound]), and none of the writers of a page, a note or a state document.
  */
 internal class FileReplacement(private val mode: FileMode) {
     /** Replaces [target] whole with [text], written beside it and moved over it. */

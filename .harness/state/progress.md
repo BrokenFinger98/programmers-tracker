@@ -6055,3 +6055,33 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Remaining.** The FIFO swap; the put-back order under concurrency; CI has not run these commits; not verified
   live.
 - **Pending.** Not pushed; the coordinator pushes.
+
+## 2026-10-08 — #386 one write for records and state, and no crash debris in a commit
+- **Branch** `refactor/386-one-write-primitive`, rebased onto main at `9b4dcc1` (#387 squashed as
+  `40bc5f5`, #377 before it, #376 and #378's store half after it). Two earlier merges, of #387's review
+  fixes and of main, are replaced by the rebase; the pin one of them changed is changed where it is made.
+- **Inventory first.** Every behaviour of `AtomicStateFile`, `StateDirectory`'s creation and
+  `RecordWrites.replaceAt` that an observer could see, and whether a test said it. `a92652d` pins what
+  none did: links, hard links and directories at the target, UTF-8, `mkdir`'s modes, and the exact
+  words each class says once. The table is in the ADR.
+- **One write.** `ce60e12` one `SaidOnce` for four classes; `5fa6c7a` `.ps` verified by the walk's own
+  step, `RecordBound.made()`; `a38fc20` `FileReplacement` and its three `FileMode`s. Every pin and every
+  test of both callers passed unchanged; only the temporary file's name changed.
+- **The debris.** `331c051` names it `.<name>.<n>.programmers-tracker.tmp`, and `RECONCILE_SCOPE` leaves
+  it out of every reconcile — chosen over a boot sweep, which cannot precede a live pass or the backup,
+  nor reach a file in flight. The coupling is one constant, on the `git → store` edge of §1.
+- **Windows.** `8934dc5`, a test enabled there alone: a page held open by `FileInputStream`, which does
+  not share deletion, then replaced. It asserts an `IOException` that is not a refusal, the old bytes
+  kept and nothing beside. Not run. If it holds, the page is skipped for that write and rewritten at the
+  next refresh; no fallback to an in-place write.
+- **Mutation.** 21 mutants, 19 killed, one of them after the pin `b1415ed`. Two survive: owner-only left
+  to the JDK's default (the same mode on the default filesystem) and `REPLACE_EXISTING` alone
+  (race-only).
+- **Gates**, all exit 0 on the rebased branch: check; test 2,545 (174 classes, 0 failures, 12 skipped:
+  the 11 as before and the Windows pin off Windows), node 4 of 4; build; `verifyBranchCoverage`
+  (`adapter/store` 87%, `adapter/git` 88%, `adapter/web` 82%, `application` 89%); guards 12 of 12.
+- **Docs.** ADR [[decisions/2026-10-08-one-replace-and-no-crash-debris]]; a note in #361's ADR, with Q4,
+  Q5 and Q6 marked; the index.
+- **Pending.** CI on the three OSes and the Windows pin's first run. Live: a rebuilt server should write
+  byte-identical files with the same modes, and `git status` in the records repository should show no
+  `.programmers-tracker.tmp` after a normal boot.
