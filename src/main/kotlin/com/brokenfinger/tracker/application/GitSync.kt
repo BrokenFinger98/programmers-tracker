@@ -56,7 +56,9 @@ interface GitSync {
      * (MCP `push()`, design §4.6).
      *
      * Returns whether the branch is on the remote, which includes "there is nothing to push":
-     * a branch with no commit yet (#360).
+     * a branch with no commit yet (#360). False when it is not: a push that failed or was
+     * refused, or one with nowhere to go. [hasRemote] tells the last apart, and with no remote
+     * at all nothing is said (#390).
      */
     fun push(): Boolean
 

@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -255,7 +257,58 @@ class DailyBackupTest {
         backupLog().lastSuccessAt() shouldBe NEXT_EVENING
     }
 
+    // What a backup that does not count says, and how often it tries (#390) -------------------
+
+    /**
+     * A repository with no remote is a documented way to run, and the boot report and the backup
+     * schedule say so once, at INFO. The backup said "could not push" at every check, beside the push's
+     * own warning: 2,880 lines a day. It says nothing now, and the day never counts — a backup that never
+     * left the machine is not recorded as one. What reconciliation commits is still committed.
+     */
+    @Test
+    fun `a repository with no remote says nothing at any check, and is never backed up`() {
+        val remoteLess = GitWorkspace(base.resolve("remote-less"))
+        remoteLess.write(".gitignore", ".ps/\n")
+        remoteLess.write("log/submissions.jsonl", A_RECORD)
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(remoteLess.root), backupLog(), clock, zone = SEOUL)
+
+        warnedWhile { ticks(backup, clock, count = 10) } shouldContainExactly emptyList()
+
+        backupLog().lastSuccessAt() shouldBe null
+        remoteLess.subjects() shouldContainExactly listOf(CommandLineGitSync.RECONCILE_MESSAGE)
+    }
+
+    /** A push that really failed — a remote whose URL leads nowhere — still says so, and the day stays due. */
+    @Test
+    fun `a push that could not reach its remote says so, and leaves the day due`() {
+        val unreachable = GitWorkspace(base.resolve("unreachable"))
+        unreachable.git("remote", "add", "origin", base.resolve("nowhere.git").toString())
+        unreachable.write("log/submissions.jsonl", A_RECORD)
+        val backup = DailyBackup(sync(unreachable.root), backupLog(), fixedAt(EVENING), zone = SEOUL)
+
+        val heard = warningsWhile(DailyBackup::class) { backup.runIfDue() shouldBe false }
+
+        heard.single() shouldContain "could not push"
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
     // Harness --------------------------------------------------------------------------------
+
+    /** [count] checks a minute apart, as the schedule makes them, from the clock's time on. */
+    private fun ticks(backup: DailyBackup, clock: MovableClock, count: Int) = repeat(count) {
+        backup.runIfDue()
+        clock.now = clock.now.plus(Duration.ofMinutes(1))
+    }
+
+    /** What the backup and the git adapter warned about while [action] ran, the backup's lines first. */
+    private fun warnedWhile(action: () -> Unit): List<String> {
+        var fromGit = emptyList<String>()
+        val fromBackup = warningsWhile(DailyBackup::class) {
+            fromGit = warningsWhile(CommandLineGitSync::class, action)
+        }
+        return fromBackup + fromGit
+    }
 
     /**
      * **The zone is named, not inherited.** Every instant below is written in Seoul terms, and

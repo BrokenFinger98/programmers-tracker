@@ -75,7 +75,7 @@ class DailyBackup(
      */
     private fun performed(due: Instant): Boolean {
         val reconciled = git.reconcile()
-        if (!git.push()) return incomplete()
+        if (!git.push()) return notPushed()
         if (!reconciled) return heldBack(due)
         log.succeededAt(clock.instant())
         logger.info("Daily backup pushed the record repository")
@@ -93,6 +93,17 @@ class DailyBackup(
         val today = now.with(at)
         if (today.isAfter(now)) return today.minusDays(1).toInstant()
         return today.toInstant()
+    }
+
+    /**
+     * A push answers false both when it failed and when there is nowhere to push, and only the first is a
+     * fault (#390). With no remote at all — a documented way to run, which the boot report and the backup
+     * schedule say once, at INFO — the day does not count and nothing is said: "could not push" at every
+     * check was 1,440 lines a day. The question is the one [BackupReporter] asks to tell the two apart.
+     */
+    private fun notPushed(): Boolean {
+        if (!git.hasRemote()) return false
+        return incomplete()
     }
 
     // Warn rather than throw: a backup that could not go up costs a day of remote history, and
