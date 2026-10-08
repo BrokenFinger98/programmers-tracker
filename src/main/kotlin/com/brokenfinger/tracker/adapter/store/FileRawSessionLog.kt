@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
@@ -37,10 +38,22 @@ import java.util.concurrent.atomic.AtomicLong
  * them a link — which costs a stat each, so a link swapped in between two frames is never written
  * through.
  *
+ * **So the answer a session's first frame got holds for that grading alone (#377).** Asking git at every
+ * frame would cost a median of 7–8 ms a frame against 0.03 ms for the append itself (measured on the host,
+ * 500 to 5,000 index entries). What a pull can change unseen meanwhile is whether git tracks something else
+ * under `.ps`: the grading in flight then finishes in its own file, which git does not track unless the pull
+ * delivered that very name, which carries the millisecond the grading started. The next session asks again.
+ *
  * While the state directory is refused, frames are **held in memory** instead, within [heldLimit]
  * characters across the log. A submit's frames go to its attempt file at [complete], which lies outside
  * `.ps`; a run set aside and an orphan are written into `.ps` the first time it is usable again, and
  * [close] says what is still held when the server stops. Each refusal, and the limit, is said once.
+ *
+ * **A boot replays only what a write would accept (#377).** [unprocessed] lists the work list only while
+ * the [guard] would let a frame be written there: what it refuses is left where it is, unread, and said
+ * once with how many. Only regular files are listed, and never a session git has ever tracked, under any
+ * spelling: untracked, one a pull delivered reads like the tracker's own. Git is asked once, and only when a
+ * session waits; while it cannot say, nothing is replayed.
  *
  * **The copy beside the record goes through [RecordWrites] when the log knows its [recordRoot]** — as
  * [under], and so the composition root, builds it (#361). The copy never replaced anything, a link
@@ -72,6 +85,10 @@ class FileRawSessionLog(
     private val heldChars = AtomicLong()
 
     private val said = ConcurrentHashMap.newKeySet<String>()
+
+    /** What the last [unprocessed] left on the work list, for the history's readers (#377). */
+    @Volatile
+    private var left = LeftUnreplayed.NOTHING
 
     /**
      * A name no other session holds.
@@ -200,27 +217,85 @@ class FileRawSessionLog(
         return OrphanedFrames(lessonId, frames, file)
     }
 
+    /**
+     * The work list, read only from where a frame would be written now (#377): `.ps` the tracker's own,
+     * git tracking nothing there, no link on the way — what [StateDirectory.forWriting] and
+     * [StateDirectory.pathFor] answer every write. A pull can deliver a file whose name parses as a session,
+     * and a replay records it as a grading of the owner's. Otherwise nothing is read: each session is left
+     * where it is, never moved or deleted, since it may be the owner's own. Git is asked first and the links
+     * checked after, just before the listing, so a link swapped in while git answers is not listed through.
+     * What is left is kept for [unreplayed] until the next call.
+     */
     override fun unprocessed(): List<RawSession> {
-        if (!Files.isDirectory(directory)) return emptyList()
-        val raw = listable() ?: return emptyList()
-        return Files.list(raw).use { entries ->
-            entries.toList().mapNotNull { sessionOf(it) }.sortedBy { it.id.value }
+        val work = workList()
+        left = work.left
+        return work.replayable
+    }
+
+    override fun unreplayed(): LeftUnreplayed = left
+
+    private fun workList(): WorkList {
+        if (!Files.isDirectory(directory)) return WorkList(emptyList(), LeftUnreplayed.NOTHING)
+        val guard = guard ?: return sessionsIn(directory).let { it.keeping(it.files) }
+        val state = guard.forWriting()
+        if (state is StateDirectory.Refused) return leftInPlace(state.refusal, guard.pathFor(RAW))
+        return when (val raw = guard.pathFor(RAW)) {
+            is StateDirectory.Usable -> unknownToGit(sessionsIn(raw.directory), guard)
+            is StateDirectory.Refused -> leftInPlace(raw.refusal, raw)
         }
     }
 
-    // Listed only through real directories — `.ps` and `raw`, neither a link (#387). Replaying a session makes a record,
-    // and one behind a link is not the tracker's own. Said once; what is there waits for a boot that can list it.
-    private fun listable(): Path? {
-        val guard = guard ?: return directory
-        return when (val inspection = guard.pathFor(RAW)) {
-            is StateDirectory.Usable -> inspection.directory
-            is StateDirectory.Refused -> unlisted(inspection.refusal)
-        }
+    // A session git has ever tracked, in any spelling, may be what a pull delivered, and untracking it leaves the
+    // file behind: never replayed (#377). One question to git, only when a session waits; unanswered, none is.
+    private fun unknownToGit(listed: Listing, guard: StateDirectory): WorkList {
+        if (listed.files.isEmpty()) return listed.keeping(emptyList())
+        val known = guard.pathsEverTracked() ?: return unanswered(listed)
+        val (delivered, ours) = listed.files.partition { session -> known.any { isPathOf(session, it) } }
+        if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
+        return listed.keeping(ours)
     }
 
-    private fun unlisted(refusal: StateDirectory.Refusal): Path? {
-        sayOnce(UNLISTED) { logger.warn(NOT_LISTED, refusal.reason) }
-        return null
+    private fun unanswered(listed: Listing): WorkList {
+        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size) }
+        return listed.keeping(emptyList())
+    }
+
+    // `raw/<name>` below the state directory, in any case: git keeps a name as it was committed, and a filesystem
+    // that folds case answers it for the session's own.
+    private fun isPathOf(session: RawSession, path: String): Boolean {
+        val segments = path.split('/')
+        if (segments.size != 2) return false
+        return segments[0].equals(RAW, ignoreCase = true) && segments[1].equals(session.id.value, ignoreCase = true)
+    }
+
+    // Regular files alone (#377): the tracker writes no link there, so one named like a session is not its own,
+    // and is never read through. Those passed over are said once, by how many, and counted as left.
+    private fun sessionsIn(raw: Path): Listing {
+        val (files, others) = namedLikeSessions(raw).partition(::isARegularFile)
+        if (others.isNotEmpty()) sayOnce(NOT_A_FILE) { logger.warn(NOT_REGULAR_FILES, others.size) }
+        return Listing(files.sortedBy { it.id.value }, others.size)
+    }
+
+    private fun isARegularFile(session: RawSession): Boolean =
+        Files.isRegularFile(session.path, LinkOption.NOFOLLOW_LINKS)
+
+    private fun namedLikeSessions(raw: Path): List<RawSession> =
+        Files.list(raw).use { entries -> entries.toList().mapNotNull { sessionOf(it) } }
+
+    // Said once with how many and why. Counted only where the directory was inspected and no link is on the way.
+    private fun leftInPlace(refusal: StateDirectory.Refusal, raw: StateDirectory.Inspection): WorkList {
+        val listed = (raw as? StateDirectory.Usable)?.let { sessionsIn(it.directory) } ?: return notCounted(refusal)
+        if (listed.files.isNotEmpty()) {
+            sayOnce("$NOT_REPLAYED${refusal.name}") { logger.warn(LEFT_IN_PLACE, listed.files.size, refusal.reason) }
+        }
+        return listed.keeping(emptyList())
+    }
+
+    // Nothing is listed through a link or where the directory could not be inspected, so nothing is counted, and
+    // the message names no link that may not be there.
+    private fun notCounted(refusal: StateDirectory.Refusal): WorkList {
+        sayOnce("$NOT_REPLAYED${refusal.name}") { logger.warn(NOT_COUNTED, refusal.reason) }
+        return WorkList(emptyList(), LeftUnreplayed(0, uncounted = true))
     }
 
     private fun sessionOf(file: Path): RawSession? {
@@ -379,6 +454,16 @@ class FileRawSessionLog(
 
     private enum class Verdict { UNDECIDED, DISK, MEMORY }
 
+    // Named like sessions in a raw directory: the regular files, and how many others were passed over.
+    private class Listing(val files: List<RawSession>, val others: Int) {
+        // [replayable] replayed, and everything else listed here left on the work list, counted in one place.
+        fun keeping(replayable: List<RawSession>) =
+            WorkList(replayable, LeftUnreplayed(files.size - replayable.size + others, uncounted = false))
+    }
+
+    // What a start replays, and what it leaves on the work list for a later one.
+    private class WorkList(val replayable: List<RawSession>, val left: LeftUnreplayed)
+
     companion object {
         // Basic ISO, UTC, millisecond precision: sortable as text and colon-free, because
         // Windows rejects a colon in a file name and CI runs windows-latest.
@@ -403,11 +488,28 @@ class FileRawSessionLog(
                 ".ps is usable again. Said once."
         private const val LOST_AT_EXIT =
             "Raw frames held in memory were lost when the server stopped, because .ps was not usable: {} of them."
+        private const val LEFT_IN_PLACE =
+            "{} raw session(s) were left in place, not replayed: {}. Each is replayed as a grading at the first " +
+                "start that finds .ps usable, unless git has ever tracked it. Said once for this reason."
+        private const val NOT_COUNTED =
+            "Raw sessions were not replayed: {}. Their directory was not listed, so nothing in it was read or " +
+                "counted, and it is left as it is. Said once for this reason."
+        private const val KNOWN_TO_GIT =
+            "{} raw session(s) were left in place and will never be replayed: git has tracked their names under " +
+                ".ps, so each may be what a pull delivered rather than a grading this server captured. They stay " +
+                "where they are, for a person to read. Said once."
+        private const val HISTORY_UNANSWERED =
+            "{} raw session(s) were left in place, not replayed: git could not say what it has ever tracked under " +
+                ".ps, and a session git delivered must never be replayed. They are replayed at the first start " +
+                "where git answers. Said once."
+        private const val KNOWN = "known to git"
+        private const val UNANSWERED = "history unanswered"
+        private const val NOT_REGULAR_FILES =
+            "{} raw session(s) were not replayed because each is not a regular file — a link, most likely, which " +
+                "this server never writes there — and none was read. Said once."
+        private const val NOT_A_FILE = "not a file"
+        private const val NOT_REPLAYED = "not replayed: "
         private const val LIMIT = "limit"
-        private const val UNLISTED = "unlisted"
-        private const val NOT_LISTED =
-            "The raw work list was not read: {}. Its sessions are replayed once it is a real directory again. " +
-                "Said once."
 
         /** What the log holds in memory at most, across every session, while `.ps` is refused. */
         const val HELD_LIMIT = 8_000_000L

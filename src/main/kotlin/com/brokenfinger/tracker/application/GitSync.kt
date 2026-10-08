@@ -56,7 +56,9 @@ interface GitSync {
      * (MCP `push()`, design §4.6).
      *
      * Returns whether the branch is on the remote, which includes "there is nothing to push":
-     * a branch with no commit yet (#360).
+     * a branch with no commit yet (#360). False when it is not: a push that failed or was
+     * refused, or one with nowhere to go. [hasRemote] tells the last apart, and with no remote
+     * at all nothing is said (#390).
      */
     fun push(): Boolean
 
@@ -67,6 +69,15 @@ interface GitSync {
      * things it is (#183): a repository nobody gave a remote is a **supported way to run the
      * tool** — the README says push needs credentials the tool cannot invent — while a
      * repository that has one and is not pushing is a fault.
+     *
+     * False as well when git cannot say, which is warned about where it happened.
      */
     fun hasRemote(): Boolean
+
+    /**
+     * Whether a push credential is stored for this repository — answered by its presence, the token never
+     * read. One is stored only when a token was given, so with no remote it says that one was wanted: the
+     * wiring failed, or the remote went away since (the review of #399).
+     */
+    fun hasPushCredential(): Boolean
 }

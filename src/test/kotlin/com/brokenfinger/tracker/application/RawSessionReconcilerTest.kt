@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
@@ -21,8 +22,10 @@ import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.madeFifo
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -54,7 +57,10 @@ class RawSessionReconcilerTest {
     @TempDir
     lateinit var outside: Path
 
-    private val rawLog by lazy { FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)) }
+    /** What git answers about `.ps`: nothing tracked, unless a test says a pull changed that. */
+    private val git = ChangingAnswer(false)
+
+    private val rawLog by lazy { FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root, git)) }
 
     // Reconciled ten minutes after the session that the crash interrupted started.
     private val clock by lazy { Clock.fixed(NOW, ZoneOffset.UTC) }
@@ -267,6 +273,81 @@ class RawSessionReconcilerTest {
         rawLog.unprocessed().size shouldBe 1
     }
 
+    // Not replayed: what a write would refuse (#377) ------------------------------------------
+
+    /**
+     * A pull can deliver a session the work list parses, and the boot recorded it as a grading of the
+     * owner's. While git tracks anything under `.ps`, nothing there is replayed, and nothing is lost:
+     * the session stays where it is.
+     */
+    @Test
+    fun `a session under a state directory git tracks anything in is not replayed`() {
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        git.answer = true
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(root.resolve(".ps/raw")) shouldHaveSize 1
+    }
+
+    @Test
+    fun `a session behind a raw directory that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw"), elsewhere)
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(elsewhere) shouldHaveSize 1
+    }
+
+    /**
+     * The forged PASS of the review of PR #395: delivered by a pull and untracked as the advice said, it was
+     * recorded at the next start. A session git has ever tracked is never replayed; it stays where it is.
+     */
+    @Test
+    fun `a session git has ever tracked is not replayed`() {
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        git.history = setOf("raw/$A_SESSION")
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(root.resolve(".ps/raw")) shouldHaveSize 1
+    }
+
+    /** Linked to frames in the tree, a session file was replayed from them (the review of PR #395, measured). */
+    @Test
+    fun `a session file that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        Files.write(frames, broadcastsOf("algorithm-pass.jsonl"))
+        aLink(root.resolve(".ps/raw/$A_SESSION"), frames)
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+    }
+
+    /** Listed as a file and swapped for a link before it is read: the read does not follow it. */
+    @Test
+    fun `a session is never read through a link at its file`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        Files.write(frames, broadcastsOf("algorithm-pass.jsonl"))
+        val link = aLink(root.resolve(".ps/raw/$A_SESSION"), frames)
+        val listedBeforeTheSwap = object : RawSessionLog by rawLog {
+            override fun unprocessed() = listOf(RawSession(RawSessionId(A_SESSION), LESSON_ID, SESSION_START, link))
+        }
+
+        reconcile(listedBeforeTheSwap) shouldBe ReconcileReport(failed = 1)
+
+        records().shouldBeEmpty()
+    }
+
     @Test
     fun `a raw directory that was never created is a no-op`() {
         reconcile() shouldBe ReconcileReport()
@@ -281,8 +362,8 @@ class RawSessionReconcilerTest {
 
     /**
      * Replaying a stored session makes a record, so a session that is a link is not replayed (#387): whatever it leads
-     * to — here a grading's frames kept elsewhere — would become this learner's record. It fails, said like any
-     * session that cannot be settled, and stays on the work list.
+     * to — here a grading's frames kept elsewhere — would become this learner's record. Since #377 the work list lists
+     * regular files alone, so it is passed over there rather than failed at the read, and it stays on the work list.
      */
     @Test
     fun `a stored session that is a link is not replayed, and stays on the work list`() {
@@ -291,25 +372,43 @@ class RawSessionReconcilerTest {
         val session = storedSessions().single()
         aLink(session, Files.move(session, outside.resolve("frames.jsonl")))
 
-        reconcile() shouldBe ReconcileReport(failed = 1)
+        reconcile() shouldBe ReconcileReport()
 
         records().shouldBeEmpty()
         Files.isSymbolicLink(session) shouldBe true
     }
 
     /**
-     * Only a regular file is replayed: a FIFO on the work list would hold the boot for a writer that never comes. What
-     * this pins is that the pass returns at all — the timeout fails it if the check is removed — with the session
-     * failed, as one that cannot be settled.
+     * A FIFO on the work list would hold the boot for a writer that never comes. The listing passes it over, as it
+     * does anything that is not a regular file (#377): the pass returns, the timeout failing it otherwise, and nothing
+     * is replayed.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a stored session that is a FIFO is passed over, not waited on`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val fifo = Files.createDirectories(root.resolve(".ps/raw")).resolve(A_SESSION)
+        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+
+        reconcile() shouldBe ReconcileReport()
+    }
+
+    /**
+     * And a session listed as a file and swapped for a FIFO before it is read is not waited on either (#387): only a
+     * regular file is read. What this pins is that the pass returns at all — the timeout fails it if the read's own
+     * check is removed — with the session failed, as one that cannot be settled.
      */
     @Test
     @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     fun `a stored session that is a FIFO is not waited on, and fails as one that cannot be settled`() {
         assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
-        val fifo = Files.createDirectories(root.resolve(".ps/raw")).resolve("20260805T090000000Z-$LESSON_ID.jsonl")
+        val fifo = Files.createDirectories(root.resolve(".ps/raw")).resolve(A_SESSION)
         assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+        val listedBeforeTheSwap = object : RawSessionLog by rawLog {
+            override fun unprocessed() = listOf(RawSession(RawSessionId(A_SESSION), LESSON_ID, SESSION_START, fifo))
+        }
 
-        reconcile() shouldBe ReconcileReport(failed = 1)
+        reconcile(listedBeforeTheSwap) shouldBe ReconcileReport(failed = 1)
     }
 
     // Harness --------------------------------------------------------------------------------
@@ -318,9 +417,9 @@ class RawSessionReconcilerTest {
         Files.list(root.resolve(".ps/raw")).use { entries -> entries.filter { Files.isRegularFile(it) }.toList() }
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
-    private fun reconcile(): ReconcileReport = runBlocking {
+    private fun reconcile(log: RawSessionLog = rawLog): ReconcileReport = runBlocking {
         RawSessionReconciler(
-            rawLog,
+            log,
             writer(),
             StaleTimer(ELAPSED_SEC),
             aFrameReader(),
@@ -367,6 +466,9 @@ class RawSessionReconcilerTest {
         const val ELAPSED_SEC = 3600L
         const val LESSON_ID = 120804L
         const val SQL_LESSON_ID = 131528L
+
+        /** The name a session opened at [SESSION_START] for [LESSON_ID] gets. */
+        const val A_SESSION = "20260805T090000000Z-120804.jsonl"
     }
 }
 

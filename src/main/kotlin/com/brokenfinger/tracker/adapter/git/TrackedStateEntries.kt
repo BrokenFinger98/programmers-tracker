@@ -25,6 +25,10 @@ import java.nio.file.Path
  * Read from the index, which is what `commit -a` commits from. Null when git cannot be asked — a
  * directory that is no repository, a git that did not finish — and the callers decide what unknown
  * means for them.
+ *
+ * **And what git has ever tracked there** ([pathsEverTracked], #377), read from every ref's history: once
+ * untracked, a raw session a pull delivered is a file like the tracker's own, and only the history still
+ * names it. Judged by the same first segment.
  */
 class TrackedStateEntries(private val root: Path, environment: Map<String, String> = System.getenv()) :
     TrackedState {
@@ -32,14 +36,34 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
 
     override fun tracksAnything(): Boolean? = runCatching { listed() }.getOrNull()
 
+    /**
+     * Every path any commit a ref reaches has added, changed or removed below the state directory, by the part
+     * below it (#377): a pull can deliver a raw session there, and untracking it leaves the file behind. One
+     * `git log` over every ref ([HISTORY]); its first segments are judged as [tracksAnything] judges the index.
+     */
+    override fun pathsEverTracked(): Set<String>? = runCatching { inHistory() }.getOrNull()
+
     private fun listed(): Boolean? {
         val result = process.run(listOf("git", "ls-files", "-z"))
         if (!result.succeeded()) return null
-        return firstSegments(result.stdout).any { isStateDirectory(it) }
+        return firstSegments(pathsIn(result.stdout)).any { isStateDirectory(it) }
     }
 
-    private fun firstSegments(listing: String): Set<String> =
-        listing.split(NUL).filter { it.isNotEmpty() }.map { it.substringBefore('/') }.toSet()
+    private fun inHistory(): Set<String>? {
+        val result = process.run(HISTORY)
+        if (!result.succeeded()) return null
+        return belowStateDirectory(pathsIn(result.stdout))
+    }
+
+    // Each first segment is judged once: the history names the same few thousands of times.
+    private fun belowStateDirectory(paths: List<String>): Set<String> {
+        val state = firstSegments(paths).filter { isStateDirectory(it) }.toSet()
+        return paths.filter { '/' in it && it.substringBefore('/') in state }.map { it.substringAfter('/') }.toSet()
+    }
+
+    private fun pathsIn(listing: String): List<String> = listing.split(NUL).filter { it.isNotEmpty() }
+
+    private fun firstSegments(paths: List<String>): Set<String> = paths.map { it.substringBefore('/') }.toSet()
 
     // `equals(ignoreCase = true)` folds as Java's `equalsIgnoreCase` does, so `.pſ` is `.ps` too.
     private fun isStateDirectory(segment: String): Boolean =
@@ -53,5 +77,15 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
 
     private companion object {
         const val NUL = '\u0000'
+
+        /**
+         * Every ref; a merge compared with each parent, so a path a merge alone added is named; the root commit
+         * against nothing; no rename detection, so a moved path is named at both ends; and no colour or signature
+         * among the paths. An unborn repository answers nothing, and exit 0.
+         */
+        val HISTORY = listOf(
+            "git", "log", "--all", "-m", "--root", "--no-renames", "--no-color", "--no-show-signature",
+            "--name-only", "-z", "--format=",
+        )
     }
 }

@@ -125,18 +125,22 @@ class RawSessionReconciler(
     /**
      * Decoded with replacement rather than reported: a crash can tear a line in the middle of
      * a multi-byte character, and one bad byte must not cost the whole session.
+     *
+     * Read without following a link at the file (#377): the work list holds regular files alone,
+     * and one swapped for a link after it was listed fails here rather than being read through.
      */
-    private fun linesOf(session: RawSession): List<String> = String(framesOf(session.path), StandardCharsets.UTF_8)
+    private fun linesOf(session: RawSession): List<String> = String(bytesOf(session.path), StandardCharsets.UTF_8)
         .lineSequence()
         .filter { it.isNotBlank() }
         .toList()
 
     /**
-     * Only a regular file, opened without following a link (#387). What replays becomes a record,
-     * and through a link it would be whatever the link leads to; a FIFO would never answer. Such a
-     * session fails like any other that cannot be settled, and stays where it is.
+     * Only a regular file, opened without following a link (#377, #387). What replays becomes a record,
+     * and through a link it would be whatever the link leads to; a FIFO would never answer. The work
+     * list holds regular files alone, so this is what stands against one swapped in after the listing:
+     * such a session fails like any other that cannot be settled, and stays where it is.
      */
-    private fun framesOf(file: Path): ByteArray {
+    private fun bytesOf(file: Path): ByteArray {
         check(Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) { "the stored session is not a regular file" }
         return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
     }

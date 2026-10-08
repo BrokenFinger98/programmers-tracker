@@ -55,12 +55,14 @@ import java.util.concurrent.atomic.AtomicReference
  * 3. The credential is replaced, never written through a link ([GithubRemote]), and git is only
  *    pointed at it while it is a regular file ([PushCredential]).
  * 4. The content gate: the working tree within a commit's scope before staging, what is staged
- *    before the commit, and every commit a push would send before the push, are searched for the
+ *    before the commit, and every blob a push would send before the push, are searched for the
  *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
- *    remote, and runs with replace refs off, so the search reads the objects the push sends — for the
- *    commits that remote's tracking refs lack, which a stale ref understates.
+ *    remote, and runs with replace refs off, so the search reads the objects the push sends — each
+ *    once, for the commits that remote's tracking refs lack, which a stale ref understates
+ *    ([OutgoingObjectScan], #373) — and HEAD's own tree at every push, whatever the refs say.
  *
- * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
+ * A push also reads the commits it would send — each message, author and committer — and the trees, which
+ * hold the names (#375). What none of this reads: content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
  * is a window the checks do not close. Every refusal is one WARN that names why and never the token,
  * and a false — fail closed.
@@ -79,6 +81,9 @@ class CommandLineGitSync(
     private val credential = PushCredential(root)
 
     private val process = GitProcess(root, environment)
+
+    /** What a push would send, searched object by object, through the same calls as everything else here. */
+    private val outgoing = OutgoingObjectScan(ProcessCalls(process, ::commandFor))
 
     private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
 
@@ -114,8 +119,19 @@ class CommandLineGitSync(
     override fun push(): Boolean = inRepository("push") { pushed() }
 
     // `git remote` lists names and prints nothing when there is none, so an empty answer is the
-    // whole signal. A failure to run it answers false: unknown is not "configured".
-    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+    // whole signal. A failure to run it answers false: unknown is not "configured". So does one that
+    // could not start, which threw — with the records directory gone, out of the backup's check (the
+    // review of #399) — and is said, as every other git call here that could not run is.
+    override fun hasRemote(): Boolean = runCatching { remotesListed() }.getOrElse { remoteUnknown(it) }
+
+    private fun remotesListed(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+
+    private fun remoteUnknown(cause: Throwable): Boolean {
+        logger.warn(REMOTE_UNKNOWN, root, cause.javaClass.simpleName)
+        return false
+    }
+
+    override fun hasPushCredential(): Boolean = credential.isStored()
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
@@ -231,11 +247,13 @@ class CommandLineGitSync(
      * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
      * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
      * name under `push.default=upstream` is not where this push goes. The search covers the commits that
-     * remote's own branches lack.
+     * remote's own branches lack. And `--no-follow-tags`: with `push.followTags=true` in the repository, an
+     * annotated tag on the branch went out beside it, its message never read (#375); now no tag goes.
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
-     * a documented way to run — is nowhere to push, so nothing is searched for it.
+     * a documented way to run — is nowhere to push, so nothing is searched for it, and with no remote at
+     * all nothing is said either (#390).
      */
     private fun pushed(): Boolean {
         val head = headCommit() ?: return true
@@ -243,7 +261,7 @@ class CommandLineGitSync(
         val remote = pushRemoteOf(branch)
         if (!hasDestination(remote)) return noRemote(remote)
         if (!searchedClean(SearchedHead(head, remote, fingerprintOfStore()))) return false
-        val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
+        val result = git(listOf("push", "--no-follow-tags", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
 
@@ -253,8 +271,11 @@ class CommandLineGitSync(
     private fun hasDestination(remote: String): Boolean =
         listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
 
+    // No remote at all is the remote-less way to run, said once at INFO by the boot report and the backup
+    // schedule; said here, it was a warning at every push, every minute the backup was due (#390). A
+    // remote that exists while the push goes to another name, which has no URL, is a fault, and is said.
     private fun noRemote(remote: String): Boolean {
-        logger.warn(NO_REMOTE, root, remote)
+        if (hasRemote()) logger.warn(NO_REMOTE, root, remote)
         return false
     }
 
@@ -265,10 +286,30 @@ class CommandLineGitSync(
      */
     private fun searchedClean(head: SearchedHead): Boolean {
         if (lastSearchedClean.get() == head) return true
-        if (!carriesNoToken("push") { outgoingSearches(head.remote) }) return false
+        if (!carriesNoToken("push") { outgoing.outcome(searchedForPush(head.remote), it) }) return false
         lastSearchedClean.set(head)
         return true
     }
+
+    /**
+     * What a push to [remote] is searched for, as `rev-list` argument lists: what it would send, and HEAD's own
+     * tree, whatever the remote-tracking refs say. The tracker never fetches, so a ref stays where the last
+     * push left it: after `remote set-url`, or with the remote re-created empty, it still names commits the
+     * remote does not hold, and the range leaves out what they reach. A token still in HEAD's tree went out
+     * unsearched that way (the review of 315f44e). HEAD's tree is what the search before #373 read of HEAD; a
+     * commit between HEAD and a stale ref was not read then either, and is #376's.
+     */
+    private fun searchedForPush(remote: String): List<List<String>> = listOf(outgoingRange(remote), HEAD_TREE)
+
+    /**
+     * What a push to [remote] would send, as `rev-list` arguments: the commits none of its remote-tracking
+     * branches holds, and what they carry. A push updates the branch it pushed, so after the first one this
+     * is what was committed since; with none at all it is every commit. Another remote's branches do not
+     * count — the review's N4: a commit already pushed to a second remote was skipped, and sent here
+     * unsearched. The tracker configures no upstream (`push.default=current`), so `@{u}..HEAD` would name
+     * nothing. The one place the range is decided, so a change to what counts as sent is made here.
+     */
+    private fun outgoingRange(remote: String): List<String> = listOf("HEAD", "--not", "--remotes=$remote")
 
     // What was stored when a head was searched, kept as a digest rather than as the secret itself.
     private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {
@@ -307,39 +348,53 @@ class CommandLineGitSync(
      * unsearched — which is why the push searches again, what was actually committed.
      */
     private fun committed(what: String, scope: List<String>, message: String): Boolean {
-        if (!carriesNoToken(what) { listOf(listOf("--untracked", "--") + scope) }) return false
+        if (!carriesNoToken(what) { grepped(it, listOf("--untracked", "--") + scope) }) return false
         if (!retryingOnContention(what) { git(listOf("add", "--all", "--") + scope) }) return false
-        if (!carriesNoToken(what) { listOf(listOf("--cached", "--") + scope) }) return false
+        if (!carriesNoToken(what) { grepped(it, listOf("--cached", "--") + scope) }) return false
         return retryingOnContention(what) { git(listOf("commit", "--message", message, "--") + scope) }
     }
 
     /**
-     * The content gate (#360): true when no GitHub token is in any of the searches — each the arguments
-     * of one `git grep`. Two kinds of pattern go to each: anything shaped like a GitHub token, always,
-     * so the gate does not depend on what is stored and finds a token rotated out of the store (the
-     * review's R1); and what the store holds, as fixed strings on stdin, never in argv. It searches the
-     * content git would carry, not a path, so it holds wherever a token turns up — though not in a
-     * commit or tag message, which it does not read.
+     * The content gate (#360): true when [search] finds no GitHub token in what a commit or a push would
+     * carry. Two kinds of pattern are searched for: anything shaped like a GitHub token, always, so the
+     * gate does not depend on what is stored and finds a token rotated out of the store (the review's R1);
+     * and what the store holds, never in argv. It searches the content git would carry, not a path, so it
+     * holds wherever a token turns up. A commit's side is searched by `git grep` ([grepped]); a push's by
+     * [OutgoingObjectScan] (#373), which reads the commits it would send as well (#375).
      *
-     * Fails closed, with one WARN that never carries what was searched for: a store that is there and
-     * cannot be read, searches that cannot be listed (null), a search that does not finish, a match.
+     * Fails closed, with one WARN that never carries what was searched for: a store that is there and cannot
+     * be read, a search that did not read everything, a match. A match in a commit names the commit and the
+     * part of it, never the token, so the owner knows which one to rewrite.
      */
-    private fun carriesNoToken(what: String, searches: () -> List<List<String>>?): Boolean {
+    private fun carriesNoToken(what: String, search: (StoredCredential) -> SearchOutcome): Boolean {
         val stored = credential.stored()
         if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
-        return searchedClean(what, stored, searches())
+        return when (val outcome = search(stored)) {
+            SearchOutcome.Clean -> true
+            SearchOutcome.FoundInContent -> refused(CREDENTIAL_FOUND, what)
+            is SearchOutcome.FoundInCommit -> refused(outcome, what)
+            SearchOutcome.FoundInName -> refused(CREDENTIAL_IN_A_NAME, what)
+            SearchOutcome.Unsearched -> refused(CREDENTIAL_UNSEARCHED, what)
+        }
     }
 
-    private fun searchedClean(what: String, stored: StoredCredential, searches: List<List<String>>?): Boolean {
-        if (searches == null) return refused(CREDENTIAL_UNSEARCHED, what)
-        val outcome = searches.asSequence().flatMap { greps(stored, it) }.firstOrNull { it != NO_MATCH } ?: return true
-        if (outcome == MATCH) return refused(CREDENTIAL_FOUND, what)
-        return refused(CREDENTIAL_UNSEARCHED, what)
+    // The commit, by a short id, and the part of it the token is in — never the token: that commit is rewritten.
+    private fun refused(found: SearchOutcome.FoundInCommit, what: String): Boolean {
+        logger.warn(CREDENTIAL_IN_A_COMMIT, what, root, found.part.said, found.commit.take(SHORT_ID))
+        return false
     }
 
-    // The token shapes first, then what is stored — the second only runs if the first found nothing.
+    // One `git grep` search of a commit's side, its arguments [search]: a match, a clean end, or neither.
+    private fun grepped(stored: StoredCredential, search: List<String>): SearchOutcome {
+        val outcome = greps(stored, search).firstOrNull { it != NO_MATCH } ?: return SearchOutcome.Clean
+        if (outcome == MATCH) return SearchOutcome.FoundInContent
+        return SearchOutcome.Unsearched
+    }
+
+    // The token shapes first, then what is stored — the second only runs if the first found nothing. The
+    // stored values go on stdin as fixed strings, never in argv.
     private fun greps(stored: StoredCredential, search: List<String>): Sequence<Int> = sequence {
-        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TOKEN_SHAPES.flatMap { listOf("-e", it) } + search)))
+        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TokenPatterns.SHAPES.flatMap { listOf("-e", it) } + search)))
         if (stored is Patterns) yield(outcomeOf(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput())))
     }
 
@@ -351,20 +406,6 @@ class CommandLineGitSync(
     private fun outcomeOf(result: GitResult): Int {
         if (result.code == NO_MATCH && result.stderr.lines().any { it.startsWith("error:") }) return UNREAD
         return result.code
-    }
-
-    /**
-     * One search per batch of the commits a push to [remote] would send: those none of its
-     * remote-tracking branches holds. A push updates the branch it pushed, so after the first one this
-     * is what was committed since; with none at all it is every commit. Another remote's branches do
-     * not count — the review's N4: a commit already pushed to a second remote was skipped, and sent here
-     * unsearched. The tracker configures no upstream (`push.default=current`), so `@{u}..HEAD` would
-     * name nothing. Null when they cannot be listed.
-     */
-    private fun outgoingSearches(remote: String): List<List<String>>? {
-        val listed = git(listOf("rev-list", "HEAD", "--not", "--remotes=$remote"))
-        if (!listed.succeeded()) return null
-        return listed.stdout.lines().filter { it.isNotBlank() }.chunked(REVISIONS_PER_SEARCH) { it + "--" }
     }
 
     /** One WARN naming why — never what was searched for, or where it matched — and false. */
@@ -535,6 +576,9 @@ class CommandLineGitSync(
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
 
+        private const val REMOTE_UNKNOWN =
+            "git remote could not run in {} ({}), so whether it has a remote is unknown, and it is answered as none."
+
         /**
          * Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]).
          * The path is printed raw inside git's quotes, quotes of its own included (`'it's/'`, measured), so it
@@ -565,6 +609,21 @@ class CommandLineGitSync(
                 ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub " +
                 "and remove it from history."
 
+        /** The part of a commit, and the commit by a short id: the owner rewrites that commit (#375). */
+        private const val CREDENTIAL_IN_A_COMMIT =
+            "git {} refused in {}: {} of commit {} carries a GitHub token — the one stored in " +
+                ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub, and " +
+                "rewrite that commit before the next push."
+
+        /** How much of a commit's id a refusal names: more than git abbreviates to, unambiguous in practice. */
+        private const val SHORT_ID = 12
+
+        /** A name, never which: the name would carry the token (#375). */
+        private const val CREDENTIAL_IN_A_NAME =
+            "git {} refused in {}: a file or directory name in what it would send carries a GitHub token — the " +
+                "one stored in .ps/git-credentials, or one shaped like it. It was not sent; revoke the token on " +
+                "GitHub, and rename that file in every commit that has it."
+
         private const val CREDENTIAL_UNREADABLE =
             "git {} refused in {}: .ps/git-credentials is not a regular file, or cannot be read, so the push " +
                 "token cannot be searched for. Replace it with a regular file, or remove it."
@@ -580,20 +639,11 @@ class CommandLineGitSync(
         /** A grep that exited as if nothing matched, after failing to read something it was asked to search. */
         private const val UNREAD = -2
 
-        /**
-         * GitHub's token formats, as `git grep -E` patterns: they are not secret, so they go in argv.
-         * The classic kinds are a prefix, `_`, then 30 random and 6 checksum characters (GitHub's
-         * engineering blog), 36 in all; `_` is in the class because a stateless installation token is
-         * `ghs_<app id>_<JWT>`, whose JWT header alone runs past 36. A fine-grained token is
-         * `github_pat_` and more; its length is not documented, and the bound stays at 60.
-         */
-        private val TOKEN_SHAPES = listOf("gh[pousr]_[A-Za-z0-9_]{36,}", "github_pat_[A-Za-z0-9_]{60,}")
-
         /** Where a push goes when git names no other remote for the branch. */
         private const val DEFAULT_REMOTE = "origin"
 
-        /** Commits per `git grep`, which keeps every argument list far below any system's limit. */
-        private const val REVISIONS_PER_SEARCH = 256
+        /** HEAD's own tree, and everything under it, as `rev-list --objects` takes it. */
+        private val HEAD_TREE = listOf("HEAD^{tree}")
 
         /** `git check-ignore` exits 1 for a path no rule ignores; 0 is ignored, 128 is an error. */
         private const val NO_RULE_MATCHED = 1

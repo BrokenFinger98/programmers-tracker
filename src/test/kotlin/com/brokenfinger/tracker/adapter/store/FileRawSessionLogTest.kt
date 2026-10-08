@@ -1,5 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.adapter.git.TrackedStateEntries
+import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
@@ -9,6 +11,7 @@ import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -19,6 +22,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -242,9 +246,10 @@ class FileRawSessionLogTest {
     }
 
     /**
-     * The work list is listed only through real directories (#387). Replaying a session makes a record, and with `raw`
-     * a link the sessions it leads to are not the tracker's own: whatever stands there would become one. Nothing is
-     * listed while the link stands, that is said, and what lies behind it is left where it is.
+     * The work list is listed only through real directories (#387, and #377's guard since). Replaying a session makes a
+     * record, and with `raw` a link the sessions it leads to are not the tracker's own: whatever stands there would
+     * become one. Nothing is listed while the link stands, that is said in #377's words, and what lies behind it is
+     * left where it is.
      */
     @Test
     fun `a raw directory that is a link lists no work, and says so`() {
@@ -256,7 +261,7 @@ class FileRawSessionLogTest {
 
         val heard = warningsWhile(FileRawSessionLog::class) { log.unprocessed().shouldBeEmpty() }
 
-        heard.single() shouldContain "work list was not read"
+        heard.single() shouldContain "Their directory was not listed"
         heard.single() shouldContain "symbolic link"
         namesIn(elsewhere) shouldHaveSize 1
     }
@@ -590,8 +595,380 @@ class FileRawSessionLogTest {
 
     private fun attemptFile(): Path = root.resolve("problems/120804-x/attempts/002.raw.jsonl")
 
+    // A boot replays only what a write would accept (#377) ---------------------------------------
+
+    /**
+     * A pull can deliver a file under `.ps/raw` whose name the work list parses, and the next boot
+     * replayed it as a grading of the owner's. Not while git tracks anything there: the judgement a write
+     * takes is the one a replay takes. The file is left where it is, since it may be the owner's own.
+     */
+    @Test
+    fun `a session under a state directory git tracks anything in is left in place, not replayed`() {
+        val session = aSessionLeftBehind()
+
+        logGuardedBy(aStateDirectory(root) { true }).unprocessed().shouldBeEmpty()
+
+        Files.readAllLines(session) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** As a pull leaves it: committed elsewhere, checked out by git here. Git's own answer is the oracle. */
+    @Test
+    fun `a raw session git checked out is not replayed`(@TempDir base: Path) {
+        val repo = GitWorkspace(base)
+        repo.write(".gitignore", ".ps/\n")
+        val pulled = repo.write(".ps/raw/$A_SESSION", """{"n":1}""" + "\n")
+        repo.git("add", ".gitignore")
+        repo.git("add", "--force", ".ps/raw/$A_SESSION")
+        repo.git("commit", "--message", "as a pull delivers it")
+        Files.delete(pulled)
+        repo.git("checkout", "--", ".ps/raw/$A_SESSION")
+        val state = StateDirectory(repo.root, TrackedStateEntries(repo.root))
+
+        FileRawSessionLog.under(repo.root, Clock.fixed(startedAt, ZoneOffset.UTC), state).unprocessed().shouldBeEmpty()
+
+        Files.exists(pulled) shouldBe true
+    }
+
+    @Test
+    fun `a session behind a raw directory that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve(A_SESSION), """{"n":1}""" + "\n")
+        aLink(root.resolve(".ps/raw"), elsewhere)
+
+        logGuardedBy(aStateDirectory(root)).unprocessed().shouldBeEmpty()
+
+        namesIn(elsewhere) shouldContainExactly listOf(A_SESSION)
+    }
+
+    @Test
+    fun `a session behind a state directory that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.createDirectories(elsewhere.resolve("raw"))
+        Files.writeString(elsewhere.resolve("raw/$A_SESSION"), """{"n":1}""" + "\n")
+        aLink(root.resolve(".ps"), elsewhere)
+
+        logGuardedBy(aStateDirectory(root)).unprocessed().shouldBeEmpty()
+
+        namesIn(elsewhere.resolve("raw")) shouldContainExactly listOf(A_SESSION)
+    }
+
+    /** Said once, with how many and why — never a path below `.ps`, a session's name or a frame. */
+    @Test
+    fun `sessions left in place are said once, with how many and why`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val log = logGuardedBy(aStateDirectory(root) { true })
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.unprocessed()
+            log.unprocessed()
+        }
+
+        heard.single() shouldContain "2 raw session(s) were left in place"
+        heard.single() shouldContain StateDirectory.Refusal.TRACKED.reason
+        heard.single() shouldNotContain ".ps/"
+        heard.single() shouldNotContain "120804"
+    }
+
+    /**
+     * The link check ran before git was asked, so a raw directory swapped for a link during the git call was
+     * listed through it (the review of PR #395, measured). It runs after git answers, just before the listing.
+     */
+    @Test
+    fun `a raw directory swapped for a link while git answers is not listed through`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aSessionLeftBehind()
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve(A_SESSION), """{"n":1}""" + "\n")
+        val swapping = ChangingAnswer(false) { swapForALink(root.resolve(".ps/raw"), elsewhere) }
+
+        logGuardedBy(aStateDirectory(root, swapping)).unprocessed().shouldBeEmpty()
+    }
+
+    /**
+     * A session file that is itself a link was listed, and read through it: linked to frames in the tree, it
+     * was recorded (the review of PR #395, measured). The tracker writes no link there, so only regular files
+     * are listed, and the rest are said once, by how many.
+     */
+    @Test
+    fun `a session file that is a link is not listed, and that is said once`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        aLink(root.resolve(".ps/raw/$A_SESSION"), Files.writeString(frames, """{"n":1}""" + "\n"))
+        val log = logGuardedBy(aStateDirectory(root))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
+        }
+
+        heard.single() shouldContain "1 raw session(s) were not replayed because each is not a regular file"
+        heard.single() shouldNotContain ".ps/"
+    }
+
+    /**
+     * Counting them would list a directory through a link, so they are said to be left, not counted. The words
+     * name no link: the same message serves a directory that could not be inspected (the review of PR #395).
+     */
+    @Test
+    fun `sessions behind a link are said to be left, and are not counted through it`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve(A_SESSION), """{"n":1}""" + "\n")
+        aLink(root.resolve(".ps/raw"), elsewhere)
+
+        val heard = warningsWhile(FileRawSessionLog::class) { logGuardedBy(aStateDirectory(root)).unprocessed() }
+
+        heard.single() shouldContain "Their directory was not listed, so nothing in it was read or counted"
+        heard.single() shouldContain StateDirectory.Refusal.HOLDS_A_LINK.reason
+    }
+
+    @Test
+    fun `a refused state directory with no session in it says nothing`() {
+        Files.createDirectories(root.resolve(".ps/raw"))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            logGuardedBy(aStateDirectory(root) { true }).unprocessed().shouldBeEmpty()
+        }
+
+        heard.shouldBeEmpty()
+    }
+
+    @Test
+    fun `a session left in place is replayed once the state directory is usable again`() {
+        val git = ChangingAnswer(true)
+        aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, git))
+        log.unprocessed().shouldBeEmpty()
+        git.answer = false
+
+        log.unprocessed().map { it.lessonId } shouldContainExactly listOf(120804L)
+    }
+
+    /** The same judgement a write takes: git that cannot say what it tracks now stops neither a capture nor its replay. */
+    @Test
+    fun `git that cannot say what it tracks does not stop a replay`() {
+        aSessionLeftBehind()
+
+        logGuardedBy(aStateDirectory(root, ChangingAnswer(null))).unprocessed() shouldHaveSize 1
+    }
+
+    // A session git has ever tracked is never replayed (#377, the review of PR #395) --------------
+
+    /**
+     * Upstream committed a forged session under `.ps/raw`, the owner pulled, followed the TRACKED advice to
+     * untrack it and restarted, and the forged PASS was recorded (the review of PR #395, measured end to end).
+     * Untracked, it reads like the tracker's own; git's history still names it, and that decides.
+     */
+    @Test
+    fun `a session git checked out and the owner then untracked is not replayed`(@TempDir base: Path) {
+        val repo = GitWorkspace(base)
+        repo.write(".gitignore", ".ps/\n")
+        val pulled = repo.write(".ps/raw/$A_SESSION", """{"n":1}""" + "\n")
+        repo.git("add", ".gitignore")
+        repo.git("add", "--force", ".ps/raw/$A_SESSION")
+        repo.git("commit", "--message", "as a pull delivers it")
+        repo.git("rm", "-r", "--cached", "--quiet", ".ps")
+        repo.git("commit", "--message", "the advice followed")
+        val state = StateDirectory(repo.root, TrackedStateEntries(repo.root))
+
+        FileRawSessionLog.under(repo.root, Clock.fixed(startedAt, ZoneOffset.UTC), state).unprocessed().shouldBeEmpty()
+
+        Files.exists(pulled) shouldBe true
+    }
+
+    @Test
+    fun `a session git has ever tracked is left in place, never replayed, and said once`() {
+        val session = aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = setOf("raw/$A_SESSION"))))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
+        }
+
+        Files.exists(session) shouldBe true
+        heard.single() shouldContain "1 raw session(s) were left in place and will never be replayed"
+        heard.single() shouldNotContain ".ps/"
+    }
+
+    /** Git keeps a name as it was committed, and a filesystem that folds case answers it for ours. */
+    @Test
+    fun `a session git has tracked in another case is not replayed either`() {
+        aSessionLeftBehind()
+        val history = setOf("RAW/" + A_SESSION.lowercase())
+
+        logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = history))).unprocessed().shouldBeEmpty()
+    }
+
+    /**
+     * One question to git a start, whatever the work list holds, and only the sessions it names stay. A path
+     * elsewhere below `.ps` that ends in a session's name is not that session.
+     */
+    @Test
+    fun `a session git has never tracked is replayed beside one it has`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val elsewhere = listOf("git-credentials", "raw/recorded/x.jsonl", "recorded/20260805T142301123Z-131528.jsonl")
+        val git = ChangingAnswer(false, history = setOf("raw/$A_SESSION") + elsewhere)
+
+        val replayed = logGuardedBy(aStateDirectory(root, git)).unprocessed()
+
+        replayed.map { it.lessonId } shouldContainExactly listOf(131528L)
+        git.historyAsked shouldBe 1
+    }
+
+    /** Unknown is not "never": while git cannot say what it has ever tracked, nothing is replayed, and that is said. */
+    @Test
+    fun `nothing is replayed while git cannot say what it has ever tracked`() {
+        aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null)))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.unprocessed().shouldBeEmpty()
+            log.unprocessed().shouldBeEmpty()
+        }
+
+        heard.single() shouldContain "1 raw session(s) were left in place, not replayed: git could not say"
+    }
+
+    // What a start leaves unreplayed is kept for the history's readers (#377, #169) ---------------
+
+    /**
+     * Left in place at a start, a session is a grading no record represents until a later start, and MCP said
+     * nothing of it: the WARN reached the log alone (the review of PR #395). The log keeps the count for readers.
+     */
+    @Test
+    fun `sessions a start leaves in place are counted for the history's readers`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val log = logGuardedBy(aStateDirectory(root) { true })
+
+        log.unprocessed()
+
+        log.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
+    }
+
+    @Test
+    fun `sessions git has known, or could not vouch for, are counted as left`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val known = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = setOf("raw/$A_SESSION"))))
+        val unanswered = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null)))
+
+        known.unprocessed()
+        unanswered.unprocessed()
+
+        known.unreplayed() shouldBe LeftUnreplayed(1, uncounted = false)
+        unanswered.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
+    }
+
+    @Test
+    fun `a session file that is a link is counted as left`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        aLink(root.resolve(".ps/raw/$A_SESSION"), Files.writeString(frames, """{"n":1}""" + "\n"))
+        val log = logGuardedBy(aStateDirectory(root))
+
+        log.unprocessed()
+
+        log.unreplayed() shouldBe LeftUnreplayed(1, uncounted = false)
+    }
+
+    /** Nothing is listed through a link, so nothing is counted there: the readers are told it may hold some. */
+    @Test
+    fun `a raw directory that was not listed may hold sessions, uncounted`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve(A_SESSION), """{"n":1}""" + "\n")
+        aLink(root.resolve(".ps/raw"), elsewhere)
+        val log = logGuardedBy(aStateDirectory(root))
+
+        log.unprocessed()
+
+        log.unreplayed() shouldBe LeftUnreplayed(0, uncounted = true)
+    }
+
+    /** Each start answers for itself: once the work list is replayed whole, nothing is said to be left. */
+    @Test
+    fun `a work list replayed whole leaves nothing, though an earlier start left some`() {
+        val git = ChangingAnswer(true)
+        aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, git))
+        log.unprocessed()
+        git.answer = false
+
+        log.unprocessed() shouldHaveSize 1
+
+        log.unreplayed() shouldBe LeftUnreplayed.NOTHING
+    }
+
+    @Test
+    fun `git is not asked what it has ever tracked when nothing waits to be replayed`() {
+        Files.createDirectories(root.resolve(".ps/raw"))
+        val git = ChangingAnswer(false)
+
+        logGuardedBy(aStateDirectory(root, git)).unprocessed().shouldBeEmpty()
+
+        git.historyAsked shouldBe 0
+    }
+
+    // A session's verdict holds for its own grading, and the next one asks again (#377) ----------
+
+    /**
+     * Whether `.ps` may be written is asked at a session's first frame and kept for that grading: asking at
+     * every frame would cost a git call each, a median of 7–8 ms on the host against 0.03 ms for the append.
+     * Every frame still checks its own path, so a link swapped in between two frames is not written through
+     * (the swap test above): a stat, then an open that follows no link at the file.
+     * What a pull can change unseen is git's answer: the grading in flight finishes in its own file, which
+     * git does not track, and the next session asks again and is held. What is held is not lost.
+     */
+    @Test
+    fun `git tracking something mid-grading is seen by the next session, not by the one in flight`() {
+        val git = ChangingAnswer(false)
+        val log = logGuardedBy(aStateDirectory(root, git))
+        val inFlight = log.start(120804)
+        log.append(inFlight, """{"n":1}""")
+        Files.writeString(root.resolve(".ps/raw/pulled.jsonl"), "{}\n")
+        git.answer = true
+
+        log.append(inFlight, """{"n":2}""")
+        val next = log.start(120805)
+        log.append(next, """{"m":1}""")
+        val copied = log.complete(next, root.resolve("problems/120805-y/attempts/001.raw.jsonl"))
+
+        Files.readAllLines(stateRaw(inFlight)) shouldContainExactly listOf("""{"n":1}""", """{"n":2}""")
+        namesIn(root.resolve(".ps/raw")) shouldContainExactly listOf(inFlight.value, "pulled.jsonl")
+        Files.readAllLines(copied) shouldContainExactly listOf("""{"m":1}""")
+    }
+
+    /** A session as a crash leaves it, or a pull delivers it: a file under `.ps/raw` the work list parses. */
+    private fun aSessionLeftBehind(lessonId: Long = 120804): Path {
+        val log = FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC))
+        val session = log.start(lessonId)
+        log.append(session, """{"n":1}""")
+        return root.resolve(".ps/raw").resolve(session.value)
+    }
+
+    // What another process could do while git answers: the raw directory moved away, a link left in its place.
+    private fun swapForALink(raw: Path, target: Path) {
+        if (Files.isSymbolicLink(raw)) return
+        Files.move(raw, raw.resolveSibling("moved-away"))
+        aLink(raw, target)
+    }
+
+    private fun logGuardedBy(state: StateDirectory) =
+        FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), state)
+
     private fun stateRaw(session: RawSessionId): Path = root.resolve(".ps/raw").resolve(session.value)
 
     /** One instant, so every session opened with it collides unless the log prevents it. */
     private val sameMillisecond: Instant = Instant.parse("2026-08-11T05:26:42.748Z")
+
+    private companion object {
+        /** The name a session opened at `startedAt` for lesson 120804 gets: one the work list parses. */
+        const val A_SESSION = "20260805T142301123Z-120804.jsonl"
+    }
 }

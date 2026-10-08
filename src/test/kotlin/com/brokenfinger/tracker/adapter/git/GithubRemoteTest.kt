@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
@@ -122,8 +123,9 @@ class GithubRemoteTest {
 
     /**
      * Any answer that is neither "created" nor "the name exists" — a revoked token, a scope the
-     * user did not grant, GitHub being down. Nothing is wired and the records stay local, which
-     * is the degraded mode the daily backup already reports (#272 covered this path).
+     * user did not grant, GitHub being down. Nothing is wired and the records stay local (#272
+     * covered this path). The credential was stored first, so the daily backup says the remote is
+     * missing, once for each scheduled backup (the review of #399).
      */
     @Test
     fun `an answer that is neither created nor already-exists wires nothing`() {
@@ -139,6 +141,22 @@ class GithubRemoteTest {
      * somebody else, or the token cannot read it — there is nothing to converge on, and guessing
      * a URL would wire a push at a repository we never confirmed.
      */
+    /**
+     * GitHub out of reach, so the wiring throws. The warning promised that the daily backup would say so
+     * until a remote existed, and since #390 a backup with no remote says nothing unless one was evidently
+     * wanted (the review of #399). It says what holds whatever the backup does: the records stay here, and
+     * a restart with the token tries again.
+     */
+    @Test
+    fun `a wiring that throws says a restart tries again`() {
+        val unreachable = GithubRemote(repo.root, GithubToken("ghp_test_token"), "http://127.0.0.1:${aClosedPort()}")
+
+        val heard = warningsWhile(GithubRemote::class) { unreachable.ensure() }
+
+        heard.single() shouldContain "restart"
+        git("remote").trim() shouldBe ""
+    }
+
     @Test
     fun `a name that exists but cannot be read wires nothing`() {
         createStatus = 422
@@ -406,6 +424,9 @@ class GithubRemoteTest {
 
         git("remote", "get-url", "origin") shouldBe urls
     }
+
+    /** A port nothing listens on: bound, then let go. */
+    private fun aClosedPort(): Int = ServerSocket(0).use { it.localPort }
 
     private fun git(vararg args: String): String {
         val process = ProcessBuilder(listOf("git") + args).directory(repo.root.toFile())

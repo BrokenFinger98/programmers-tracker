@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@55b502aeed6486f11b88902a7d42cfa411a73e84 -->
+<!-- translated-from: bootstrap.md@781686eb0185b0bb04156890f76dd63ab4fd556e -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -367,7 +367,8 @@ cd "$TRACKER_RECORD_REPO" && git log --oneline -3 && tail -1 log/submissions.jso
 | `curl: (7) Failed to connect` | 서버가 안 떠 있거나 `TRACKER_PORT` 가 다릅니다. |
 | `Session file not found` | 3단계를 건너뛰었고 센서가 아직 쿠키를 넘기지 않았습니다 — 확장을 켠 채 Programmers 에 로그인하거나 직접 붙여넣으세요. compose 에서는 파일이 `<TRACKER_STATE_DIR>/session` 이고, 네이티브 실행에서는 `TRACKER_SESSION_FILE` 입니다. |
 | 시작할 때 `not a git repository` 경고 | `TRACKER_RECORD_REPO` 가 git 저장소를 가리키지 않습니다. 기록은 쓰이지만 커밋은 되지 않습니다. |
-| `git push failed with 128: ... No configured push destination` | 리모트가 없습니다. 2단계의 그 부분을 건너뛰었다면 정상입니다. |
+| `The record repository has no remote, so records stay on this machine` (시작할 때 INFO) | 리모트가 없습니다. 2단계의 그 부분을 건너뛰었다면 정상입니다. 기록은 이 기기에서 커밋되고 푸시되지 않으며, 이에 대해 더는 아무 말도 하지 않습니다. |
+| `Daily backup could not push: the record repository has no remote, yet a push credential is stored or a backup was recorded before` | 리모트가 있어야 했습니다. 시작할 때의 GitHub 연결이 실패했거나(그 이유는 그쪽 경고가 말합니다) 리모트가 제거되었습니다. 다시 추가하거나, `GITHUB_TOKEN` 을 설정한 채 재시작해 연결하십시오. 대신 기록을 이 기기에만 두려면 `.env` 에서 `GITHUB_TOKEN` 을 빼고, 기록 저장소의 `.ps/git-credentials` 와 `.ps/backup.json` 을 지우십시오. 이 상태가 이어지는 동안 하루에 한 번, 그리고 재시작 후 다시 말합니다. |
 | `git reconcile failed with 128: Author identity unknown` | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` 이 설정되지 않았습니다. 기록은 쓰이지만 커밋되지 않습니다. |
 | 제출했는데 아무것도 기록되지 않음 | `/watch` 로 문제가 등록되지 않았거나, 그 순간 서버가 죽어 있었습니다. **그 채점은 사라졌습니다** — 설계상 사후 복구가 불가능합니다. |
 

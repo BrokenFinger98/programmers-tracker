@@ -510,6 +510,8 @@ private class RecordingRawSessionLog(private val journal: MutableList<String>) :
 
     override fun unprocessed(): List<RawSession> = emptyList()
 
+    override fun unreplayed(): LeftUnreplayed = LeftUnreplayed.NOTHING
+
     /** Every frame appended to the most recent session. */
     fun frames(): List<String> = sessions.values.last().toList()
 
