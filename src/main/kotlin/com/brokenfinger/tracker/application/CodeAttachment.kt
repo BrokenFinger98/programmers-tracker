@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.domain.calc.TagCoverage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -79,10 +80,32 @@ class CodeAttachment(
     private suspend fun passOver(pending: List<SubmissionRecord>): AttachReport {
         var report = AttachReport()
         for (record in pending) {
-            report = report.and(attach(record))
+            report = report.and(retried(record))
             if (report.hasStopped()) return report
         }
         return report
+    }
+
+    /**
+     * One record's retry. Writing its files can fail for as long as the cause stands — a link on their path is
+     * refused until someone removes it (#361) — and the startup runner catches nothing, so one such record would
+     * end every boot the same way. It stays pending instead, as it does when this fails at capture time, and the
+     * pass goes on to the next.
+     */
+    private suspend fun retried(record: SubmissionRecord): AttachOutcome {
+        try {
+            return attach(record)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failed: Exception) {
+            return notWritten(record, failed)
+        }
+    }
+
+    // The kind of failure alone: a message can carry a path, and the one it carries can be where a link leads.
+    private fun notWritten(record: SubmissionRecord, cause: Exception): AttachOutcome {
+        logger.warn(NOT_WRITTEN, record.lessonId, cause.javaClass.simpleName)
+        return AttachOutcome.DEFERRED
     }
 
     private suspend fun fetched(record: SubmissionRecord): CodeFetch =
@@ -198,6 +221,8 @@ class CodeAttachment(
 
     private companion object {
         val logger = LoggerFactory.getLogger(CodeAttachment::class.java)
+
+        const val NOT_WRITTEN = "Lesson {} keeps its code pending — its files were not written ({})"
     }
 }
 

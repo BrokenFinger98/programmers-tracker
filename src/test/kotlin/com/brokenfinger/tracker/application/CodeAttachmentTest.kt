@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -20,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -231,6 +233,27 @@ class CodeAttachmentTest {
         attachment(fetches(CODE_V2)).attachPending() shouldBe AttachReport()
     }
 
+    /**
+     * Writing a record's files can fail for as long as the cause stands — a link on their path is refused until
+     * someone removes it (#361) — and the startup runner catches nothing, so one such record ended every boot the
+     * same way. It stays pending, as it does when this fails at capture time, says so, and the pass goes on.
+     */
+    @Test
+    fun `a pass leaves a record whose files were not written pending, and goes on to the next`() = runBlocking<Unit> {
+        stored(aPending(attempt = 1, captureKey = CaptureKey("aaaa000000000001")))
+        stored(aPending(attempt = 2))
+        val pass = attachment(refusingTheCodeOf(attempt = 1), fetches(CODE_V2))
+
+        val heard = warningsWhile(CodeAttachment::class) {
+            runBlocking { pass.attachPending() shouldBe AttachReport(attached = 1, deferred = 1) }
+        }
+
+        resolved(CaptureKey("aaaa000000000001")).codePending shouldBe true
+        resolved().codePending shouldBe false
+        heard.single() shouldContain "Lesson 120804 keeps its code pending"
+        heard.single() shouldContain "IOException"
+    }
+
     // Harness ----------------------------------------------------------------------------------
 
     private fun untouched(record: SubmissionRecord) {
@@ -265,13 +288,28 @@ class CodeAttachmentTest {
 
     private fun keysInLog(): List<CaptureKey> = store().read().map { SubmissionRecordJson.decode(it.line).captureKey }
 
-    private fun attachment(fetcher: CodeFetcher) = CodeAttachment(
+    private fun attachment(fetcher: CodeFetcher) = attachment(artifacts(), fetcher)
+
+    private fun attachment(artifacts: DerivedArtifacts, fetcher: CodeFetcher) = CodeAttachment(
         fetcher,
         store(),
-        FileDerivedArtifacts(root, store(), Clock.systemDefaultZone()),
+        artifacts,
         anEmptyCatalog(),
         Dispatchers.Unconfined,
     )
+
+    private fun artifacts(): DerivedArtifacts = FileDerivedArtifacts(root, store(), Clock.systemDefaultZone())
+
+    /** The real files, except that one attempt's code cannot be written — the shape a refused write leaves. */
+    private fun refusingTheCodeOf(attempt: Int): DerivedArtifacts {
+        val real = artifacts()
+        return object : DerivedArtifacts by real {
+            override fun writeCode(record: SubmissionRecord, code: String): AttachedCode {
+                if (record.attempt == attempt) throw IOException("not written: a link on its path")
+                return real.writeCode(record, code)
+            }
+        }
+    }
 
     private fun fetches(code: String) = CodeFetcher { _, _ -> CodeFetch.Fetched(code) }
 
