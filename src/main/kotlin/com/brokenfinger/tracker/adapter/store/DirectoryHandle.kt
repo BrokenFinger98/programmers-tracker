@@ -104,7 +104,7 @@ fun interface DirectoryHandles {
 
         /**
          * Chosen when first asked for, as the composition root's state directory is built at startup: through a handle
-         * where this platform gives one. `DirectoryHandleTest` pins which do, on every platform CI runs.
+         * where this platform gives one, or cannot say. `DirectoryHandleTest` pins which do, on every platform CI runs.
          */
         val ON_THIS_PLATFORM: DirectoryHandles by lazy { selected(givesHandles(temporaryDirectory())) }
 
@@ -126,10 +126,14 @@ fun interface DirectoryHandles {
         // Any directory on the default file system answers for all of it; the JVM's own temporary one is always there.
         private fun temporaryDirectory(): Path = Path.of(System.getProperty(TMPDIR))
 
-        /** Whether [directory]'s file system gives a [SecureDirectoryStream] for it; no, where it cannot say. */
+        /**
+         * Whether [directory]'s file system gives a [SecureDirectoryStream] for it — yes where it cannot say, since
+         * [THROUGH_A_HANDLE] holds by path any directory whose file system gives none: not knowing must never cost a
+         * handle where there is one, nor be said as a platform that gives none.
+         */
         internal fun givesHandles(directory: Path): Boolean = runCatching {
             Files.newDirectoryStream(directory).use { it is SecureDirectoryStream<*> }
-        }.getOrDefault(false)
+        }.getOrDefault(true)
     }
 }
 

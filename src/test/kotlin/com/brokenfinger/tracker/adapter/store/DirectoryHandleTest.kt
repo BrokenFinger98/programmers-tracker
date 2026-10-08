@@ -331,6 +331,15 @@ class DirectoryHandleTest {
         DirectoryHandles.givesHandles(root) shouldBe !isWindows()
     }
 
+    /**
+     * Not knowing must never cost a handle where there is one: `THROUGH_A_HANDLE` holds by path any directory whose file
+     * system gives none, so a file system that cannot be asked is taken to give one, and is never said to give none.
+     */
+    @Test
+    fun `a file system that cannot be asked is taken to give handles`() {
+        DirectoryHandles.givesHandles(root.resolve("absent")) shouldBe true
+    }
+
     @Test
     fun `this platform's directories are held through a handle wherever it gives one`() {
         DirectoryHandles.ON_THIS_PLATFORM.open(root).use { (it is SecureDirectoryHandle) shouldBe !isWindows() }
