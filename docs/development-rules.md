@@ -289,6 +289,9 @@ tests with it.
 - Disabled by default (`@Tag("integration")`), run explicitly and locally only
 - The default `test` Gradle task **excludes** the tag; run them via the separate
   `integrationTest` task (`scripts/test.sh` stays unit + layer only)
+- Nothing may depend on `integrationTest`. Kover would otherwise instrument it and make
+  `verifyBranchCoverage`, `check` and `build` run it, so `build.gradle.kts` turns that off and
+  fails the build, before any task runs, if a task in the graph depends on it (#362)
 - Session cookie is read from `TRACKER_SESSION_FILE` (default `~/.ps/session`);
   no session cookie → **skip via JUnit assumption — that is not a failure**
 - Never run in CI
