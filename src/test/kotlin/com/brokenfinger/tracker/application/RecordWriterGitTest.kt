@@ -237,7 +237,11 @@ class RecordWriterGitTest {
     )
 
     private fun staged(name: String) = aRawSessionId("$name.jsonl").also {
-        FileRawSessionLog.under(repo.root, Clock.systemUTC(), aStateDirectory(repo.root)).append(it, """{"type":"finish","grading":"$name"}""")
+        FileRawSessionLog.under(
+            repo.root,
+            Clock.systemUTC(),
+            aStateDirectory(repo.root),
+        ).append(it, """{"type":"finish","grading":"$name"}""")
     }
 
     private fun logLines(): List<String> =

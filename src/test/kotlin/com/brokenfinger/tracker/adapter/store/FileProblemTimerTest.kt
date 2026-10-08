@@ -68,7 +68,8 @@ class FileProblemTimerTest {
         timer.startIfAbsent(120804)
         clock.advance(Duration.ofMinutes(5))
 
-        FileProblemTimer.under(root, clock, aStateDirectory(root)).elapsedSecOf(120804) shouldBe Duration.ofMinutes(5).seconds
+        FileProblemTimer.under(root, clock, aStateDirectory(root)).elapsedSecOf(120804) shouldBe
+            Duration.ofMinutes(5).seconds
     }
 
     @Test

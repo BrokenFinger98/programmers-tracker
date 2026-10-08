@@ -208,7 +208,11 @@ class AtomicStateFileTest {
     @Test
     fun `each reason a write is refused for is said`() {
         val git = ChangingAnswer(true)
-        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, git, listing = aListingThatFailsOnce()))
+        val timers = AtomicStateFile.under(
+            root,
+            "timers.json",
+            StateDirectory(root, git, listing = aListingThatFailsOnce()),
+        )
 
         val heard = warningsWhile(AtomicStateFile::class) { repeat(3) { timers.write("{}") } }
 

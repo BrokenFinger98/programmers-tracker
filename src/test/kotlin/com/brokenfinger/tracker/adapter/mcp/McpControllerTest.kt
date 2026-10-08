@@ -75,7 +75,11 @@ class McpControllerTest {
                     scratchStore(),
                     anEmptyCatalog(),
                     Clock.systemUTC(),
-                    FileRawSessionLog.under(Path.of("build/tmp/mcp-controller-test"), Clock.systemUTC(), aStateDirectory(Path.of("build/tmp/mcp-controller-test"))),
+                    FileRawSessionLog.under(
+                        Path.of("build/tmp/mcp-controller-test"),
+                        Clock.systemUTC(),
+                        aStateDirectory(Path.of("build/tmp/mcp-controller-test")),
+                    ),
                     codes = codes,
                 ),
             ),

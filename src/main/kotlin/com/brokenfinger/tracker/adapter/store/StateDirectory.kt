@@ -72,8 +72,9 @@ class StateDirectory(
         .getOrElse { Refused(Refusal.NOT_INSPECTED) }
 
     private fun inspect(whenUnanswered: Inspection?): Inspection {
-        val directory = runCatching { verified(recordRoot.resolve(NAME)) }.getOrElse { return Refused(Refusal.NOT_INSPECTED) }
-            ?: return Refused(Refusal.NOT_THE_DIRECTORY)
+        val directory =
+            runCatching { verified(recordRoot.resolve(NAME)) }.getOrElse { return Refused(Refusal.NOT_INSPECTED) }
+                ?: return Refused(Refusal.NOT_THE_DIRECTORY)
         return when (tracked.tracksAnything()) {
             false -> Usable(directory)
             true -> Refused(Refusal.TRACKED)

@@ -396,7 +396,8 @@ class FileRawSessionLogTest {
     @Test
     fun `held frames stay within their limit, and going over it is said`() {
         val state = aStateDirectory(root) { true }
-        val log = FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC), state, heldLimit = 10)
+        val log =
+            FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC), state, heldLimit = 10)
         val session = log.start(120804)
         val destination = root.resolve("001.raw.jsonl")
 

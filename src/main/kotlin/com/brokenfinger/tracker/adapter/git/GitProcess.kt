@@ -24,10 +24,7 @@ import java.util.concurrent.TimeUnit
  * switch that changes how a pathspec reads: the exclusions that keep `.ps` out are pathspec magic, and
  * `GIT_LITERAL_PATHSPECS=1` reads `:(exclude,glob,icase)[.]ps` as a file name (the review's ENV).
  */
-internal class GitProcess(
-    private val root: Path,
-    private val inherited: Map<String, String> = System.getenv(),
-) {
+internal class GitProcess(private val root: Path, private val inherited: Map<String, String> = System.getenv()) {
     /** Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [TIMEOUT]. */
     fun run(command: List<String>, input: String? = null): GitResult =
         inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(command, input, stdout, stderr) } }
