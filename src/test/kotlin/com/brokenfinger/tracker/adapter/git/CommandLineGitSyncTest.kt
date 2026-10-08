@@ -652,12 +652,12 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * Only a regular file is the credential. Anything else at its path — here a directory; a link is
-     * refused before this, by the walk below `.ps` — cannot be searched for, so nothing goes out
-     * unchecked.
+     * Only a regular file is the credential. Anything else at its path — here a directory — cannot be
+     * searched for, so nothing goes out unchecked.
      */
     @Test
     fun `a credential store that is not a regular file refuses every commit and push`() {
+        val remote = remoteInitialised()
         written(".gitignore", ".ps/\n")
         git("add", "--all")
         git("commit", "--message", "ignore the state")
@@ -672,7 +672,8 @@ class CommandLineGitSyncTest {
 
         heard.size shouldBe 2
         heard.forEach { it shouldContain "is not a regular file" }
-        subjects() shouldContainExactly listOf("ignore the state")
+        subjects() shouldContainExactly listOf("ignore the state", "init")
+        subjects(at = remote) shouldContainExactly listOf("init")
     }
 
     @Test
@@ -1044,6 +1045,139 @@ class CommandLineGitSyncTest {
         subjects(at = remote) shouldContainExactly listOf("init")
     }
 
+    // A search that cannot run to the end refuses (#360) ---------------------------------------
+
+    /**
+     * `git grep` over a commit whose blob cannot be read says `unable to read` on stderr and exits 1 —
+     * the code for "nothing found" (measured on 2.48.1 and 2.53.0). That is not a search that ran to
+     * the end, so the push is refused, and said as unsearched.
+     */
+    @Test
+    fun `a blob a push would send that cannot be read stops the push`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        written("notes/today.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        Files.delete(looseObjectOf("HEAD:notes/today.md"))
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "did not run to the end"
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
+    /** A tree that cannot be read fails the search outright (exit 128), and that refuses too. */
+    @Test
+    fun `a tree a push would send that cannot be read stops the push`() {
+        val remote = remoteInitialised()
+        written("notes/today.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        Files.delete(looseObjectOf("HEAD^{tree}"))
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "did not run to the end"
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
+    /** Commits that cannot be listed cannot be searched: a remote-tracking ref naming no object stops the push. */
+    @Test
+    fun `outgoing commits that cannot be listed stop the push`() {
+        val remote = remoteInitialised()
+        written("notes/today.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        Files.writeString(root.resolve(".git/refs/remotes/origin/main"), "0123456789abcdef0123456789abcdef01234567\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "did not run to the end"
+        subjects(at = remote) shouldContainExactly listOf("init")
+    }
+
+    /**
+     * The search after staging reads what `add` made of the files: a clean filter can put a token into
+     * the staged blob that the working tree never held, so the search before staging finds nothing.
+     */
+    @Test
+    fun `a token a clean filter puts into what is staged is never committed`() {
+        assumeTrue(canPlantLinksIn(root), "this test runs a shell filter")
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "ignore the state")
+        val injected = Files.writeString(base.resolve("injected.txt"), "${aGithubShapedToken()}\n")
+        git("config", "filter.inject.clean", "cat '$injected'")
+        written(".gitattributes", "notes/*.md filter=inject\n")
+        written("notes/today.md", "a note\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        subjects() shouldContainExactly listOf("ignore the state")
+    }
+
+    // A push that cannot go anywhere, and one that keeps failing (#360) -------------------------
+
+    /**
+     * Records kept with no remote are a documented way to run (bootstrap), and the daily backup asks
+     * every minute while it is due: each push searched all of history first — 23.4 s for 1,660
+     * commits (the review of ea1357c) — and then failed as before. With no remote nothing would be
+     * sent, so nothing is searched.
+     */
+    @Test
+    fun `a repository with no remote fails its push without searching`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "history a search would refuse")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "no remote"
+        heard.single() shouldNotContain "token"
+    }
+
+    /**
+     * A push that keeps failing — a remote that is down — searched the same commits at every attempt.
+     * A head already searched clean, for the same remote and the same stored token, is not searched
+     * again: a blob that went missing since would have failed a second search.
+     */
+    @Test
+    fun `a head already searched clean is not searched again`() {
+        written(".gitignore", ".ps/\n")
+        written("notes/today.md", "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        git("remote", "add", "origin", base.resolve("down.git").toString())
+        val sync = sync()
+        sync.push() shouldBe false
+        Files.delete(looseObjectOf("HEAD:notes/today.md"))
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "git push failed"
+    }
+
+    /** What was searched is the head it was searched at: a commit made since is searched before it goes. */
+    @Test
+    fun `a new head is searched again`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "ignore the state")
+        val sync = sync()
+        sync.push() shouldBe true
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "a token pasted since")
+
+        sync.push() shouldBe false
+
+        everythingAt(remote) shouldNotContain aGithubShapedToken()
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**
@@ -1134,6 +1268,12 @@ class CommandLineGitSyncTest {
     private fun trackedAs(path: String, file: Path) {
         val blob = git("hash-object", "-w", root.relativize(file).toString()).trim()
         git("update-index", "--add", "--cacheinfo", "100644,$blob,$path")
+    }
+
+    /** Where git keeps [revision]'s object while it is loose, as it is in a repository never packed. */
+    private fun looseObjectOf(revision: String): Path {
+        val id = git("rev-parse", revision).trim()
+        return root.resolve(".git/objects/${id.take(2)}/${id.drop(2)}")
     }
 
     /** A bare repository the record repository already pushed its first commit to. */

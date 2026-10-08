@@ -9,8 +9,10 @@ import com.brokenfinger.tracker.domain.Verdict
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * [GitSync] over the `git` command line, run inside the record repository.
@@ -87,6 +89,9 @@ class CommandLineGitSync(
 
     /** Whether waiting out the user's merge, cherry-pick, revert or rebase was already said. */
     private val waitingSaid = AtomicBoolean()
+
+    /** The last head a push searched clean, and what it was searched against. */
+    private val lastSearchedClean = AtomicReference<SearchedHead?>()
 
     override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean =
         inRepository("commit") { commitScoped(record, paths) }
@@ -211,17 +216,51 @@ class CommandLineGitSync(
      * One branch to one remote, named on the command line (#360). A bare `git push` sent whatever
      * `remote.<r>.push` or `push.default=matching` said — branches the search never looked at — so the
      * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
-     * search covers the commits that remote's own branches lack. Before the first commit there is
-     * nothing to push, and that is not a failure.
+     * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
+     * name under `push.default=upstream` is not where this push goes. The search covers the commits that
+     * remote's own branches lack.
+     *
+     * Before the first commit there is nothing to push, and that is answered as a push that succeeded
+     * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
+     * a documented way to run — is nowhere to push, so nothing is searched for it.
      */
     private fun pushed(): Boolean {
-        if (!git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).succeeded()) return true
+        val head = headCommit() ?: return true
         val branch = currentBranch() ?: return detached()
         val remote = pushRemoteOf(branch)
-        if (!carriesNoToken("push") { outgoingSearches(remote) }) return false
+        if (!hasDestination(remote)) return noRemote(remote)
+        if (!searchedClean(SearchedHead(head, remote, fingerprintOfStore()))) return false
         val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
-        if (result.succeeded()) return true
-        return failed("push", result)
+        return result.succeeded() || failed("push", result)
+    }
+
+    private fun headCommit(): String? =
+        git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
+
+    private fun hasDestination(remote: String): Boolean =
+        listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
+
+    private fun noRemote(remote: String): Boolean {
+        logger.warn(NO_REMOTE, root, remote)
+        return false
+    }
+
+    /**
+     * A head already searched clean — for the same remote, against the same stored token — is not
+     * searched again. A push that kept failing, to a remote that was down, searched the same commits at
+     * every attempt: 23.4 s for 1,660 commits, every minute the backup was due (the review of ea1357c).
+     */
+    private fun searchedClean(head: SearchedHead): Boolean {
+        if (lastSearchedClean.get() == head) return true
+        if (!carriesNoToken("push") { outgoingSearches(head.remote) }) return false
+        lastSearchedClean.set(head)
+        return true
+    }
+
+    // What was stored when a head was searched, kept as a digest rather than as the secret itself.
+    private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {
+        is Patterns -> MessageDigest.getInstance("SHA-256").digest(stored.asInput().toByteArray()).toHexString()
+        else -> stored.toString()
     }
 
     private fun currentBranch(): String? =
@@ -287,8 +326,18 @@ class CommandLineGitSync(
 
     // The token shapes first, then what is stored — the second only runs if the first found nothing.
     private fun greps(stored: StoredCredential, search: List<String>): Sequence<Int> = sequence {
-        yield(git(listOf("grep", "-q", "-E") + TOKEN_SHAPES.flatMap { listOf("-e", it) } + search).code)
-        if (stored is Patterns) yield(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput()).code)
+        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TOKEN_SHAPES.flatMap { listOf("-e", it) } + search)))
+        if (stored is Patterns) yield(outcomeOf(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput())))
+    }
+
+    /**
+     * What a grep's ending means for the gate. One that could not read a blob says so on stderr and
+     * exits 1, the code for "nothing found" (measured on 2.48.1 and 2.53.0) — not a search that ran to
+     * the end. A warning, such as a `.gitignore` git cannot follow, is not an error.
+     */
+    private fun outcomeOf(result: GitResult): Int {
+        if (result.code == NO_MATCH && result.stderr.lines().any { it.startsWith("error:") }) return UNREAD
+        return result.code
     }
 
     /**
@@ -440,6 +489,9 @@ class CommandLineGitSync(
         /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
         private const val STATE_DIRECTORY = "${StateDirectory.NAME}/"
 
+        private const val NO_REMOTE =
+            "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
+
         private const val OPERATION_IN_PROGRESS =
             "{} has a merge, cherry-pick, revert or rebase in progress, so the tracker's commits wait " +
                 "rather than commit inside it: records stay uncommitted until it is finished or aborted. " +
@@ -468,6 +520,9 @@ class CommandLineGitSync(
         /** `git grep -q` exits 0 when something matched and 1 when nothing did; anything else is an error. */
         private const val MATCH = 0
         private const val NO_MATCH = 1
+
+        /** A grep that exited as if nothing matched, after failing to read something it was asked to search. */
+        private const val UNREAD = -2
 
         /**
          * GitHub's token formats, as `git grep -E` patterns: they are not secret, so they go in argv.
@@ -502,3 +557,6 @@ class CommandLineGitSync(
         private val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java)
     }
 }
+
+/** A head searched clean: the commit, the remote it was searched for, and a digest of what was stored. */
+private data class SearchedHead(val commit: String, val remote: String, val store: String)
