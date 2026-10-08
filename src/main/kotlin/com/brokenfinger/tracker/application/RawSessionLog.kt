@@ -65,8 +65,9 @@ interface RawSessionLog {
      * copy again under the number it is then given; a copy left behind took that number from every later grading.
      *
      * Only this log's own copy, and only while every frame in it is also on the work list: one that holds frames kept
-     * only in memory is their one copy on disk, and is kept — false, as for anything at [copy] that is not a regular
-     * file.
+     * only in memory is their one copy on disk, and is kept — under a name outside the attempt numbering, so true, since
+     * nothing is left at [copy] to meet the next grading given that number after a restart (#403). Anything at [copy]
+     * that is not a regular file is not this log's to remove or move: false.
      */
     fun withdraw(session: RawSessionId, copy: Path): Boolean
 

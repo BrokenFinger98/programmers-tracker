@@ -199,9 +199,23 @@ class FileRawSessionLog(
      * when the log knows its root, so nothing is deleted through a link; built bare, where it was made.
      */
     override fun withdraw(session: RawSessionId, copy: Path): Boolean {
-        if (holdsInMemory(session)) return false
+        if (holdsInMemory(session)) return setAside(session, copy)
         val bounded = attempts ?: return removedIfRegular(copy)
         return bounded.removeFile(copy)
+    }
+
+    // The one copy on disk of frames held in memory is kept, under the session's own name after `unrecorded-`, outside
+    // the attempt numbering (#403): left at its number, it met the next grading given that number after a restart.
+    private fun setAside(session: RawSessionId, copy: Path): Boolean {
+        val aside = copy.resolveSibling("$UNRECORDED${session.value}")
+        if (!movedAside(copy, aside)) return false
+        logger.warn(SET_ASIDE, aside)
+        return true
+    }
+
+    private fun movedAside(copy: Path, aside: Path): Boolean {
+        val bounded = attempts ?: return movedIfRegular(copy, aside)
+        return bounded.moveAside(copy, aside.fileName.toString())
     }
 
     // Frames of this session held while `.ps` was refused: the copy holds them, and the work list does not.
@@ -739,6 +753,12 @@ class FileRawSessionLog(
             "Raw frames held in memory, or orphaned, could not be written into .ps ({}). They stay in memory and are " +
                 "written at the next release, and lost if the server stops first. Said once."
         private const val WRITE_FAILED_KEY = "write failed"
+        private const val UNRECORDED = "unrecorded-"
+        private const val SET_ASIDE =
+            "A copy of raw frames held only in memory, whose record was not appended, was kept as {}: outside the " +
+                "attempt numbering, so the next grading given that number makes its own copy. Moved into .ps/raw " +
+                "under the name after \"unrecorded-\", it is replayed at a start; once a record of that grading " +
+                "exists, it can be deleted."
 
         /** One part in this many of what the log holds is kept for the gradings in flight (#378). */
         private const val LIVE_SHARE = 4

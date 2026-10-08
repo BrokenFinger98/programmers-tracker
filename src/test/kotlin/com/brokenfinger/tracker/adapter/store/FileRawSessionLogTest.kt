@@ -725,15 +725,83 @@ class FileRawSessionLogTest {
         Files.readAllLines(stateRaw(session)) shouldContainExactly listOf("""{"n":1}""")
     }
 
-    /** Frames held in memory while `.ps` was refused have no other copy on disk, so theirs is kept. */
+    /**
+     * Frames held in memory while `.ps` was refused have no other copy on disk, so theirs is kept — no longer at its
+     * number, where after a restart it met the next grading given that number, which then recorded no copy (#403). It is
+     * kept under the session's own name after `unrecorded-`, outside the attempt numbering, and said with where.
+     */
     @Test
-    fun `a copy holding frames held only in memory is kept, as their one copy on disk`() {
+    fun `a copy holding frames held only in memory is set aside, as their one copy on disk`() {
         val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
         val session = sessionOf(log)
         val copy = log.complete(session, attemptFile())
 
+        val heard = warningsWhile(FileRawSessionLog::class) { log.withdraw(session, copy) shouldBe true }
+
+        val aside = copy.resolveSibling("unrecorded-${session.value}")
+        Files.exists(copy, LinkOption.NOFOLLOW_LINKS) shouldBe false
+        Files.readAllLines(aside) shouldContainExactly listOf("""{"n":1}""")
+        heard.single() shouldContain "kept as $aside"
+        heard.single() shouldNotContain """{"n":1}"""
+    }
+
+    /** Built with bare copies, it sets the copy aside where it made it. */
+    @Test
+    fun `a log whose copies are bare sets one aside where it made it`() {
+        val refused = aStateDirectory(root) { true }
+        val log = FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC), refused)
+        val session = sessionOf(log)
+        val copy = log.complete(session, root.resolve("attempts/001.raw.jsonl"))
+
+        log.withdraw(session, copy) shouldBe true
+
+        val aside = copy.resolveSibling("unrecorded-${session.value}")
+        Files.readAllLines(aside) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** What stands where the copy was and is no regular file is not this log's to move either: kept, and false. */
+    @Test
+    fun `a copy of memory's frames that became a link is not set aside`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.delete(copy)
+        aLink(copy, Files.writeString(outside.resolve("not-ours.jsonl"), "kept\n"))
+
         log.withdraw(session, copy) shouldBe false
 
+        Files.isSymbolicLink(copy) shouldBe true
+        Files.exists(copy.resolveSibling("unrecorded-${session.value}"), LinkOption.NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /** Nor is it moved through an attempts directory that became a link after the copy was made. */
+    @Test
+    fun `nothing is set aside through an attempts directory that became a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.move(copy.parent, root.resolve("moved-attempts"))
+        Files.writeString(outside.resolve(copy.fileName.toString()), "not ours\n")
+        aLink(copy.parent, outside)
+
+        shouldThrow<RefusedWriteException> { log.withdraw(session, copy) }
+
+        namesIn(outside) shouldContainExactly listOf(copy.fileName.toString())
+    }
+
+    /** A name already taken is never replaced: both are a grading's frames. The failure is the writer's to say. */
+    @Test
+    fun `a copy is never set aside over what already has its name`() {
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        val taken = Files.writeString(copy.resolveSibling("unrecorded-${session.value}"), "earlier\n")
+
+        shouldThrow<FileAlreadyExistsException> { log.withdraw(session, copy) }
+
+        Files.readString(taken) shouldBe "earlier\n"
         Files.readAllLines(copy) shouldContainExactly listOf("""{"n":1}""")
     }
 

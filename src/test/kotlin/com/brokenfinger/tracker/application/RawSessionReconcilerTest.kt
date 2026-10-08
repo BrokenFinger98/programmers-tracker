@@ -435,6 +435,26 @@ class RawSessionReconcilerTest {
         Files.readAllBytes(copy) shouldBe left
     }
 
+    /**
+     * A refused grading's copy of frames held only in memory is kept under its session's name after `unrecorded-`
+     * (#403). Moved into `.ps/raw` under that name, as the warning tells the owner, it is replayed as its grading.
+     */
+    @Test
+    fun `a copy set aside and moved onto the work list is replayed as its grading`() {
+        val refusedState = aStateDirectory(root) { true }
+        val refused = FileRawSessionLog.under(root, Clock.fixed(SESSION_START, ZoneOffset.UTC), refusedState)
+        val session = refused.start(LESSON_ID)
+        broadcastsOf("algorithm-pass.jsonl").forEach { refused.append(session, it) }
+        val copy = refused.complete(session, root.resolve("problems/kept/attempts/001.raw.jsonl"))
+        refused.withdraw(session, copy) shouldBe true
+        val aside = copy.resolveSibling("unrecorded-${session.value}")
+
+        Files.move(aside, Files.createDirectories(root.resolve(".ps/raw")).resolve(session.value))
+
+        reconcile() shouldBe ReconcileReport(recorded = 1)
+        records().single().verdict shouldBe Verdict.PASS
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     private fun storedSessions(): List<Path> =

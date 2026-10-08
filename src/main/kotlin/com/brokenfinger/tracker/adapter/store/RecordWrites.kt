@@ -119,6 +119,16 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
         return removedIfRegular(directory.resolve(target.fileName))
     }
 
+    /**
+     * Moves [target] to [name] in its own directory when it is a regular file, the directory walked through no link and
+     * nothing made on the way; true when moved (#403). Anything else at [target] is not this writer's to move: false.
+     * What already has [name] is never replaced, and a directory on the way that is refused is thrown.
+     */
+    fun moveAside(target: Path, name: String): Boolean {
+        val directory = bounded(target) { bound.existing(target.toAbsolutePath().parent) } ?: return false
+        return movedIfRegular(directory.resolve(target.fileName), directory.resolve(name))
+    }
+
     // The target's own directory, walked from the real root and created where absent, then the target's name in it.
     // Null from the walk only when a directory vanished between being made and being looked at.
     private fun fileIn(target: Path): Path =
@@ -259,6 +269,16 @@ internal fun removedIfRegular(file: Path): Boolean {
     if (!isThere(file)) return true
     if (!Files.isRegularFile(file, NOFOLLOW_LINKS)) return false
     Files.deleteIfExists(file)
+    return true
+}
+
+/**
+ * [file] moved to [aside] when it is a regular file, judged without following a link; true when moved (#403). A file
+ * already at [aside] is never replaced: a [java.nio.file.FileAlreadyExistsException].
+ */
+internal fun movedIfRegular(file: Path, aside: Path): Boolean {
+    if (!Files.isRegularFile(file, NOFOLLOW_LINKS)) return false
+    Files.move(file, aside)
     return true
 }
 
