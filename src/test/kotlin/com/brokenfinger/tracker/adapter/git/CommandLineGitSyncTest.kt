@@ -442,7 +442,119 @@ class CommandLineGitSyncTest {
         warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true } shouldContainExactly emptyList()
     }
 
+    // Nothing the tracker commits or pushes carries the push token (#360) -----------------------
+
+    /**
+     * Another tool committed the state directory — an editor's git plugin running `add -A` under a
+     * `.gitignore` git cannot read. The tracker did not make that commit, but its push would send it,
+     * so the push looks at every commit it would send before sending any.
+     */
+    @Test
+    fun `a commit another tool made with the push token is never pushed`() {
+        val remote = remoteInitialised()
+        aPushTokenIn(root)
+        written("notes.md", "my note\n")
+        git("add", "--all")
+        git("commit", "--message", "vault backup (editor plugin)")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "git push refused"
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+        subjects(at = remote) shouldContainExactly listOf("init")
+        everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /**
+     * The search is for the token wherever it sits, not for a path. Every other layer guards where the
+     * server writes it; this one is what still holds when the token turns up somewhere nobody guarded —
+     * here pasted into a note — on any filesystem.
+     */
+    @Test
+    fun `a token in any tracked path is never committed`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("problems/zz/notes.md", "my token is $A_PUSH_CREDENTIAL\n")
+        written("log/submissions.jsonl", RECORD)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "git reconcile refused"
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+        subjects() shouldContainExactly emptyList()
+    }
+
+    @Test
+    fun `a submit whose files carry the push token is not committed`() {
+        aPushTokenIn(root)
+        val solution = written("problems/120804/Solution.java", "// $A_PUSH_CREDENTIAL\n$CODE")
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync().commitSubmission(aWrongSubmit(), listOf(solution)) shouldBe false
+        }
+
+        heard.single() shouldContain "git commit refused"
+        subjects() shouldContainExactly emptyList()
+    }
+
+    /**
+     * Only a regular file is the credential. A link at its path was put there by someone else — a pull
+     * can deliver one — and what it leads to is not ours to search for, so nothing goes out unchecked.
+     */
+    @Test
+    fun `a credential store that is not a regular file refuses every commit and push`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        written(".gitignore", ".ps/\n")
+        val target = written("problems/zz/notes.md", "someone's notes\n")
+        aLink(root.resolve(PushCredential.FILE), target)
+        written("log/submissions.jsonl", RECORD)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync.reconcile() shouldBe false
+            sync.push() shouldBe false
+        }
+
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "is not a regular file" }
+        subjects() shouldContainExactly emptyList()
+    }
+
+    @Test
+    fun `a healthy repository still commits and pushes with a credential stored`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+        sync().push() shouldBe true
+
+        subjects(at = remote).first() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
+    }
+
+    /**
+     * What is searched for is the token itself and the stored line, as fixed strings: never a prefix
+     * of the token, and never the user name every GitHub token shares.
+     */
+    @Test
+    fun `part of the token or another x-access-token line is not taken for the credential`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("notes/near.md", "${A_PUSH_CREDENTIAL.dropLast(1)}\nhttps://x-access-token:another@github.com\n")
+
+        sync().reconcile() shouldBe true
+        sync().push() shouldBe true
+
+        subjects(at = remote).first() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
+    }
+
     private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor)
+
+    /** Every commit a repository holds, with its full diff — what a push could ever have delivered there. */
+    private fun everythingAt(repository: Path): String =
+        git("log", "--all", "--patch", "--format=%H %s", at = repository)
 
     private fun aWrongSubmit(
         lessonId: Long = 120804,
