@@ -5723,3 +5723,43 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - S4: `WatchToken.writeText`.
   - S5 and Q7: the reads that still follow a link.
 - **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
+
+## 2026-10-08 — #377 a raw session git delivered is never replayed (branch fix/377-raw-replay-guard)
+- **Both findings reproduced** before any change, as tests that failed against `41f713e`:
+  - the reconciler recorded a session under a state directory git tracks anything in, and one behind
+    a linked raw directory (`recorded: expected 0 but was 1`, each);
+  - `unprocessed()` returned a session real git checked out, and sessions behind a linked `.ps` or
+    `.ps/raw`;
+  - once git tracked a file under `.ps` mid-grading, the next frame of the grading in flight was still
+    written to `.ps/raw`.
+- `9c45aa7`: the work list is read only where a frame would be written, through `forWriting()` and then
+  `pathFor("raw")`, the judgement every raw write takes. A refused session is left in place, unread,
+  and one WARN per reason says how many and why. Through a link nothing is listed or counted. The
+  commit adds 11 tests: 9 in the store, one of them against real git, and 2 in the reconciler.
+- `1ce2977`: the session verdict's cache is kept, its bound stated in the KDoc and pinned by 1 test.
+  Measured on the host (APFS, git 2.48.1) with 500 to 5,000 index entries:
+  - `forWriting()`: median 7.2–8.1 ms;
+  - `tracksAnything()`: 6.8–8.0 ms;
+  - `pathFor("raw")`: 0.007 ms;
+  - an append: 0.03 ms.
+
+  The image was not measured, because the sandbox refused to run git in a container.
+- **Mutation.** Each of 12 mutants ran against the whole suite, and all were killed. They were the
+  guard, `forWriting()` and `pathFor("raw")` each removed, `forGit()` in its place, counting through a
+  link, the WARN's silence, once-ness, count and reason, deleting what is refused, and git asked per
+  frame or per log.
+- **Gates**, all exit 0 on the branch rebased onto `ff56a5f` (#392):
+  - check;
+  - test: 2,147 JUnit tests in 161 classes, 0 failures, 9 skipped as before; node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 85% (631 of 742), with all 16 new branches covered;
+  - guards: 12 of 12.
+- **Docs.** An Outcome note in [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]]. No
+  new ADR: the cache is round 4's design, kept with a measured bound.
+- **Remaining.**
+  - Once `.ps` is untracked, as the TRACKED reason advises, a session git delivered is replayed at
+    the next boot. The WARN names `git ls-files .ps` so the owner can remove those first.
+  - An untracked link at a session file is still listed, and the reconciler reads through it.
+  - `orphans()` is unguarded.
+  - #378 items 2–3 are untouched.
+- **Pending.** Not pushed. CI has not run. Not verified live.

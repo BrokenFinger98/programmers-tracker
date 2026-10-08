@@ -632,3 +632,58 @@ commit, no tracked symlink, `.ps` a real directory (#360's newest comment).
 **Windows CI found two things the reviews could not (PR #379).**
 - **Test setup.** Git writes objects read-only, and Windows will not delete a read-only file. The runner's `core.autocrlf` also made `hash-object` print a warning that the helper read as the object id.
 - **A product bug in `GitProcess`.** Windows will not delete a file a process still holds, and `git push` to a local path leaves receive-pack holding the output file after git exits. The cleanup in `finally` then threw, discarding the answer already read, so a push could be reported as one that "could not run". Cleanup is now best effort: a file that will not go is retried by the JVM at exit. `GitProcessTest` pins it, and the test fails against the throwing cleanup.
+
+**#377, after the merge.** Two low findings from round 4's adversarial pass had been inferred from the
+code. Both were reproduced on `fix/377-raw-replay-guard` as tests that failed against `41f713e`.
+
+- **A raw session a pull delivered was replayed at boot.** `unprocessed()` listed `.ps/raw` with no
+  guard. A session git checked out there was recorded at boot (`recorded=1`), and so was one behind a
+  linked raw directory. The work list is now read only where a frame would be written: `forWriting()`,
+  then `pathFor("raw")`, the judgement every raw write takes, with no second rule. Git that cannot
+  answer does not stop a replay, just as it does not stop a write. Otherwise nothing is read, moved or
+  deleted. One WARN per reason gives the reason and how many sessions were left, and never names a
+  path below `.ps`. Through a link nothing is listed, so the WARN says that nothing was counted. A
+  session left in place is replayed at the first boot that finds `.ps` usable.
+- **A session kept its first frame's answer.** Once git tracked a file under `.ps` mid-grading, the
+  next frame of the grading in flight was still written to `.ps/raw`. The cache is kept, with a
+  stated bound.
+  - Cost of the alternative: asking git at every frame took a median of 7.2–8.1 ms, against 0.03 ms
+    for the append and 0.007 ms for the per-frame link check. Measured on the host (APFS, git 2.48.1)
+    with 500 to 5,000 index entries; not measured in the image.
+  - The other two re-check points guard nothing. A re-check when the session completes comes after
+    its last frame. One when a write fails never fires, because a pull that adds a tracked file makes
+    no write fail.
+  - What the cache lets through is the rest of one grading, written to the session's own file. Git
+    does not track that file unless the pull delivered that exact name, and the name carries the
+    grading's start to the millisecond.
+  - The next session asks again, so round 4's "When the writers ask" stands.
+- **Tests and mutants.** There are 12 new tests.
+  - Nine failed against `41f713e`. The pin of the bound replaced a reproduction that failed there
+    too.
+  - Two pin what held already: a refused directory with nothing in it says nothing, and git that
+    cannot answer does not stop a replay.
+  - Each of 12 mutants ran against the whole suite, and all were killed. The number of tests each
+    failed:
+
+    | Mutant | Tests failed |
+    |---|---|
+    | the guard removed | 9 |
+    | `forWriting()` removed | 5 |
+    | `pathFor("raw")` removed | 3 |
+    | `forGit()` in its place | 1 |
+    | counting through the link | 1 |
+    | a WARN with nothing left | 1 |
+    | a WARN at every call | 1 |
+    | refused sessions deleted | 7 |
+    | the WARN without its count | 1 |
+    | the WARN without its reason | 1 |
+    | git asked at every frame | 1 |
+    | the answer kept for the log rather than the session | 1 |
+- **What remains.**
+  - The TRACKED reason tells the owner to take `.ps` out of the index. Once they do, a session git
+    delivered is an untracked file like the tracker's own, and the next boot replays it. The WARN
+    asks the owner to remove those first and names `git ls-files .ps`.
+  - A session file that is itself an untracked link is still listed, and the reconciler reads
+    through it. This was run once in a scratch test, which was not committed.
+  - `orphans()` still reads `.ps/raw/orphans` without the guard, at boot and for MCP's
+    `incompleteHistory`.
