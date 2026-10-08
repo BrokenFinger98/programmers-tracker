@@ -827,6 +827,31 @@ class CommandLineGitSyncTest {
         filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
     }
 
+    /**
+     * Each directory is said by its own path (the review of #389): one whose name holds a quote, which git
+     * prints unescaped inside its own quotes, and one with a space and Hangul, which git prints as they
+     * are. A key shared by every directory, or a pattern that stops at a quote, leaves one of them unsaid.
+     */
+    @Test
+    fun `every directory git cannot open is said once, by its own path`() {
+        assumeTrue(keepsPosixPermissions(root), "this test takes a directory's permissions away")
+        written(".gitignore", ".ps/\n")
+        val quoted = written("it's/x", "x\n").parent
+        val spaced = written("$SPACED_HANGUL/x.md", "x\n").parent
+        val sync = sync()
+
+        val heard = sealedWhile(quoted) {
+            sealedWhile(spaced) {
+                assumeTrue(!Files.isReadable(quoted), "a superuser reads it anyway")
+                warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+            }
+        }
+
+        heard.size shouldBe 2
+        heard.count { "it's/" in it } shouldBe 1
+        heard.count { "$SPACED_HANGUL/" in it } shouldBe 1
+    }
+
     /** Git translates the sentence and not the path, and this tool's users run it in Korean. */
     @Test
     fun `a directory git cannot open is said whatever language the server runs in`() {
@@ -1432,6 +1457,9 @@ class CommandLineGitSyncTest {
 
         /** An ordinary UTF-8 locale, as the tracker's own image sets it, where git says everything in English. */
         val UTF_8_LOCALE = mapOf("LC_ALL" to "en_US.UTF-8", "LANG" to "en_US.UTF-8")
+
+        /** A directory name with a space and Hangul in it ("note folder"), which git prints unquoted and unescaped. */
+        const val SPACED_HANGUL = "노트 폴더"
 
         /** `é` in Latin-1: one byte that is never valid UTF-8 on its own. */
         const val LATIN_1_E_ACUTE: Byte = 0xE9.toByte()
