@@ -95,7 +95,9 @@ The push searches what `OutgoingObjectScan` reads:
 
 1. `git rev-list --objects <range>` names every object the range reaches, each once. The range is
    unchanged — `HEAD --not --remotes=<remote>` — and is decided in `CommandLineGitSync.outgoingRange`
-   alone, for #376 and #378 to change.
+   alone, for #376 and #378 to change. A second listing, `rev-list --objects HEAD^{tree}`, names HEAD's
+   own tree at every push, whatever the remote-tracking refs say (added after the review of 315f44e, see
+   the Outcome); an object both name is read once.
 2. `git cat-file --batch-check --buffer` describes each listed object, 50,000 ids to a call. Only blobs
    are read; commit and tag messages are #375's, and their types would join `READ_TYPES`.
 3. `git cat-file --batch --buffer` prints the blobs, the objects whose content starts in the same 64 MB
@@ -120,15 +122,16 @@ listed, then described `missing` (exit 0); half of one is described, then fails 
 
 ## Rationale
 
-Measured on the same histories, the same way (three runs each, but one of each first push on main):
+Measured on the same histories, the same way: main once per first push, the rest three to eight runs. The
+middle column is the range alone; the last adds HEAD's tree, as the branch now does:
 
-| | main | this branch |
-|---|---|---|
-| First push, 1,660 commits, 4.2 MB tree | 25.2 s | 0.21–0.33 s |
-| First push, 5,000 commits, 9.8 MB tree | 252.5 s | 0.52–0.63 s |
-| First push, log history (below) | 56.3 s | 4.3–7.2 s |
-| Five outgoing commits, 1,660 / 5,000 / log | 0.22–0.31 / 0.48–0.54 / 0.31–0.33 s | 0.12–0.18 / 0.13–0.16 / 0.16–0.37 s |
-| Nothing outgoing (the push's own overhead) | 0.07–0.13 s | 0.09–0.14 s |
+| | main | the range alone | and HEAD's tree |
+|---|---|---|---|
+| First push, 1,660 commits, 4.2 MB tree | 25.2 s | 0.21–0.33 s | 0.21–0.28 s |
+| First push, 5,000 commits, 9.8 MB tree | 252.5 s | 0.52–0.63 s | 0.50–0.59 s |
+| First push, log history (below) | 56.3 s | 4.3–7.2 s | 3.9–9.5 s |
+| Five outgoing commits, 1,660 / 5,000 / log | 0.22–0.31 / 0.48–0.54 / 0.31–0.33 s | 0.12–0.18 / 0.13–0.16 / 0.16–0.37 s | 0.17–0.25 / 0.24–0.29 / 0.19–0.21 s |
+| Nothing outgoing, 1,660 / 5,000 / log | 0.07–0.13 s | 0.09–0.14 s | 0.21–0.37 / 0.31–0.40 / 0.20–0.46 s |
 
 The slowest single call on a first push, with every call timed: 0.14 s on the 1,660-commit history,
 0.38 s (`rev-list --objects`) on the 5,000-commit one, and 1.03 s on the log history — one 64 MB
@@ -152,17 +155,18 @@ the bytes `BatchOutput` reads.
 ## Accepted costs
 
 - **A file that changes in every commit is read in full at every version.** On the log history that was
-  729 MB and 4.3–7.2 s on a first push; it grows with the sum of the file's versions, not with the
+  729 MB and 3.9–9.5 s on a first push; it grows with the sum of the file's versions, not with the
   tree. Each call stays bounded — 64 MB of content, at most 1.03 s measured — but the total does not.
   Reading only the bytes a version added would need diffs, which option 2 ruled out.
 - **A call's output waits on disk.** About 64 MB at a time, and a single blob larger than that is one call
   of its own size. The temporary file is deleted when the call is read.
 - **The list of objects is held in memory.** `rev-list`'s answer and each description are read whole:
   an id line per object, about 25,000 lines on the 5,000-commit history. Content never is.
-- **What the remote already holds is not read again.** `rev-list --objects` leaves out every object the
-  remote's branches reach, so a token pushed once no longer refuses every later push — #360's cost "a
-  token in a file already pushed blocks every later push" is gone. The push does not send that object
-  again, and the token was public from the first push either way.
+- **HEAD's tree is read at every push.** Its blobs — about 431 KB on the owner's repository, 3.4–9.8 MB on
+  these histories — are read even when the push sends none of them: about +0.05–0.1 s with five commits
+  outgoing, +0.1–0.25 s with nothing else outgoing, measured above. So a token in a file still in HEAD's
+  tree refuses every push until a commit removes it, as #360's search did. What the remote holds only in
+  older commits is not read again — the push does not send it, and it was public from its first push.
 - **The push now finds what a commit does not.** A token in UTF-16 text is refused at the push, while the
   commit side's `git grep` still lets it into a local commit, so every push is refused until the token is
   removed from history. Fail closed, and out of this issue's scope (the commit side stays `git grep`).
@@ -176,8 +180,14 @@ the bytes `BatchOutput` reads.
   ASCII, and an ASCII character read as UTF-16 needs its zero byte, so they are not affected.
 - **Parity rests on probes.** The shapes are compared with `git grep -E` on the probes the test holds, in
   the C locale #372 pins. A git whose regular expressions changed elsewhere would drift unseen.
-- **Commit and tag messages are still not read** (#375), and stale remote-tracking refs are still trusted
-  (#376, #378).
+- **A stale remote-tracking ref still narrows the range** (#376, #378). The tracker never fetches, so a ref
+  stays where the last push left it; after `remote set-url`, or with the remote re-created empty, it can
+  name commits the remote does not hold. What is covered: HEAD's own tree, read at every push whatever the
+  refs say — what `git grep` read of HEAD before #373. What is not: a commit behind the stale ref, one the
+  ref reaches and the remote lacks, and whatever only it carries. A token in such a commit's tree that
+  HEAD's tree no longer holds goes out unsearched. `git grep` did not read it either: it searched only
+  the commits the same range named.
+- **Commit and tag messages are still not read** (#375).
 
 ## Outcome
 
@@ -224,6 +234,28 @@ Gates, all exit 0: check; test (2,129 JUnit across 164 classes, 0 failures, 9 sk
 `icase` test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%,
 306 of 345, from 85%, 225 of 262; `adapter/config` 65% at its floor); guards.
 
-Not verified live, and not run on CI: Windows skips the four new tests that run a shell alias. A rebase
-onto #372's PR, which pins `LC_ALL=C` in `GitProcess` and changes `isDirty`, is to come; this branch
-changed neither.
+Not verified live, and not run on CI: Windows skips the four new tests that run a shell alias. The branch
+was rebased onto main `cb78438`, which carries #372's `LC_ALL=C` pin in `GitProcess`; this branch changed
+neither that nor `isDirty`.
+
+**The review of 315f44e found one regression** (Medium). The search before #373 read the whole tree of
+every outgoing commit, HEAD's included; the scan read only what the range reaches. The tracker never
+fetches, so after `remote set-url` to a new remote, or with the remote re-created empty, `origin/main`
+still named a commit `T`, pushed by another tool, whose tree held a token in `leak.md`. A clean commit
+`Y` on top still held the file, and the push of `Y` went out with it: true, and the token on the new
+remote, in both scenarios on 315f44e; refused on main.
+
+`eaab208` lists HEAD's tree beside the range at every push (Decision 1). Two tests run the reviewer's
+scenarios with real remotes — the push is refused and the new remote holds no ref — and both were red on
+315f44e (`expected:<false> but was:<true>`). Three scan tests: what a second listing alone names is read,
+what both name is read once, a second listing that fails refuses. Against a stub that read the first
+listing alone, two of them failed; against one that did not dedupe, the third (`expected:<1> but was:<2>`).
+Four mutants, each killed: HEAD's tree not listed (2 tests), no dedupe (1), a failed listing taken for an
+empty one (5), the first listing alone (4). The cost is in the Rationale's last column and in the costs
+above; what a stale ref still leaves out is #376's.
+
+Gates on that commit, all exit 0: check; test (2,246 JUnit across 166 classes, 0 failures, 9 skipped;
+node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 311 of 353; `adapter/config` 65% at its
+floor); guards. Two coverage runs failed first, in the one `@SpringBootTest`: it records into a fixed path
+under the system temp directory, and another worktree's test run held its lock
+(`RecordRepositoryLockedException`). The run that waited for that worktree to go idle passed.
