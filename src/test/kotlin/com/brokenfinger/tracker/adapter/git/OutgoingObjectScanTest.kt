@@ -26,8 +26,8 @@ import java.time.Duration
  * The push half of the content gate, over **real repositories** (#373): what `rev-list --objects` names
  * is read once, by `cat-file`, and searched; and a scan that cannot read everything refuses. The failures
  * are git's own where git can be made to fail — a missing tree, an object that will not inflate, a call
- * that does not finish, output cut short — and an object deleted between two calls where it cannot.
- * Token-shaped strings are built at runtime, never written out.
+ * that does not finish, output cut short. Where it cannot, an object is deleted between two calls, or
+ * git's real answer is altered. Token-shaped strings are built at runtime, never written out.
  */
 class OutgoingObjectScanTest {
     @TempDir

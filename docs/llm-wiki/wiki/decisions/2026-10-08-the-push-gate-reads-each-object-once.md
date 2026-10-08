@@ -1,0 +1,229 @@
+---
+type: decision
+project: programmers-tracker
+tags: [security, git, credentials, push, performance]
+author: BrokenFinger98
+created: 2026-10-08
+updated: 2026-10-08
+sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory]
+---
+
+# The push gate reads each object a push would send once
+
+## Context
+
+The push half of #360's content gate ([[decisions/2026-10-08-reconcile-never-stages-the-state-directory]],
+layer 4) ran `git grep` over every outgoing commit, 256 commits to a call, once for GitHub's token shapes
+and once for the stored values. `git grep <commit>` reads that commit's whole tree, so a first push read
+every unchanged file once per commit: the work grows with commits × tree size.
+
+#373 asked for the cost to stop growing that way. Measured here (Apple M4 Pro, git 2.48.1) on synthetic
+histories shaped like the #360 review's — each commit adds one file of base64 text, so nothing is
+token-shaped and every search runs to the end — through `push()` to a remote that has a URL and is not
+there, so the gate runs in full and the push fails at once. The slowest single call is from the same
+`git grep` calls replayed in a shell:
+
+| History | Tree | First push on main | Slowest single call |
+|---|---|---|---|
+| 1,660 commits | 4.2 MB | 25.2 s | 3.3 s |
+| 5,000 commits | 9.8 MB | 252.5 s | 16.1 s |
+
+Each call ran under `GitProcess`'s 60-second timeout, so a larger tree times out on every attempt and the
+push is refused for good; and a range only shrinks when a push succeeds, so a first push that failed ran
+the whole search again on every pass.
+
+Two blind spots of `git grep` came up in #372's review while this was open. In a UTF-8 locale on macOS,
+`git grep -E` misses a token beside a byte that is not valid UTF-8 and exits 1 with nothing on stderr
+(measured again here: of five files with a token beside `0xE9`, `0xC0 0xAF` or `0x80`, `en_US.UTF-8`
+found none and `C` found all five); #372 pins `LC_ALL=C` for every git call. And no locale finds a token
+in UTF-16 text, which Windows PowerShell 5.1 writes with every `>`.
+
+## Options considered
+
+1. **Keep `git grep`, in bigger or parallel batches.** Each unchanged file is still read once per
+   commit; parallel calls spread the same work over more cores. Rejected.
+2. **Search each commit's diff (`git log -p`).** Reads only what changed, but a binary change comes as a
+   base85 delta or not at all, and it is not the content a push sends. Rejected.
+3. **`pack-objects --revs --stdout`, and parse the pack.** Exactly what a push sends, but the JVM would
+   have to resolve deltas: a pack reader written for a search. Rejected.
+4. **`rev-list --objects` → `cat-file --batch-check` → `cat-file --batch`, matched in the JVM.** Git lists
+   each object once and inflates it; the JVM only matches. Chosen; the issue named it.
+
+Within the chosen option:
+
+- **How the blobs are picked out.** `rev-list --filter=object:type=blob` (git 2.32 and later) lists blobs
+  alone, but it still prints the commit it was given unless `--filter-provided-objects` is added (measured),
+  it gives no sizes, and commit and tag messages (#375) would need a second listing. `cat-file
+  --batch-check` describes every listed object — type and size — on any git, and #375's types join one
+  set. Its cost is small: on the 5,000-commit history it took 0.05 s for 25,000 objects. Reading every
+  listed object instead was never an option: the trees there add up to 400 MB, against 9.8 MB of blobs,
+  because the `problems` tree gains an entry with every commit.
+- **How content is matched.** Decoded as UTF-8, a byte that is not UTF-8 becomes U+FFFD, a window seam
+  can split a character, and characters stop counting bytes. Read as ISO-8859-1, each byte is the one
+  character of the same number: nothing is dropped or merged, a window is bytes, and a match is found
+  where `git grep` finds one in the C locale, in a binary blob as well. The shapes are `java.util.regex`
+  patterns written as `git grep -E` reads them, and two parity tests run `git grep -E` and `git grep -F`
+  in the C locale over the same probe files — each length bound, every prefix, NUL, newline, CR and
+  non-ASCII bytes inside a run and beside it — and require the same files found. The stored values are
+  matched as the UTF-8 bytes `git grep -F -f -` is fed, split into lines as it splits them (a CR before a
+  newline is not part of a value).
+- **How memory is bounded.** Streaming, and calls of bounded size, both. `GitProcess.runReading` writes
+  stdout to a temporary file as `run` does, and hands it over as a stream once git has exited 0 in time.
+  `BatchOutput` reads each object's content a window of 1 MB at a time; each window repeats the last
+  `TokenPatterns.overlap` bytes of the one before. Objects go to `cat-file --batch` about 64 MB of
+  content to a call, which bounds each call's time and its temporary file.
+- **What a window must repeat, exactly.** `{36,}` and `{60,}` match wherever their shortest forms do, so
+  a match exists if and only if a shortest match exists: 40 characters for a classic token, 71 for a
+  fine-grained one, and a stored value's own length. A shortest match of m bytes that ends in a window
+  begins at most m − 1 bytes before it, so a window that repeats m − 1 bytes holds it whole. The overlap
+  is the largest such m, less one: 141 with no long stored value, since UTF-16 (below) doubles 71.
+- **UTF-16, raised by #372's review.** A window that holds a NUL byte is also decoded as UTF-16, in both
+  byte orders and from its first and its second byte, and searched for the shapes and for the stored
+  values as text. UTF-16 text with an ASCII character in it always holds a NUL byte, so text windows are
+  not decoded at all. Odd and even offsets are both read, so UTF-16 text that starts an odd number of
+  bytes into a blob is found too.
+- **Writing a call's input.** The scan hands `cat-file` every id on stdin. `GitProcess` wrote input on
+  the caller's thread before the wait began, so a git that stopped reading held the caller past the
+  timeout: 10.1 s against a 1-second timeout in the new test, after which git exited 0 and the call was
+  reported as a success. Input is now written from a thread of its own, and a git past its timeout is
+  killed through its `ProcessHandle`: `Process.destroyForcibly` also closes stdin, which waits for a write
+  in progress — 10.0 s while a child of git held the pipe.
+
+## Decision
+
+The push searches what `OutgoingObjectScan` reads:
+
+1. `git rev-list --objects <range>` names every object the range reaches, each once. The range is
+   unchanged — `HEAD --not --remotes=<remote>` — and is decided in `CommandLineGitSync.outgoingRange`
+   alone, for #376 and #378 to change.
+2. `git cat-file --batch-check --buffer` describes each listed object, 50,000 ids to a call. Only blobs
+   are read; commit and tag messages are #375's, and their types would join `READ_TYPES`.
+3. `git cat-file --batch --buffer` prints the blobs, the objects whose content starts in the same 64 MB
+   of the whole going to one call (and no more than 50,000 of them). `BatchOutput` reads each call's
+   output against what was asked and searches it in windows (`TokenPatterns`).
+4. Fails closed, each as `CREDENTIAL_UNSEARCHED`: a listing, a description or a read that fails or does
+   not finish in time; a description that is not every id asked for, in order, or that names an object
+   `missing`; a header other than the one asked for — another id, type or size, or `missing`; content
+   that ends early; a missing newline after it; output left over; a header longer than any header. A
+   match is `CREDENTIAL_FOUND`; a store that cannot be read is `CREDENTIAL_UNREADABLE`, as before. The
+   WARNs are #360's, and name neither what matched nor where.
+
+The commit side's two searches (`--untracked`, `--cached`) stay `git grep`. `lastSearchedClean` keeps its
+key. The token shapes move to `TokenPatterns.SHAPES`, which the commit side's grep also reads.
+
+The git this relies on: `rev-list --objects`, and `cat-file --batch` and `--batch-check` in their default
+formats, far older than any git the tracker runs with; and `cat-file --buffer`, which came with
+`--batch-all-objects` in git 2.6 (2015). Nothing needs 2.32's object filters. Each behaviour a refusal
+rests on was measured on 2.48.1 here, and with the same results on 2.53.0 in the tracker's image (Ubuntu
+26.04): a missing loose blob fails `rev-list --objects` (128); a loose object that will not inflate is
+listed, then described `missing` (exit 0); half of one is described, then fails `--batch` (128).
+
+## Rationale
+
+Measured on the same histories, the same way (three runs each, but one of each first push on main):
+
+| | main | this branch |
+|---|---|---|
+| First push, 1,660 commits, 4.2 MB tree | 25.2 s | 0.21–0.33 s |
+| First push, 5,000 commits, 9.8 MB tree | 252.5 s | 0.52–0.63 s |
+| First push, log history (below) | 56.3 s | 4.3–7.2 s |
+| Five outgoing commits, 1,660 / 5,000 / log | 0.22–0.31 / 0.48–0.54 / 0.31–0.33 s | 0.12–0.18 / 0.13–0.16 / 0.16–0.37 s |
+| Nothing outgoing (the push's own overhead) | 0.07–0.13 s | 0.09–0.14 s |
+
+The slowest single call on a first push, with every call timed: 0.14 s on the 1,660-commit history,
+0.38 s (`rev-list --objects`) on the 5,000-commit one, and 1.03 s on the log history — one 64 MB
+`cat-file --batch` call, the JVM's matching of its output included. On main, replayed in a shell, they
+were 3.3 s, 16.1 s and 6.9 s.
+
+The log history is the tracker's own shape: each of its 1,660 commits also appends a line to
+`log/submissions.jsonl`, as a submit does, so every commit carries a new version of a growing file. Its
+tree is 3.4 MB; its blobs add up to 729 MB, every version of the log read whole. That is where the
+speed-up is smallest (8–13 times), and it is still never more work than `git grep`, which read the same
+versions as part of every tree.
+
+Each object is read once because `rev-list --objects` prints an object the first time it reaches it, and
+a blob many commits share is one object. A test counts the ids each `cat-file --batch` was asked for: a
+blob in 14 commits, and the same content at two paths, is asked for once, and only blobs are asked for.
+
+The UTF-16 view and the overlap are pinned by tests that fail without them, below. A token beside an
+invalid UTF-8 sequence is pinned at three levels — the parity probes, real blobs read by the scan, and
+the bytes `BatchOutput` reads.
+
+## Accepted costs
+
+- **A file that changes in every commit is read in full at every version.** On the log history that was
+  729 MB and 4.3–7.2 s on a first push; it grows with the sum of the file's versions, not with the
+  tree. Each call stays bounded — 64 MB of content, at most 1.03 s measured — but the total does not.
+  Reading only the bytes a version added would need diffs, which option 2 ruled out.
+- **A call's output waits on disk.** About 64 MB at a time, and a single blob larger than that is one call
+  of its own size. The temporary file is deleted when the call is read.
+- **The list of objects is held in memory.** `rev-list`'s answer and each description are read whole:
+  an id line per object, about 25,000 lines on the 5,000-commit history. Content never is.
+- **What the remote already holds is not read again.** `rev-list --objects` leaves out every object the
+  remote's branches reach, so a token pushed once no longer refuses every later push — #360's cost "a
+  token in a file already pushed blocks every later push" is gone. The push does not send that object
+  again, and the token was public from the first push either way.
+- **The push now finds what a commit does not.** A token in UTF-16 text is refused at the push, while the
+  commit side's `git grep` still lets it into a local commit, so every push is refused until the token is
+  removed from history. Fail closed, and out of this issue's scope (the commit side stays `git grep`).
+- **Other encodings are not read.** UTF-32, base64, a compressed or encrypted blob: a token in one is
+  missed, as `git grep` missed it. A UTF-16 stored value made only of characters with no zero byte in
+  either byte order would be missed in a window without a NUL; a GitHub token and the stored line are
+  ASCII.
+- **The UTF-16 view can find more than is there.** In a window that holds a NUL, any two bytes can spell
+  a UTF-16 character, so a stored value that is not ASCII can be found where its code units merely
+  stand side by side, and the push is refused where `git grep` would not have refused it. The shapes are
+  ASCII, and an ASCII character read as UTF-16 needs its zero byte, so they are not affected.
+- **Parity rests on probes.** The shapes are compared with `git grep -E` on the probes the test holds, in
+  the C locale #372 pins. A git whose regular expressions changed elsewhere would drift unseen.
+- **Commit and tag messages are still not read** (#375), and stale remote-tracking refs are still trusted
+  (#376, #378).
+
+## Outcome
+
+#373 on `perf/373-scan-new-objects`:
+
+- `66a58da` input written from its own thread, and a git past its timeout killed through its handle;
+- `9a1d286` `GitProcess.runReading`;
+- `180948b` `TokenPatterns`, with the shapes moved there, the UTF-16 view and the parity tests;
+- `95ed428` `GitObject` and `BatchOutput`;
+- `596ee7c` `OutgoingObjectScan`;
+- `2d64faf` the push gate on the scan, and three push tests;
+- `64ca2ca` the CR, exit-code and every-id checks pinned;
+- `bf39d9b` both UTF-16 byte orders and the NUL gate pinned;
+- this page, the #360 page's superseded lines, the index and progress.
+
+Every new test was red first. Each new class against a stub that answered clean or read everything
+whole: 15 of the first 16 `TokenPatterns` tests, then 8 of them against a version that read bytes alone
+(the UTF-16 and overlap ones); 10 of 11 `GitObject` tests; 8 of 19 `BatchOutput` tests, the stub reading
+the endless header to an `OutOfMemoryError`; 17 of 20 scan tests. `a token in a UTF-16 file is never
+pushed` against the push still on `git grep`: the push went out (`expected:<false> but was:<true>`). The
+`GitProcess` test against each half of its fix: 10.1 s and success with the input on the caller's thread,
+10.0 s with the old kill.
+
+36 mutants, each a behaviour removed, run against the final code. 34 fail a test. One more fails the
+build: a header read without a bound exhausts the test JVM's heap (`Java heap space`) on the test written
+for it. One is equivalent: content that ends early taken for the end of the object, since a short read
+happens only at the end of the output, where the newline that must follow fails as well. Planning the
+run found three checks no test could fail — a CR kept in a stored value, and the two batch-check checks,
+each of which covered the other — pinned in `64ca2ca` before it ran. The run left two survivors besides
+the equivalent one, UTF-16LE alone and the NUL gate gone, pinned in `bf39d9b` and run again. The
+mutants, with how many tests each failed: input on the caller's thread 1; the old
+kill 1; `runReading` reading whatever the exit 2; no UTF-16 view 9; UTF-16 from the first byte only 1;
+one byte order only 1; the UTF-16 view without the stored values 1; every window read as UTF-16 1; stored
+values as characters 2; the CR kept 1; empty lines kept 6; the overlap without UTF-16 3, without the
+stored values 2, a byte short 3, gone 4; the tail carried into the next object 1; the header not compared
+2; no newline after the content 1; output left over accepted 1; any type accepted 2; a negative size 1; a
+failed `rev-list` taken for nothing outgoing 4; a failed description accepted 1; a description short of
+an id accepted 1; a failed or timed-out read taken for clean 2; only the first call read 1; trees and
+commits read 1; every commit's tree read, as `git grep` did 5; the range ignored 3; every object in one
+call 1; the push on `git grep` again 2; the range from every remote 1; `UNSEARCHED` let through 3;
+`FOUND` said as unsearched 5.
+
+Gates, all exit 0: check; test (2,129 JUnit across 164 classes, 0 failures, 9 skipped — 8 C# and the
+`icase` test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%,
+306 of 345, from 85%, 225 of 262; `adapter/config` 65% at its floor); guards.
+
+Not verified live, and not run on CI: Windows skips the four new tests that run a shell alias. A rebase
+onto #372's PR, which pins `LC_ALL=C` in `GitProcess` and changes `isDirty`, is to come; this branch
+changed neither.
