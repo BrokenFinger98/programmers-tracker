@@ -7,6 +7,7 @@ import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.RawSessionLog
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -186,11 +187,14 @@ class FileRawSessionLog(
         releaseHeld()
         val file = orphans.resolve("$lessonId$SUFFIX")
         if (isThereButNotAFile(file)) return heldBehind(lessonId, line)
-        appendLine(file, line)
+        if (!written { appendLine(file, line) }) holdOrphan(lessonId, line)
     }
 
-    private fun holdOrphan(lessonId: Long, line: String) =
-        holdSettled(heldOrphans.computeIfAbsent(lessonId) { orphanList() }, line)
+    // Held inside the map's own step for the lesson, so a release that takes the lesson's frames takes this one too
+    // or leaves it for the next: never a list the release has already taken.
+    private fun holdOrphan(lessonId: Long, line: String) {
+        heldOrphans.compute(lessonId) { _, held -> (held ?: orphanList()).also { holdSettled(it, line) } }
+    }
 
     // Anything but a regular file where a lesson's orphans go — a link, most likely — loses no frame (#378): it is held
     // like a refused frame and written once a regular file or nothing stands there. The link is never replaced: the
@@ -499,21 +503,44 @@ class FileRawSessionLog(
         settledChars.addAndGet(-charsOf(lines))
     }
 
-    // Runs and orphans kept while `.ps` was refused, now that it is usable (#360).
+    // Runs and orphans kept while `.ps` was refused, now that it is usable (#360). Each is taken from memory and
+    // written; one whose write fails goes back ahead of anything held since, for the next release. A release never
+    // throws: the frame that asked for it may be a live grading's first (the review of PR #401).
     private fun releaseHeld() {
         if (heldRuns.isEmpty() && heldOrphans.isEmpty()) return
-        subdirectory(RETIRED)?.let { recorded ->
-            heldRuns.keys.forEach { name -> heldRuns.remove(name)?.let { appendedSettled(recorded.resolve(name), it) } }
-        }
-        subdirectory(ORPHANS)?.let { orphans -> heldOrphans.keys.forEach { id -> releaseOrphans(orphans, id) } }
+        subdirectory(RETIRED)?.let { recorded -> heldRuns.keys.toList().forEach { releaseRun(recorded, it) } }
+        subdirectory(ORPHANS)?.let { orphans -> heldOrphans.keys.toList().forEach { releaseOrphans(orphans, it) } }
+    }
+
+    private fun releaseRun(recorded: Path, name: String) {
+        val lines = heldRuns.remove(name) ?: return
+        if (written { appendedSettled(recorded.resolve(name), lines) }) return
+        heldRuns.merge(name, lines) { since, kept -> kept + since }
     }
 
     // A lesson whose orphans file is a link keeps its frames held: written through it, they would land where it
-    // leads, and the throw would stop whichever grading's frame asked for the release (#378).
+    // leads (#378).
     private fun releaseOrphans(orphans: Path, lessonId: Long) {
         val file = orphans.resolve("$lessonId$SUFFIX")
         if (isThereButNotAFile(file)) return
-        heldOrphans.remove(lessonId)?.let { held -> appendedSettled(file, synchronized(held) { held.toList() }) }
+        val held = heldOrphans.remove(lessonId) ?: return
+        val lines = synchronized(held) { held.toList() }
+        if (!written { appendedSettled(file, lines) }) keptFirst(lessonId, lines)
+    }
+
+    private fun keptFirst(lessonId: Long, lines: List<String>) {
+        heldOrphans.compute(lessonId) { _, since -> orphanList().apply { addAll(lines + since.orEmpty()) } }
+    }
+
+    // A write of held frames, or of an orphan, that fails — a link swapped in after the check, a full disk — keeps
+    // what it was writing. Said once, by the kind of failure and never where. A write that fails partway may leave
+    // part of it behind, and the frames are written again whole: a duplicate, never a loss.
+    private fun written(write: () -> Unit): Boolean = try {
+        write()
+        true
+    } catch (failed: IOException) {
+        sayOnce(WRITE_FAILED_KEY) { logger.warn(WRITE_FAILED, failed.javaClass.simpleName) }
+        false
     }
 
     private fun flushEverything() {
@@ -671,6 +698,10 @@ class FileRawSessionLog(
                 "they are dropped until .ps is usable again, so that the gradings in flight keep {} characters of " +
                 "their own. Said once."
         private const val SETTLED_LIMIT_KEY = "settled limit"
+        private const val WRITE_FAILED =
+            "Raw frames held in memory, or orphaned, could not be written into .ps ({}). They stay in memory and are " +
+                "written at the next release, and lost if the server stops first. Said once."
+        private const val WRITE_FAILED_KEY = "write failed"
 
         /** One part in this many of what the log holds is kept for the gradings in flight (#378). */
         private const val LIVE_SHARE = 4

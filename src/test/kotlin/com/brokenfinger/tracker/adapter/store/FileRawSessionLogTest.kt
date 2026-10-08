@@ -11,7 +11,9 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
@@ -505,6 +507,32 @@ class FileRawSessionLogTest {
         val copied = log.complete(submit, root.resolve("problems/131528-x/attempts/001.raw.jsonl"))
 
         Files.readAllLines(copied) shouldContainExactly listOf("""{"n":0}""")
+    }
+
+    /**
+     * A run set aside while `.ps` was refused left memory before its write, as orphans did, so a write that failed
+     * lost it and stopped the grading that asked for the release (the review of PR #401). It stays held instead.
+     */
+    @Test
+    fun `a run whose release cannot write stays held, and is written later`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val git = ChangingAnswer(true)
+        val log = logGuardedBy(aStateDirectory(root, git))
+        val run = log.start(120804)
+        log.append(run, """{"r":1}""")
+        log.setAside(run)
+        val recorded = Files.createDirectories(root.resolve(".ps/raw/recorded"))
+        git.answer = false
+        val next = log.start(131528)
+
+        unwritableWhile(recorded) {
+            assumeTrue(!Files.isWritable(recorded), "a superuser writes anyway")
+            log.append(next, """{"n":1}""")
+        }
+        log.orphaned(120805, """{"o":1}""")
+
+        Files.readAllLines(stateRaw(next)) shouldContainExactly listOf("""{"n":1}""")
+        Files.readAllLines(recorded.resolve(run.value)) shouldContainExactly listOf("""{"r":1}""")
     }
 
     @Test

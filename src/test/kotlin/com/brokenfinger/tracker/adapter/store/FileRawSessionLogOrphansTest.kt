@@ -7,7 +7,9 @@ import com.brokenfinger.tracker.support.fixtures.GIT_COULD_NOT_SAY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.madeFifo
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.shouldBe
@@ -342,6 +344,61 @@ class FileRawSessionLogOrphansTest {
 
         heard.single() shouldContain "is not a regular file"
         heard.single() shouldNotContain outside.toString()
+    }
+
+    // A release that cannot write (the review of PR #401) ---------------------------------------------
+
+    /**
+     * The release took a lesson's frames out of memory before writing them, so a write that failed lost them all,
+     * and its throw stopped the grading whose first frame had asked for the release: with a link swapped in after
+     * the check, the review measured 376 of 400 held frames lost. Here the write fails as any can, in an `orphans/`
+     * closed to new files. The frames stay held, the grading goes on, and a later release writes them.
+     */
+    @Test
+    fun `a release that cannot write keeps the frames, and the grading that asked goes on`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val git = ChangingAnswer(true)
+        val log = logGuardedBy(aStateDirectory(root, git))
+        log.orphaned(120804, """{"held":1}""")
+        val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
+        git.answer = false
+        val session = log.start(131528)
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            unwritableWhile(orphans) {
+                assumeTrue(!Files.isWritable(orphans), "a superuser writes anyway")
+                log.append(session, """{"n":1}""")
+            }
+        }
+        log.orphaned(120805, """{"next":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw").resolve(session.value)) shouldBe listOf("""{"n":1}""")
+        Files.readAllLines(orphans.resolve("120804.jsonl")) shouldBe listOf("""{"held":1}""")
+        heard.single() shouldContain "could not be written"
+        heard.single() shouldNotContain root.toString()
+    }
+
+    /**
+     * An orphan's own write that fails is held as a refused one is, never thrown at the capture, and said once
+     * however often it fails. What is held keeps the order the frames came in.
+     */
+    @Test
+    fun `an orphan whose own write fails is held, said once, and written later in order`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
+        val log = log()
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            unwritableWhile(orphans) {
+                assumeTrue(!Files.isWritable(orphans), "a superuser writes anyway")
+                log.orphaned(120804, """{"held":1}""")
+                log.orphaned(120804, """{"held":2}""")
+            }
+        }
+        log.orphaned(120805, """{"next":1}""")
+
+        Files.readAllLines(orphans.resolve("120804.jsonl")) shouldBe listOf("""{"held":1}""", """{"held":2}""")
+        heard.single() shouldContain "could not be written"
     }
 
     private fun log() = logGuardedBy(aStateDirectory(root))

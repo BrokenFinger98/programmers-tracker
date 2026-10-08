@@ -75,6 +75,20 @@ fun <T> sealedWhile(directory: Path, action: () -> T): T {
 }
 
 /**
+ * [directory] listed and entered but closed to every new file, as `chmod 500` leaves it, while [action] runs — so a
+ * write into it fails as a full disk or a link swapped in would — and given back afterwards. A superuser writes
+ * anyway: a test that needs the write to fail assumes `!Files.isWritable(directory)` inside [action].
+ */
+fun <T> unwritableWhile(directory: Path, action: () -> T): T {
+    Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("r-x------"))
+    try {
+        return action()
+    } finally {
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
+    }
+}
+
+/**
  * [path] made a FIFO, which only `mkfifo` makes: false where there is none to run, and false where one ran and no
  * FIFO is there. CI's Windows runner has an `mkfifo` that exits 0, and the two tests that trusted its exit code found
  * nothing at [path] (PR #401). Its parent must exist.
