@@ -1974,6 +1974,24 @@ class CommandLineGitSyncTest {
         filesInHead() shouldContainExactly listOf("${aGithubShapedToken()}/today.md")
     }
 
+    /**
+     * What entered HEAD is read against the tree searched before it, so a token-shaped directory is said once, as
+     * it enters, and not again for each file a later commit adds under it.
+     */
+    @Test
+    fun `a name already said is not said again for a file added under it`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("${aGithubShapedToken()}/notes.md")
+        val sync = sync()
+        val first = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+        written("${aGithubShapedToken()}/today.md", "a note\n")
+
+        val later = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+
+        first.single() shouldContain "already holds a GitHub token"
+        later shouldContainExactly emptyList()
+    }
+
     @Test
     fun `a new token-shaped directory under a held one is never committed`() {
         written(".gitignore", ".ps/\n")

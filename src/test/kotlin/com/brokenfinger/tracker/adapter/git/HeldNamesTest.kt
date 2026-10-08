@@ -122,6 +122,18 @@ class HeldNamesTest {
         HeldNames(failing, setOf(head())).holds("a.md").shouldBeNull()
     }
 
+    /** An answer for fewer tips than were asked about cannot say which it left out: no answer. */
+    @Test
+    fun `a peel short of a tip is no answer`() {
+        val short = Counting(repo.root, shortened = "cat-file")
+        val first = head()
+        repo.write("later.md", "later\n")
+        repo.git("add", "--all")
+        repo.git("commit", "--message", "later")
+
+        HeldNames(short, setOf(first, head())).holds("a.md").shouldBeNull()
+    }
+
     /** The names a search found held, and so sent again, are kept for the notice, in the order sent. */
     @Test
     fun `the names sent again are kept`() {
@@ -147,8 +159,12 @@ class HeldNamesTest {
         Files.delete(file)
     }
 
-    /** Real git, its calls counted; a call whose first argument is [failing] answers as git failing would. */
-    private class Counting(root: Path, private val failing: String? = null) : GitCalls {
+    /**
+     * Real git, its calls counted; a call whose first argument is [failing] answers as git failing would, and one
+     * whose first argument is [shortened] answers without its last line.
+     */
+    private class Counting(root: Path, private val failing: String? = null, private val shortened: String? = null) :
+        GitCalls {
         private val real = ProcessCalls(GitProcess(root)) { listOf("git") + it }
         var asked = 0
             private set
@@ -156,7 +172,9 @@ class HeldNamesTest {
         override fun answer(args: List<String>, input: String?): GitResult {
             asked++
             if (args.first() == failing) return GitResult(FAILED, "", "fatal: as asked")
-            return real.answer(args, input)
+            val answer = real.answer(args, input)
+            if (args.first() != shortened) return answer
+            return answer.copy(stdout = answer.stdout.trimEnd().lines().dropLast(1).joinToString("\n", postfix = "\n"))
         }
 
         override fun <T : Any> streamed(args: List<String>, input: String?, read: (InputStream) -> T): T? {

@@ -204,7 +204,7 @@ class BatchOutputTest {
         val token = entry("100644", "${aGithubShapedToken()}.md")
         val printed = tree(1, entry("100644", "a.md"), token, entry("40000", "notes"))
 
-        searched(printed, held = held)
+        searched(printed, held = held, window = WHOLE_TREE)
 
         held.asked shouldBe listOf(asBytes("${aGithubShapedToken()}.md"))
     }
@@ -251,6 +251,19 @@ class BatchOutputTest {
         val printed = tree(1, entry("100644", "a.md"), "100644 ${aGithubShapedToken()}".toByteArray())
 
         searched(printed, held = Held(aGithubShapedToken())) shouldBe SearchOutcome.FoundInName
+    }
+
+    /**
+     * A tree of many windows is walked entry by entry where nothing matches, so each window keeps no more than the
+     * entry that runs on: a tree far larger than an entry may be is read to its end, in step.
+     */
+    @Test
+    fun `a tree of many windows is read in step to its end`() {
+        val many = (1..MANY_ENTRIES).map { entry("100644", "file-$it.md") }
+        val printed = tree(1, *(many + entry("100644", "${aGithubShapedToken()}.md")).toTypedArray())
+
+        searched(printed, held = Held("${aGithubShapedToken()}.md")) shouldBe SearchOutcome.Clean
+        searched(printed, held = Held()) shouldBe SearchOutcome.FoundInName
     }
 
     /** A name no filesystem could hold would be waited on without end: it is not read, and nothing goes out. */
@@ -365,9 +378,10 @@ class BatchOutputTest {
         vararg printed: Printed,
         patterns: TokenPatterns = nothingStored,
         held: NamesHeld = NamesHeld.NONE,
+        window: Int = WINDOW,
     ): SearchOutcome {
         val output = printed.fold(ByteArray(0)) { all, each -> all + each.bytes }
-        return BatchOutput(ByteArrayInputStream(output), patterns, WINDOW, held).searched(printed.map { it.asked })
+        return BatchOutput(ByteArrayInputStream(output), patterns, window, held).searched(printed.map { it.asked })
     }
 
     private fun searched(asked: List<GitObject>, output: ByteArray, patterns: TokenPatterns = nothingStored) =
@@ -427,6 +441,12 @@ class BatchOutputTest {
 
         /** Past what any filesystem lets a name be, 255 bytes, and past what the search waits for. */
         const val LONGER_THAN_ANY_NAME = 1 shl 17
+
+        /** Entries of about 40 bytes each: a tree of about 160 KB, past what an entry may run to. */
+        const val MANY_ENTRIES = 4_000
+
+        /** A window that holds a small tree whole, so every name in it is in the one window that matches. */
+        const val WHOLE_TREE = 1024
 
         /** A name as a tree holds it: its UTF-8 bytes, one ISO-8859-1 character each, as they are read. */
         fun asBytes(name: String): String = String(name.toByteArray(Charsets.UTF_8), Charsets.ISO_8859_1)
