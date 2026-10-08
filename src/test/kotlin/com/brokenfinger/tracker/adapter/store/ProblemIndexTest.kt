@@ -4,14 +4,23 @@ import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -27,6 +36,9 @@ import java.time.ZoneOffset
 class ProblemIndexTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `it lands where GitHub renders a directory listing`() {
@@ -143,13 +155,57 @@ class ProblemIndexTest {
         rowsOf(text).first() shouldContain "| database |"
     }
 
+    // Written over a link, never through one (#361) ---------------------------------------------------
+
+    @Test
+    fun `an index that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val index = aLink(root.resolve("problems/README.md"), token)
+
+        val heard = warningsWhile(RecordWrites::class) { index().write(listOf(aSubmissionRecord())) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.isSymbolicLink(index) shouldBe false
+        Files.readString(index) shouldContain "# Problems"
+        heard.single() shouldContain index.toString()
+    }
+
+    /** Derived from the log at every attachment and boot, so a refused index is skipped and said, not thrown. */
+    @Test
+    fun `a problems directory that is a link gets no index, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            index().write(listOf(aSubmissionRecord())).shouldBeNull()
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "problems is a symbolic link"
+    }
+
+    @Test
+    fun `an index that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-an-index.md")
+        val index = aLink(root.resolve("problems/README.md"), nowhere)
+
+        val heard = warningsWhile(RecordWrites::class) { index().write(listOf(aSubmissionRecord())) }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.readString(index) shouldContain "# Problems"
+        heard.single() shouldContain index.toString()
+    }
+
     private fun at(instant: String): OffsetDateTime = Instant.parse(instant).atOffset(ZoneOffset.ofHours(9))
 
     private fun rowsOf(text: String): List<String> =
         text.lines().filter { it.startsWith("| ") && !it.startsWith("| Problem") }
 
-    private fun write(records: List<SubmissionRecord>): Path =
-        checkNotNull(ProblemIndex(RecordLayout(root)).write(records))
+    private fun index() = ProblemIndex(RecordLayout(root))
+
+    private fun write(records: List<SubmissionRecord>): Path = checkNotNull(index().write(records))
 
     private fun render(records: List<SubmissionRecord>): String = Files.readString(write(records))
 }

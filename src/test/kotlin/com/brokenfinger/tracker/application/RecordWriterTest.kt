@@ -7,12 +7,16 @@ import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.ProblemKind
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
 import com.brokenfinger.tracker.support.fixtures.aTruncatedStream
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
@@ -24,8 +28,10 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -249,6 +255,24 @@ class RecordWriterTest {
         store.failing = false
 
         writer.write(aSettledCapture()) shouldNotBe null
+    }
+
+    /**
+     * A record is never appended where a link leads (#361). With the log a link a pull delivered, the grading is
+     * not recorded and says so by throwing, as any failed append does, so the live path logs it as settled and not
+     * recorded; its frames stay on the work list for a boot after the link is gone to replay. Never lost silently.
+     */
+    @Test
+    fun `a grading whose log is a link is not appended there, and its frames stay`() = runBlocking<Unit> {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        aLink(root.resolve("log/submissions.jsonl"), token)
+        val capture = aSettledCapture(rawSessionId = liveRaw("live-1.jsonl"))
+
+        shouldThrow<IOException> { writer().write(capture) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.exists(rawDirectory().resolve("live-1.jsonl")) shouldBe true
     }
 
     private fun writer(

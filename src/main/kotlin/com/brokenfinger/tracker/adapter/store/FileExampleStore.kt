@@ -4,7 +4,6 @@ import com.brokenfinger.tracker.application.ExampleStore
 import com.brokenfinger.tracker.domain.ProblemExample
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -18,15 +17,19 @@ import java.nio.file.Path
  *
  * Best-effort like the raw-file move: this file regenerates on the next run, so losing a
  * write must never cost the record it rode in with.
+ *
+ * Written over a link, never through one (#361). The read bound (#354) refuses a linked
+ * `examples.json`, so the runner asks for Run Code to be pressed, and pressing it is this write:
+ * it replaces the link with the examples just captured. A link on the way is refused, which
+ * [RecordWrites] says, and skipped like any other failed write here.
  */
 class FileExampleStore(private val layout: RecordLayout) : ExampleStore {
+    private val writes = RecordWrites.underProblems(layout)
+
     override fun replace(lessonId: Long, title: String?, examples: List<ProblemExample>) {
         if (examples.isEmpty()) return
-        runCatching {
-            val file = examplesFileOf(lessonId, title)
-            Files.createDirectories(file.parent)
-            Files.writeString(file, json.encodeToString(examples))
-        }.onFailure { logger.warn("Lesson {} was recorded but its examples were not written", lessonId, it) }
+        runCatching { writes.replaceOrSkip(examplesFileOf(lessonId, title), json.encodeToString(examples)) }
+            .onFailure { logger.warn("Lesson {} was recorded but its examples were not written", lessonId, it) }
     }
 
     private fun examplesFileOf(lessonId: Long, title: String?): Path =

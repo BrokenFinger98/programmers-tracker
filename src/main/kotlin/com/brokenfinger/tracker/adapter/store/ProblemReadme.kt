@@ -3,7 +3,6 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.UnknownReason
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.format.DateTimeFormatter
 
@@ -26,16 +25,20 @@ import java.time.format.DateTimeFormatter
  */
 class ProblemReadme(private val layout: RecordLayout) {
     private val statements = FileProblemStatements(layout)
+    private val writes = RecordWrites.underProblems(layout)
 
-    /** Writes the page for one problem's records, oldest first, and returns the file. */
-    fun write(records: List<SubmissionRecord>): Path {
+    /**
+     * Writes the page for one problem's records, oldest first, and returns the file — or null when [RecordWrites]
+     * refused it, which it has said: a link on the way to it (#361). The page is derived from the log and written
+     * again at every attachment and boot, so a refused one is skipped rather than thrown, which would take every
+     * page, the index and the tag map after it down with it.
+     */
+    fun write(records: List<SubmissionRecord>): Path? {
         require(records.isNotEmpty()) { "a README needs at least one record" }
         val lessonId = records.first().lessonId
         require(records.all { it.lessonId == lessonId }) { "records must all belong to lesson $lessonId" }
         val file = layout.problemDirectory(lessonId, titleOf(records)).resolve(README)
-        Files.createDirectories(file.parent)
-        Files.writeString(file, render(records))
-        return file
+        return file.takeIf { writes.replaceOrSkip(it, render(records)) }
     }
 
     private fun render(records: List<SubmissionRecord>): String =

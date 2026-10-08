@@ -41,14 +41,24 @@ import java.util.concurrent.atomic.AtomicLong
  * characters across the log. A submit's frames go to its attempt file at [complete], which lies outside
  * `.ps`; a run set aside and an orphan are written into `.ps` the first time it is usable again, and
  * [close] says what is still held when the server stops. Each refusal, and the limit, is said once.
+ *
+ * **The copy beside the record goes through [RecordWrites] when the log knows its [recordRoot]** — as
+ * [under], and so the composition root, builds it (#361). The copy never replaced anything, a link
+ * included; the directories above it are now never made or passed through a link either. A refusal is
+ * thrown, and the writer keeps the frames with the runs, as it does for any copy that fails. Built bare,
+ * as the guard can be, it writes where it is told.
  */
 class FileRawSessionLog(
     private val directory: Path,
     private val clock: Clock = Clock.systemUTC(),
     private val guard: StateDirectory? = null,
     private val heldLimit: Long = HELD_LIMIT,
+    recordRoot: Path? = null,
 ) : RawSessionLog,
     AutoCloseable {
+    /** Where a submit's frames are copied: under the record repository's `problems/`, through no link. */
+    private val attempts = recordRoot?.let { RecordWrites.underProblems(RecordLayout(it)) }
+
     /** Names this log has handed out. One instance serves every channel, so this is the whole set. */
     private val issued = ConcurrentHashMap.newKeySet<String>()
 
@@ -117,8 +127,7 @@ class FileRawSessionLog(
         val onDisk = framesOnDisk(session, state)
         val held = state?.let { synchronized(it) { it.frames.toList() } }.orEmpty()
         if (onDisk == null && held.isEmpty()) throw NoSuchFileException("${directory.resolve(session.value)}")
-        destination.parent?.let { Files.createDirectories(it) }
-        return written(destination, onDisk, held)
+        return written(destination, framesOf(onDisk, held))
     }
 
     override fun discard(session: RawSessionId) {
@@ -290,11 +299,19 @@ class FileRawSessionLog(
         return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
     }
 
-    private fun written(destination: Path, onDisk: ByteArray?, held: List<String>): Path {
-        Files.newOutputStream(destination, StandardOpenOption.CREATE_NEW).use { out ->
-            onDisk?.let(out::write)
-            held.forEach { out.write((it + "\n").toByteArray(CHARSET)) }
-        }
+    // What was on disk, then what was held, in arrival order.
+    private fun framesOf(onDisk: ByteArray?, held: List<String>): ByteArray =
+        (onDisk ?: ByteArray(0)) + held.joinToString("") { "$it\n" }.toByteArray(CHARSET)
+
+    private fun written(destination: Path, frames: ByteArray): Path {
+        val bounded = attempts ?: return unbounded(destination, frames)
+        bounded.createNew(destination, frames)
+        return destination
+    }
+
+    private fun unbounded(destination: Path, frames: ByteArray): Path {
+        destination.parent?.let { Files.createDirectories(it) }
+        Files.newOutputStream(destination, StandardOpenOption.CREATE_NEW).use { it.write(frames) }
         return destination
     }
 
@@ -370,7 +387,11 @@ class FileRawSessionLog(
         const val ORPHANS = "orphans"
 
         /** Raw logs live under the record repository, not next to the tool (design §5.1). */
-        fun under(recordRoot: Path, clock: Clock, state: StateDirectory): FileRawSessionLog =
-            FileRawSessionLog(recordRoot.resolve(StateDirectory.NAME).resolve(RAW), clock, state)
+        fun under(recordRoot: Path, clock: Clock, state: StateDirectory): FileRawSessionLog = FileRawSessionLog(
+            recordRoot.resolve(StateDirectory.NAME).resolve(RAW),
+            clock,
+            state,
+            recordRoot = recordRoot,
+        )
     }
 }

@@ -148,7 +148,8 @@ class StateDirectory(
 
 private const val UNTRACK = "if git tracks it, run `git rm -r --cached .ps` and commit that"
 
-private fun namesOnDisk(directory: Path): Set<String> =
+/** The names [directory] lists, as `readdir` returns them: the name on disk, whatever name it was reached by. */
+internal fun namesOnDisk(directory: Path): Set<String> =
     Files.newDirectoryStream(directory).use { entries -> entries.map { it.fileName.toString() }.toSet() }
 
 /**

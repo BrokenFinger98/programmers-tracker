@@ -1,7 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.SubmissionRecord
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -22,6 +21,8 @@ import java.nio.file.Path
  * ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
  */
 class ProblemIndex(private val layout: RecordLayout) {
+    private val writes = RecordWrites.underProblems(layout)
+
     /**
      * Null when there is nothing recorded, and no file either.
      *
@@ -29,13 +30,14 @@ class ProblemIndex(private val layout: RecordLayout) {
      * `StartupReconciliation` states out loud: a boot that had nothing to recover does nothing.
      * Manufacturing a commit to say "nothing yet" is exactly the noise that claim exists to
      * prevent.
+     *
+     * Null too when [RecordWrites] refused it, which it has said: a link on the way (#361). Derived from the log
+     * and written again at every attachment and boot, so a refused index is skipped rather than thrown.
      */
     fun write(records: List<SubmissionRecord>): Path? {
         if (records.isEmpty()) return null
         val file = layout.problemIndex()
-        Files.createDirectories(file.parent)
-        Files.writeString(file, render(records))
-        return file
+        return file.takeIf { writes.replaceOrSkip(it, render(records)) }
     }
 
     private fun render(records: List<SubmissionRecord>): String =

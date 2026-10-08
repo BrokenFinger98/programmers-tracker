@@ -1,11 +1,10 @@
 package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption.CREATE
-import java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
-import java.nio.file.StandardOpenOption.WRITE
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
 
@@ -33,6 +32,13 @@ import java.util.concurrent.atomic.AtomicLong
  * delete by hand, which was the pid file's failure. But two instances started inside the same
  * window can both see no change and both proceed. The kernel lock closes that on every
  * filesystem that implements locking; this closes the common case on the one that does not.
+ *
+ * **Never through a link** (#361). The marker sits in `.git`, which no clone or pull delivers,
+ * except where `.git` is not a directory — a linked worktree — and then at the records root,
+ * where a pull can deliver it as a link. Followed, every beat truncated what the link led to;
+ * read through one, a file that kept changing made a free repository look held. It is written
+ * through [RecordWrites], bounded at its own directory, which replaces a link rather than writing
+ * through it, and read without following one.
  */
 class RepositoryHeartbeat(
     private val recordRoot: Path,
@@ -41,6 +47,8 @@ class RepositoryHeartbeat(
     private val waitFor: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : AutoCloseable {
     private val beats = AtomicLong()
+
+    private val writes = RecordWrites.underRoot(marker.toAbsolutePath().parent, setOf(marker.fileName.toString()))
 
     /**
      * @throws RecordRepositoryLockedException when the marker changes while we watch it,
@@ -79,13 +87,15 @@ class RepositoryHeartbeat(
      * start — the lock is still in force wherever it works.
      */
     private fun write() {
-        runCatching {
-            Files.createDirectories(marker.parent)
-            Files.writeString(marker, tokenOf(), CREATE, WRITE, TRUNCATE_EXISTING)
-        }.onFailure { logger.warn("Could not write the liveness marker for {}; relying on the lock alone", recordRoot) }
+        runCatching { writes.replaceOrSkip(marker, tokenOf()) }
+            .onFailure { logger.warn(NOT_WRITTEN, recordRoot) }
     }
 
-    private fun read(): String? = runCatching { Files.readString(marker) }.getOrNull()
+    // A link where the marker should be reads as no marker, and the next write replaces it.
+    private fun read(): String? = runCatching { readNotFollowing() }.getOrNull()
+
+    private fun readNotFollowing(): String =
+        Files.newInputStream(marker, NOFOLLOW_LINKS).use { String(it.readAllBytes(), UTF_8) }
 
     /**
      * Unique per write, which is the only property that matters — the marker is compared for
@@ -100,5 +110,7 @@ class RepositoryHeartbeat(
 
     private companion object {
         val logger = LoggerFactory.getLogger(RepositoryHeartbeat::class.java)!!
+
+        const val NOT_WRITTEN = "Could not write the liveness marker for {}; relying on the lock alone"
     }
 }

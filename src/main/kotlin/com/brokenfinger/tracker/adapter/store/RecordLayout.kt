@@ -133,6 +133,12 @@ class RecordLayout(private val root: Path) {
 
     private fun repositoryRoot(): Path = root.toAbsolutePath().normalize()
 
+    /**
+     * The root as configured, made absolute and not normalized: what every path here is built on. A writer walks
+     * from it physically, as git and the lock do, and refuses a `..` below it rather than folding it away (#361).
+     */
+    internal fun configuredRoot(): Path = root.toAbsolutePath()
+
     private fun attemptsOf(lessonId: Long, title: String?, attempt: Int): Path {
         require(attempt >= 1) { "attempt must be at least 1, a run writes no attempt file: $attempt" }
         return problemDirectory(lessonId, title).resolve(ATTEMPTS)
@@ -155,14 +161,17 @@ class RecordLayout(private val root: Path) {
         /** Keeps `<lessonId>-<slug>/attempts/NNN.ext` well inside the Windows path limit. */
         const val MAX_SLUG = 60
 
-        private const val PROBLEMS = "problems"
-        private const val TAGS = "tags"
+        internal const val PROBLEMS = "problems"
+        internal const val TAGS = "tags"
+
+        /** Where the submission log lives, the one name the log's writer keeps at the root (#361). */
+        internal const val LOG = "log"
 
         /** The page [ProblemReadme] writes, named here because links point at it. */
         private const val PROBLEM_PAGE = "README"
         const val STATEMENT = "statement"
         private const val ATTEMPTS = "attempts"
-        private const val SUBMISSION_LOG = "log/submissions.jsonl"
+        private const val SUBMISSION_LOG = "$LOG/submissions.jsonl"
         private const val RUN_LOG = "runs.jsonl"
         private const val FALLBACK_EXTENSION = "txt"
         private const val MAX_EXTENSION = 10
