@@ -58,8 +58,8 @@ import java.util.concurrent.atomic.AtomicReference
  *    before the commit, and every blob a push would send before the push, are searched for the
  *    stored token and for anything shaped like a GitHub token. A push names its one branch and its
  *    remote, and runs with replace refs off, so the search reads the objects the push sends — each
- *    once, for the commits that remote's tracking refs lack, which a stale ref understates
- *    ([OutgoingObjectScan], #373).
+ *    once ([OutgoingObjectScan], #373), for what the push's destinations lack as each says itself, never
+ *    as a remote-tracking ref remembers it ([RemoteTips], #376).
  *
  * What none of this reads: commit and tag messages, and content a filter keeps outside the blob.
  * And each check is of a path at one moment, not of a handle held to the write — a swap in between
@@ -83,6 +83,12 @@ class CommandLineGitSync(
 
     /** What a push would send, searched object by object, through the same calls as everything else here. */
     private val outgoing = OutgoingObjectScan(ProcessCalls(process, ::commandFor))
+
+    /** What a push's destinations already hold, asked of them through the push's own credential (#376). */
+    private val remoteTips = RemoteTips(ProcessCalls(process, ::commandFor))
+
+    /** Whether a destination that could not say what it holds was already said, since it last answered. */
+    private val unansweredSaid = AtomicBoolean()
 
     private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
 
@@ -234,19 +240,21 @@ class CommandLineGitSync(
      * `remote.<r>.push` or `push.default=matching` said — branches the search never looked at — so the
      * push names its refspec, `HEAD:refs/heads/<branch>`, and the remote git would choose for it. The
      * branch goes to its own name there: `branch.<b>.merge` is not consulted, so an upstream of another
-     * name under `push.default=upstream` is not where this push goes. The search covers the commits that
-     * remote's own branches lack.
+     * name under `push.default=upstream` is not where this push goes. The search covers what the push's
+     * destinations lack, as each of them says itself (#376).
      *
      * Before the first commit there is nothing to push, and that is answered as a push that succeeded
      * (#372 is the daily backup recording it as one). A remote with no URL — records kept without one is
-     * a documented way to run — is nowhere to push, so nothing is searched for it.
+     * a documented way to run — is nowhere to push, so nothing is searched for it. A destination that
+     * cannot say what it holds is not pushed to: what the push would send cannot be told (#376).
      */
     private fun pushed(): Boolean {
         val head = headCommit() ?: return true
         val branch = currentBranch() ?: return detached()
         val remote = pushRemoteOf(branch)
-        if (!hasDestination(remote)) return noRemote(remote)
-        if (!searchedClean(SearchedHead(head, remote, fingerprintOfStore()))) return false
+        val destinations = destinationsOf(remote) ?: return noRemote(remote)
+        val held = heldByDestinations(destinations) ?: return false
+        if (!searchedClean(SearchedHead(head, destinations, held, fingerprintOfStore()))) return false
         val result = git(listOf("push", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
@@ -254,8 +262,29 @@ class CommandLineGitSync(
     private fun headCommit(): String? =
         git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
 
-    private fun hasDestination(remote: String): Boolean =
-        listOf("remote.$remote.url", "remote.$remote.pushurl").any { configured(it) != null }
+    /**
+     * Where a push to [remote] goes: its push URLs as git resolves them — `pushurl`, else `url`. Null for a
+     * name with neither, which is nowhere to push. The push URLs, not the remote's name: `ls-remote <name>`
+     * asks the fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured).
+     */
+    private fun destinationsOf(remote: String): List<String>? {
+        val urls = git(listOf("remote", "get-url", "--push", "--all", remote))
+        if (!urls.succeeded()) return null
+        return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }
+    }
+
+    // What the destinations already hold, said once while one cannot say, until it answers again (#376).
+    private fun heldByDestinations(destinations: List<String>): Set<String>? {
+        val held = remoteTips.heldByAll(destinations) ?: return unanswered()
+        unansweredSaid.set(false)
+        return held
+    }
+
+    // Never with git's own words: they can carry the URL, and a URL can carry a credential.
+    private fun unanswered(): Set<String>? {
+        if (!unansweredSaid.getAndSet(true)) logger.warn(REMOTE_UNANSWERED, root)
+        return null
+    }
 
     private fun noRemote(remote: String): Boolean {
         logger.warn(NO_REMOTE, root, remote)
@@ -263,26 +292,29 @@ class CommandLineGitSync(
     }
 
     /**
-     * A head already searched clean — for the same remote, against the same stored token — is not
-     * searched again. A push that kept failing, to a remote that was down, searched the same commits at
-     * every attempt: 23.4 s for 1,660 commits, every minute the backup was due (the review of ea1357c).
+     * A head already searched clean is not searched again. A push that kept failing searched the same
+     * commits at every attempt: 23.4 s for 1,660 commits, every minute the backup was due (the review of
+     * ea1357c). Remembered with what was searched (#378): the destinations, the tips they held that the
+     * range left out, and the stored token. Keyed on the head alone, a head searched for one remote was sent
+     * to another unsearched once `origin` was repointed.
      */
     private fun searchedClean(head: SearchedHead): Boolean {
         if (lastSearchedClean.get() == head) return true
-        if (!carriesNoToken("push") { outgoing.outcome(outgoingRange(head.remote), it) }) return false
+        if (!carriesNoToken("push") { outgoing.outcome(outgoingRange(head.held), it) }) return false
         lastSearchedClean.set(head)
         return true
     }
 
     /**
-     * What a push to [remote] would send, as `rev-list` arguments: the commits none of its remote-tracking
-     * branches holds, and what they carry. A push updates the branch it pushed, so after the first one this
-     * is what was committed since; with none at all it is every commit. Another remote's branches do not
-     * count — the review's N4: a commit already pushed to a second remote was skipped, and sent here
-     * unsearched. The tracker configures no upstream (`push.default=current`), so `@{u}..HEAD` would name
-     * nothing. The one place the range is decided, so a change to what counts as sent is made here.
+     * What a push would send, as `rev-list` arguments: HEAD's history, less what the tips its destinations
+     * already hold reach ([RemoteTips], #376). Those tips are what the destinations say, through
+     * `ls-remote`, not the remote-tracking refs: a remote re-created under the same name, or repointed with
+     * `set-url`, left refs that vouched for commits it never received, and a token pushed once was sent to
+     * it unsearched. Another remote's branches never count (the review's N4). A tip leaving more out than
+     * the push would is the one way this could understate, and a tip comes only from what a destination
+     * holds. The one place the range is decided.
      */
-    private fun outgoingRange(remote: String): List<String> = listOf("HEAD", "--not", "--remotes=$remote")
+    private fun outgoingRange(held: Set<String>): List<String> = listOf("HEAD", "--not") + held.sorted()
 
     // What was stored when a head was searched, kept as a digest rather than as the secret itself.
     private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {
@@ -540,6 +572,10 @@ class CommandLineGitSync(
         private const val NO_REMOTE =
             "git push skipped in {}: no remote named {} has a URL, so there is nowhere to push and nothing was searched."
 
+        private const val REMOTE_UNANSWERED =
+            "git push skipped in {}: its remote could not say what it holds, so what a push would send could not " +
+                "be told, and nothing was sent. This is said once, until the remote answers again."
+
         /**
          * Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]).
          * The path is printed raw inside git's quotes, quotes of its own included (`'it's/'`, measured), so it
@@ -607,5 +643,13 @@ class CommandLineGitSync(
     }
 }
 
-/** A head searched clean: the commit, the remote it was searched for, and a digest of what was stored. */
-private data class SearchedHead(val commit: String, val remote: String, val store: String)
+/**
+ * A head searched clean, with what it was searched against (#378): the push's destinations, the tips they
+ * held that the range left out, and a digest of what was stored.
+ */
+private data class SearchedHead(
+    val commit: String,
+    val destinations: List<String>,
+    val held: Set<String>,
+    val store: String,
+)

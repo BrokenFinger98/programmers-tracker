@@ -1248,14 +1248,20 @@ class CommandLineGitSyncTest {
         subjects(at = remote) shouldContainExactly listOf("init")
     }
 
-    /** Commits that cannot be listed cannot be searched: a remote-tracking ref naming no object stops the push. */
+    /**
+     * Commits that cannot be listed cannot be searched: a commit in the range whose object is gone stops the
+     * push. (Until #376 this was a remote-tracking ref naming no object; the range no longer reads them.)
+     */
     @Test
     fun `outgoing commits that cannot be listed stop the push`() {
         val remote = remoteInitialised()
         written("notes/today.md", "a note\n")
         git("add", "--all")
         git("commit", "--message", "a record")
-        Files.writeString(root.resolve(".git/refs/remotes/origin/main"), "0123456789abcdef0123456789abcdef01234567\n")
+        written("notes/tomorrow.md", "another note\n")
+        git("add", "--all")
+        git("commit", "--message", "another record")
+        deletedObject("HEAD~1")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
 
@@ -1306,17 +1312,19 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * A push that keeps failing — a remote that is down — searched the same commits at every attempt.
-     * A head already searched clean, for the same remote and the same stored token, is not searched
-     * again: a blob that went missing since would have failed a second search.
+     * A push that keeps failing searched the same commits at every attempt. A head already searched clean —
+     * for the same destination, the same tips it holds and the same stored token — is not searched again: a
+     * blob that went missing since would have failed a second search. The failing push is a rejected one,
+     * from a remote that moved ahead: since #376 a remote that is not there is not searched for at all.
      */
     @Test
     fun `a head already searched clean is not searched again`() {
+        val remote = remoteInitialised()
+        remoteMovedAhead(remote)
         written(".gitignore", ".ps/\n")
         written("notes/today.md", "a note\n")
         git("add", "--all")
         git("commit", "--message", "a record")
-        git("remote", "add", "origin", base.resolve("down.git").toString())
         val sync = sync()
         sync.push() shouldBe false
         deletedObject("HEAD:notes/today.md")
@@ -1342,6 +1350,137 @@ class CommandLineGitSyncTest {
         sync.push() shouldBe false
 
         everythingAt(remote) shouldNotContain aGithubShapedToken()
+    }
+
+    // What a push would not send again is what its destination holds (#376, #378) -------------
+    //
+    // Each starts from the same history: another tool committed a token and pushed it to the first
+    // remote, then the token was removed in a new commit. HEAD's tree is clean, the token is in its
+    // history, and only a destination that already holds that history may be spared its search.
+
+    /**
+     * The remote was deleted and made again under the same name and URL. The remote-tracking ref still
+     * said it held the token's commit, so that commit was left out of the search and sent to the new
+     * remote with the rest.
+     */
+    @Test
+    fun `a remote re-created under the same name is searched for what it no longer holds`() {
+        val remote = remoteInitialised()
+        aTokenPushedThenRemoved()
+        recreatedEmpty(remote)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(remote) shouldContainExactly emptyList()
+    }
+
+    /** `git remote set-url` keeps the remote-tracking refs, and they vouched for the old remote's commits. */
+    @Test
+    fun `a remote whose URL changed is searched for what the new one holds`() {
+        remoteInitialised()
+        aTokenPushedThenRemoved()
+        val second = bareAt("second.git")
+        git("remote", "set-url", "origin", second.toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(second) shouldContainExactly emptyList()
+    }
+
+    /**
+     * #378: a head searched clean was remembered by itself, the remote's name and the store. Pushed to the
+     * first remote, which already held the token's commit, it was searched without it; repointed to another
+     * remote and fetched with `--prune`, the same server sent it there unsearched. A fresh server refused.
+     */
+    @Test
+    fun `a head searched clean for one remote is searched again before it goes to another`() {
+        remoteInitialised()
+        aTokenPushedThenRemoved()
+        val sync = sync()
+        sync.push() shouldBe true
+        val second = bareAt("second.git")
+        git("remote", "set-url", "origin", second.toString())
+        git("fetch", "--quiet", "--prune", "origin")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(second) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The same server, the same URL: the remote was re-created between two pushes. What it held is part of
+     * what the head was searched against, so a head remembered as clean is searched again.
+     */
+    @Test
+    fun `a head searched clean is searched again once its remote no longer holds what it did`() {
+        val remote = remoteInitialised()
+        aTokenPushedThenRemoved()
+        val sync = sync()
+        sync.push() shouldBe true
+        recreatedEmpty(remote)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(remote) shouldContainExactly emptyList()
+    }
+
+    /**
+     * `git ls-remote origin` asks the fetch URL, and a push goes to the push URL (measured: with `pushurl`
+     * set apart, `ls-remote` listed the fetch URL's refs). The range is what the push URL holds.
+     */
+    @Test
+    fun `a push URL apart from the fetch URL is searched for what it holds`() {
+        remoteInitialised()
+        aTokenPushedThenRemoved()
+        val pushedTo = bareAt("pushed-to.git")
+        git("config", "remote.origin.pushurl", pushedTo.toString())
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        refsAt(pushedTo) shouldContainExactly emptyList()
+    }
+
+    /**
+     * A destination that cannot say what it holds leaves the range unknown: nothing goes, fail closed, and
+     * the server says so once — the backup tries again and again while it is due — never with git's words,
+     * which can carry a URL.
+     */
+    @Test
+    fun `a destination that cannot say what it holds is not pushed to, and that is said once`() {
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        git("remote", "add", "origin", base.resolve("nowhere.git").toString())
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.push() shouldBe false } }
+
+        heard.single() shouldContain "could not say what it holds"
+        heard.single() shouldNotContain "nowhere.git"
+    }
+
+    /** Once the destination answered, a destination that stops answering is said again. */
+    @Test
+    fun `a destination that answered and then cannot is said again`() {
+        written(".gitignore", ".ps/\n")
+        git("add", "--all")
+        git("commit", "--message", "a record")
+        val away = base.resolve("away.git")
+        git("remote", "add", "origin", away.toString())
+        val sync = sync()
+        sync.push() shouldBe false
+        git("init", "--quiet", "--bare", "-b", "main", away.toString(), at = base)
+        sync.push() shouldBe true
+        deleted(away)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "could not say what it holds"
     }
 
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
@@ -1462,6 +1601,40 @@ class CommandLineGitSyncTest {
         git("commit", "--message", "init")
         git("push", "--set-upstream", "origin", "main")
         return remote
+    }
+
+    /**
+     * Another tool committed a token and pushed it to `origin`, then the token was removed in a new commit:
+     * HEAD's tree is clean, and the token is in its history and on `origin`.
+     */
+    private fun aTokenPushedThenRemoved() {
+        written(".gitignore", ".ps/\n")
+        written("notes/pasted.md", "${aGithubShapedToken()}\n")
+        git("add", "--all")
+        git("commit", "--message", "a token another tool committed")
+        git("push", "--quiet", "origin", "main")
+        git("rm", "--quiet", "notes/pasted.md")
+        git("commit", "--message", "the token removed")
+    }
+
+    /** An empty bare repository called [name], beside the record repository. */
+    private fun bareAt(name: String): Path =
+        base.resolve(name).also { git("init", "--quiet", "--bare", "-b", "main", it.toString(), at = base) }
+
+    /** The refs [repository] holds, by name: none for one that never received anything. */
+    private fun refsAt(repository: Path): List<String> =
+        git("for-each-ref", "--format=%(refname)", at = repository).lines().filter { it.isNotBlank() }
+
+    /** [remote] deleted and made again, empty, at the same path. */
+    private fun recreatedEmpty(remote: Path) {
+        deleted(remote)
+        git("init", "--quiet", "--bare", "-b", "main", remote.toString(), at = base)
+    }
+
+    /** [remote] deleted; git writes objects read-only, which Windows will not delete, so each is made writable first. */
+    private fun deleted(remote: Path) {
+        remote.toFile().walkBottomUp().forEach { it.setWritable(true) }
+        remote.toFile().deleteRecursively() shouldBe true
     }
 
     /** Someone else pushed meanwhile, which is what makes the next push a non-fast-forward. */
