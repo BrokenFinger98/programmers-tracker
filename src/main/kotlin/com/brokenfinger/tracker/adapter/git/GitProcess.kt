@@ -82,7 +82,14 @@ internal class GitProcess(
         /** Generous for a local repository, and short enough that nothing waits on it. */
         val TIMEOUT: Duration = Duration.ofSeconds(60)
 
-        private val PINNED = mapOf("GIT_TERMINAL_PROMPT" to "0", "GIT_NO_REPLACE_OBJECTS" to "1")
+        /**
+         * `LC_ALL=C` because the tracker reads git's own words — a directory git could not open, an
+         * `error:` from a search, the index lock — and a git built with translations says them in the
+         * server's language: under Korean git 2.48.1 translated the first, under German its `warning:`
+         * prefix too (#372). Paths and commit messages are bytes to git either way; the Korean ones
+         * the tests commit and read back are unchanged under it.
+         */
+        private val PINNED = mapOf("GIT_TERMINAL_PROMPT" to "0", "GIT_NO_REPLACE_OBJECTS" to "1", "LC_ALL" to "C")
 
         private val UNSET = setOf(
             "GIT_DIR",

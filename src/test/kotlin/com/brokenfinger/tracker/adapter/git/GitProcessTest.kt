@@ -69,6 +69,24 @@ class GitProcessTest {
     }
 
     /**
+     * The tracker reads git's own words: a directory git could not open, an `error:` from a search, the
+     * index lock. A git built with translations says them in the server's language — git 2.48.1 here
+     * answered this status in Korean under `ko_KR.UTF-8` and as "Auf Branch main" under German, and German
+     * translates even the `warning:` prefix (#372). Where git has no translations, or the locale is not
+     * installed, it answers in English either way, and this cannot fail.
+     */
+    @Test
+    fun `git answers in English whatever language the server was started in`() {
+        listOf("ko_KR.UTF-8" to "ko", "de_DE.UTF-8" to "de").forEach { (locale, language) ->
+            val inherited = mapOf("LC_ALL" to locale, "LANG" to locale, "LANGUAGE" to language)
+
+            val answer = run("status", inherited = inherited)
+
+            answer.stdout shouldContain "On branch main"
+        }
+    }
+
+    /**
      * Windows will not delete a file that a process still holds open, and a git that has exited can
      * leave a child holding its output: `git push` to a local path runs receive-pack. On Windows CI
      * the push's answer was thrown away for that, and a push was reported as one that "could not run".
