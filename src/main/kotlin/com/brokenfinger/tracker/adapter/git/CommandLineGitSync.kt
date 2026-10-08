@@ -352,10 +352,15 @@ class CommandLineGitSync(
          * ignore rules exclude, and an exclusion counts as naming it: with `.ps/` ignored, as in a
          * healthy repository, `:(exclude).ps`, `:!.ps` and every other spelling that starts with
          * `.ps` failed each reconciliation (measured on git 2.48.1). git judges whether an
-         * argument names a path by its prefix before the first wildcard; `[.]` leaves this one
-         * no prefix, and still matches nothing but the dot.
+         * argument names a path by its prefix before the first wildcard (`exclude_matches_pathspec`
+         * in git's `dir.c`); `[.]` leaves this one no prefix, and still matches nothing but the dot.
+         *
+         * **And in any ASCII case** (`icase`), so `.PS/` is left out too (#360). On a case-insensitive
+         * volume a case alias of `.ps` is refused before git runs ([StateDirectory]); this is what holds
+         * where both spellings can stand side by side. ASCII only — `.p` with U+017F, which APFS folds
+         * to `.ps`, is not matched, and the state-directory check and the content gate stand there.
          */
-        private val RECONCILE_SCOPE = listOf(".", ":(exclude,glob)[.]ps/**")
+        private val RECONCILE_SCOPE = listOf(".", ":(exclude,glob,icase)[.]ps/**")
 
         /** Said once per process, so it stays readable instead of drowning every other line. */
         const val NOT_A_REPOSITORY =

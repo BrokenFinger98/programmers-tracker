@@ -336,6 +336,24 @@ class CommandLineGitSyncTest {
         filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
     }
 
+    /**
+     * The pathspec names `.ps/` in any ASCII case, so the state directory stays out however git spells
+     * it (#360). On a case-insensitive volume a case alias is refused before git runs; where `.PS` and
+     * `.ps` can stand side by side, as here, the pathspec is what leaves it out.
+     */
+    @Test
+    fun `the state directory is left out in any case`() {
+        assumeTrue(!foldsTogether(base, ".PS", ".ps"), "this filesystem folds .PS into .ps")
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written(".PS/raw/a-run.jsonl", RAW_FRAME)
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
     /** A timer ticked or a frame landed, and nothing else moved: that is nothing to reconcile, not an empty commit. */
     @Test
     fun `a change under the state directory alone is nothing to reconcile`() {
