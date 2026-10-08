@@ -109,6 +109,37 @@ reproduced with the real classes, a bare remote and fake tokens:
 The second lesson: `.ps` is what is inside it as well as what it is, and a gate that searches only for
 the stored value goes blind the moment the store changes.
 
+**The third round of reviews, of `ea1357c`.** Both blocked the merge, on one finding each:
+
+- **U1 (High, adversarial).** On APFS — the host, and Docker's virtiofs over a macOS bind mount — a
+  pulled `.pſ/x` lands inside the real `.ps`, while the index records `.pſ/x`. The name on disk stays
+  `.ps`, so the listing check passed, and the tracked question, `ls-files ':(glob,icase)[.]ps/**'`,
+  folds ASCII alone and found nothing. With real pulls and the round-3 classes, on the host and in the
+  image, the server committed and pushed its own timers and orphaned frames under `.pſ/`, and renamed
+  the real token onto a pulled, tracked `.pſ/git-credentials`.
+- **A regression on a healthy repository (Critical, quality).** The walk for links below `.ps` used
+  `Files.walk`, which throws when an entry vanishes between being listed and being read, and that read
+  as a refusal. The tracker's own temp-and-rename writes make entries vanish all the time: 444 of 3,000
+  inspections of a healthy `.ps` refused (434 here), and 3 of 500 sessions (2 here) lost every raw
+  frame, because the raw log kept its first frame's verdict for the session. Skipping a refused
+  writer's frames, round 3's choice, was itself a discard of originals, which the constitution forbids.
+
+Three Importants: a repository with no remote — a documented way to run — searched all of history at
+every push, 23.4 s for 1,660 commits every minute the backup was due; the gate's fail-closed branches
+had no tests, and their mutants survived; and the frames. The adversarial review's ENV: with
+`GIT_LITERAL_PATHSPECS=1` in the server's environment, the tracked question answered "nothing". The
+quality review's Minors: an 11-line method, a cast where an exhaustive `when` belonged, asymmetric
+names, a fail-open default (`TrackedState.UNASKED`), a state read that followed links, a second
+spelling of the `.ps` pathspec, and three sentences that were not true.
+
+Writing the tests for those branches found one more: `git grep` over a commit whose blob cannot be
+read says `unable to read` and exits 1 — the code for "nothing found" — on 2.48.1 here and on 2.53.0
+in the image. The gate took it for a clean search.
+
+The third lesson: a check is as good as the question it asks. ASCII folding answered a Unicode
+question, a walk answered a question no writer had, and an exit code answered for a search that had
+not read everything.
+
 ## Options considered
 
 1. **Trust `.gitignore`, and refuse to reconcile when `git check-ignore` says `.ps/` is not ignored.**
@@ -186,36 +217,77 @@ clean. The state writers go ahead. Their refusal answers a link, an alias or a t
 known to be there. An unknown is far more often a git that is missing or busy, and dropping captures
 over it would lose data for nothing that has been seen.
 
+Round 4 weighed four more:
+
+**What git tracks, asked how.** A pathspec cannot spell every fold — `icase` is ASCII — so every index
+entry is listed and judged by its first segment: equal to `.ps` ignoring case as Java folds it
+(`".pſ".equalsIgnoreCase(".ps")` is true), or resolved by the filesystem to the same directory as `.ps`
+(`Files.isSameFile`), which catches a fold no case rule knows, a short name, a link. Listing 5,000
+entries took about 9 ms (measured), against about 6 ms for the pathspec question it replaces.
+
+**The walk: made to tolerate a vanishing entry, or gone.** The quality review's sketch tolerated one
+and measured 0 of 3,000 and 0 of 500. Kept, the walk would still read every entry below `.ps` at every
+state write and at every session's first frame, to say whether a link stood anywhere — and no writer
+needs that. A link a pull delivers is tracked, and the tracked question refuses it under any name. A
+link left untracked, after the owner's own `git rm --cached`, misleads only a writer whose path runs
+through it. So the walk is gone, and each writer checks its own path before every write: `.ps` and each
+directory below it, none of them a link, a stat apiece. State files are renamed into `.ps`, which
+replaces a link rather than writing through it, and a state read never follows one. Nothing reads what
+another writer is replacing, so the tracker's own writes cannot refuse it. "When the writers ask"
+above is superseded: the tracked question runs at every state write and at a session's first frame,
+and a stat per directory at every frame.
+
+**Where refused frames go.** Memory, or a quarantine directory outside the records repository. A
+quarantine survives a crash, but it is another configured path to ship — the Docker image mounts the
+records and nothing else, and no path is hard-coded. Memory needs nothing new and is bounded: a
+submit's frames go whole to its attempt file, which lies outside `.ps`, as soon as the grading is
+recorded; runs and orphans wait until `.ps` is usable again. Memory, at most 8,000,000 characters
+across the log.
+
+**A push with nowhere to go, and one that keeps failing.** A remote with neither `url` nor `pushurl`
+is nowhere to push, so nothing is searched for it — `pushurl` beside the `url` the brief named,
+because a push needs only that. A head already searched clean is remembered with its remote and a
+SHA-256 digest of what was stored, so a push that keeps failing is not searched again; a new head,
+remote or stored token is. In memory only: a restart searches once more.
+
 ## Decision
 
-Five layers, each covering what the one before cannot:
+Six layers, each covering what the one before cannot:
 
 1. **The pathspec.** Reconciliation checks, stages and commits with
    `. :(exclude,glob,icase)[.]ps :(exclude,glob,icase)[.]ps/**`, the entry and what is under it,
    whatever `.gitignore` says. On an unborn branch it is still a root commit. The submit path stages
    only the record's paths, and drops any whose first segment is `.ps` in any case.
-2. **The state directory, what it is and what is in it** (`StateDirectory`, `adapter/store`). Absent,
-   `.ps` is created as a real directory. Present, it must be:
+2. **The state directory, what it is and what git tracks of it** (`StateDirectory`, `adapter/store`).
+   Absent, `.ps` is created as a real directory. Present, it must be:
    - listed in the root by exactly that name;
    - a directory without following a link;
    - at the real root plus `.ps` as its real path;
-   - free of symbolic links anywhere below it, found by a walk that follows none;
-   - free of anything git tracks there, the entry included, in any ASCII case:
-     `git ls-files -z -- :(glob,icase)[.]ps :(glob,icase)[.]ps/**`. The question is the `TrackedState`
-     port, declared in `adapter/store` and answered by `adapter/git`'s `TrackedStateEntries`.
+   - free of anything git tracks that is it or under it: every entry `git ls-files -z` lists is judged
+     by its first segment — `.ps` ignoring case as Java folds it, or the same directory as `.ps` on disk.
+     The question is the `TrackedState` port, declared in `adapter/store` and answered by `adapter/git`'s
+     `TrackedStateEntries`. It has no default: a writer never assumes "nothing tracked".
 
-   Otherwise, or when git cannot say, `CommandLineGitSync` runs no commit, reconciliation or push, and
-   `GithubRemote` stores no credential and wires nothing. Git is still asked what it tracks, and where
-   a push would go. One WARN names the reason, never content, and the way out: `git rm -r --cached .ps`,
-   and commit that.
+   Nothing walks the directory. `forGit()` refuses when any of these fails, or when git cannot say:
+   `CommandLineGitSync` runs no commit, reconciliation or push, and `GithubRemote` stores no credential
+   and wires nothing. Git is still asked what it tracks, and where a push would go. A refusal carries a
+   typed `Refusal`: `NOT_THE_DIRECTORY`, `TRACKED` and `HOLDS_A_LINK` stand until the repository
+   changes; `UNANSWERED` and `NOT_INSPECTED` are transient. One WARN names the reason, never content,
+   and the way out: `git rm -r --cached .ps`, and commit that.
 3. **The state writers.** The credential store, the raw frames, the timers, the backup marker and the
-   seed ledger all ask the same question before writing. The ledger now writes through
-   `AtomicStateFile` like the others: a temporary file renamed over the old one, which replaces a link
-   rather than writing through it, and starts owner-only. `gitConfig()` offers the helper only for a
-   regular file. While the directory is refused, a write is skipped with one WARN per writer. When
-   git cannot say what it tracks, the write goes ahead. `.ps` is spelled once, `StateDirectory.NAME`.
-   The writers, the ignore rule, the credential path and both pathspecs derive from it, and one test
-   pins that they agree.
+   seed ledger ask `forWriting()` — `forGit()`, except that git which cannot say does not stop them —
+   and never write through a link. Each state file is a temporary file renamed over the old one inside
+   `.ps`, which replaces a link rather than writing through it, and starts owner-only; a state read
+   never follows a link, and a link where a document should be reads as none. `gitConfig()` offers the
+   helper only for a regular file. The raw log checks its own path before every frame — `.ps`, `raw`,
+   `recorded`, `orphans`, none of them a link, a stat apiece — and asks `forWriting()` at a session's
+   first frame, and again at the next while the refusal is transient. While the directory is refused,
+   a state file's write is skipped and **raw frames are held in memory**, at most 8,000,000 characters
+   across the log: a submit's go whole to its attempt file, a run set aside and an orphan are written
+   once `.ps` is usable again, and what is still held at shutdown is written if it can be and said if
+   not. Each reason is said once per writer. `.ps` is spelled once, `StateDirectory.NAME`; the writers,
+   the ignore rule, the credential path and the pathspec derive from it, and one test pins that they
+   agree.
 4. **The content gate**, in `CommandLineGitSync`:
    - Before staging, `git grep --untracked` searches the working tree under the commit's pathspec, so a
      refused commit leaves nothing staged. After staging, `git grep --cached` searches the index.
@@ -226,15 +298,24 @@ Five layers, each covering what the one before cannot:
      in it raw and percent-decoded, as fixed strings on stdin, never in argv. A prefix of the token, or
      the user name every token shares, is never a pattern.
    - Refused: a store that is not a regular file or cannot be read (a FIFO is never opened), a match,
-     a search that fails, and outgoing commits that cannot be listed. Each refusal is one WARN that
-     names why and never the token, and a false. A match says to revoke the token on GitHub and remove
-     it from history.
+     a search that fails — or that exits as if it found nothing after an `error:`, such as a blob it
+     could not read — and outgoing commits that cannot be listed. Each refusal is one WARN that names
+     why and never the token, and a false. A match says to revoke the token on GitHub and remove it
+     from history.
+   - A head already searched clean, for the same remote and the same stored token, is not searched
+     again by the same server.
 5. **The push.** `git push <remote> HEAD:refs/heads/<branch>`: the current branch alone, named on the
    command line, so `remote.<r>.push` and `push.default` send nothing else. The remote is
-   `branch.<b>.pushRemote`, else `remote.pushDefault`, else `branch.<b>.remote`, else `origin`. The
-   commits searched are `rev-list HEAD --not --remotes=<remote>`. An unborn HEAD is nothing to push and
-   says nothing; a detached one is not pushed, and says so. Every git call runs with
-   `GIT_NO_REPLACE_OBJECTS=1`, so the search reads the objects a push sends.
+   `branch.<b>.pushRemote`, else `remote.pushDefault`, else `branch.<b>.remote`, else `origin`; the
+   branch goes to its own name there, and `branch.<b>.merge` is not consulted. A remote with no `url`
+   and no `pushurl` is nowhere to push: nothing is searched, and the WARN says so. The commits searched
+   are `rev-list HEAD --not --remotes=<remote>`. An unborn HEAD is nothing to push, says nothing and
+   answers true — which the daily backup records as a success (#372). A detached one is not pushed,
+   and says so.
+6. **Git's environment** (`GitProcess`). Every git call of the tracker runs through one helper, with
+   `GIT_TERMINAL_PROMPT=0` and `GIT_NO_REPLACE_OBJECTS=1` — so the search reads the objects a push
+   sends — and without `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE` and the four
+   pathspec switches, whatever the server was started with.
 
 Smaller items:
 
@@ -258,14 +339,14 @@ make it independent of the store. Each vector, and what stops it now:
 | Vector | Stopped by | Test, red against the code before it |
 |---|---|---|
 | F1 `.pſ` | identity (listing); the content gate on any filesystem | `a state directory the filesystem folds from a long s refuses every commit`; `a token in any tracked path is never committed` |
-| F2 link at the store | the walk; the writer replaces a link; the helper skips one | `stores nothing when the credential path is a link`; `points git at nothing when the store is a link`; `a credential store that is not a regular file refuses every commit and push` |
+| F2 link at the store | tracked: refused; untracked: the writer replaces it; the helper skips one | `stores nothing when the credential path is a tracked link`; `replaces a link at the credential path rather than writing through it`; `points git at nothing when the store is a link`; `a credential store that is not a regular file refuses every commit and push` |
 | F3 `.ps` a link | identity | `a state directory that is a link into the tree refuses every commit and push`; `stores no credential into a state directory that is a link` |
 | F4 `.PS` | identity on a case-insensitive volume; `icase` where both can exist | `a state directory the filesystem folds from another case refuses every commit`; `the state directory is left out in any case` |
 | F5 another tool's commit | the push gate | `a commit another tool made with the push token is never pushed` |
 | N2 a tracked store | tracked entries | `a credential store a pull delivered stops every commit and push for what it is`; `stores no token over a store git tracks` |
 | N2a a one-letter store | the same refusal, for what it is, before any search | `a credential store a pull delivered stops every commit and push for what it is` |
-| N1 a link inside `.ps` | the walk; the raw log asks first | `a link inside the state directory stops every commit and push`; `no frame is written through a link where the raw directory was` |
-| N7 a link at the ledger | the writers ask first | `the ledger writes nothing through a link` |
+| N1 a link inside `.ps` | tracked: refused; the raw log checks its own path | `a link inside the state directory stops every commit and push`; `no frame is written through a link where the raw directory was` |
+| N7 a link at the ledger | tracked: refused; untracked: replaced, never written through | `the ledger never writes through a link` |
 | N3b state piled up under an alias | the writers ask first | `nothing piles up where the state directory pointed while it was a link`; `a state file is not written while the state directory is not its own` |
 | N3 the advice breaks commits | the entry excluded | `a state directory that replaced a tracked link does not stop reconciliation` |
 | N4 / M2 another remote masks the range | `--remotes=<remote>` | `a commit another remote holds is still searched before it is pushed here` |
@@ -276,9 +357,30 @@ make it independent of the store. Each vector, and what stops it now:
 | N11 a submit during a merge | the wait | `a submit waits out a merge in progress and leaves it untouched` |
 | Replace refs | `GIT_NO_REPLACE_OBJECTS=1` | `a replace ref does not hide a commit from the search` |
 | M4 the listing check | the injected listing | `a directory the root does not list under exactly that name is not the state directory` |
+| U1 a tracked `.pſ`, state | every index entry, judged in any fold | `state a fold of the name tracks is never written, committed or pushed`; `an entry under a Unicode case fold of the name is answered yes` |
+| U1 a tracked `.pſ`, the token | the same | `stores no token where a fold of the name is tracked` |
+| A fold no case rule knows | the same directory on disk | `an entry the filesystem resolves to the state directory is answered yes` |
+| ENV, the server's environment | `GitProcess` | four `GitProcessTest` cases; `a tracked state file is found whatever index the environment names` |
+| The walk racing the tracker's own writes | no walk | `a healthy directory is never refused while the tracker's own writers replace their files` |
+| A passing refusal kept for a session | asked again | `a session refused for a moment keeps every frame, in order` |
+| A link swapped in between two frames | a stat per directory, per frame | `a raw directory swapped for a link mid-session is never written through` |
+| Frames skipped while refused | held in memory | `a submit refused for good still reaches its attempt file whole`; `a run set aside while refused is written once the state directory is usable again`; `orphans kept while refused are written once the state directory is usable again`; `held frames stay within their limit, and going over it is said`; `what is still held when the log closes is said`; `what is held is written when the log closes, once the state directory is usable` |
+| A state read through a link | no-follow | `a link where the document should be reads as none` |
+| One WARN used up by a passing refusal | once per reason | `each reason a write is refused for is said` |
+| "Stayed in the raw directory" | said as it is | `a grading whose frames were never kept says so` |
+| An unreadable blob read as clean | an `error:` is not "nothing found" | `a blob a push would send that cannot be read stops the push` |
+| No remote, all of history searched | nothing searched | `a repository with no remote fails its push without searching` |
+| The same head searched at every attempt | remembered | `a head already searched clean is not searched again`; `a new head is searched again` |
 
 The new unit tests for `StateDirectory`, `TrackedStateEntries` and the writers' guard were red as
-compile errors first, since the API they call did not exist. Three tests pin what held already and
+compile errors first, since the API they call did not exist. In round 4 the store's implementation was
+written before its tests, so their red was taken afterwards and against the code before the change: a
+scratch worktree at `0590dac` ran each behaviour through the old API — 434 of 3,000 inspections
+refused, 2 of 500 sessions lost, every frame lost after a passing refusal, a refused submit's
+`complete()` throwing `NoSuchFileException`, a run and the first orphan never written, a frame written
+through a link swapped in mid-session, a read returning the link's target, one WARN for two reasons.
+The fail-closed pins — a missing tree, a ref naming no object, a clean filter — held already, and
+their mutants die. Three tests pin what held already and
 were green before: `strings that only resemble a token are not refused`,
 `every state writer, the ignore rule and the pathspec agree on one directory` and
 `a detached head is not pushed`. Each of the first two dies under a mutant: the token class widened to
@@ -305,6 +407,31 @@ and a helper offered for a link fails one. Round 3's, each against the final cod
 - the state check bypassed altogether: 8;
 - the listing check removed: 1, on macOS as well now.
 
+Round 4's, against the final code, with how many tests each failed:
+
+- the tracked question folding ASCII alone: 1 (the Unicode-fold case; on this host the end-to-end U1
+  tests still refuse, through the same directory on disk);
+- the same-directory check removed: 1;
+- git's environment passed through: 5;
+- the walk put back, as it was: 2, with 371 of 3,000 inspections refused;
+- a transient refusal kept for the session: 1;
+- the raw directory checked once per log rather than per frame: 1 (a frame written through the link);
+- frames skipped rather than held: 7;
+- no limit on what is held: 1;
+- `close()` silent: 1;
+- `RecordWriter` saying "stayed in the raw directory" again: 1;
+- a state read following a link: 1;
+- one WARN per file rather than per reason: 1;
+- no check for a remote: 1;
+- no cached head, or one cached for any head: 1 each;
+- an `error:` after exit 1 taken for "nothing found": 1;
+- each of the three fail-closed refusals turned into `return true`: 2, 1 and 1;
+- the search after staging removed: 1 — round 3's one survivor, now killed by the clean filter;
+- round 3's mutants again — the entry exclusion 1, git answering that nothing is tracked 14, state
+  files ignoring their guard 5, a bare push 1, `--remotes` unnamed 1, an unborn HEAD pushed 1, no token
+  shapes 7, no search before staging 1, the submit not waiting 1, replace refs on 1, the state check
+  bypassed 9.
+
 Without `icase`, the `.PS` test fails where `.PS` and `.ps` can coexist: measured on a case-sensitive
 APFS image here. Linux CI is such a filesystem, but this branch has not run on CI yet. On a
 case-insensitive host the identity check refuses first, and the test skips.
@@ -320,12 +447,12 @@ Two pin that a healthy repository still commits and pushes with a credential sto
 - **A pull can still delete the real state directory (F3).** Git treats it as expendable; the tracker
   cannot prevent that. The credential and the raw frames in it are gone. Until the link is replaced
   with a real directory, nothing is stored, committed or pushed.
-- **While `.ps` is refused, the tracker keeps no state.** Raw frames, timers, the backup marker and
-  the seed ledger are skipped, each said once. A grading captured in that window is recorded from the
-  grading itself, without its raw copy. That is a gap in "keep the original" (dev rules §2.4),
-  bounded by the refusal's WARN, and taken because the only place left to write was through the link,
-  or into the tracked path, that caused the refusal. `RecordWriter` then logs that the frames "stayed
-  in the raw directory", which they never reached.
+- **While `.ps` is refused, state files are not written and raw frames live in memory.** Timers, the
+  backup marker and the seed ledger skip their writes, each reason said once: a problem opened in that
+  window has no start time. Raw frames are held, at most 8,000,000 characters across the log; past
+  that they are dropped, and that is said. A crash or a kill loses what is held — `close()` runs only
+  when the server stops in order, and then writes what it can. Round 3 skipped the frames outright,
+  which discarded originals; that is reversed.
 - **A tracked or hand-staged `.ps` file stops everything.** `ls-files` reads the index, so one staged
   by hand is tracked. Every commit and push is refused until `git rm -r --cached .ps` takes it out —
   the owner's to run, on their own history. Round 2 committed around such a file and left it staged.
@@ -334,8 +461,9 @@ Two pin that a healthy repository still commits and pushes with a credential sto
 - **An untracked directory git cannot open is skipped silently (F8).** Reading stderr again would bring
   back the empty commit a linked `.gitignore`'s warning caused.
 - **TOCTOU windows remain (N10): every check is of a path, not a held handle.** They sit between the
-  state directory's inspection and a write, and between the commit's searches and the partial commit,
-  which reads the working tree again; the push searches what was committed. The ignores writer's
+  state directory's inspection and a write, between a writer's stat of its directories and its open
+  (the open itself never follows a link at the file), and between the commit's searches and the
+  partial commit, which reads the working tree again; the push searches what was committed. The ignores writer's
   no-follow read and `CREATE_NEW` matter only inside the race (both mutants survive). A FIFO swapped
   in between the store's checks would hang boot (F13). Each needs a process racing the tracker on this
   machine, outside the clone-or-pull model. Handle-based writes (`SecureDirectoryStream`) are a
@@ -370,13 +498,28 @@ Two pin that a healthy repository still commits and pushes with a credential sto
   remote deleted and recreated empty under the same name, before a fetch, leaves commits out of the
   range that the push then sends unsearched. The refspec still sends one branch, but not only
   searched commits.
-- **`icase` is ASCII-only.** `.pſ` rests on the identity check and the gate.
+- **`icase` is ASCII-only.** An untracked `.pſ` rests on the identity check, a tracked one on the
+  tracked question, which judges every fold, and both on the gate.
+- **A link below `.ps` that no writer's path runs through is not reported.** Nothing walks the
+  directory any more; such a link misleads no write, and one a pull delivers is tracked, and refused.
+- **`isSameFile` follows links.** A tracked link at the root that leads to `.ps` refuses everything,
+  as a tracked `.ps` does; nobody has a reason to commit one.
+- **Every state write asks git.** Listing the index took about 9 ms for 5,000 entries (measured), at
+  every timer, marker and ledger write and at each session's first frame; a frame costs a stat per
+  directory.
+- **The unreadable-blob check reads git's `error:` prefix** (2.48.1 and 2.53.0). A git that reworded it
+  would let an unreadable blob read as clean again; the push itself would then fail, since
+  `pack-objects` cannot read it either.
+- **Only eight variables are removed from git's environment.** `GIT_CONFIG_PARAMETERS` and
+  `GIT_CONFIG_COUNT`, which set config, and `GIT_OBJECT_DIRECTORY` and
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES` still pass through; each is the server's own environment, set
+  by its owner.
+- **A head searched clean is remembered in memory.** A restart searches it once more. A remote-tracking
+  ref that moves backward under the same head widens the range without a new search; those commits were
+  on that remote already.
 - **The identity check's real-path comparison** catches nothing the other checks do not on the POSIX
   cases tested (that mutant survives). It is kept for a directory that is not a link yet leads
   elsewhere, such as a Windows junction (untested).
-- **The search after staging has no test of its own.** With it removed, every test passes: the
-  search before staging reads the same content, so it differs only inside the window between the two,
-  which no test holds open. It is kept for that window.
 - **Refusals repeat.** The daily backup retries every minute while due, so a persistent refusal is
   logged at every attempt, beside the backup's own line, as a failing push already was. The merge
   wait and each writer's skip are said once.
@@ -424,11 +567,43 @@ After the second:
 - `8ed4fe6` the listing check pinned on every platform (M4);
 - `2dafd11` the KDoc and the WARNs, corrected (M1);
 - `e71bb2a` and `03bd6d2` the nits (M7);
-- this page, `SECURITY.md` and dev rules §1.
+- `7f11f59` this page, `SECURITY.md` and dev rules §1 (first published as `ea1357c`, whose `Closes`
+  became a `Refs` when round 4 followed).
 
-Gates green: 2,012 tests (9 skipped), ktlint, the build, branch coverage (`adapter/git` 81%, 198 of
-242; `adapter/store` 85%, 462 of 538) and the guards. Every git behaviour the layers rely on was
-checked on 2.48.1 here and on 2.53.0 in the tracker's image:
+Round 3's gates were green: 2,012 tests (9 skipped), ktlint, the build, branch coverage (`adapter/git`
+81%, 198 of 242; `adapter/store` 85%, 462 of 538) and the guards.
+
+After the third:
+
+- `2d3c09e` every git call through one helper, in its own environment (ENV);
+- `0590dac` every index entry judged in any fold (U1);
+- `8de36cd` no walk, typed refusals, refused frames held in memory, a state read that never follows a
+  link, one WARN per reason, no fail-open default (the Critical, Important 2, the Minors);
+- `836c540` an unreadable blob refuses, no search with no remote, a head searched clean not searched
+  again, the fail-closed branches pinned (Importants 1 and 3);
+- `a8a184d` the `.ps` pathspec spelled once, and the KDoc corrected (the Minors);
+- `8f68977` a held orphan list copied under its lock before it is written;
+- `49904f8` ktlint over the round's files — its lint checks had grepped a coloured report and never
+  matched, so the earlier commits of the round fail ktlint and only the last passes it;
+- this page, `SECURITY.md`, the index, the amendment and progress.
+
+Round 4's gates are green: 2,043 tests (9 skipped: 8 C#, and the `icase` test, which needs `.PS` beside
+`.ps`), ktlint, the build, branch coverage (`adapter/git` 85%, 225 of 262; `adapter/store` 84%, 535 of
+632; `adapter/config` 65%, 25 of 38, at its floor) and the guards. On the case-sensitive APFS image,
+where nothing folds, as on Linux, the git and store tests pass, the `icase` test runs, and the seven
+that need a folding filesystem skip. 32 mutants of this round's code and of round 3's layers, run
+against the final code, all fail a test. The review's two race measurements, against the fix: 0 of
+3,000 inspections refused and 0 of 500 sessions short of a frame, three runs each (434 and 2 on the
+code before it, here).
+
+U1 was run again as the adversarial review ran it — a real pull, the critic's own drivers on the
+tracker's boot jar — on the host (git 2.48.1) and in the tracker's image over a macOS bind mount (git
+2.53.0). Both pulls still leave `.pſ/git-credentials`, `.pſ/timers.json` and
+`.pſ/raw/orphans/120804.jsonl` in the index. Now `forGit()` answers `Refused(TRACKED)`, the token is
+not stored, `git status` is clean, the server's reconcile and push both answer false, another tool's
+`commit -a` finds no token, and the remote holds none of the server's state.
+
+Every git behaviour the layers rely on was checked on 2.48.1 here and on 2.53.0 in the tracker's image:
 
 - `git grep -F` with patterns from a file and from stdin, `--cached` and over commits;
 - `git grep --untracked` under the scope: exit 1 on a clean tree with the token in `.ps`, 0 with it
@@ -442,10 +617,14 @@ checked on 2.48.1 here and on 2.53.0 in the tracker's image:
 - with a second remote holding a commit, `--remotes` lists 0 commits and `--remotes=origin` 1;
 - with a replace ref, the search missed the token (exit 1) and found it with
   `GIT_NO_REPLACE_OBJECTS=1` (exit 0), while a push sent the original;
-- `rev-parse --git-path`, `--untracked-files=all`, and `icase` in a healthy repository.
+- `rev-parse --git-path`, `--untracked-files=all`, and `icase` in a healthy repository;
+- `git grep` over a commit whose blob is missing: `error: … unable to read`, exit 1; whose tree is
+  missing: `fatal: unable to read tree`, exit 128; `rev-list --not --remotes=origin` with that ref
+  naming no object: `fatal: bad object origin/main`, exit 128; a linked `.gitignore` under
+  `grep --untracked`: a `warning:` only, exit 1.
 
-Not verified live. On a records repository whose `.ps` is a real directory with no link and nothing
-tracked in it, and whose `.gitignore` is a regular file holding the rule, a rebuilt server should log
-no refusal at boot. Its startup reconciliation should succeed, and its next push should carry no
+Not verified live. On a records repository whose `.ps` is a real directory with nothing tracked in it,
+and whose `.gitignore` is a regular file holding the rule, a rebuilt server should log no refusal at
+boot. Its startup reconciliation should succeed, and its next push should carry no
 `.ps` path. The owner's repository was checked by names only, before this branch: no `.p*` path in any
 commit, no tracked symlink, `.ps` a real directory (#360's newest comment).

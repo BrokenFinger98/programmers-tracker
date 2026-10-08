@@ -123,7 +123,8 @@ switch the rule off; reconciliation's `git add --all` then staged `.ps/git-crede
 token `.ps/` has held since #258. Two adversarial reviews then found the same token reaching a push
 through aliases of `.ps` itself — a link a pull swaps in, a name the filesystem folds — through what a
 pull can put inside it, and through another tool's commit or the push's own settings. The rule is now
-one of five layers. Reconciliation leaves `.ps` out by pathspec. While `.ps` is an alias, holds a link
-or holds anything git tracks, the tracker commits nothing, pushes nothing and writes no state there.
-And it searches what it commits and pushes for the stored token and for GitHub's token shapes:
-[[decisions/2026-10-08-reconcile-never-stages-the-state-directory]].
+one of six layers. Reconciliation leaves `.ps` out by pathspec. While `.ps` is an alias, or git tracks
+anything under it under any name the filesystem folds to it, the tracker commits nothing, pushes
+nothing and writes no state file there, and holds raw frames in memory instead; nothing is written
+through a link at any time. And it searches what it commits and pushes for the stored token and for
+GitHub's token shapes: [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]].

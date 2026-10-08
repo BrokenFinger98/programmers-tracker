@@ -32,11 +32,12 @@ repository's `.gitignore` itself rather than trusting one to already be there. N
 the rule alone: git reads none from a `.gitignore` that is a symbolic link, and a clone or a pull
 can put a link, a case variant or a tracked file where `.ps/` was. So the server's own commits leave
 `.ps` and everything under it out, whatever that file says. It runs no commit or push, and stores no
-credential, while `.ps` is not a real directory of its own, holds a link or holds anything git
-tracks, or while git cannot say whether it does. And before every commit and every push it searches
-the file content it would send for the stored token and for anything shaped like a GitHub token,
-refusing if it finds one. Commit and tag messages are not searched. A token that reached a commit
-is revoked on GitHub; removing it from history does not make it secret again
+credential, while `.ps` is not a real directory of its own or git tracks anything under it — under
+any name the filesystem folds to `.ps` — or while git cannot say whether it does. It writes nothing
+through a link. And before every commit and every push it searches the file content it would send
+for the stored token and for anything shaped like a GitHub token, refusing if it finds one or
+cannot read everything it would send. Commit and tag messages are not searched. A token that
+reached a commit is revoked on GitHub; removing it from history does not make it secret again
 ([#360](https://github.com/BrokenFinger98/programmers-tracker/issues/360)).
 
 None of the three may appear in a log line, an exception message or a debug dump at any level.
