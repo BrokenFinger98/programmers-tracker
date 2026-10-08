@@ -107,6 +107,14 @@ kover {
 // from a test that passes, which is how eight CodeFetch tests reached main looking green in
 // #21 without ever executing. This makes the invisible case visible: every test class in the
 // source tree must produce a result file.
+//
+// A class tagged `integration` is the exception. `test` excludes that tag (development-rules
+// §6.5), so such a class leaves no result there by design and runs only in `integrationTest`,
+// when somebody names it. Counted, it fails this check, and `scripts/test.sh` and CI's test step
+// with it, the day the first one is written (#381). It is left out rather than counted from
+// `integrationTest`'s results, because a verdict that read those would change with whatever else
+// the invocation happened to run. The cost is that nothing here notices an integration class
+// that never ran; those are run by name, by hand.
 val verifyEveryTestClassRan =
     tasks.register("verifyEveryTestClassRan") {
         description = "Fails when a test class produced no result file — usually a non-Unit test method."
@@ -120,10 +128,7 @@ val verifyEveryTestClassRan =
         val resultsDir = layout.buildDirectory.dir("test-results/test")
         inputs.files(sources)
         doLast {
-            val declared = sources.files
-                .filter { it.readText().contains("@Test") }
-                .map { it.nameWithoutExtension }
-                .toSortedSet()
+            val declared = testClassesOwingAResult(sources.files.map { it.nameWithoutExtension to it.readText() })
             val ran = (resultsDir.get().asFile.listFiles() ?: emptyArray())
                 .filter { it.name.endsWith(".xml") }
                 .map { it.nameWithoutExtension.substringAfterLast('.') }
@@ -131,10 +136,30 @@ val verifyEveryTestClassRan =
             val missing = declared - ran
             check(missing.isEmpty()) {
                 "these test classes declare @Test but produced no results, so they never ran: " +
-                    missing.joinToString()
+                    missing.joinToString() +
+                    ". A class is left out as an integration test only when it carries an unindented " +
+                    "@Tag(\"integration\")."
             }
         }
     }
+
+/**
+ * The classes that must leave a result file after `test`, by simple name, from (name, source)
+ * pairs: those that declare `@Test`, except a class tagged `integration`.
+ *
+ * Both facts are read from the source text. The tag counts only unindented at the start of a line,
+ * which is where a top-level class's annotation sits. A mention in a comment does not leave a class
+ * out, and neither does the tag on one method or nested class: `test` still runs the rest of that
+ * class, which still owes a result. A class whose every test is tagged on the method fails the
+ * check until the tag moves up to the class. That is a loud false alarm, the safe way to be wrong;
+ * the opposite mistake would leave a class that nobody checks.
+ */
+fun testClassesOwingAResult(sources: Iterable<Pair<String, String>>): Set<String> = sources
+    .filter { (_, text) -> "@Test" in text && !integrationClassTag.containsMatchIn(text) }
+    .map { (name, _) -> name }
+    .toSortedSet()
+
+private val integrationClassTag = Regex("""(?m)^@Tag\("integration"\)""")
 
 // Branch coverage, floor per package, deferred in `2026-08-05-ci-guard-scoping` and widened
 // past the calculators in #272.
