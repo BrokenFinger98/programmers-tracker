@@ -8,10 +8,11 @@ import java.io.InputStream
  *
  * `git grep` over each outgoing commit read every commit's whole tree, so a first push read each unchanged
  * file once per commit: 252 s for 5,000 commits, one call 16 s, on a history shaped like the #360 review's;
- * this scan took 0.5 s there. Here `rev-list --objects` names each object of the range once, the first time
- * it reaches it; `cat-file --batch-check` tells each one's type and size; and `cat-file --batch` prints the
- * blobs, in calls of about [bytesPerCall] of content each, which [BatchOutput] searches as it reads them. A
- * blob many commits share is read once, and no tree or commit is read at all.
+ * this scan took 0.5 s there. Here `rev-list --objects` names each object of each listing once, the first
+ * time it reaches it — the push lists its range and HEAD's own tree; `cat-file --batch-check` tells each
+ * one's type and size; and `cat-file --batch` prints the blobs, in calls of about [bytesPerCall] of content
+ * each, which [BatchOutput] searches as it reads them. A blob many commits share, or both listings name, is
+ * read once, and no tree or commit is read at all.
  *
  * Fails closed: a listing, a description or a read that fails or does not finish in time, an object git
  * cannot describe or print, and output other than what was asked for are each [SearchOutcome.Unsearched].
@@ -21,16 +22,19 @@ internal class OutgoingObjectScan(
     private val bytesPerCall: Long = BYTES_PER_CALL,
     private val window: Int = BatchOutput.WINDOW,
 ) {
-    /** Searches every object [range] names — arguments to `rev-list` — for the token shapes and [stored]'s values. */
-    fun outcome(range: List<String>, stored: StoredCredential): SearchOutcome {
-        val listed = listed(range) ?: return SearchOutcome.Unsearched
+    /**
+     * Searches every object [listings] name — each the arguments of one `rev-list --objects` — for the token
+     * shapes and [stored]'s values. What two listings name is read once.
+     */
+    fun outcome(listings: List<List<String>>, stored: StoredCredential): SearchOutcome {
+        val listed = listings.map { listed(it) ?: return SearchOutcome.Unsearched }.flatten().distinct()
         val read = described(listed)?.filter { it.type in READ_TYPES } ?: return SearchOutcome.Unsearched
         val patterns = TokenPatterns.of(stored)
         val outcomes = calls(read).asSequence().map { searched(it, patterns) }
         return outcomes.firstOrNull { it != SearchOutcome.Clean } ?: SearchOutcome.Clean
     }
 
-    // Every object the range names, each once: rev-list prints an object the first time it reaches it, and a
+    // Every object one listing names, each once: rev-list prints an object the first time it reaches it, and a
     // path after the id of each tree and blob, which only orders them.
     private fun listed(range: List<String>): List<String>? {
         val answer = git.answer(listOf("rev-list", "--objects") + range)

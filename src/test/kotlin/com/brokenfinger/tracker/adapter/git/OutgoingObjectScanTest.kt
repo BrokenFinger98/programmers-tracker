@@ -168,6 +168,36 @@ class OutgoingObjectScanTest {
         calls.reads shouldBe 0
     }
 
+    // More than one listing: the push reads HEAD's tree beside its range (the review of 315f44e) -------
+
+    @Test
+    fun `an object only a second listing names is read`() {
+        committed("notes/pasted.md", "${aGithubShapedToken()}\n")
+        committed("notes/today.md", "a note\n")
+        val listings = listOf(listOf("HEAD", "--not", "HEAD~1"), HEAD_TREE)
+
+        scanned(listings = listings) shouldBe SearchOutcome.FoundInContent
+    }
+
+    /** On a first push every blob of HEAD's tree is in the range as well, and is read once all the same. */
+    @Test
+    fun `an object two listings name is read once`() {
+        committed("notes/today.md", "a note\n")
+        val note = repo.git("rev-parse", "HEAD:notes/today.md").trim()
+        val calls = RecordingCalls(repo.root)
+
+        scanned(listings = listOf(listOf("HEAD"), HEAD_TREE), calls = calls) shouldBe SearchOutcome.Clean
+
+        calls.read().count { it == note } shouldBe 1
+    }
+
+    @Test
+    fun `a second listing that cannot be listed is unsearched`() {
+        val listings = listOf(listOf("HEAD"), listOf("refs/heads/no-such-branch"))
+
+        scanned(listings = listings) shouldBe SearchOutcome.Unsearched
+    }
+
     // Failing closed ------------------------------------------------------------------------------------
 
     @Test
@@ -290,7 +320,8 @@ class OutgoingObjectScanTest {
         stored: StoredCredential = StoredCredential.None,
         calls: GitCalls = RecordingCalls(repo.root),
         bytesPerCall: Long = OutgoingObjectScan.BYTES_PER_CALL,
-    ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(range, stored)
+        listings: List<List<String>> = listOf(range),
+    ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(listings, stored)
 
     private fun committed(relative: String, content: String) = committedBytes(relative, content.toByteArray())
 
@@ -330,6 +361,9 @@ class OutgoingObjectScanTest {
     private companion object {
         /** The argument that makes a call a read of content rather than a question about type and size. */
         const val READ = "--batch"
+
+        /** HEAD's tree as the push lists it beside its range. */
+        val HEAD_TREE = listOf("HEAD^{tree}")
 
         /** The argument that makes a call a question about each object's type and size. */
         const val DESCRIBE = "--batch-check"
