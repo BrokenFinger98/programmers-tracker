@@ -10,17 +10,23 @@ import com.brokenfinger.tracker.adapter.store.RecordLayout
 import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
+import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
@@ -65,6 +71,25 @@ class StartupReconciliationTest {
 
         repo.filesInHead() shouldContain "log/submissions.jsonl"
         repo.subjects().size shouldBe 1
+    }
+
+    /**
+     * A log a link stands in for is refused rather than read (#387), and the boot is not where that ends. The startup
+     * runner catches nothing, so each reader of the log at boot says it could not read it and goes on, and the server
+     * stays up to keep every grading's frames until the link is gone. What the link leads to is neither read as the
+     * history nor changed.
+     */
+    @Test
+    fun `a submission log that is a link is refused at boot, said, and the boot goes on`() {
+        assumeTrue(canPlantLinksIn(base), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(base.resolve("elsewhere")).resolve("submissions.jsonl")
+        Files.writeString(elsewhere, "$A_RECORD\n")
+        aLink(repo.root.resolve("log/submissions.jsonl"), elsewhere)
+
+        val heard = warningsWhile(CodeAttachment::class) { startup() }
+
+        heard.single() shouldContain "could not be read"
+        Files.readString(elsewhere) shouldBe "$A_RECORD\n"
     }
 
     @Test

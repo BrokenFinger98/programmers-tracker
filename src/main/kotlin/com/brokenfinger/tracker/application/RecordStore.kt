@@ -29,6 +29,10 @@ interface RecordStore {
      * Every record the log still holds, oldest first. **Lenient** — a line that cannot be
      * parsed is skipped, never thrown on, because a crash mid-append leaves a torn final
      * line and losing the rest of the log with it is unrecoverable (protocol doc §11).
+     *
+     * **Not written yet is empty; unreadable is not.** A log that is there and cannot be read —
+     * one a link stands in for is refused (#387) — is thrown as an `IOException`, never
+     * answered as empty, which every reader would take for "no submissions".
      */
     fun read(): List<RecordedSubmission>
 }
