@@ -421,6 +421,42 @@ class FileRawSessionLogTest {
         heard.last() shouldContain "reached 10 characters"
     }
 
+    /**
+     * Runs set aside and orphans held while `.ps` was refused filled the budget they shared with the gradings in
+     * flight, so a submit's frames were dropped, `complete()` threw and the attempt had no raw copy (#378). They hold
+     * three quarters at most, and the rest stays for the gradings in flight.
+     */
+    @Test
+    fun `runs and orphans held while refused leave a submit room for its frames`() {
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root) { true })
+        repeat(6) { log.orphaned(120804, """{"o":$it}""") }
+        val run = log.start(120805)
+        log.append(run, """{"r":1}""")
+        log.setAside(run)
+        val submit = log.start(131528)
+        log.append(submit, """{"n":1}""")
+
+        val copied = log.complete(submit, root.resolve("problems/131528-x/attempts/001.raw.jsonl"))
+
+        Files.readAllLines(copied) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** Three quarters of 40 characters hold four 7-character orphans; the fifth is dropped, and that is said once. */
+    @Test
+    fun `orphans held while refused take their share and no more, and going over it is said`() {
+        val git = ChangingAnswer(true)
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root, git))
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            repeat(6) { log.orphaned(120804, """{"o":$it}""") }
+        }
+        git.answer = false
+        log.orphaned(120805, """{"next":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/120804.jsonl")) shouldHaveSize 4
+        heard.last() shouldContain "reached 30 characters"
+    }
+
     @Test
     fun `what is still held when the log closes is said`() {
         val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
@@ -880,6 +916,15 @@ class FileRawSessionLogTest {
         Files.move(raw, raw.resolveSibling("moved-away"))
         aLink(raw, target)
     }
+
+    // A log under the record repository that holds at most [limit] characters while `.ps` is refused.
+    private fun aLogHolding(limit: Long, state: StateDirectory) = FileRawSessionLog(
+        root.resolve(".ps/raw"),
+        Clock.fixed(startedAt, ZoneOffset.UTC),
+        state,
+        heldLimit = limit,
+        recordRoot = root,
+    )
 
     private fun logGuardedBy(state: StateDirectory) =
         FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), state)

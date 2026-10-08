@@ -49,7 +49,10 @@ import java.util.concurrent.atomic.AtomicLong
  * While the state directory is refused, frames are **held in memory** instead, within [heldLimit]
  * characters across the log. A submit's frames go to its attempt file at [complete], which lies outside
  * `.ps`; a run set aside and an orphan are written into `.ps` the first time it is usable again, and
- * [close] says what is still held when the server stops. Each refusal, and the limit, is said once.
+ * [close] says what is still held when the server stops. Each refusal, and the limit, is said once. Runs set
+ * aside and orphans hold three quarters of the limit at most, so a submit in flight always has room (#378); the
+ * full limit of 8,000,000 characters retains about 16 MB of heap (measured with the fixtures' frames, whose Korean
+ * makes each character two bytes).
  *
  * **A boot replays only what a write would accept (#377).** [unprocessed] lists the work list only while
  * the [guard] would let a frame be written there: what it refuses is left where it is, unread, and said
@@ -86,6 +89,13 @@ class FileRawSessionLog(
     private val heldOrphans = ConcurrentHashMap<Long, MutableList<String>>()
 
     private val heldChars = AtomicLong()
+
+    /**
+     * What runs set aside and orphans may hold, of [heldLimit], so that a quarter always stays for the gradings in
+     * flight: settled frames filled the budget and a submit's were dropped, its attempt left with no raw copy (#378).
+     */
+    private val settledLimit = heldLimit - heldLimit / LIVE_SHARE
+    private val settledChars = AtomicLong()
 
     private val said = ConcurrentHashMap.newKeySet<String>()
 
@@ -180,7 +190,7 @@ class FileRawSessionLog(
     }
 
     private fun holdOrphan(lessonId: Long, line: String) =
-        hold(heldOrphans.computeIfAbsent(lessonId) { orphanList() }, line)
+        holdSettled(heldOrphans.computeIfAbsent(lessonId) { orphanList() }, line)
 
     // Anything but a regular file where a lesson's orphans go — a link, most likely — loses no frame (#378): it is held
     // like a refused frame and written once a regular file or nothing stands there. The link is never replaced: the
@@ -436,27 +446,64 @@ class FileRawSessionLog(
 
     // Bounded across the whole log: past the limit a frame is dropped, and that is said once.
     private fun hold(frames: MutableList<String>, line: String) {
-        if (heldChars.addAndGet(line.length.toLong()) <= heldLimit) {
+        if (reserved(line.length.toLong())) {
             synchronized(frames) { frames += line }
             return
         }
-        heldChars.addAndGet(-line.length.toLong())
         sayOnce(LIMIT) { logger.warn(OVER_LIMIT, heldLimit) }
     }
 
+    // A frame whose grading has settled — an orphan — holds within the settled share, and that limit is said once.
+    private fun holdSettled(frames: MutableList<String>, line: String) {
+        if (reservedSettled(line.length.toLong())) {
+            synchronized(frames) { frames += line }
+            return
+        }
+        sayOnce(SETTLED_LIMIT_KEY) { logger.warn(OVER_SETTLED_LIMIT, settledLimit, heldLimit - settledLimit) }
+    }
+
+    // A run set aside moves its frames, held already, into the settled share; past that share they are dropped.
     private fun holdRun(name: String, frames: List<String>) {
-        if (frames.isNotEmpty()) heldRuns.merge(name, frames) { old, new -> old + new }
+        if (frames.isEmpty()) return
+        if (settledChars.addAndGet(charsOf(frames)) <= settledLimit) {
+            heldRuns.merge(name, frames) { old, new -> old + new }
+            return
+        }
+        settledChars.addAndGet(-charsOf(frames))
+        released(frames)
+        sayOnce(SETTLED_LIMIT_KEY) { logger.warn(OVER_SETTLED_LIMIT, settledLimit, heldLimit - settledLimit) }
+    }
+
+    private fun reserved(chars: Long): Boolean {
+        if (heldChars.addAndGet(chars) <= heldLimit) return true
+        heldChars.addAndGet(-chars)
+        return false
+    }
+
+    private fun reservedSettled(chars: Long): Boolean {
+        val withinShare = settledChars.addAndGet(chars) <= settledLimit
+        if (withinShare && reserved(chars)) return true
+        settledChars.addAndGet(-chars)
+        return false
     }
 
     private fun released(lines: List<String>) {
-        heldChars.addAndGet(-lines.sumOf { it.length.toLong() })
+        heldChars.addAndGet(-charsOf(lines))
+    }
+
+    private fun charsOf(lines: List<String>): Long = lines.sumOf { it.length.toLong() }
+
+    // Settled frames written at last leave both counts.
+    private fun appendedSettled(file: Path, lines: List<String>) {
+        appendedAll(file, lines)
+        settledChars.addAndGet(-charsOf(lines))
     }
 
     // Runs and orphans kept while `.ps` was refused, now that it is usable (#360).
     private fun releaseHeld() {
         if (heldRuns.isEmpty() && heldOrphans.isEmpty()) return
         subdirectory(RETIRED)?.let { recorded ->
-            heldRuns.keys.forEach { name -> heldRuns.remove(name)?.let { appendedAll(recorded.resolve(name), it) } }
+            heldRuns.keys.forEach { name -> heldRuns.remove(name)?.let { appendedSettled(recorded.resolve(name), it) } }
         }
         subdirectory(ORPHANS)?.let { orphans -> heldOrphans.keys.forEach { id -> releaseOrphans(orphans, id) } }
     }
@@ -466,7 +513,7 @@ class FileRawSessionLog(
     private fun releaseOrphans(orphans: Path, lessonId: Long) {
         val file = orphans.resolve("$lessonId$SUFFIX")
         if (isThereButNotAFile(file)) return
-        heldOrphans.remove(lessonId)?.let { held -> appendedAll(file, synchronized(held) { held.toList() }) }
+        heldOrphans.remove(lessonId)?.let { held -> appendedSettled(file, synchronized(held) { held.toList() }) }
     }
 
     private fun flushEverything() {
@@ -619,6 +666,14 @@ class FileRawSessionLog(
         private const val ORPHANS_UNANSWERED_KEY = "orphans unanswered"
         private const val NOT_REPLAYED = "not replayed: "
         private const val LIMIT = "limit"
+        private const val OVER_SETTLED_LIMIT =
+            "Raw frames of runs set aside and of orphans, held in memory, reached {} characters; beyond that " +
+                "they are dropped until .ps is usable again, so that the gradings in flight keep {} characters of " +
+                "their own. Said once."
+        private const val SETTLED_LIMIT_KEY = "settled limit"
+
+        /** One part in this many of what the log holds is kept for the gradings in flight (#378). */
+        private const val LIVE_SHARE = 4
 
         /** What the log holds in memory at most, across every session, while `.ps` is refused. */
         const val HELD_LIMIT = 8_000_000L
