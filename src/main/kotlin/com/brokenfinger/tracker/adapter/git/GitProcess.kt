@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -33,6 +34,25 @@ internal class GitProcess(
     /** Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [timeout]. */
     fun run(command: List<String>, input: String? = null): GitResult =
         inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(command, input, stdout, stderr) } }
+
+    /**
+     * Runs [command] as [run] does, and hands what git wrote to stdout to [read] as a stream, never held
+     * whole: an answer can be as large as the objects it carries (#373). Null, with [read] never called,
+     * unless git exited 0 in time — what a call cut off by the timeout wrote stops anywhere.
+     */
+    fun <T : Any> runReading(command: List<String>, input: String?, read: (InputStream) -> T): T? =
+        inTempFile(".out") { stdout -> inTempFile(".err") { readIfAnswered(command, input, stdout, it, read) } }
+
+    private fun <T : Any> readIfAnswered(
+        command: List<String>,
+        input: String?,
+        stdout: Path,
+        stderr: Path,
+        read: (InputStream) -> T,
+    ): T? {
+        if (exitCodeOf(command, input, stdout, stderr) != 0) return null
+        return Files.newInputStream(stdout).buffered().use(read)
+    }
 
     private fun ran(command: List<String>, input: String?, stdout: Path, stderr: Path): GitResult {
         val code = exitCodeOf(command, input, stdout, stderr)

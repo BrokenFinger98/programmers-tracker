@@ -125,6 +125,43 @@ class GitProcessTest {
         Duration.ofNanos(System.nanoTime() - started) shouldBeLessThan Duration.ofSeconds(5)
     }
 
+    // An answer read as a stream (#373) ----------------------------------------------------------
+
+    /** `cat-file --batch` prints whole objects, so its answer is read as it comes rather than held. */
+    @Test
+    fun `an answer can be read as a stream`() {
+        val note = repo.git("rev-parse", "HEAD:notes/today.md").trim()
+
+        val answer = GitProcess(repo.root).runReading(listOf("git", "cat-file", "--batch"), "$note\n") {
+            it.readAllBytes().decodeToString()
+        }
+
+        answer shouldBe "$note blob 7\na note\n\n"
+    }
+
+    @Test
+    fun `a call that fails hands nothing over to read`() {
+        val answer = GitProcess(repo.root).runReading(listOf("git", "cat-file", "--batch", "--no-such-option"), null) {
+            it.readAllBytes().decodeToString()
+        }
+
+        answer shouldBe null
+    }
+
+    /** What a call cut off by the timeout wrote stops anywhere, so it is not read as an answer. */
+    @Test
+    @Timeout(value = 30, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a call cut off by its timeout hands nothing over to read`() {
+        assumeTrue(canPlantLinksIn(base), "this test runs a shell command")
+        val process = GitProcess(repo.root, timeout = Duration.ofSeconds(1))
+
+        val answer = process.runReading(listOf("git", "-c", "alias.stall=!echo partial; sleep 10", "stall"), null) {
+            it.readAllBytes().decodeToString()
+        }
+
+        answer shouldBe null
+    }
+
     private fun run(vararg args: String, inherited: Map<String, String>): GitResult =
         GitProcess(repo.root, System.getenv() + inherited).run(listOf("git") + args)
 
