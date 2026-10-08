@@ -211,7 +211,8 @@ class FileRawSessionLog(
 
     private fun refused(refusal: StateDirectory.Refusal): Verdict {
         sayOnce(refusal.name) { logger.warn(HELD, refusal.reason) }
-        return if (refusal.transient) Verdict.UNDECIDED else Verdict.MEMORY
+        if (refusal.transient) return Verdict.UNDECIDED
+        return Verdict.MEMORY
     }
 
     // Written in arrival order: what was held while `.ps` was refused goes before the frame at hand.
@@ -282,7 +283,8 @@ class FileRawSessionLog(
     // never saw — a replay after a restart — is read if it is there.
     private fun framesOnDisk(session: RawSessionId, state: LiveSession?): ByteArray? {
         val raw = rawDirectory()
-        if (raw == null) return if (state?.wroteToDisk == true) throw unreachable() else null
+        if (raw == null && state?.wroteToDisk == true) throw unreachable()
+        if (raw == null) return null
         val file = raw.resolve(session.value)
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return null
         return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readAllBytes() }
