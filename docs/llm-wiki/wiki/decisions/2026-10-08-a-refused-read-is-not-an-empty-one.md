@@ -221,9 +221,9 @@ Two tests were pins, green before: the owner-only mode of a generated token, and
   frames; MCP fails every call; the vault, statements and pending code wait. Recording resumes at the
   first grading after the link is gone — but, as the review measured, **not for the gradings refused
   meanwhile**: their frames stay on the work list, which only a start replays. Until then MCP omits
-  them silently, since `incompleteHistory` counts orphaned frames and not the work list; #377's
-  `sessionsNotReplayed` (PR #395) may cover part of that. And a grading recorded live before that start
-  takes the next number, so the replayed ones are numbered after it, though they came first.
+  them silently. #377's `sessionsNotReplayed`, merged since, does not cover them: it counts what the
+  last start left in place, and these were refused after it. And a grading recorded live before that
+  start takes the next number, so the replayed ones are numbered after it, though they came first.
 - **An unreadable log no longer stops the boot.** It used to fail the writer's bean, and the container
   restarted. Now every reader says it, and the writer retries at each grading. A transient error at boot
   costs that boot's attachment pass and page refresh, which wait for the next; a standing one no longer
@@ -429,3 +429,29 @@ the log, and may name the read's refusal where the append's was meant.
 - `./scripts/guards.sh`.
 
 Still **not verified live**, and not pushed: CI has not run these commits.
+
+### Merged with #377
+
+Main moved to `258ed10` with #377 (`2edfb2a`), which rewrote the raw work list this branch had also
+bounded. Merged in `5a86aaa`, with every guarantee of both kept:
+
+- **The listing is #377's.** It asks `forWriting()`, then `pathFor("raw")` after git answers, lists
+  regular files alone, never replays a session git has ever tracked, and keeps what it left for
+  `sessionsNotReplayed`. That covers everything this page's `listable()` did — the audit row above
+  and "nothing listed, said once" in the table of refused reads — so that method and its words went,
+  and #377's say it ("Their directory was not listed").
+- **The read keeps both.** The replay opens without following a link, as both sides did, and checks
+  for a regular file first, as this branch did. Since the listing passes over a link or a FIFO, a
+  session that is one is no longer failed at the read: it is left on the work list and counted. The
+  check now stands against one swapped in after the listing, which a test pins.
+- **The tests of both are kept.** Three of this branch's expected the old place of refusal and were
+  changed to the new one: a linked `raw` is said in #377's words, a linked session file gives an
+  empty report and stays, and the FIFO test is split in two, passed over through the listing and
+  failed, never waited on, when listed before the swap.
+- **Mutation, the conflicted code.** The read's regular-file check removed fails the swap test; the
+  listing past `pathFor`, non-regular entries listed, no history exclusion, nothing kept for
+  `sessionsNotReplayed`, and `withdraw` blind to held frames each fail 1 to 7 tests. The read's open
+  following a link survives, race-only as before: the check refuses a link before the open.
+- **Gates**, all exit 0 at `5a86aaa`: check; test 2,403 JUnit tests in 169 classes, 0 failures, 11
+  skipped, node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 85%, 659 of 768;
+  `adapter/git` 89%; `adapter/web` 82%; `application` 89%); guards, 12 of 12.

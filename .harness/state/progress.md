@@ -5951,3 +5951,22 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Gates**, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 341/384; `adapter/config` 65% at its floor); guards.
 - **Found, not fixed.** The commit side still reads file content alone, so a file named with a token is committed by a reconciliation and every push is then refused until history is rewritten.
 - Pending: CI; not verified live.
+
+## 2026-10-08 — #387 merged with main at 258ed10, #377 among it (branch fix/387-reads-never-follow-links)
+- **`5a86aaa`**, a merge, no rebase. Five files conflicted, all on the raw work list both branches had
+  bounded. The listing is #377's (`forWriting()`, then `pathFor("raw")`, regular files alone, no session
+  git has ever tracked, `sessionsNotReplayed`), which does all that #387's `listable()` did, so that went.
+  The replay's read is main's, with #387's regular-file check kept before its open. `withdraw` is kept.
+  `docs/mcp.ko.md` holds both paragraphs, its header the merged page's blob `edb4123`.
+- **Where the two disagreed:** a linked or FIFO session is now passed over at the listing (an empty
+  report) where #387 failed it at the read (`failed=1`). Three #387 tests were changed to that: the
+  linked-raw WARN in #377's words, the linked session's empty report, and the FIFO test split into the
+  listing case and a swap-after-listing case that pins the read's check.
+- Every test name of both sides is in the merge, but main's two renames and the one #387 removed.
+- **Mutation spot checks**: 6 of 7 killed; the read's open following a link survives, race-only.
+- **Gates**, all exit 0: check; test 2,403 (169 classes, 0 failures, 11 skipped), node 4 of 4; build;
+  `verifyBranchCoverage` (`adapter/store` 85%, `adapter/git` 89%, `adapter/web` 82%, `application` 89%);
+  guards 12 of 12.
+- The ADR's accepted cost is now precise: `sessionsNotReplayed` counts what the last start left, not
+  gradings refused while the server runs.
+- **Pending.** Not pushed. CI, the junction tests' first run and the live check, as before.
