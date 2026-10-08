@@ -712,3 +712,177 @@ reconciliation (1).
 Mutants of this round, each failing a test: the pin removed again (3 tests, the bytes test among
 them); the date ignored, so once per process (2); the dedupe removed (3); the directory holding the
 day, by reading the warning as a change (4); and the two above (1 each).
+
+**#377, after the merge.** Two low findings from round 4's adversarial pass had been inferred from the
+code. Both were reproduced on `fix/377-raw-replay-guard` as tests that failed against `41f713e`.
+
+- **A raw session a pull delivered was replayed at boot.** `unprocessed()` listed `.ps/raw` with no
+  guard. A session git checked out there was recorded at boot (`recorded=1`), and so was one behind a
+  linked raw directory. The work list is now read only where a frame would be written: `forWriting()`,
+  then `pathFor("raw")`, the judgement every raw write takes, with no second rule. Git that cannot
+  answer does not stop a replay, just as it does not stop a write. Otherwise nothing is read, moved or
+  deleted. One WARN per reason gives the reason and how many sessions were left, and never names a
+  path below `.ps`. Through a link nothing is listed, so the WARN says that nothing was counted. A
+  session left in place is replayed at the first boot that finds `.ps` usable.
+- **A session kept its first frame's answer.** Once git tracked a file under `.ps` mid-grading, the
+  next frame of the grading in flight was still written to `.ps/raw`. The cache is kept, with a
+  stated bound.
+  - Cost of the alternative: asking git at every frame took a median of 7.2–8.1 ms, against 0.03 ms
+    for the append and 0.007 ms for the per-frame link check. Measured on the host (APFS, git 2.48.1)
+    with 500 to 5,000 index entries; not measured in the image.
+  - The other two re-check points guard nothing. A re-check when the session completes comes after
+    its last frame. One when a write fails never fires, because a pull that adds a tracked file makes
+    no write fail.
+  - What the cache lets through is the rest of one grading, written to the session's own file. Git
+    does not track that file unless the pull delivered that exact name, and the name carries the
+    grading's start to the millisecond.
+  - The next session asks again, so round 4's "When the writers ask" stands.
+- **Tests and mutants.** There are 12 new tests.
+  - Nine failed against `41f713e`. The pin of the bound replaced a reproduction that failed there
+    too.
+  - Two pin what held already: a refused directory with nothing in it says nothing, and git that
+    cannot answer does not stop a replay.
+  - Each of 12 mutants ran against the whole suite, and all were killed. The number of tests each
+    failed:
+
+    | Mutant | Tests failed |
+    |---|---|
+    | the guard removed | 9 |
+    | `forWriting()` removed | 5 |
+    | `pathFor("raw")` removed | 3 |
+    | `forGit()` in its place | 1 |
+    | counting through the link | 1 |
+    | a WARN with nothing left | 1 |
+    | a WARN at every call | 1 |
+    | refused sessions deleted | 7 |
+    | the WARN without its count | 1 |
+    | the WARN without its reason | 1 |
+    | git asked at every frame | 1 |
+    | the answer kept for the log rather than the session | 1 |
+- **What this pass left.** The review round below closes the first two.
+  - The TRACKED reason told the owner to take `.ps` out of the index. After that, a session git delivered
+    was an untracked file like the tracker's own, and the next boot replayed it. The WARN named
+    `git ls-files .ps`, which lists no folded spelling.
+  - A session file that is itself an untracked link was listed, and the reconciler read through it.
+  - `orphans()` reads `.ps/raw/orphans` without the guard, at boot and for MCP's `incompleteHistory`.
+
+**The review of PR #395, at `4008e8f`.** An adversarial review found nothing blocking, and CI was green.
+On real git 2.48.1 on APFS it measured two things. The replay guard deferred a forged session rather than
+blocking it, and two of the branch's own messages were false. Each fix below has a test that failed
+against the code before it, on behaviour. Where an API was new, it went in first with nothing behind it.
+
+- **M1: a forged session was deferred, not blocked.** The review measured it end to end:
+  - upstream force-added `.ps/raw/<S>.jsonl`, holding algorithm-pass frames;
+  - the owner pulled, met the TRACKED WARN, ran its `git rm -r --cached .ps`, and restarted;
+  - the boot recorded the forged PASS (`recorded=1`) with no raw-log WARN, and the next reconcile
+    committed it.
+
+  `35fc42f` adds `pathsEverTracked()` to `TrackedState`: every path below the state directory that any
+  commit a ref reaches holds, as stored. `TrackedStateEntries` answers it with one
+  `git log --all -m --root --no-renames --name-only -z`, and judges first segments as it judges the index.
+  The raw log asks once a start, and only when a session waits. It never replays a session whose
+  `raw/<name>` the history names, in any case. Such sessions are left in place and said once. While git
+  cannot say what it has tracked, nothing is replayed, and that is said too. A git that cannot answer
+  therefore defers a replay where the first pass let it through. A write still goes ahead, but unknown is
+  not "never delivered".
+
+  The cost was measured on this host, as the median of 21 runs, on synthetic records histories built with
+  `git fast-import`:
+
+  | History | The question | `unprocessed()`, one session waiting | Nothing waiting |
+  |---|---|---|---|
+  | 166 commits, 460 KB tree (the owner's size) | 10.7 ms | 20.1 ms | 7.9 ms |
+  | 1,660 commits, 4.5 MB tree (the review's size) | 33.6 ms | 40.7 ms | 8.4 ms |
+
+  With nothing waiting, the history is not read, so the last column is the index question alone. The
+  plainer `git log --all --name-only -z --format=` took 10.2 and 32.3 ms. `-m`, `--root`, `--no-renames`
+  and the rest therefore cost 0.5–1.3 ms. The question runs once a start. It was not measured in the image.
+- **M2: the way out was false for folded names.** `.PS/raw`, `.Ps/raw`, `.pſ/raw`, `.Pſ/raw`, `.PS/RAW` and
+  `.pſ/RAW` all land on `.ps/raw` and are refused as TRACKED. But `git ls-files .ps` listed none of them,
+  and `tracksAnything()` stayed true after `git rm -r --cached .ps`.
+  - `bab8bb8` changes the reasons to give `git ls-files -- ':(icase).ps' ':(icase).pſ'` and
+    `git rm -r --cached --ignore-unmatch -- ':(icase).ps' ':(icase).pſ'`. `:(icase)` folds ASCII alone, so
+    `ſ` has its own pathspec.
+  - TRACKED says to delete from disk what git put there before untracking it. `--cached` stays, so the
+    server's own files, such as a credential staged by hand, are only untracked.
+  - A test runs both commands as the owner reads them, for eight spellings, with real git.
+- **M4: held sessions were invisible to MCP.** `0de3f66` adds `RawSessionLog.unreplayed()`, which keeps what
+  the last start left. `incompleteHistory` carries it as `sessionsNotReplayed`, or as
+  `rawDirectoryNotListed` where nothing could be counted. `docs/mcp.md` and its twin describe both keys.
+  `ec783c3` counts what a start leaves in one place.
+- **L1: a session file that was a link** (`.ps/raw/<S>` pointing at frames in the tree) was recorded.
+  `8c24551` lists only regular files, says the rest once and counts them as left. The reconciler now reads
+  without following a link at the file.
+- **L2: the link check ran before the git call**, so swapping `.ps/raw` for a link during the call let a
+  session through. `fca29fc` asks git first and runs the link check just before the listing.
+- **L3 and L5: wording** (`bab8bb8`).
+  - A test KDoc says "between two frames" rather than "never".
+  - The WARN for a directory that was not listed names no link, since it also serves one that could not
+    be inspected.
+  - HOLDS_A_LINK says to move what lies behind the link into a real directory before removing it, and
+    NOT_THE_DIRECTORY says the same.
+- **L4: an exact-name collision, where the cached verdict's bound was measured.** It needs no code. The
+  review found that a pull delivering a tracked file under the in-flight session's very name overwrites the
+  ignored file. The two real frames already written are lost, and the tracked file takes the rest of that
+  grading. The pull needs that exact name, which carries the grading's start to the millisecond.
+- **Pins.** `8362c46` adds three tests: `--root` under `log.showRoot=false`, which an owner's global config
+  can set; the `raw` segment of a history path; and the unanswered history's WARN said once.
+- **Mutation.** 32 mutants ran, each against the whole suite, and all were killed:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | links checked before git answers | 1 |
+  | entries that are not regular files listed | 3 |
+  | passed-over entries said at every start | 1 |
+  | the reconciler reading through a link at the file | 1 |
+  | no session excluded by git's history | 6 |
+  | an unanswered history taken for an empty one | 2 |
+  | git asked when nothing waits | 1 |
+  | a history name matched in its case alone | 1 |
+  | the `raw` segment unchecked | 1 |
+  | the `raw` segment matched in its case alone | 1 |
+  | the unanswered history's WARN at every start | 1 |
+  | the known sessions' WARN at every start | 1 |
+  | no `-m` | 1 |
+  | no `--all` | 2 |
+  | no `--root` | 1 |
+  | paths outside the state directory answered | 2 |
+  | the state directory by its exact name alone | 1 |
+  | a failed `git log` taken for an empty history | 2 |
+  | the history never handed to the log | 20 |
+  | the listing command without `ſ` | 3 |
+  | the untracking command without `ſ` | 8 |
+  | the untracking command without `--ignore-unmatch` | 13 |
+  | TRACKED without deleting what git put there | 1 |
+  | HOLDS_A_LINK removing the link alone | 1 |
+  | the uncounted WARN naming a link | 1 |
+  | what a start left never recorded | 6 |
+  | entries passed over not counted as left | 1 |
+  | replayed sessions counted as left | 2 |
+  | a raw directory that was not listed, not flagged | 2 |
+  | `sessionsNotReplayed` written with nothing to say | 1 |
+  | `rawDirectoryNotListed` written with nothing to say | 1 |
+  | `incompleteHistory` absent when only sessions were left | 2 |
+- **Gates**, all exit 0:
+  - check;
+  - test: 2,181 JUnit tests in 161 classes, 0 failures, 9 skipped as before, and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 85% (641 of 754), `adapter/git` 85% (232 of 270), every package
+    at or above its floor;
+  - guards: 12 of 12.
+- **What remains.**
+  - `orphans()` reads `.ps/raw/orphans` without the guard (M3, for #378). The review measured three
+    effects:
+    - a tracked orphans file forges every answer's `incompleteHistory`;
+    - a tracked link counts lines outside `.ps`;
+    - a link to `/dev/zero` exhausts the heap on each call (183–954 ms).
+  - If the owner untracks a session git delivered without deleting it, the file stays on disk. It is
+    never replayed, and it is counted in `sessionsNotReplayed` at every start until removed.
+  - A git that cannot say what it has ever tracked defers every replay. If the server cannot run git —
+    a repository it may not read, a `safe.directory` refusal in a container — the work list waits until git
+    answers, and the WARN and `sessionsNotReplayed` say so.
+  - The history covers every ref, not the reflogs. A forged commit reset away from every ref, with its
+    file kept on disk untracked, is not named.
+  - A directory swapped for a link after the listing, but before the reconciler reads it, is read through;
+    the file itself never is. That needs a process racing the boot on this machine.
+  - This round was not measured in the image, CI has not run it, and it was not verified live.

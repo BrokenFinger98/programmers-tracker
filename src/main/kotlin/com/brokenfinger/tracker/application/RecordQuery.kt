@@ -118,6 +118,12 @@ class RecordQuery(
     fun orphanedFrames(): List<OrphanedFrames> = raw.orphans()
 
     /**
+     * Sessions the last start left on the work list rather than replay (#377): gradings no record represents
+     * until a later start, reported beside the orphans for the same reason (#169).
+     */
+    fun unreplayedSessions(): LeftUnreplayed = raw.unreplayed()
+
+    /**
      * What is worth re-solving today (design §6.4). The clock is the only thing this adds to
      * the calculator — everything else it needs is in the records.
      */

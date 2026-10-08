@@ -11,18 +11,24 @@ import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aBroadcastFrame
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
+import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -46,7 +52,10 @@ class RawSessionReconcilerTest {
     @TempDir
     lateinit var root: Path
 
-    private val rawLog by lazy { FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)) }
+    /** What git answers about `.ps`: nothing tracked, unless a test says a pull changed that. */
+    private val git = ChangingAnswer(false)
+
+    private val rawLog by lazy { FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root, git)) }
 
     // Reconciled ten minutes after the session that the crash interrupted started.
     private val clock by lazy { Clock.fixed(NOW, ZoneOffset.UTC) }
@@ -259,6 +268,81 @@ class RawSessionReconcilerTest {
         rawLog.unprocessed().size shouldBe 1
     }
 
+    // Not replayed: what a write would refuse (#377) ------------------------------------------
+
+    /**
+     * A pull can deliver a session the work list parses, and the boot recorded it as a grading of the
+     * owner's. While git tracks anything under `.ps`, nothing there is replayed, and nothing is lost:
+     * the session stays where it is.
+     */
+    @Test
+    fun `a session under a state directory git tracks anything in is not replayed`() {
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        git.answer = true
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(root.resolve(".ps/raw")) shouldHaveSize 1
+    }
+
+    @Test
+    fun `a session behind a raw directory that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw"), elsewhere)
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(elsewhere) shouldHaveSize 1
+    }
+
+    /**
+     * The forged PASS of the review of PR #395: delivered by a pull and untracked as the advice said, it was
+     * recorded at the next start. A session git has ever tracked is never replayed; it stays where it is.
+     */
+    @Test
+    fun `a session git has ever tracked is not replayed`() {
+        stage(LESSON_ID, broadcastsOf("algorithm-pass.jsonl"))
+        git.history = setOf("raw/$A_SESSION")
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+        namesIn(root.resolve(".ps/raw")) shouldHaveSize 1
+    }
+
+    /** Linked to frames in the tree, a session file was replayed from them (the review of PR #395, measured). */
+    @Test
+    fun `a session file that is a link is not replayed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        Files.write(frames, broadcastsOf("algorithm-pass.jsonl"))
+        aLink(root.resolve(".ps/raw/$A_SESSION"), frames)
+
+        reconcile() shouldBe ReconcileReport()
+
+        records().shouldBeEmpty()
+    }
+
+    /** Listed as a file and swapped for a link before it is read: the read does not follow it. */
+    @Test
+    fun `a session is never read through a link at its file`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        Files.write(frames, broadcastsOf("algorithm-pass.jsonl"))
+        val link = aLink(root.resolve(".ps/raw/$A_SESSION"), frames)
+        val listedBeforeTheSwap = object : RawSessionLog by rawLog {
+            override fun unprocessed() = listOf(RawSession(RawSessionId(A_SESSION), LESSON_ID, SESSION_START, link))
+        }
+
+        reconcile(listedBeforeTheSwap) shouldBe ReconcileReport(failed = 1)
+
+        records().shouldBeEmpty()
+    }
+
     @Test
     fun `a raw directory that was never created is a no-op`() {
         reconcile() shouldBe ReconcileReport()
@@ -274,9 +358,9 @@ class RawSessionReconcilerTest {
     // Harness --------------------------------------------------------------------------------
 
     /** A fresh writer every pass — a restart is exactly what this code recovers from. */
-    private fun reconcile(): ReconcileReport = runBlocking {
+    private fun reconcile(log: RawSessionLog = rawLog): ReconcileReport = runBlocking {
         RawSessionReconciler(
-            rawLog,
+            log,
             writer(),
             StaleTimer(ELAPSED_SEC),
             aFrameReader(),
@@ -323,6 +407,9 @@ class RawSessionReconcilerTest {
         const val ELAPSED_SEC = 3600L
         const val LESSON_ID = 120804L
         const val SQL_LESSON_ID = 131528L
+
+        /** The name a session opened at [SESSION_START] for [LESSON_ID] gets. */
+        const val A_SESSION = "20260805T090000000Z-120804.jsonl"
     }
 }
 
