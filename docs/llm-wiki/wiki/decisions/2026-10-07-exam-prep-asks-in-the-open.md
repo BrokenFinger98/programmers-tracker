@@ -279,12 +279,19 @@ Found in review and filed rather than fixed on this branch:
 `fix/365-strict-tool-arguments`.
 
 - **A non-object `arguments` is refused on every tool.** `tools/call` reads its arguments through
-  the strict reader this branch added, renamed `McpCall.strictArguments()` once it had both callers.
-  The lenient reader lost its last caller and is deleted. Before, `"arguments": "x"`, `[]` or `5`
-  was read as none: `submissions`, `list_problems`, `review_queue`, `slow_passes` and `repair_steps`
-  answered over everything on record, and `get_problem` and `stats` answered "lessonId is required"
-  and "groupBy is required" to a call that had sent arguments. Now each is `-32602`, on HTTP 400 to a
-  modern client and 200 to a handshake one, as an unknown tool is. Absent or `null` stays none.
+  the strict reader #364 added, renamed `McpCall.strictArguments()` once it had both callers. The
+  lenient reader lost its last caller and is deleted, and so, after review, is
+  `McpCall.stringArgument`, which had no caller outside its tests. Before, `"arguments": "x"`, `[]`
+  or `5` was read as none: `submissions`, `list_problems`, `review_queue`, `slow_passes` and
+  `repair_steps` answered over everything on record, and `get_problem` and `stats` answered
+  "lessonId is required" and "groupBy is required" to a call that had sent arguments. Now each is
+  `-32602`, on HTTP 400 to a modern client and 200 to a handshake one, as an unknown tool is. Absent
+  or `null` stays none, on purpose: `null` fails the schema too, but it means what leaving the
+  member out means and widens nothing an omission does not.
+- **The structure check precedes the tool lookup**, as the reference TypeScript SDK's does: its
+  `setRequestHandler` parses a request against its schema before the handler looks the tool up
+  (1.32.1, read rather than run; it answers that parse failure with `-32603`, where this server
+  keeps `-32602`).
 - **Why a protocol error and not `isError`.** The CallToolRequest schema types `arguments` as an
   optional object in 2025-11-25 and 2026-07-28 (spec repository at `0a11bf68c7`, read 2026-10-08),
   and the tools page makes a request that fails that schema a protocol error. Input validation is a
@@ -297,11 +304,16 @@ Found in review and filed rather than fixed on this branch:
   key with a newline no longer breaks it. The list is the tool's schema in its own order, read from
   the schema by `McpToolCatalog.argumentsOf`, so the invoker's seven copies of the property names are
   gone. An owner that takes nothing would read "takes no arguments"; no tool does today.
-- **The shared words live in one place.** `McpArguments.unknown` words the unknown-key refusal for
-  both paths (the prompt adds ", in that order"), and `McpArguments.optionalText` reads a text
-  argument for both. Before, the two paths kept identical wording by copying.
+- **The shared words live in one place.** `McpArguments.unknownArgumentsMessage` words the
+  unknown-key refusal for both paths (the prompt adds ", in that order"), and
+  `McpArguments.optionalText` reads a text argument for both. Before, the two paths kept identical
+  wording by copying.
 
 Each new test was red before its code, except two: a pin of what already held (an absent or `null`
 `arguments` is none, in both eras) and the schema without `properties`, written after its code.
-Mutants showed both red, and all 24 mutants of the branch were killed. Not verified live: the
-running container predates the branch, and rebuilding it is the owner's step.
+Mutants showed both red, and all 24 mutants of the branch were killed. The review of PR #393 found
+the order of the two refusals pinned nowhere: the dispatcher's table names only tools that exist,
+and a mutant letting the unknown-tool refusal win survived all 317 MCP tests. A third pin now sends
+`exam_start` with `"arguments": "x"` in both eras and expects the arguments refusal; the mutant, one
+per era, dies on it. Not verified live: the running container predates the branch, and rebuilding it
+is the owner's step.
