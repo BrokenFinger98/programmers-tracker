@@ -418,6 +418,19 @@ class McpDispatcherTest {
         }
     }
 
+    /**
+     * The structure of a call is checked before its tool is looked up, as the reference TypeScript SDK parses a request
+     * against its schema before its handler looks the tool up. A call that is wrong in both ways is refused for its
+     * arguments; the table above names only tools that exist, so it says nothing about this order.
+     */
+    @Test
+    fun `an unknown tool with arguments that are not an object is refused for its arguments, in both eras`() {
+        val params = aCallParams("exam_start", JsonPrimitive("x"))
+
+        answerModern("tools/call", params).shouldBeTheArgumentsRefusal(onStatus = 400)
+        answerLegacy("tools/call", params).shouldBeTheArgumentsRefusal(onStatus = 200)
+    }
+
     /** `arguments` is optional: absent or null narrows nothing, so `submissions` answers with the whole log. */
     @Test
     fun `absent or null tool arguments are a whole request, in both eras`() {
