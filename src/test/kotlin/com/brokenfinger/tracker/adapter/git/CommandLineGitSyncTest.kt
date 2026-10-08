@@ -366,6 +366,21 @@ class CommandLineGitSyncTest {
     }
 
     /**
+     * Git's answer is read from stdout alone, and a status that failed answers nothing there. That is
+     * not a clean tree: the reconciliation goes on, fails where git says why, and says so.
+     */
+    @Test
+    fun `a status that fails is reported, never taken for a clean tree`() {
+        written(".gitignore", ".ps/\n")
+        written("log/submissions.jsonl", RECORD)
+        Files.writeString(root.resolve(".git/index"), "not an index")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "git reconcile failed"
+    }
+
+    /**
      * Someone forced a state file into the index. A commit that names its paths takes only those, so
      * the file stays staged and goes no further — an editor's staged note is kept out of a submit
      * commit the same way.
