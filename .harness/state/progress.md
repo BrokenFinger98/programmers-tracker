@@ -5631,3 +5631,52 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - Docs: development-rules §6.5 gains one bullet. No ADR: the pattern is the guards ADR's, and the choice and its cost are in the task's comment; the last commit carries `Wiki-Skip`.
 - Gates, all exit 0 from `clean`, on a tree rebased onto #384: check; test (2,051 JUnit in 160 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (every package at or above its floor, `adapter/config` 65% at its own); guards (12 checks).
 - Pending: CI has not run this branch. The three-OS `gates` job is the first run of the check on Windows checkouts; here that case was measured with a scratch class converted to CRLF.
+## 2026-10-08 — #361 no writer follows a link (branch fix/361-writers-never-follow-links)
+- **Audit first.** Every write, create, move and delete in `src/main` was grepped and classified by
+  path, by what a link at the file or on the way could redirect, and by what it writes. The issue named
+  six writers. Eight more were found: the code files and the raw copy (a link on the way, which the
+  rename and `CREATE_NEW` never covered), `log/submissions.jsonl`, the tag notes, the vault seeds, the
+  heartbeat marker (at the root when `.git` is not a directory), and the runner sweep, which was a
+  *delete* through a linked problem directory. `.ps` and the `.gitignore` were already #360's. The
+  lock and the stale-lock removal are not exposed; the watch token, the session file and git's temp
+  files are outside the root.
+- **The bound.** `ff2462c` adds `RecordWrites` (`adapter/store`, internal): every directory from the
+  real root walked one name at a time, created where absent, and each a real directory whose real path
+  is the path walked; the walk is bounded at `problems` or the root. Operations: `replace` (temp and
+  move, a link replaced; mode kept, or owner-only on request), `writeOnce`, `appendLine` (regular file
+  or none, no-follow), `createNew` and `deleteIn`. A refusal is one WARN per reason, never quoting a
+  link's target, then thrown unless the writer asked to skip.
+- **The boot pass.** `2635d01`: `attachPending` leaves a record whose attachment throws pending
+  (`DEFERRED`) and goes on to the next record. It ran unwrapped at boot, so a standing refusal would
+  have crash-looped the container.
+- **The writers.** `a66529a` (under `problems/`) and `6532d1b` (the root's level):
+  - Record writes throw: code files (still owner-only), the run log, the raw copy, the statement and
+    the submission log.
+  - The page, the index, the tag notes, the examples and the runner skip.
+  - A seed that is a link is left alone.
+  - The heartbeat replaces a linked marker and reads without following one.
+  - A linked `statement.md` is now replaced once rather than refetched at every boot.
+  - Pressing Run Code after a refused `examples.json` (the comment's route) replaces the link.
+- **Pins from the mutation review.** `89e3005` a marker linked to a changing file no longer makes the
+  repository look held. `9597093` a failure that is no refusal still reaches a skipping writer.
+  `58436dc` a root-level write outside the root is refused for the true reason.
+- **Tests.** 73 new (2,044 → 2,117; 9 skipped, as before: 8 C# and the `icase` test). Red evidence
+  was saved per class:
+  - 20 of the 33 first helper tests failed against a stub making the old raw `Files` calls.
+  - Every new writer test was red against the unchanged writers on the exposure itself, except two
+    pins (owner-only code files; a dangling link where the raw copy goes, refused already) and two
+    `CodeArtifacts` cases that were red only on the warning (the rename never wrote through a link
+    at the file).
+  - `attachPending` threw out before `2635d01`.
+  - The heartbeat read threw `RecordRepositoryLockedException` against the old read.
+- **Mutation.** 37 mutants, 35 killed. The two survivors are race-only: the append's
+  `NOFOLLOW_LINKS`, and the seeds' raw write behind their link check. The climb-out check survived
+  until `58436dc`.
+- **Measured.** Over 2,000 writes on this host: a replace 0.22–0.24 ms against 0.04 ms, an append
+  0.07–0.08 ms against 0.03 ms.
+- **Docs.** ADR [[decisions/2026-10-08-no-writer-follows-a-link]] (the audit table, options, each
+  writer's posture, costs), the index, #354's pointer, and a `SECURITY.md` posture line.
+- **Pending.** Live: after a rebuild, pages and code byte-identical, `git status` clean after a boot
+  with nothing to recover, and no `Not writing` or `Replacing` line. CI on the three OSes has not run;
+  Windows skips every link test. Follow-ups: `JsonlRecordStore.read()` and `RunLog`'s idempotency read
+  still follow a link (readers, outside #354's bound); handle-based writes, with #360's.
