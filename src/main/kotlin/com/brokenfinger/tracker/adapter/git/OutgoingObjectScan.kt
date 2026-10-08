@@ -41,9 +41,11 @@ internal class OutgoingObjectScan(
     }
 
     // Every object one listing names, each once: rev-list prints an object the first time it reaches it, and a
-    // path after the id of each tree and blob, which only orders them.
+    // path after the id of each tree and blob, which only orders them. The listing goes on stdin, `--not` and all:
+    // a push past a remote of many refs leaves each one's tip out, and on the command line about 800 of them
+    // filled the 32,767 characters Windows allows (#405).
     private fun listed(range: List<String>): List<String>? {
-        val answer = git.answer(listOf("rev-list", "--objects") + range)
+        val answer = git.answer(listOf("rev-list", "--objects", "--stdin"), linesOf(range))
         if (!answer.succeeded()) return null
         return answer.stdout.lines().filter { it.isNotEmpty() }.map { it.substringBefore(' ') }
     }

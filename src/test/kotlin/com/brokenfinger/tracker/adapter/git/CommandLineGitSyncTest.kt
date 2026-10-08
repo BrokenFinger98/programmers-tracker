@@ -1751,6 +1751,21 @@ class CommandLineGitSyncTest {
     }
 
     /**
+     * #405: every tip a remote holds is left out of the range, and on the command line about 800 of them filled the
+     * 32,767 characters Windows allows, so every push failed. They go on stdin. Here more tips than macOS's
+     * command line holds, which is a megabyte; Windows' holds far fewer.
+     */
+    @Test
+    fun `a push past more tips than a command line holds goes out`() {
+        val remote = aRemoteHolding(MANY_TIPS)
+        committedByAnotherTool("notes/today.md")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /**
      * A push sends what its remote lacks, and a pulled string the remote already holds is not sent again.
      * #373 read HEAD's whole tree at every push besides, which refused every push for it.
      */
@@ -2231,6 +2246,45 @@ class CommandLineGitSyncTest {
         git("config", "url.${to.parent}/.$kind", "${from.parent}/")
     }
 
+    /**
+     * A bare remote that holds this repository's main and [tips] more commits, a ref each: the commits made here by
+     * `git fast-import`, the remote reading them through `objects/info/alternates`, its refs written as one
+     * `packed-refs`. A remote of many refs, made in well under a second.
+     */
+    private fun aRemoteHolding(tips: Int): Path {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/first.md")
+        val ids = fastImported(tips)
+        val remote = bareAt("many.git")
+        val objects = root.resolve(".git/objects").toAbsolutePath()
+        Files.writeString(remote.resolve("objects/info/alternates"), "$objects\n")
+        Files.writeString(remote.resolve("packed-refs"), packedRefs(git("rev-parse", "HEAD").trim(), ids))
+        git("remote", "add", "origin", remote.toString())
+        return remote
+    }
+
+    /** [count] commits, each with a message of its own and no file, made by `git fast-import`: their ids. */
+    private fun fastImported(count: Int): List<String> {
+        val stream = Files.writeString(base.resolve("tips.import"), (1..count).joinToString("") { tipCommit(it) })
+        val marks = base.resolve("tips.marks")
+        val process = ProcessBuilder("git", "fast-import", "--quiet", "--export-marks=$marks")
+            .directory(root.toFile()).redirectInput(stream.toFile()).redirectErrorStream(true).start()
+        process.inputStream.readAllBytes()
+        check(process.waitFor() == 0) { "git fast-import failed" }
+        return Files.readAllLines(marks).map { it.substringAfter(' ') }
+    }
+
+    private fun tipCommit(n: Int): String =
+        "commit refs/heads/tips\nmark :$n\ncommitter T <t@example.invalid> 1700000000 +0000\n" +
+            "data ${"tip $n\n".length}\ntip $n\n\n"
+
+    /** A `packed-refs` file: main at [head], and a tag for each of [ids], sorted by name as git reads them. */
+    private fun packedRefs(head: String, ids: List<String>): String {
+        val tags = ids.mapIndexed { n, id -> "$id refs/tags/t${n.toString().padStart(TAG_DIGITS, '0')}" }
+        val header = listOf("# pack-refs with: peeled fully-peeled sorted ", "$head refs/heads/main")
+        return (header + tags.sortedBy { it.substringAfter(' ') }).joinToString("\n", postfix = "\n")
+    }
+
     /** An empty bare repository called [name], beside the record repository. */
     private fun bareAt(name: String): Path =
         base.resolve(name).also { git("init", "--quiet", "--bare", "-b", "main", it.toString(), at = base) }
@@ -2385,6 +2439,12 @@ class CommandLineGitSyncTest {
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2
+
+        /** Tips whose ids, 41 bytes each with a separator, fill more than macOS's megabyte of command line. */
+        const val MANY_TIPS = 30_000
+
+        /** Digits enough for every tip's tag to sort by name as by number. */
+        const val TAG_DIGITS = 6
 
         /** How much of a commit's id a refusal names (#375). */
         const val SHORT_ID = 12

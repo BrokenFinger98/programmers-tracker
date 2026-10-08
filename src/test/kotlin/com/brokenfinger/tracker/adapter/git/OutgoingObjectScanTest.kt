@@ -206,6 +206,21 @@ class OutgoingObjectScanTest {
         calls.read() shouldContainExactlyInAnyOrder objectsIn(listOf("HEAD"), setOf("blob", "tree", "commit"))
     }
 
+    /**
+     * A listing goes to `rev-list` on stdin, never as its arguments: a push past a remote of many refs leaves each
+     * one's tip out, and Windows' command line holds 32,767 characters — about 800 tips (#405).
+     */
+    @Test
+    fun `a listing goes to rev-list on stdin, not on its command line`() {
+        committed("notes/a.md", "a note\n")
+        val listed = mutableListOf<List<String>>()
+        val calls = RecordingCalls(repo.root, before = { if (it.first() == "rev-list") listed += it })
+
+        scanned(range = listOf("HEAD", "--not", repo.git("rev-parse", "HEAD~1").trim()), calls = calls)
+
+        listed shouldBe listOf(listOf("rev-list", "--objects", "--stdin"))
+    }
+
     @Test
     fun `objects the range leaves out are not read`() {
         committed("notes/pasted.md", "${aGithubShapedToken()}\n")
