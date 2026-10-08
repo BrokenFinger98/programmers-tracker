@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aRepairStepFilter
 import com.brokenfinger.tracker.support.fixtures.aRun
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
@@ -43,7 +44,7 @@ class McpConfigurationTest {
             RecordLayout(root),
             anEmptyCatalog(),
             Clock.systemUTC(),
-            FileRawSessionLog.under(root),
+            FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)),
         ).history().size shouldBe
             2
     }
@@ -56,7 +57,7 @@ class McpConfigurationTest {
             RecordLayout(root),
             anEmptyCatalog(),
             Clock.systemUTC(),
-            FileRawSessionLog.under(root),
+            FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)),
         )
 
         val dispatcher = configuration.mcpDispatcher(configuration.mcpToolInvoker(query))
@@ -85,7 +86,7 @@ class McpConfigurationTest {
             RecordLayout(root),
             anEmptyCatalog(),
             Clock.systemUTC(),
-            FileRawSessionLog.under(root),
+            FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)),
         ).repairSteps(aRepairStepFilter(), lessonId = null).steps
 
         steps.single().step.diff.shouldNotBeNull() shouldContain "+select b"
@@ -97,7 +98,7 @@ class McpConfigurationTest {
             RecordLayout(root),
             anEmptyCatalog(),
             Clock.systemUTC(),
-            FileRawSessionLog.under(root),
+            FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)),
         ).history().size shouldBe
             0
     }

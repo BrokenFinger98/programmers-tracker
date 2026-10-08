@@ -487,7 +487,7 @@ class CommandLineGitSyncTest {
     /**
      * `.ps` is the real directory, but a pull put a tracked link inside it, `.ps/raw`, leading into the
      * tree, so the raw frames written through it are tracked paths. The identity check sees only `.ps`;
-     * the walk below it is what refuses (#360).
+     * git tracking the link is what refuses (#360).
      */
     @Test
     fun `a link inside the state directory stops every commit and push`() {
@@ -507,7 +507,7 @@ class CommandLineGitSyncTest {
         }
 
         heard.size shouldBe 2
-        heard.forEach { it shouldContain "holds a symbolic link" }
+        heard.forEach { it shouldContain "git tracks files under .ps" }
         subjects() shouldContainExactly listOf("as a pull delivers it")
     }
 
@@ -1096,10 +1096,11 @@ class CommandLineGitSyncTest {
 
     /** One write from each writer of state the server has, each through its own factory. */
     private fun everyStateWriter() {
-        FileRawSessionLog.under(root).let { log -> log.append(log.start(120804), RAW_FRAME) }
-        FileProblemTimer.under(root, Clock.systemUTC()).startIfAbsent(120804)
-        FileBackupLog.under(root).succeededAt(Instant.EPOCH)
-        SeedLedger(root).record("dashboard.base", "seeded")
+        val state = StateDirectory(root, TrackedStateEntries(root))
+        FileRawSessionLog.under(root, Clock.systemUTC(), state).let { log -> log.append(log.start(120804), RAW_FRAME) }
+        FileProblemTimer.under(root, Clock.systemUTC(), state).startIfAbsent(120804)
+        FileBackupLog.under(root, state).succeededAt(Instant.EPOCH)
+        SeedLedger(root, state).record("dashboard.base", "seeded")
     }
 
     private fun ignoredByGit(file: Path): Boolean =

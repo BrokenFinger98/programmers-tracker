@@ -34,7 +34,7 @@ class TrackedStateEntriesTest {
         repo.write("notes.md", "a note\n")
         repo.git("add", "notes.md")
 
-        TrackedStateEntries(repo.root).any() shouldBe false
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe false
     }
 
     @Test
@@ -42,7 +42,7 @@ class TrackedStateEntriesTest {
         repo.write(PushCredential.FILE, "e\n")
         repo.git("add", "--force", PushCredential.FILE)
 
-        TrackedStateEntries(repo.root).any() shouldBe true
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe true
     }
 
     @Test
@@ -51,7 +51,7 @@ class TrackedStateEntriesTest {
         aLink(repo.root.resolve(".ps"), Files.createDirectories(repo.root.resolve("problems/zz")))
         repo.git("add", ".ps")
 
-        TrackedStateEntries(repo.root).any() shouldBe true
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe true
     }
 
     /** Asked in any case: `.PS/x` in the index is the state directory on a volume that folds case. */
@@ -61,7 +61,7 @@ class TrackedStateEntriesTest {
         val blob = repo.git("hash-object", "-w", "decoy").trim()
         repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,.PS/x")
 
-        TrackedStateEntries(repo.root).any() shouldBe true
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe true
     }
 
     /**
@@ -75,7 +75,7 @@ class TrackedStateEntriesTest {
         val blob = repo.git("hash-object", "-w", "decoy").trim()
         repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$A_LONG_S_STATE_DIRECTORY/x")
 
-        TrackedStateEntries(repo.root).any() shouldBe true
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe true
     }
 
     /**
@@ -89,7 +89,7 @@ class TrackedStateEntriesTest {
         aLink(repo.root.resolve("elsewhere"), state)
         repo.git("add", "elsewhere")
 
-        TrackedStateEntries(repo.root).any() shouldBe true
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe true
     }
 
     @Test
@@ -97,7 +97,7 @@ class TrackedStateEntriesTest {
         repo.write(".ps2/notes.md", "not state\n")
         repo.git("add", ".ps2/notes.md")
 
-        TrackedStateEntries(repo.root).any() shouldBe false
+        TrackedStateEntries(repo.root).tracksAnything() shouldBe false
     }
 
     /**
@@ -110,13 +110,13 @@ class TrackedStateEntriesTest {
         repo.git("add", "--force", PushCredential.FILE)
         val environment = System.getenv() + mapOf("GIT_INDEX_FILE" to base.resolve("empty-index").toString())
 
-        TrackedStateEntries(repo.root, environment).any() shouldBe true
+        TrackedStateEntries(repo.root, environment).tracksAnything() shouldBe true
     }
 
     @Test
     fun `a directory git cannot answer for is answered neither`() {
         val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))
 
-        TrackedStateEntries(elsewhere).any().shouldBeNull()
+        TrackedStateEntries(elsewhere).tracksAnything().shouldBeNull()
     }
 }

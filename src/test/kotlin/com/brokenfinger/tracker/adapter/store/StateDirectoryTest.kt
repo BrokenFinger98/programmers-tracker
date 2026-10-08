@@ -1,18 +1,25 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory.Refusal
+import com.brokenfinger.tracker.adapter.store.StateDirectory.Refused
+import com.brokenfinger.tracker.adapter.store.StateDirectory.Usable
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
-import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /**
  * Whether what answers to `<records>/.ps` is the tracker's own state directory (#360). Git stores
@@ -25,9 +32,8 @@ class StateDirectoryTest {
 
     @Test
     fun `an absent state directory is created as a real directory`() {
-        val verified = StateDirectory(root).verified()
+        aStateDirectory(root).forGit() shouldBe Usable(root.resolve(".ps"))
 
-        verified shouldBe root.resolve(".ps")
         Files.isDirectory(root.resolve(".ps"), LinkOption.NOFOLLOW_LINKS) shouldBe true
     }
 
@@ -35,7 +41,7 @@ class StateDirectoryTest {
     fun `a real directory named exactly ps is the state directory`() {
         Files.createDirectory(root.resolve(".ps"))
 
-        StateDirectory(root).verified() shouldBe root.resolve(".ps")
+        aStateDirectory(root).forGit() shouldBe Usable(root.resolve(".ps"))
     }
 
     /** What a pull can deliver: the ignored directory deleted, and a tracked link into the tree in its place. */
@@ -45,14 +51,14 @@ class StateDirectoryTest {
         val tracked = Files.createDirectories(root.resolve("problems/zz"))
         aLink(root.resolve(".ps"), tracked)
 
-        StateDirectory(root).verified().shouldBeNull()
+        aStateDirectory(root).forGit() shouldBe Refused(Refusal.NOT_THE_DIRECTORY)
     }
 
     @Test
     fun `a file in its place is not`() {
         Files.writeString(root.resolve(".ps"), "not a directory\n")
 
-        StateDirectory(root).verified().shouldBeNull()
+        aStateDirectory(root).forGit() shouldBe Refused(Refusal.NOT_THE_DIRECTORY)
     }
 
     /** A case-insensitive volume answers `.ps` with `.PS`; the name on disk is what decides. */
@@ -61,7 +67,7 @@ class StateDirectoryTest {
         assumeTrue(foldsTogether(root, ".PS", ".ps"), "this filesystem keeps .PS and .ps apart")
         Files.createDirectory(root.resolve(".PS"))
 
-        StateDirectory(root).verified().shouldBeNull()
+        aStateDirectory(root).forGit() shouldBe Refused(Refusal.NOT_THE_DIRECTORY)
     }
 
     /** U+017F folds to `s`, so APFS answers `.ps` with it, and neither the ignore rule nor the pathspec names it. */
@@ -70,7 +76,7 @@ class StateDirectoryTest {
         assumeTrue(foldsTogether(root, A_LONG_S_STATE_DIRECTORY, ".ps"), "this filesystem does not fold U+017F")
         Files.createDirectory(root.resolve(A_LONG_S_STATE_DIRECTORY))
 
-        StateDirectory(root).verified().shouldBeNull()
+        aStateDirectory(root).forGit() shouldBe Refused(Refusal.NOT_THE_DIRECTORY)
     }
 
     /**
@@ -84,63 +90,109 @@ class StateDirectoryTest {
     fun `a directory the root does not list under exactly that name is not the state directory`() {
         Files.createDirectory(root.resolve(".ps"))
 
-        StateDirectory(root, listing = { setOf(".PS") }).verified().shouldBeNull()
+        StateDirectory(root, { false }, listing = { setOf(".PS") }).forGit() shouldBe Refused(Refusal.NOT_THE_DIRECTORY)
     }
 
+    /** A read that failed says nothing about the repository, so it is asked again rather than taken for an answer. */
     @Test
     fun `a records directory that cannot hold one is answered, never thrown`() {
         val notADirectory = Files.writeString(root.resolve("records"), "a file\n")
 
-        StateDirectory(notADirectory).verified().shouldBeNull()
+        val refusal = aStateDirectory(notADirectory).forGit().shouldBeInstanceOf<Refused>().refusal
+
+        refusal shouldBe Refusal.NOT_INSPECTED
+        refusal.transient shouldBe true
     }
 
-    // Whether git may run over it: nothing linked or tracked inside (#360) ----------------------
+    // What git tracks there: refused for git and for every writer (#360) ------------------------
 
     @Test
-    fun `a real directory holding no link and nothing tracked is usable`() {
+    fun `a real directory with nothing tracked is usable for git and for writing`() {
         Files.createDirectories(root.resolve(".ps/raw"))
 
-        StateDirectory(root).inspected() shouldBe StateDirectory.Usable(root.resolve(".ps"))
-    }
-
-    /** A pull delivered `.ps/raw` as a link into the tree; raw frames written through it become tracked paths. */
-    @Test
-    fun `a link anywhere inside refuses`() {
-        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
-        val tracked = Files.createDirectories(root.resolve("problems/zz"))
-        aLink(root.resolve(".ps/raw/recorded"), tracked)
-
-        refusalOf(StateDirectory(root)) shouldContain "holds a symbolic link"
+        aStateDirectory(root).forGit() shouldBe Usable(root.resolve(".ps"))
+        aStateDirectory(root).forWriting() shouldBe Usable(root.resolve(".ps"))
     }
 
     /** What the filesystem cannot see: git tracking an entry the server is about to write over. */
     @Test
-    fun `anything git tracks inside refuses, with how to stop it being tracked`() {
+    fun `anything git tracks there refuses, for good, with how to stop it being tracked`() {
         Files.createDirectory(root.resolve(".ps"))
 
-        val reason = refusalOf(StateDirectory(root, TrackedState { true }))
-
-        reason shouldContain "git tracks files under .ps"
-        reason shouldContain "git rm -r --cached .ps"
+        aStateDirectory(root, tracked = { true }).forWriting() shouldBe Refused(Refusal.TRACKED)
+        Refusal.TRACKED.transient shouldBe false
+        Refusal.TRACKED.reason shouldContain "git rm -r --cached .ps"
     }
 
-    /** Unknown is not clean: git that cannot be asked refuses too. */
+    /** Unknown is not clean for a commit; a capture does not depend on git working. */
     @Test
-    fun `git that cannot say refuses`() {
+    fun `git that cannot say refuses git, transiently, and not a writer`() {
         Files.createDirectory(root.resolve(".ps"))
+        val state = aStateDirectory(root, tracked = { null })
 
-        refusalOf(StateDirectory(root, TrackedState { null })) shouldContain "could not say"
+        state.forGit() shouldBe Refused(Refusal.UNANSWERED)
+        Refusal.UNANSWERED.transient shouldBe true
+        state.forWriting() shouldBe Usable(root.resolve(".ps"))
     }
 
     @Test
     fun `what is not the state directory is refused with how to replace it`() {
-        Files.writeString(root.resolve(".ps"), "not a directory\n")
-
-        val reason = refusalOf(StateDirectory(root))
-
-        reason shouldContain "is not the tracker's own state directory"
-        reason shouldContain "git rm -r --cached .ps"
+        Refusal.NOT_THE_DIRECTORY.reason shouldContain "is not the tracker's own state directory"
+        Refusal.NOT_THE_DIRECTORY.reason shouldContain "git rm -r --cached .ps"
     }
 
-    private fun refusalOf(state: StateDirectory): String = (state.inspected() as StateDirectory.Refused).reason
+    // Nothing walks the directory; a writer's own path is checked (#360) -----------------------
+
+    /**
+     * The walk that looked for a link anywhere below `.ps` read every entry while the tracker's own
+     * writers replaced theirs, and an entry gone mid-walk read as a refusal: 444 of 3,000 inspections of
+     * a healthy directory (the review of ea1357c). An inspection reads `.ps` itself and asks git, never
+     * what lies below, so another writer's rename cannot refuse it.
+     */
+    @Test
+    fun `a healthy directory is never refused while the tracker's own writers replace their files`() {
+        val recorded = Files.createDirectories(root.resolve(".ps/raw/recorded"))
+        repeat(200) { Files.writeString(recorded.resolve("r$it.jsonl"), "{}\n") }
+        val state = aStateDirectory(root)
+        val stop = AtomicBoolean()
+        val writer = thread { while (!stop.get()) AtomicStateFile(root.resolve(".ps/backup.json")).write("{}") }
+
+        val refused = (1..3_000).map { state.forWriting() }.filterIsInstance<Refused>()
+
+        stop.set(true)
+        writer.join()
+        refused.shouldBeEmpty()
+    }
+
+    /** A link below `.ps` that git does not track — left behind by `git rm --cached` — stops only the writer it would mislead. */
+    @Test
+    fun `a link below the state directory stops the writer whose path it is on, not git`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw/recorded"), tracked)
+        val state = aStateDirectory(root)
+
+        state.forGit() shouldBe Usable(root.resolve(".ps"))
+        state.pathFor("raw") shouldBe Usable(root.resolve(".ps/raw"))
+        state.pathFor("raw", "recorded") shouldBe Refused(Refusal.HOLDS_A_LINK)
+    }
+
+    @Test
+    fun `a writer's directories are created as real ones`() {
+        aStateDirectory(root).pathFor("raw", "orphans") shouldBe Usable(root.resolve(".ps/raw/orphans"))
+
+        Files.isDirectory(root.resolve(".ps/raw/orphans"), LinkOption.NOFOLLOW_LINKS) shouldBe true
+    }
+
+    /** Nothing is created through a link: the check stops at the first segment that is not a real directory. */
+    @Test
+    fun `nothing is created below a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw"), tracked)
+
+        aStateDirectory(root).pathFor("raw", "orphans") shouldBe Refused(Refusal.HOLDS_A_LINK)
+
+        Files.exists(tracked.resolve("orphans")) shouldBe false
+    }
 }

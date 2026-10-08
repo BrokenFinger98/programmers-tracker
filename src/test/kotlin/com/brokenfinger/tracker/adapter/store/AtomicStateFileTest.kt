@@ -1,6 +1,9 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.logging.warningsWhile
@@ -95,7 +98,7 @@ class AtomicStateFileTest {
 
     @Test
     fun `under resolves the state file inside the record repository`() {
-        AtomicStateFile.under(root, "hints.json").write("{}")
+        AtomicStateFile.under(root, "hints.json", aStateDirectory(root)).write("{}")
 
         Files.exists(root.resolve(".ps/hints.json")) shouldBe true
     }
@@ -156,7 +159,7 @@ class AtomicStateFileTest {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         val tracked = Files.createDirectories(root.resolve("problems/zz"))
         aLink(root.resolve(".ps"), tracked)
-        val timers = AtomicStateFile.under(root, "timers.json")
+        val timers = AtomicStateFile.under(root, "timers.json", aStateDirectory(root))
 
         val heard = warningsWhile(AtomicStateFile::class) {
             timers.write("""{"a":1}""")
@@ -170,7 +173,7 @@ class AtomicStateFileTest {
     /** A file git tracks below `.ps` is a change any `commit -a` publishes, so nothing is written. */
     @Test
     fun `a state file is not written while git tracks something under the state directory`() {
-        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, TrackedState { true }))
+        val timers = AtomicStateFile.under(root, "timers.json", aStateDirectory(root, tracked = { true }))
 
         val heard = warningsWhile(AtomicStateFile::class) { timers.write("""{"a":1}""") }
 
@@ -181,11 +184,36 @@ class AtomicStateFileTest {
     /** Git that cannot be asked does not cost a capture its state; it is commits and pushes that refuse. */
     @Test
     fun `a state file is written when git cannot say what it tracks`() {
-        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, TrackedState { null }))
+        val timers = AtomicStateFile.under(root, "timers.json", aStateDirectory(root, tracked = { null }))
 
         timers.write("""{"a":1}""")
 
         Files.readString(root.resolve(".ps/timers.json")) shouldBe """{"a":1}"""
+    }
+
+    /** A link where the document should be is no document: never read through, and the next write replaces it (#360). */
+    @Test
+    fun `a link where the document should be reads as none`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.writeString(Files.createDirectories(root.resolve("elsewhere")).resolve("a.json"), "{}")
+        aLink(path(), elsewhere)
+
+        timers().read().shouldBeNull()
+    }
+
+    /**
+     * Said once for each reason, not once for the file: a refusal that passed had used up the only WARN
+     * a lasting one would get (the review of ea1357c).
+     */
+    @Test
+    fun `each reason a write is refused for is said`() {
+        val git = ChangingAnswer(true)
+        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, git, listing = aListingThatFailsOnce()))
+
+        val heard = warningsWhile(AtomicStateFile::class) { repeat(3) { timers.write("{}") } }
+
+        heard.size shouldBe 2
+        heard.last() shouldContain "git tracks files under .ps"
     }
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))

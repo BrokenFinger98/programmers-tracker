@@ -19,6 +19,7 @@ import com.brokenfinger.tracker.support.fixtures.aPartialRecordLine
 import com.brokenfinger.tracker.support.fixtures.aRecordRepository
 import com.brokenfinger.tracker.support.fixtures.aRepairStepFilter
 import com.brokenfinger.tracker.support.fixtures.aRun
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aSubmit
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
@@ -533,7 +534,7 @@ class RecordQueryTest {
     private fun RecordQuery.allRepairSteps(): List<LabelledStep> =
         repairSteps(aRepairStepFilter(), lessonId = null).steps
 
-    private fun raw() = FileRawSessionLog.under(root)
+    private fun raw() = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
 
     // Two failed runs of one problem, ten seconds apart, in the minute its lesson id names.
     private fun pairOf(lessonId: Long, part: String, language: String): Array<SubmissionRecord> = arrayOf(

@@ -138,9 +138,9 @@ class GithubRemote(
      * owner-only ([AtomicStateFile]).
      */
     private fun storeCredential(): Boolean =
-        when (val inspection = StateDirectory(recordRoot, TrackedStateEntries(recordRoot)).inspected()) {
+        when (val inspection = StateDirectory(recordRoot, TrackedStateEntries(recordRoot)).forGit()) {
             is StateDirectory.Usable -> stored(inspection.directory)
-            is StateDirectory.Refused -> notStored(inspection.reason)
+            is StateDirectory.Refused -> notStored(inspection.refusal.reason)
         }
 
     private fun stored(directory: Path): Boolean {
@@ -152,9 +152,9 @@ class GithubRemote(
     }
 
     /**
-     * `.ps` is not the tracker's own, holds a link, or holds a file git tracks (#360): a credential
-     * written there would be a path a commit can carry. Nothing is stored and nothing is wired on top
-     * of it; the token is not named.
+     * `.ps` is not the tracker's own, git tracks something that is it or under it, or git cannot say
+     * (#360): a credential written there would be a path a commit can carry. Nothing is stored and
+     * nothing is wired on top of it; the token is not named.
      */
     private fun notStored(reason: String): Boolean {
         logger.warn(CREDENTIAL_NOT_STORED, recordRoot, reason)

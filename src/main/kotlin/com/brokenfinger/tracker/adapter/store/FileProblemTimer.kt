@@ -142,7 +142,7 @@ class FileProblemTimer(private val file: AtomicStateFile, private val clock: Clo
         fun under(
             recordRoot: Path,
             clock: Clock,
-            state: StateDirectory = StateDirectory(recordRoot),
+            state: StateDirectory,
         ): FileProblemTimer = FileProblemTimer(AtomicStateFile.under(recordRoot, TIMERS, state), clock)
     }
 }

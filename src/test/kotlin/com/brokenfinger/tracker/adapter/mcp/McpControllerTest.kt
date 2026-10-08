@@ -11,6 +11,7 @@ import com.brokenfinger.tracker.support.fixtures.aLegacyBody
 import com.brokenfinger.tracker.support.fixtures.aModernBody
 import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
 import com.brokenfinger.tracker.support.fixtures.aRun
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
@@ -74,7 +75,7 @@ class McpControllerTest {
                     scratchStore(),
                     anEmptyCatalog(),
                     Clock.systemUTC(),
-                    FileRawSessionLog.under(Path.of("build/tmp/mcp-controller-test")),
+                    FileRawSessionLog.under(Path.of("build/tmp/mcp-controller-test"), Clock.systemUTC(), aStateDirectory(Path.of("build/tmp/mcp-controller-test"))),
                     codes = codes,
                 ),
             ),

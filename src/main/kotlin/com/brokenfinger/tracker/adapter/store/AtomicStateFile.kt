@@ -8,7 +8,7 @@ import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFileAttributes
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A read-modify-write state document written temp-then-replace
@@ -30,9 +30,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * keeps the permissions its owner gave it.
  *
  * **A state file under the record repository ([under]) writes only into the real state directory.**
- * Its [guard] is asked before every write; while `.ps` is not the tracker's own, holds a link or holds
- * a file git tracks, the write is skipped and said once for this file (#360). The file is never written
- * through a link, and nothing piles up where a commit could carry it.
+ * Its [guard] is asked before every write; while `.ps` is not the tracker's own or git tracks something
+ * that is it or under it, the write is skipped and said once for each reason (#360). It is written by a
+ * rename inside `.ps`, so never through a link, and read without following one: a link where the
+ * document should be reads as no document, and the next write replaces it.
  */
 class AtomicStateFile(
     private val path: Path,
@@ -41,21 +42,20 @@ class AtomicStateFile(
 ) {
     private val directory: Path = path.toAbsolutePath().parent
 
-    private val skipSaid = AtomicBoolean()
+    private val said = ConcurrentHashMap.newKeySet<StateDirectory.Refusal>()
 
-    /** The current document, or null when it has never been written. */
-    fun read(): String? = runCatching { Files.readString(path, CHARSET) }.getOrElse { failed(it) }
+    /** The current document, or null when it has never been written — or a link stands where it should. */
+    fun read(): String? = runCatching { readNotFollowing() }.getOrElse { failed(it) }
 
-    /** Replaces the document. A reader sees either the whole previous one or the whole new one. */
+    /**
+     * Replaces the document. A reader sees either the whole previous one or the whole new one. Skipped,
+     * and said once for each reason, while [guard] refuses the state directory.
+     */
     fun write(text: String) {
         if (refusedByGuard()) return
         Files.createDirectories(directory)
         val temp = Files.createTempFile(directory, path.fileName.toString(), SUFFIX)
-        runCatching {
-            Files.writeString(temp, text, CHARSET)
-            if (keepsPermissions) keepPermissions(temp)
-            replace(temp)
-        }.onFailure {
+        runCatching { replacedWith(temp, text) }.onFailure {
             Files.deleteIfExists(temp)
             throw it
         }
@@ -66,6 +66,18 @@ class AtomicStateFile(
      * document exactly as it was — nothing is written and no debris is left behind.
      */
     fun update(transform: (String?) -> String) = write(transform(read()))
+
+    private fun replacedWith(temp: Path, text: String) {
+        Files.writeString(temp, text, CHARSET)
+        if (keepsPermissions) keepPermissions(temp)
+        replace(temp)
+    }
+
+    // Opened with no-follow as well, so a link swapped in after the check fails rather than being read.
+    private fun readNotFollowing(): String? {
+        if (Files.isSymbolicLink(path)) return null
+        return Files.newInputStream(path, NOFOLLOW_LINKS).use { String(it.readAllBytes(), CHARSET) }
+    }
 
     /**
      * Hands the document's current permissions to the temporary file, so the replace does not narrow
@@ -80,9 +92,13 @@ class AtomicStateFile(
         runCatching { Files.setPosixFilePermissions(temp, attributes.permissions()) }
     }
 
-    private fun refusedByGuard(): Boolean {
-        val refusal = guard?.forWriting() as? StateDirectory.Refused ?: return false
-        if (!skipSaid.getAndSet(true)) logger.warn(NOT_WRITTEN, path.fileName, refusal.reason)
+    private fun refusedByGuard(): Boolean = when (val inspection = guard?.forWriting()) {
+        null, is StateDirectory.Usable -> false
+        is StateDirectory.Refused -> skipped(inspection.refusal)
+    }
+
+    private fun skipped(refusal: StateDirectory.Refusal): Boolean {
+        if (said.add(refusal)) logger.warn(NOT_WRITTEN, path.fileName, refusal.reason)
         return true
     }
 
@@ -101,15 +117,15 @@ class AtomicStateFile(
     companion object {
         private val CHARSET = StandardCharsets.UTF_8
         private const val SUFFIX = ".tmp"
-        private const val NOT_WRITTEN = "The state file {} was not written: {}. Said once for this file."
+        private const val NOT_WRITTEN = "The state file {} was not written: {}. Said once for this reason."
 
         private val logger = LoggerFactory.getLogger(AtomicStateFile::class.java)
 
         /**
          * State documents live under the record repository, not next to the tool (design §5.1), and are
-         * written only while [state] allows it (#360).
+         * written only while [state] allows it (#360). No default: a writer never assumes "nothing tracked".
          */
-        fun under(recordRoot: Path, name: String, state: StateDirectory = StateDirectory(recordRoot)): AtomicStateFile =
+        fun under(recordRoot: Path, name: String, state: StateDirectory): AtomicStateFile =
             AtomicStateFile(recordRoot.resolve(StateDirectory.NAME).resolve(name), guard = state)
     }
 }

@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -93,14 +94,15 @@ class SeedLedgerTest {
         Files.writeString(root.resolve(name), content)
     }
 
-    private fun ledger() = SeedLedger(root)
+    private fun ledger() = SeedLedger(root, aStateDirectory(root))
 
     /**
-     * `.ps/seeds.json` a link to a file outside the repository, as a pull can deliver it: the ledger
-     * overwrote that file at every boot. Nothing is written through it or over it (#360).
+     * `.ps/seeds.json` a link to a file outside the repository: the ledger wrote through it, and overwrote
+     * that file at every boot (#360, N7). Read, it is no ledger; written, it is replaced, and what it led
+     * to is left as it was. A pull delivers such a link tracked, which refuses every writer outright.
      */
     @Test
-    fun `the ledger writes nothing through a link`() {
+    fun `the ledger never writes through a link`() {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         val outside = Files.writeString(
             Files.createDirectories(root.resolve("elsewhere")).resolve("owners-file"),
@@ -109,10 +111,10 @@ class SeedLedgerTest {
         val records = Files.createDirectories(root.resolve("records"))
         val ledgerFile = aLink(records.resolve(".ps/seeds.json"), outside)
 
-        val heard = warningsWhile(AtomicStateFile::class) { SeedLedger(records).record("dashboard.base", "seeded") }
+        SeedLedger(records, aStateDirectory(records)).record("dashboard.base", "seeded")
 
         Files.readString(outside) shouldBe "theirs\n"
-        Files.isSymbolicLink(ledgerFile) shouldBe true
-        heard.single() shouldContain "holds a symbolic link"
+        Files.isSymbolicLink(ledgerFile) shouldBe false
+        Files.readString(ledgerFile) shouldContain "dashboard.base"
     }
 }

@@ -13,7 +13,9 @@ import java.time.Instant
  * code fetch, git — can destroy the verdict: it is replayable from this file.
  *
  * There is deliberately no in-memory queue beside it. Whatever is still listed by
- * [unprocessed] at startup is a session a crash left behind.
+ * [unprocessed] at startup is a session a crash left behind. The one exception is a store that
+ * refuses where its files would go (#360): it then holds frames in memory rather than write them
+ * where a commit could carry them, and only those are lost to a crash.
  */
 interface RawSessionLog {
     /**

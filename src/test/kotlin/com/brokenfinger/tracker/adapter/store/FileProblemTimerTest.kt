@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.domain.SensorObservation
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -24,7 +25,7 @@ class FileProblemTimerTest {
     private val clock = MovableClock()
 
     // Lazy: @TempDir is injected after construction, so `root` is not readable in an initializer.
-    private val timer by lazy { FileProblemTimer.under(root, clock) }
+    private val timer by lazy { FileProblemTimer.under(root, clock, aStateDirectory(root)) }
 
     @Test
     fun `a lesson that was never seen has elapsed zero`() {
@@ -67,7 +68,7 @@ class FileProblemTimerTest {
         timer.startIfAbsent(120804)
         clock.advance(Duration.ofMinutes(5))
 
-        FileProblemTimer.under(root, clock).elapsedSecOf(120804) shouldBe Duration.ofMinutes(5).seconds
+        FileProblemTimer.under(root, clock, aStateDirectory(root)).elapsedSecOf(120804) shouldBe Duration.ofMinutes(5).seconds
     }
 
     @Test

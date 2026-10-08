@@ -45,8 +45,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * 1. Reconciliation leaves `.ps` — the entry and what is under it — out by pathspec, in any ASCII
  *    case, whatever `.gitignore` says ([RECONCILE_SCOPE]).
- * 2. No commit, reconciliation or push runs unless `.ps` is the real state directory, holds no link
- *    and holds nothing git tracks ([StateDirectory]).
+ * 2. No commit, reconciliation or push runs unless `.ps` is the real state directory and git tracks
+ *    nothing that is it or under it, under any name the filesystem folds to it ([StateDirectory]).
  * 3. The credential is replaced, never written through a link ([GithubRemote]), and git is only
  *    pointed at it while it is a regular file ([PushCredential]).
  * 4. The content gate: the working tree within a commit's scope before staging, what is staged
@@ -105,15 +105,15 @@ class CommandLineGitSync(
     }
 
     /**
-     * Commits and pushes run only while `.ps` is the tracker's own state directory, with no link below
-     * it and nothing below it tracked by git (#360). A link a pull swapped in, a name the filesystem
-     * folds to `.ps`, a link inside it or a file git tracks there turns state the server writes into
-     * a path a commit can carry — raw frames, timers, the credential. Checked on every call, because a
-     * pull can change it while the server runs.
+     * Commits and pushes run only while `.ps` is the tracker's own state directory and git tracks
+     * nothing that is it or under it, in any name that comes to it (#360). A link a pull swapped in, a
+     * name the filesystem folds to `.ps`, or a file or link git tracks inside it turns state the server
+     * writes into a path a commit can carry — raw frames, timers, the credential. Checked on every call,
+     * because a pull can change it while the server runs.
      */
-    private fun inVerifiedState(what: String): Boolean = when (val inspection = stateDirectory.inspected()) {
+    private fun inVerifiedState(what: String): Boolean = when (val inspection = stateDirectory.forGit()) {
         is StateDirectory.Usable -> true
-        is StateDirectory.Refused -> refusedState(what, inspection.reason)
+        is StateDirectory.Refused -> refusedState(what, inspection.refusal.reason)
     }
 
     private fun refusedState(what: String, reason: String): Boolean {

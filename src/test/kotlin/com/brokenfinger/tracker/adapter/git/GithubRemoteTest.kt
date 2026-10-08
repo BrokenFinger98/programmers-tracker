@@ -257,22 +257,40 @@ class GithubRemoteTest {
     }
 
     /**
-     * A pull replaces the ignored credential file with a tracked link, and the token written through it
-     * landed in the tracked file it leads to (#360). Replacing the link was not enough either: the store
-     * then shows as a changed tracked path, which any `commit -a` publishes. A link under `.ps` stops
-     * the store altogether, and both ends are left exactly as they were.
+     * A link at the credential path, one git does not track — left behind by `git rm --cached`: the token
+     * written through it landed in the file it leads to (#360). The store is replaced, the link with it,
+     * never written through, and the file the link led to is left exactly as it was.
      */
     @Test
-    fun `stores nothing when the credential path is a link`() {
+    fun `replaces a link at the credential path rather than writing through it`() {
         assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
         val tracked = repo.write("problems/notes-sync.md", "someone's notes\n")
         val store = aLink(repo.root.resolve(PushCredential.FILE), tracked)
+
+        remote().ensure()
+
+        Files.readString(tracked) shouldBe "someone's notes\n"
+        Files.isSymbolicLink(store) shouldBe false
+        Files.readString(store) shouldContain "x-access-token:ghp_test_token@github.com"
+    }
+
+    /**
+     * The same link as a pull delivers it, tracked: replaced, the token would be a change any `commit -a`
+     * publishes. Nothing is stored, and both ends are left exactly as they were.
+     */
+    @Test
+    fun `stores nothing when the credential path is a tracked link`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val tracked = repo.write("problems/notes-sync.md", "someone's notes\n")
+        val store = aLink(repo.root.resolve(PushCredential.FILE), tracked)
+        repo.git("add", "--force", "--", "problems/notes-sync.md", PushCredential.FILE)
+        repo.git("commit", "--message", "as a pull delivers it")
 
         val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
 
         Files.readString(tracked) shouldBe "someone's notes\n"
         Files.isSymbolicLink(store) shouldBe true
-        heard.single() shouldContain "holds a symbolic link"
+        heard.single() shouldContain "git tracks files under .ps"
         heard.single() shouldNotContain "ghp_test_token"
     }
 

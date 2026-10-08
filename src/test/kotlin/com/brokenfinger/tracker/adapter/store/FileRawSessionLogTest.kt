@@ -1,8 +1,12 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.application.RawSessionId
+import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
+import com.brokenfinger.tracker.support.fixtures.NOTHING_TRACKED
 import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
@@ -224,7 +228,7 @@ class FileRawSessionLogTest {
 
     @Test
     fun `under resolves the raw directory inside the record repository`() {
-        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC))
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
         val session = log.start(120804)
 
         log.append(session, """{"n":1}""")
@@ -296,7 +300,7 @@ class FileRawSessionLogTest {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         val tracked = Files.createDirectories(root.resolve("problems/zz"))
         aLink(root.resolve(".ps/raw"), tracked)
-        val log = FileRawSessionLog.under(root, Clock.fixed(sameMillisecond, ZoneOffset.UTC))
+        val log = FileRawSessionLog.under(root, Clock.fixed(sameMillisecond, ZoneOffset.UTC), aStateDirectory(root))
 
         val heard = warningsWhile(FileRawSessionLog::class) {
             val session = log.start(120804)
@@ -306,8 +310,131 @@ class FileRawSessionLogTest {
         }
 
         Files.list(tracked).use { it.count() } shouldBe 0L
-        heard.single() shouldContain "holds a symbolic link"
+        heard.single() shouldContain "is a symbolic link"
     }
+
+    // While .ps is refused, frames are held, never discarded (#360) ----------------------------
+
+    /**
+     * A refusal that can pass — a read that failed — was kept for the whole session, which then lost
+     * every frame: 3 of 500 sessions while a timer was written every 2 ms (the review of ea1357c). It is
+     * asked again at the next frame, and what was held goes first.
+     */
+    @Test
+    fun `a session refused for a moment keeps every frame, in order`() {
+        val state = StateDirectory(root, NOTHING_TRACKED, listing = aListingThatFailsOnce())
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), state)
+        val session = log.start(120804)
+
+        log.append(session, """{"n":1}""")
+        log.append(session, """{"n":2}""")
+
+        Files.readAllLines(stateRaw(session)) shouldContainExactly listOf("""{"n":1}""", """{"n":2}""")
+    }
+
+    /** Skipping a refused session's frames discarded originals; its attempt file lies outside `.ps`, so they go there. */
+    @Test
+    fun `a submit refused for good still reaches its attempt file whole`() {
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        val session = log.start(120804)
+        log.append(session, """{"n":1}""")
+        log.append(session, """{"n":2}""")
+        val destination = root.resolve("problems/120804-x/attempts/001.raw.jsonl")
+
+        log.complete(session, destination)
+
+        Files.readAllLines(destination) shouldContainExactly listOf("""{"n":1}""", """{"n":2}""")
+        Files.exists(stateRaw(session)) shouldBe false
+    }
+
+    @Test
+    fun `a run set aside while refused is written once the state directory is usable again`() {
+        val git = ChangingAnswer(true)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root, git))
+        val run = log.start(120804)
+        log.append(run, """{"run":1}""")
+        log.setAside(run)
+        git.answer = false
+
+        log.append(log.start(120805), """{"next":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/recorded/${run.value}")) shouldContainExactly listOf("""{"run":1}""")
+    }
+
+    @Test
+    fun `orphans kept while refused are written once the state directory is usable again`() {
+        val git = ChangingAnswer(true)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root, git))
+        log.orphaned(120804, """{"lost":1}""")
+        git.answer = false
+
+        log.orphaned(120804, """{"lost":2}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/120804.jsonl")) shouldContainExactly
+            listOf("""{"lost":1}""", """{"lost":2}""")
+    }
+
+    /**
+     * The verdict a session's first frame got was kept for every later one, so a raw directory a pull
+     * swapped for a link between two frames was written through. The directory is checked before each.
+     */
+    @Test
+    fun `a raw directory swapped for a link mid-session is never written through`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+        val session = log.start(120804)
+        log.append(session, """{"n":1}""")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        Files.move(root.resolve(".ps/raw"), root.resolve("moved-away"))
+        aLink(root.resolve(".ps/raw"), tracked)
+
+        log.append(session, """{"n":2}""")
+
+        Files.list(tracked).use { it.count() } shouldBe 0L
+    }
+
+    @Test
+    fun `held frames stay within their limit, and going over it is said`() {
+        val state = aStateDirectory(root) { true }
+        val log = FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC), state, heldLimit = 10)
+        val session = log.start(120804)
+        val destination = root.resolve("001.raw.jsonl")
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.append(session, """{"n":1}""")
+            log.append(session, """{"n":2}""")
+        }
+        log.complete(session, destination)
+
+        Files.readAllLines(destination) shouldContainExactly listOf("""{"n":1}""")
+        heard.last() shouldContain "reached 10 characters"
+    }
+
+    @Test
+    fun `what is still held when the log closes is said`() {
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        log.append(log.start(120804), """{"n":1}""")
+
+        val heard = warningsWhile(FileRawSessionLog::class) { log.close() }
+
+        heard.single() shouldContain "were lost when the server stopped"
+    }
+
+    /** Usable again by the time the server stops: a live session's frames go onto the work list, which the next start replays. */
+    @Test
+    fun `what is held is written when the log closes, once the state directory is usable`() {
+        val git = ChangingAnswer(true)
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root, git))
+        val session = log.start(120804)
+        log.append(session, """{"n":1}""")
+        git.answer = false
+
+        log.close()
+
+        Files.readAllLines(stateRaw(session)) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    private fun stateRaw(session: RawSessionId): Path = root.resolve(".ps/raw").resolve(session.value)
 
     /** One instant, so every session opened with it collides unless the log prevents it. */
     private val sameMillisecond: Instant = Instant.parse("2026-08-11T05:26:42.748Z")

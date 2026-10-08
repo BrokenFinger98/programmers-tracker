@@ -28,7 +28,7 @@ import java.security.MessageDigest
  * temp-and-rename through [AtomicStateFile.under], and only while [state] allows it: a pull can
  * deliver `.ps/seeds.json` as a link, and the ledger overwrote what it led to at every boot (#360).
  */
-class SeedLedger(recordRoot: Path, state: StateDirectory = StateDirectory(recordRoot)) {
+class SeedLedger(recordRoot: Path, state: StateDirectory) {
     private val ledger = AtomicStateFile.under(recordRoot, LEDGER, state)
 
     /** True only when the file is exactly what we last wrote — never for a file we have no record of. */

@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.nio.file.Path
@@ -49,7 +50,7 @@ class RecordRepositoryFixture(val root: Path) {
     fun query(
         catalog: ProblemCatalog = anEmptyCatalog(),
         clock: Clock = Clock.systemUTC(),
-        raw: RawSessionLog = FileRawSessionLog.under(root),
+        raw: RawSessionLog = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)),
         codes: GradingCodes = FileGradingCodes(RecordLayout(root)),
         records: RecordStore = store(),
     ): RecordQuery = RecordQuery(records, catalog, clock, raw, codes = codes)

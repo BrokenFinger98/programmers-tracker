@@ -8,6 +8,7 @@ import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import io.kotest.matchers.collections.shouldContain
@@ -208,7 +209,7 @@ class RecordWriterGitTest {
         val layout = RecordLayout(repo.root)
         return RecordWriter.of(
             store = JsonlRecordStore.under(repo.root),
-            rawLog = FileRawSessionLog.under(repo.root),
+            rawLog = FileRawSessionLog.under(repo.root, Clock.systemUTC(), aStateDirectory(repo.root)),
             rawAttemptPath = AttemptRawPath(layout::rawAttemptFile),
             recordRoot = repo.root,
             git = git,
@@ -236,7 +237,7 @@ class RecordWriterGitTest {
     )
 
     private fun staged(name: String) = aRawSessionId("$name.jsonl").also {
-        FileRawSessionLog.under(repo.root).append(it, """{"type":"finish","grading":"$name"}""")
+        FileRawSessionLog.under(repo.root, Clock.systemUTC(), aStateDirectory(repo.root)).append(it, """{"type":"finish","grading":"$name"}""")
     }
 
     private fun logLines(): List<String> =

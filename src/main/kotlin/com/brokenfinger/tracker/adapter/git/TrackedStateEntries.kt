@@ -30,7 +30,7 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
     TrackedState {
     private val process = GitProcess(root, environment)
 
-    override fun any(): Boolean? = runCatching { listed() }.getOrNull()
+    override fun tracksAnything(): Boolean? = runCatching { listed() }.getOrNull()
 
     private fun listed(): Boolean? {
         val result = process.run(listOf("git", "ls-files", "-z"))

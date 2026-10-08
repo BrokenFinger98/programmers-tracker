@@ -17,6 +17,7 @@ import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -45,7 +46,7 @@ class RawSessionReconcilerTest {
     @TempDir
     lateinit var root: Path
 
-    private val rawLog by lazy { FileRawSessionLog.under(root) }
+    private val rawLog by lazy { FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root)) }
 
     // Reconciled ten minutes after the session that the crash interrupted started.
     private val clock by lazy { Clock.fixed(NOW, ZoneOffset.UTC) }
