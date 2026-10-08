@@ -100,7 +100,8 @@ reproduced with the real classes, a bare remote and fake tokens:
   search never looked at.
 - **R1.** Once the advice to rotate was followed, the old token was no longer stored, and passed the
   gate in history.
-- **N6.** Commit and tag messages are not searched.
+- **N6.** Commit and tag messages are not searched. *Resolved at the push by #375: the commits a push
+  sends are read, messages, authors and committers, and no tag is sent.*
 - **Replace refs.** The gate read a replacement object while the push sent the original.
 - **N11.** The submit path had no merge wait.
 - **N10.** Every check is of a path at one moment, and the write resolves it again. With no store, the
@@ -476,8 +477,9 @@ Two pin that a healthy repository still commits and pushes with a credential sto
 - **A hard link needs local write access.** It is a regular file to every check here; git cannot
   deliver one.
 - **The gate reads file content, nothing else.** Commit and tag messages are not searched for the
-  stored value or the shapes (N6) — a follow-up. A token that is split, or encoded other than by
-  percent-encoding, is missed. So is content a clean filter keeps outside the blob (git-lfs). A token
+  stored value or the shapes (N6) — a follow-up. *Since #375 a push reads the commits and the names it
+  would send, and sends no tag; the commit side still reads file content alone.* A token that is split,
+  or encoded other than by percent-encoding, is missed. So is content a clean filter keeps outside the blob (git-lfs). A token
   of another host's shape is found only while it is stored. A stored secret short enough to occur in
   ordinary text would refuse everything — failing closed, but stopping the backups.
 - **The first push reads every commit's tree, twice.** The review measured the stored-value search

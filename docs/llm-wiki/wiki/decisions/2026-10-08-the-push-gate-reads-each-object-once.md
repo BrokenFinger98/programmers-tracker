@@ -99,7 +99,8 @@ The push searches what `OutgoingObjectScan` reads:
    own tree at every push, whatever the remote-tracking refs say (added after the review of 315f44e, see
    the Outcome); an object both name is read once.
 2. `git cat-file --batch-check --buffer` describes each listed object, 50,000 ids to a call. Only blobs
-   are read; commit and tag messages are #375's, and their types would join `READ_TYPES`.
+   are read; commit and tag messages are #375's, and their types would join `READ_TYPES`. *Since #375,
+   commits and trees are read too, and the push sends no tag — see the Outcome.*
 3. `git cat-file --batch --buffer` prints the blobs, the objects whose content starts in the same 64 MB
    of the whole going to one call (and no more than 50,000 of them). `BatchOutput` reads each call's
    output against what was asked and searches it in windows (`TokenPatterns`).
@@ -187,7 +188,8 @@ the bytes `BatchOutput` reads.
   ref reaches and the remote lacks, and whatever only it carries. A token in such a commit's tree that
   HEAD's tree no longer holds goes out unsearched. `git grep` did not read it either: it searched only
   the commits the same range named.
-- **Commit and tag messages are still not read** (#375).
+- **Commit and tag messages are still not read** (#375). *Resolved by #375, in the Outcome: commits and
+  names are read, and no tag is sent.*
 
 ## Outcome
 
@@ -259,3 +261,67 @@ node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 311 of 353; `adapte
 floor); guards. Two coverage runs failed first, in the one `@SpringBootTest`: it records into a fixed path
 under the system temp directory, and another worktree's test run held its lock
 (`RecordRepositoryLockedException`). The run that waited for that worktree to go idle passed.
+
+**#375 put commits and trees through the same reader, and stopped tags from going at all** (branch
+`fix/375-scan-messages`). N6 in #360's review: a token in a commit message, an author or a committer was
+pushed, since only files were read; and a token in a file or directory name was invisible to every search,
+`git grep` included.
+
+- **Commits.** `cat-file --batch` prints the commits the scan already lists, and the same `TokenPatterns`
+  read them, the UTF-16 view included. A commit's header, up to the empty line that ends it, is searched
+  apart from its message, so the refusal names the commit by a 12-character id and the part — "the
+  message", or "the author, committer or another header line" — and never the token. No match spans that
+  empty line, as neither a shape nor a stored value holds a newline; the line can fall across a window's
+  seam, and a test puts it there. A tag's text merged into a commit, a `mergetag` header, is read with it.
+- **Trees, as bytes alone.** A tree holds the names, so a match in one is said as "a file or directory
+  name", never which. Its object ids cannot make a false match: a run of token characters touching an
+  id ends at the NUL before it and the space after the next entry's mode, 26 bytes at most against the 40
+  a token needs. Measured on the 5,000-commit history: the longest such run in 12,512,500 entries was 10
+  bytes, and no window of its 15,000 trees (382 MB) matched. The UTF-16 view is left off for trees: a
+  name cannot hold a NUL, and UTF-16 text of an ASCII character always does; every tree holds NULs, and
+  the view cost 6.2–7.1 s on those trees against 1.0–2.0 s for the bytes alone.
+- **Tags: never sent, rather than read.** The push names one branch, yet with `push.followTags=true` in
+  the records repository git sent every annotated tag on it too, its message never read: measured, a tag
+  on HEAD whose message held a token reached the remote as `refs/tags/v1`. The push now says
+  `--no-follow-tags`, so no tag goes, whatever the configuration says, and none needs reading.
+
+Measured as before (whole `push()`, three to five runs):
+
+| | main | before #375 | #375 |
+|---|---|---|---|
+| First push, 1,660 / 5,000 commits / log | 25.2 / 252.5 / 56.3 s | 0.21–0.28 / 0.50–0.59 / 3.9–9.5 s | 0.44–0.54 / 1.82–2.40 / 4.7–6.9 s |
+| Five outgoing commits | 0.22–0.31 / 0.48–0.54 / 0.31–0.33 s | 0.17–0.25 / 0.24–0.29 / 0.19–0.21 s | 0.14–0.22 / 0.22–0.26 / 0.17–0.19 s |
+| Nothing outgoing | 0.07–0.13 s | 0.20–0.46 s | 0.15–0.27 s |
+
+The trees are what a first push pays for: 44 / 401 / 44 MB of them, against 4 / 10 / 729 MB of blobs. The
+slowest single call on a first push was 0.21 / 0.28 / 0.33 s. Five outgoing commits add a few trees and
+commits, and cost nothing measurable.
+
+Accepted with it:
+
+- **The commit side still reads file content alone.** A file named with a token is committed by a
+  reconciliation, and then every push is refused until the history no longer holds the name. Fail closed;
+  the owner rewrites history, as for any token in what is committed.
+- **The header is one part.** The author, the committer and a merged tag are not told apart; the commit's
+  id is what the owner needs, and `git cat-file commit <id>` shows the rest.
+- **A UTF-16 name is read as bytes.** A stored value whose UTF-16 form holds no zero byte would be missed
+  in a name written in UTF-16; no tool writes names that way, and the shapes are ASCII.
+- **The owner's own pushes are unchanged.** `--no-follow-tags` binds the tracker's push alone; a `git push`
+  the owner runs still follows the repository's configuration, and is not gated.
+
+Each new test was red first: 12 for commits against types with no behaviour (the pushes went out,
+`expected:<false> but was:<true>`, and a commit hit read as a blob's); the names against a scan that read
+no tree (`Clean`), the push of a token-named file going out, and the bytes-alone matcher finding the UTF-16
+token; the tag test with the remote holding `refs/tags/v1`. A pin that was green from the start: an
+object id of 20 letters does not complete a token.
+
+17 mutants, each a #375 behaviour removed, all killed, with how many tests each failed: commits not read
+7; trees not read 4; a commit searched whole, as a blob is 11; the header never ended 4; a commit read as
+message from its first byte 5; the empty line across a seam unseen 2; the header without its tail 2; the
+message without its tail 1; the header side of the window that ends it unsearched 5; a tree read with the
+UTF-16 view 1; a tree searched as a blob 5; bytes alone read as UTF-16 too 2; tags followed again 1; the
+commit named by its whole id 1; the part not said 1; a commit finding said as content 2; a name finding
+said as content 1. Two of them, the tails, failed to compile as first written and were rerun once they did.
+
+Gates, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build;
+`verifyBranchCoverage` (`adapter/git` 88%, 341 of 384; `adapter/config` 65% at its floor); guards.

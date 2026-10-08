@@ -33,6 +33,12 @@ internal class TokenPatterns private constructor(private val values: List<String
     fun foundIn(window: String): Boolean =
         holds(window, valuesAsBytes) || NUL in window && asUtf16(window).any { holds(it, values) }
 
+    /**
+     * Whether [window] holds a token shape or a stored value as its bytes alone, never read as UTF-16: for a
+     * tree, whose names cannot hold a NUL, so no UTF-16 text of an ASCII character can be in one (#375).
+     */
+    fun foundInBytes(window: String): Boolean = holds(window, valuesAsBytes)
+
     private fun holds(text: String, fixed: List<String>): Boolean =
         COMPILED.any { it.matcher(text).find() } || fixed.any { it in text }
 
