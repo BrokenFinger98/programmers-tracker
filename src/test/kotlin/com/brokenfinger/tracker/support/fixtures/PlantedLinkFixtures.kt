@@ -16,6 +16,15 @@ const val A_PUSH_CREDENTIAL = "not-a-real-token"
 /** A stand-in for the push token, shaped like the line the real file holds and never a real one (dev rules §7.3). */
 const val A_PUSH_TOKEN_LINE = "https://x-access-token:$A_PUSH_CREDENTIAL@github.com"
 
+/**
+ * A string shaped like a classic GitHub token — prefix, underscore, 36 characters — and never a real
+ * one, built here rather than written out so no token-shaped literal is ever committed (#360).
+ */
+fun aGithubShapedToken(fill: Char = 'A'): String = "ghp" + "_" + fill.toString().repeat(36)
+
+/** The same for a fine-grained token: `github_pat_` and 82 characters. */
+fun aFineGrainedShapedToken(fill: Char = 'B'): String = "github" + "_pat_" + fill.toString().repeat(82)
+
 /** The push token where the records repository really keeps it — `.ps/git-credentials`, beside `problems/`. */
 fun aPushTokenIn(root: Path): Path {
     val file = root.resolve(PushCredential.FILE)

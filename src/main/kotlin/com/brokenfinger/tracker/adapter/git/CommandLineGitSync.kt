@@ -248,29 +248,34 @@ class CommandLineGitSync(
     }
 
     /**
-     * The content gate (#360): true when the push token is in none of the searches — each the
-     * arguments of one `git grep`, run with what the store holds as fixed strings on stdin, never in
-     * argv. It searches for the token, not for a path, so it holds wherever the token turns up.
+     * The content gate (#360): true when no GitHub token is in any of the searches — each the arguments
+     * of one `git grep`. Two kinds of pattern go to each: anything shaped like a GitHub token, always,
+     * so the gate does not depend on what is stored and finds a token rotated out of the store (the
+     * review's R1); and what the store holds, as fixed strings on stdin, never in argv. It searches the
+     * content git would carry, not a path, so it holds wherever a token turns up — though not in a
+     * commit or tag message, which it does not read.
      *
      * Fails closed, with one WARN that never carries what was searched for: a store that is there and
      * cannot be read, searches that cannot be listed (null), a search that does not finish, a match.
      */
-    private fun carriesNoCredential(what: String, searches: () -> List<List<String>>?): Boolean =
-        when (val stored = credential.stored()) {
-            StoredCredential.None -> true
-            StoredCredential.Unreadable -> refused(CREDENTIAL_UNREADABLE, what)
-            is StoredCredential.Patterns -> searchedClean(what, stored, searches())
-        }
+    private fun carriesNoCredential(what: String, searches: () -> List<List<String>>?): Boolean {
+        val stored = credential.stored()
+        if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
+        return searchedClean(what, stored, searches())
+    }
 
-    private fun searchedClean(what: String, patterns: Patterns, searches: List<List<String>>?): Boolean {
+    private fun searchedClean(what: String, stored: StoredCredential, searches: List<List<String>>?): Boolean {
         if (searches == null) return refused(CREDENTIAL_UNSEARCHED, what)
-        val outcome = searches.asSequence().map { grep(patterns, it) }.firstOrNull { it != NO_MATCH } ?: return true
+        val outcome = searches.asSequence().flatMap { greps(stored, it) }.firstOrNull { it != NO_MATCH } ?: return true
         if (outcome == MATCH) return refused(CREDENTIAL_FOUND, what)
         return refused(CREDENTIAL_UNSEARCHED, what)
     }
 
-    private fun grep(patterns: Patterns, search: List<String>): Int =
-        git(listOf("grep", "-q", "-F", "-f", "-") + search, patterns.asInput()).code
+    // The token shapes first, then what is stored — the second only runs if the first found nothing.
+    private fun greps(stored: StoredCredential, search: List<String>): Sequence<Int> = sequence {
+        yield(git(listOf("grep", "-q", "-E") + TOKEN_SHAPES.flatMap { listOf("-e", it) } + search).code)
+        if (stored is Patterns) yield(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput()).code)
+    }
 
     /**
      * One search per batch of the commits a push to [remote] would send: those none of its
@@ -478,8 +483,9 @@ class CommandLineGitSync(
         private const val STATE_REFUSED = "git {} refused in {}: {}."
 
         private const val CREDENTIAL_FOUND =
-            "git {} refused in {}: what it would send carries the push token stored in .ps/git-credentials. " +
-                "Nothing has left this machine. Take the token out of those files or commits, and rotate it."
+            "git {} refused in {}: what it would send carries a GitHub token — the one stored in " +
+                ".ps/git-credentials, or one shaped like it. It was not sent; revoke the token on GitHub " +
+                "and remove it from history."
 
         private const val CREDENTIAL_UNREADABLE =
             "git {} refused in {}: .ps/git-credentials is not a regular file, or cannot be read, so the push " +
@@ -492,6 +498,15 @@ class CommandLineGitSync(
         /** `git grep -q` exits 0 when something matched and 1 when nothing did; anything else is an error. */
         private const val MATCH = 0
         private const val NO_MATCH = 1
+
+        /**
+         * GitHub's token formats, as `git grep -E` patterns: they are not secret, so they go in argv.
+         * The classic kinds are a prefix, `_`, then 30 random and 6 checksum characters (GitHub's
+         * engineering blog), 36 in all; `_` is in the class because a stateless installation token is
+         * `ghs_<app id>_<JWT>`, whose JWT header alone runs past 36. A fine-grained token is
+         * `github_pat_` and more; its length is not documented, and the bound stays at 60.
+         */
+        private val TOKEN_SHAPES = listOf("gh[pousr]_[A-Za-z0-9_]{36,}", "github_pat_[A-Za-z0-9_]{60,}")
 
         /** Where a push goes when git names no other remote for the branch. */
         private const val DEFAULT_REMOTE = "origin"

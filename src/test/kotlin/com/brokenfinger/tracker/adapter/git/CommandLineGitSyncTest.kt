@@ -11,6 +11,8 @@ import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
+import com.brokenfinger.tracker.support.fixtures.aFineGrainedShapedToken
+import com.brokenfinger.tracker.support.fixtures.aGithubShapedToken
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
@@ -819,6 +821,59 @@ class CommandLineGitSyncTest {
 
         heard.single() shouldContain "is not the tracker's own state directory"
         subjects() shouldContainExactly listOf("as a clone delivers it")
+    }
+
+    // Anything shaped like a GitHub token, whatever is stored (#360) ----------------------------
+
+    /**
+     * The refusal used to say "rotate it", and after rotation the store held the new token, so the old
+     * one in an unpushed commit went out (the review's R1). The search also looks for anything shaped
+     * like a GitHub token, so a token no longer stored is still found.
+     */
+    @Test
+    fun `a GitHub token no longer stored is still found before a push`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        written(PushCredential.FILE, "https://x-access-token:${aGithubShapedToken('N')}@github.com\n")
+        written("notes.md", "the one before: ${aGithubShapedToken('O')}\n")
+        git("add", "--all")
+        git("commit", "--message", "a note another tool committed")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "revoke the token on GitHub"
+        everythingAt(remote) shouldNotContain aGithubShapedToken('O')
+    }
+
+    /** With nothing stored at all, a token-shaped string is still not committed. */
+    @Test
+    fun `a classic GitHub token is refused with nothing stored`() {
+        written(".gitignore", ".ps/\n")
+        written("notes.md", "${aGithubShapedToken()}\n")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "revoke the token on GitHub"
+        heard.single() shouldNotContain aGithubShapedToken()
+    }
+
+    @Test
+    fun `a fine-grained GitHub token is refused with nothing stored`() {
+        written(".gitignore", ".ps/\n")
+        written("notes.md", "${aFineGrainedShapedToken()}\n")
+
+        sync().reconcile() shouldBe false
+    }
+
+    /** A repository with nothing token-shaped in it is untouched: near misses are not tokens. */
+    @Test
+    fun `strings that only resemble a token are not refused`() {
+        written(".gitignore", ".ps/\n")
+        written("notes.md", "ghp_short, github_pat_tooShort, x-access-token, ghx_${"A".repeat(36)}\n")
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "notes.md")
     }
 
     // What a push sends, and to where (#360) ----------------------------------------------------
