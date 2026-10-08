@@ -33,11 +33,14 @@ internal class BackupRetry private constructor(
         /** The longest wait, so that a fix is picked up within the hour it is made. */
         val LONGEST: Duration = Duration.ofHours(1)
 
-        /** Doublings past which [FIRST] is beyond [LONGEST] anyway; the shift stops there. */
-        private const val DOUBLINGS = 6
+        /**
+         * The doublings that take [FIRST] to [LONGEST] or past it, counted from the two rather than written
+         * down beside them; the shift stops there, so it never overflows.
+         */
+        private val DOUBLINGS: Int = generateSequence(FIRST) { it.multipliedBy(2) }.takeWhile { it < LONGEST }.count()
 
         /** The retry after a try for [due] failed at [failedAt], counting on from [previous] for the same [due]. */
-        fun after(previous: BackupRetry?, due: Instant, failedAt: Instant): BackupRetry {
+        fun of(previous: BackupRetry?, due: Instant, failedAt: Instant): BackupRetry {
             val failures = (previous?.failuresFor(due) ?: 0) + 1
             return BackupRetry(due, failures, failedAt.plus(waitAfter(failures)))
         }

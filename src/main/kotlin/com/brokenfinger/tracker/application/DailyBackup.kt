@@ -72,7 +72,7 @@ class DailyBackup(
 
     private fun retryAfter(due: Instant, counted: Boolean): BackupRetry? {
         if (counted) return null
-        return BackupRetry.after(retry.get(), due, clock.instant())
+        return BackupRetry.of(retry.get(), due, clock.instant())
     }
 
     /**

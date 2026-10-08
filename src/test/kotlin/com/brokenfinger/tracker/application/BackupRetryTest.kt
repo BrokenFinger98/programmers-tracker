@@ -14,7 +14,7 @@ import java.time.Instant
 class BackupRetryTest {
     @Test
     fun `the first failure is tried again a minute later`() {
-        val retry = BackupRetry.after(null, DUE, FAILED)
+        val retry = BackupRetry.of(null, DUE, FAILED)
 
         retry.waits(DUE, FAILED.plusSeconds(59)) shouldBe true
         retry.waits(DUE, FAILED.plusSeconds(60)) shouldBe false
@@ -46,16 +46,16 @@ class BackupRetryTest {
     fun `another scheduled backup counts its failures from one`() {
         val atTheCap = retriesOf(failures = 7).last().first
 
-        val next = BackupRetry.after(atTheCap, NEXT_DUE, FAILED)
+        val next = BackupRetry.of(atTheCap, NEXT_DUE, FAILED)
 
         waitOf(next, FAILED, NEXT_DUE) shouldBe Duration.ofMinutes(1)
     }
 
     /** Each retry after a failure at the time the one before it allowed, with that time. */
     private fun retriesOf(failures: Int): List<Pair<BackupRetry, Instant>> =
-        generateSequence(BackupRetry.after(null, DUE, FAILED) to FAILED) { (retry, at) ->
+        generateSequence(BackupRetry.of(null, DUE, FAILED) to FAILED) { (retry, at) ->
             val next = at.plus(waitOf(retry, at))
-            BackupRetry.after(retry, DUE, next) to next
+            BackupRetry.of(retry, DUE, next) to next
         }.take(failures).toList()
 
     private fun waitsOf(failures: Int): List<Duration> = retriesOf(failures).map { (retry, at) -> waitOf(retry, at) }
