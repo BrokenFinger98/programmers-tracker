@@ -5756,10 +5756,49 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - guards: 12 of 12.
 - **Docs.** An Outcome note in [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]]. No
   new ADR: the cache is round 4's design, kept with a measured bound.
-- **Remaining.**
-  - Once `.ps` is untracked, as the TRACKED reason advises, a session git delivered is replayed at
-    the next boot. The WARN names `git ls-files .ps` so the owner can remove those first.
-  - An untracked link at a session file is still listed, and the reconciler reads through it.
+- **Remaining, at `4008e8f`.** The review round below closes the first two.
+  - Once `.ps` was untracked, as the TRACKED reason advised, a session git delivered was replayed at
+    the next boot. The WARN named `git ls-files .ps`, which lists no folded spelling.
+  - An untracked link at a session file was listed, and the reconciler read through it.
   - `orphans()` is unguarded.
   - #378 items 2–3 are untouched.
-- **Pending.** Not pushed. CI has not run. Not verified live.
+- **Pending.** Pushed as PR #395 by the coordinator; CI was green on `4008e8f`. Not verified live.
+
+## 2026-10-08 — #377 review round: PR #395's M1, M2, M4 and L1–L5 (branch fix/377-raw-replay-guard)
+- **The review.** An adversarial review of PR #395, at `4008e8f`, found nothing blocking. It measured on
+  real git 2.48.1 on APFS that the forged replay was deferred, not blocked: upstream force-added a raw
+  session, the owner pulled, ran the TRACKED advice `git rm -r --cached .ps` and restarted, and the boot
+  recorded the forged PASS (`recorded=1`). Commits on top of `4008e8f`, no rebase. Each fix has a test that
+  failed against the commit before it, on behaviour.
+- `fca29fc` **L2.** Git is asked first, and the link check runs just before the listing. A `.ps/raw` swapped
+  for a link inside the git question was listed through before.
+- `8c24551` **L1.** Only regular files are listed. A session file that is a link was listed and recorded;
+  the reconciler now reads without following a link at the file.
+- `35fc42f` **M1.** `TrackedState.pathsEverTracked()`, answered by one
+  `git log --all -m --root --no-renames --name-only -z`. A session whose `raw/<name>` git's history names,
+  in any case, is never replayed; while git cannot say, none is. Ten tests, the end-to-end one with real
+  git. Measured on this host, median of 21, synthetic histories:
+  - 166 commits (460 KB tree): the question took 10.7 ms; `unprocessed()` with one session waiting 20.1 ms;
+  - 1,660 commits (4.5 MB tree): 33.6 and 40.7 ms;
+  - with nothing waiting git's history is not read (7.9 and 8.4 ms, the index question alone).
+- `bab8bb8` **M2, the TRACKED advice, L3, L5.** The reasons give `git ls-files -- ':(icase).ps'
+  ':(icase).pſ'` and `git rm -r --cached --ignore-unmatch -- ':(icase).ps' ':(icase).pſ'`; TRACKED says to
+  delete from disk what git put there first. A parameterized test runs both commands as the owner reads
+  them, for eight spellings; the old reason had no listing command, and its `git rm -r --cached .ps` left
+  `tracksAnything()` true for `.PS` and `.pſ` entries (probed). HOLDS_A_LINK and NOT_THE_DIRECTORY say to
+  move what lies behind the link first; the uncounted WARN names no link.
+- `0de3f66` **M4.** `RawSessionLog.unreplayed()`; `incompleteHistory` carries `sessionsNotReplayed` and
+  `rawDirectoryNotListed`; `docs/mcp.md` and its twin (blob `70f95ca`). `ec783c3` counts what is left in one
+  place.
+- `8362c46` **Pins.** `--root` under `log.showRoot=false`, the `raw` segment, one WARN.
+- **Mutation.** 32 mutants, each against the whole suite, all killed; the table is in the ADR.
+- **Gates**, all exit 0: check; test (2,181 JUnit in 161 classes, 0 failures, 9 skipped as before; node 4
+  of 4); build; `verifyBranchCoverage` (`adapter/store` 85%, 641 of 754; `adapter/git` 85%, 232 of 270;
+  every package at or above its floor); guards (12 of 12).
+- **Docs.** The #360 ADR's #377 Outcome: the review round, M1's cost, L4's measured collision and the
+  mutation table. No new ADR: these fix the round's own guard; no new decision.
+- **Remaining.** `orphans()` unguarded (M3, for #378); a session git delivered and the owner only untracked
+  stays on disk, never replayed and counted at every start; a git that cannot answer holds the work list;
+  the reflogs are not read; a directory swapped after the listing is read through. Not measured in the
+  image; CI has not run this round; not verified live.
+- **Pending.** Not pushed; the coordinator merges main in and pushes.
