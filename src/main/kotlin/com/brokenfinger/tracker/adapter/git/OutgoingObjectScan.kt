@@ -14,7 +14,7 @@ import java.io.InputStream
  * blob many commits share is read once, and no tree or commit is read at all.
  *
  * Fails closed: a listing, a description or a read that fails or does not finish in time, an object git
- * cannot describe or print, and output other than what was asked for are each [SearchOutcome.UNSEARCHED].
+ * cannot describe or print, and output other than what was asked for are each [SearchOutcome.Unsearched].
  */
 internal class OutgoingObjectScan(
     private val git: GitCalls,
@@ -23,11 +23,11 @@ internal class OutgoingObjectScan(
 ) {
     /** Searches every object [range] names — arguments to `rev-list` — for the token shapes and [stored]'s values. */
     fun outcome(range: List<String>, stored: StoredCredential): SearchOutcome {
-        val listed = listed(range) ?: return SearchOutcome.UNSEARCHED
-        val read = described(listed)?.filter { it.type in READ_TYPES } ?: return SearchOutcome.UNSEARCHED
+        val listed = listed(range) ?: return SearchOutcome.Unsearched
+        val read = described(listed)?.filter { it.type in READ_TYPES } ?: return SearchOutcome.Unsearched
         val patterns = TokenPatterns.of(stored)
         val outcomes = calls(read).asSequence().map { searched(it, patterns) }
-        return outcomes.firstOrNull { it != SearchOutcome.CLEAN } ?: SearchOutcome.CLEAN
+        return outcomes.firstOrNull { it != SearchOutcome.Clean } ?: SearchOutcome.Clean
     }
 
     // Every object the range names, each once: rev-list prints an object the first time it reaches it, and a
@@ -61,7 +61,7 @@ internal class OutgoingObjectScan(
         val read = git.streamed(listOf("cat-file", "--batch", "--buffer"), linesOf(call.map { it.id })) {
             BatchOutput(it, patterns, window).searched(call)
         }
-        return read ?: SearchOutcome.UNSEARCHED
+        return read ?: SearchOutcome.Unsearched
     }
 
     companion object {

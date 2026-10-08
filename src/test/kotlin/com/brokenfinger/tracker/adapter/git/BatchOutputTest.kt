@@ -20,17 +20,17 @@ class BatchOutputTest {
 
     @Test
     fun `objects that hold nothing are clean`() {
-        searched(blob(1, "a note\n"), blob(2, "another\n")) shouldBe SearchOutcome.CLEAN
+        searched(blob(1, "a note\n"), blob(2, "another\n")) shouldBe SearchOutcome.Clean
     }
 
     @Test
     fun `an empty object is clean`() {
-        searched(blob(1, "")) shouldBe SearchOutcome.CLEAN
+        searched(blob(1, "")) shouldBe SearchOutcome.Clean
     }
 
     @Test
     fun `a token in any object is found`() {
-        searched(blob(1, "a note\n"), blob(2, "pasted ${aGithubShapedToken()}\n")) shouldBe SearchOutcome.FOUND
+        searched(blob(1, "a note\n"), blob(2, "pasted ${aGithubShapedToken()}\n")) shouldBe SearchOutcome.FoundInContent
     }
 
     /** `git grep` searches a binary file too; its bytes are read one character each, NULs and all. */
@@ -38,21 +38,23 @@ class BatchOutputTest {
     fun `a token in binary content is found`() {
         val binary = byteArrayOf(0, -1, 0x7f, 0) + aGithubShapedToken().toByteArray() + byteArrayOf(0, -2)
 
-        searched(blob(1, binary)) shouldBe SearchOutcome.FOUND
+        searched(blob(1, binary)) shouldBe SearchOutcome.FoundInContent
     }
 
     @Test
     fun `a stored value is found`() {
         val stored = TokenPatterns.of(StoredCredential.of("https://x-access-token:$A_PUSH_CREDENTIAL@github.com\n"))
 
-        searched(blob(1, "my token is $A_PUSH_CREDENTIAL\n"), patterns = stored) shouldBe SearchOutcome.FOUND
+        searched(blob(1, "my token is $A_PUSH_CREDENTIAL\n"), patterns = stored) shouldBe SearchOutcome.FoundInContent
     }
 
     // Across a seam: the match ends one byte into a window ---------------------------------------------
 
     @Test
     fun `the shortest classic token across a seam is found`() {
-        searched(blob(1, endingOneByteIntoAWindow(aGithubShapedToken().toByteArray()))) shouldBe SearchOutcome.FOUND
+        val shortest = aGithubShapedToken().toByteArray()
+
+        searched(blob(1, endingOneByteIntoAWindow(shortest))) shouldBe SearchOutcome.FoundInContent
     }
 
     /** The longest shortest match is what a window repeats, so this is the one an overlap a byte short misses. */
@@ -60,7 +62,7 @@ class BatchOutputTest {
     fun `the shortest fine-grained token across a seam is found`() {
         val shortest = aFineGrainedShapedToken().take(TokenPatterns.LARGEST_MINIMUM_MATCH).toByteArray()
 
-        searched(blob(1, endingOneByteIntoAWindow(shortest))) shouldBe SearchOutcome.FOUND
+        searched(blob(1, endingOneByteIntoAWindow(shortest))) shouldBe SearchOutcome.FoundInContent
     }
 
     /** In UTF-16 the same token takes twice the bytes, and the window repeats that much. */
@@ -68,15 +70,16 @@ class BatchOutputTest {
     fun `the shortest fine-grained token in UTF-16 across a seam is found`() {
         val shortest = aFineGrainedShapedToken().take(TokenPatterns.LARGEST_MINIMUM_MATCH).toByteArray(UTF_16LE)
 
-        searched(blob(1, endingOneByteIntoAWindow(shortest))) shouldBe SearchOutcome.FOUND
+        searched(blob(1, endingOneByteIntoAWindow(shortest))) shouldBe SearchOutcome.FoundInContent
     }
 
     @Test
     fun `a stored value longer than every shape across a seam is found`() {
         val line = "https://x-access-token:${"n".repeat(LONGER_THAN_A_SHAPE)}@github.com"
         val stored = TokenPatterns.of(StoredCredential.of("$line\n"))
+        val printed = blob(1, endingOneByteIntoAWindow(line.toByteArray()))
 
-        searched(blob(1, endingOneByteIntoAWindow(line.toByteArray())), patterns = stored) shouldBe SearchOutcome.FOUND
+        searched(printed, patterns = stored) shouldBe SearchOutcome.FoundInContent
     }
 
     /** Each object is searched apart, as `git grep` searches each file: a token is never made of two. */
@@ -84,7 +87,7 @@ class BatchOutputTest {
     fun `a token is never read from one object into the next`() {
         val token = aGithubShapedToken()
 
-        searched(blob(1, token.take(HALF)), blob(2, token.drop(HALF))) shouldBe SearchOutcome.CLEAN
+        searched(blob(1, token.take(HALF)), blob(2, token.drop(HALF))) shouldBe SearchOutcome.Clean
     }
 
     // Output that is not what was asked for -------------------------------------------------------------
@@ -93,35 +96,35 @@ class BatchOutputTest {
     fun `an object reported missing is unsearched`() {
         val asked = GitObject(idOf(1), "blob", 6)
 
-        searched(listOf(asked), "${idOf(1)} missing\n".toByteArray()) shouldBe SearchOutcome.UNSEARCHED
+        searched(listOf(asked), "${idOf(1)} missing\n".toByteArray()) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
     fun `a header for another object is unsearched`() {
         val printed = blob(2, "a note")
 
-        searched(listOf(GitObject(idOf(1), "blob", 6)), printed.bytes) shouldBe SearchOutcome.UNSEARCHED
+        searched(listOf(GitObject(idOf(1), "blob", 6)), printed.bytes) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
     fun `a header of another type is unsearched`() {
         val printed = Printed(GitObject(idOf(1), "tree", 6), "a note".toByteArray())
 
-        searched(listOf(GitObject(idOf(1), "blob", 6)), printed.bytes) shouldBe SearchOutcome.UNSEARCHED
+        searched(listOf(GitObject(idOf(1), "blob", 6)), printed.bytes) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
     fun `a header of another size is unsearched`() {
         val printed = blob(1, "a note")
 
-        searched(listOf(GitObject(idOf(1), "blob", 7)), printed.bytes) shouldBe SearchOutcome.UNSEARCHED
+        searched(listOf(GitObject(idOf(1), "blob", 7)), printed.bytes) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
     fun `content that ends early is unsearched`() {
         val printed = blob(1, "a note that git stopped printing")
 
-        searched(listOf(printed.asked), printed.bytes.copyOf(printed.bytes.size - 10)) shouldBe SearchOutcome.UNSEARCHED
+        searched(listOf(printed.asked), printed.bytes.copyOf(printed.bytes.size - 10)) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
@@ -129,7 +132,7 @@ class BatchOutputTest {
         val printed = blob(1, "a note")
 
         searched(listOf(printed.asked), printed.bytes.copyOf(printed.bytes.size - 1) + 'x'.code.toByte()) shouldBe
-            SearchOutcome.UNSEARCHED
+            SearchOutcome.Unsearched
     }
 
     @Test
@@ -137,14 +140,14 @@ class BatchOutputTest {
         val printed = blob(1, "a note")
 
         searched(listOf(printed.asked), printed.bytes + "${idOf(2)} blob 0\n\n".toByteArray()) shouldBe
-            SearchOutcome.UNSEARCHED
+            SearchOutcome.Unsearched
     }
 
     @Test
     fun `output that ends before an object is unsearched`() {
         val printed = blob(1, "a note")
 
-        searched(listOf(printed.asked, GitObject(idOf(2), "blob", 6)), printed.bytes) shouldBe SearchOutcome.UNSEARCHED
+        searched(listOf(printed.asked, GitObject(idOf(2), "blob", 6)), printed.bytes) shouldBe SearchOutcome.Unsearched
     }
 
     /** A header is a short line; one that never ends is read no further than a header can be long. */
@@ -156,7 +159,7 @@ class BatchOutputTest {
         }
 
         BatchOutput(endless, nothingStored, WINDOW).searched(listOf(GitObject(idOf(1), "blob", 6))) shouldBe
-            SearchOutcome.UNSEARCHED
+            SearchOutcome.Unsearched
     }
 
     /** What `cat-file --batch` prints for [asked]: its header, its content, and a newline. */

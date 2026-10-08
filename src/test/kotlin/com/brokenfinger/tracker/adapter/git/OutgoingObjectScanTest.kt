@@ -48,7 +48,7 @@ class OutgoingObjectScanTest {
         committed("notes/a.md", "a note\n")
         committed("notes/b.md", "another\n")
 
-        scanned() shouldBe SearchOutcome.CLEAN
+        scanned() shouldBe SearchOutcome.Clean
     }
 
     /** The review's middle commit: a token committed, then deleted. Its blob is still in what goes. */
@@ -58,22 +58,22 @@ class OutgoingObjectScanTest {
         repo.git("rm", "--quiet", "notes/pasted.md")
         repo.git("commit", "--message", "removed")
 
-        scanned() shouldBe SearchOutcome.FOUND
+        scanned() shouldBe SearchOutcome.FoundInContent
     }
 
     @Test
     fun `a fine-grained token is found`() {
         committed("notes/pasted.md", "${aFineGrainedShapedToken()}\n")
 
-        scanned() shouldBe SearchOutcome.FOUND
+        scanned() shouldBe SearchOutcome.FoundInContent
     }
 
     @Test
     fun `the stored value is found, and only with it stored`() {
         committed("notes/pasted.md", "my token is $A_PUSH_CREDENTIAL\n")
 
-        scanned(stored = StoredCredential.of("$A_PUSH_TOKEN_LINE\n")) shouldBe SearchOutcome.FOUND
-        scanned(stored = StoredCredential.None) shouldBe SearchOutcome.CLEAN
+        scanned(stored = StoredCredential.of("$A_PUSH_TOKEN_LINE\n")) shouldBe SearchOutcome.FoundInContent
+        scanned(stored = StoredCredential.None) shouldBe SearchOutcome.Clean
     }
 
     /** `git grep` searches a binary file too, and so does this: a byte is a character, NULs and all. */
@@ -82,7 +82,7 @@ class OutgoingObjectScanTest {
         val binary = byteArrayOf(0, -1, 0, 0x7f) + aGithubShapedToken().toByteArray() + ByteArray(8)
         committedBytes("assets/blob.bin", binary)
 
-        scanned() shouldBe SearchOutcome.FOUND
+        scanned() shouldBe SearchOutcome.FoundInContent
     }
 
     /**
@@ -97,8 +97,8 @@ class OutgoingObjectScanTest {
         committedBytes("notes/before.md", beside + aGithubShapedToken().toByteArray())
         committedBytes("notes/after.md", aFineGrainedShapedToken().toByteArray() + beside)
 
-        scanned(range = listOf("HEAD~1", "--not", "HEAD~2")) shouldBe SearchOutcome.FOUND
-        scanned(range = listOf("HEAD", "--not", "HEAD~1")) shouldBe SearchOutcome.FOUND
+        scanned(range = listOf("HEAD~1", "--not", "HEAD~2")) shouldBe SearchOutcome.FoundInContent
+        scanned(range = listOf("HEAD", "--not", "HEAD~1")) shouldBe SearchOutcome.FoundInContent
     }
 
     /** What Windows PowerShell 5.1 writes with `>`: UTF-16LE behind a byte order mark. `git grep` finds nothing. */
@@ -107,7 +107,7 @@ class OutgoingObjectScanTest {
         val text = byteArrayOf(-1, -2) + "${aGithubShapedToken()}\r\n".toByteArray(Charsets.UTF_16LE)
         committedBytes("notes/powershell.txt", text)
 
-        scanned() shouldBe SearchOutcome.FOUND
+        scanned() shouldBe SearchOutcome.FoundInContent
     }
 
     // What is read, and how often ------------------------------------------------------------------------
@@ -121,7 +121,7 @@ class OutgoingObjectScanTest {
         val shared = repo.git("rev-parse", "HEAD:notes/shared.md").trim()
         val calls = RecordingCalls(repo.root)
 
-        scanned(calls = calls) shouldBe SearchOutcome.CLEAN
+        scanned(calls = calls) shouldBe SearchOutcome.Clean
 
         calls.read().count { it == shared } shouldBe 1
     }
@@ -143,7 +143,7 @@ class OutgoingObjectScanTest {
         committed("notes/today.md", "a note\n")
         val calls = RecordingCalls(repo.root)
 
-        scanned(range = listOf("HEAD", "--not", "HEAD~1"), calls = calls) shouldBe SearchOutcome.CLEAN
+        scanned(range = listOf("HEAD", "--not", "HEAD~1"), calls = calls) shouldBe SearchOutcome.Clean
 
         calls.read() shouldNotContain pushed
     }
@@ -154,7 +154,7 @@ class OutgoingObjectScanTest {
         committed("notes/pasted.md", "${aGithubShapedToken()}\n")
         val calls = RecordingCalls(repo.root)
 
-        scanned(calls = calls, bytesPerCall = 1) shouldBe SearchOutcome.FOUND
+        scanned(calls = calls, bytesPerCall = 1) shouldBe SearchOutcome.FoundInContent
 
         calls.reads shouldBeGreaterThan 1
     }
@@ -163,7 +163,7 @@ class OutgoingObjectScanTest {
     fun `nothing outgoing is clean, and nothing is read`() {
         val calls = RecordingCalls(repo.root)
 
-        scanned(range = listOf("HEAD", "--not", "HEAD"), calls = calls) shouldBe SearchOutcome.CLEAN
+        scanned(range = listOf("HEAD", "--not", "HEAD"), calls = calls) shouldBe SearchOutcome.Clean
 
         calls.reads shouldBe 0
     }
@@ -175,7 +175,7 @@ class OutgoingObjectScanTest {
         committed("notes/today.md", "a note\n")
         deletedObject("HEAD^{tree}")
 
-        scanned() shouldBe SearchOutcome.UNSEARCHED
+        scanned() shouldBe SearchOutcome.Unsearched
     }
 
     /** Every id is answered for, in the order asked: a description that leaves one out is not taken for one. */
@@ -184,14 +184,14 @@ class OutgoingObjectScanTest {
         committed("notes/today.md", "a note\n")
         val calls = describing { it.copy(stdout = withoutItsLastLine(it.stdout)) }
 
-        scanned(calls = calls) shouldBe SearchOutcome.UNSEARCHED
+        scanned(calls = calls) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
     fun `a description git exits non-zero on is unsearched, however whole it looks`() {
         committed("notes/today.md", "a note\n")
 
-        scanned(calls = describing { it.copy(code = FATAL) }) shouldBe SearchOutcome.UNSEARCHED
+        scanned(calls = describing { it.copy(code = FATAL) }) shouldBe SearchOutcome.Unsearched
     }
 
     /** A loose object that will not inflate is listed — `rev-list` asks only that it exists — and told missing. */
@@ -200,7 +200,7 @@ class OutgoingObjectScanTest {
         committed("notes/today.md", "a note\n")
         overwrittenObject("HEAD:notes/today.md") { "not an object at all".toByteArray() }
 
-        scanned() shouldBe SearchOutcome.UNSEARCHED
+        scanned() shouldBe SearchOutcome.Unsearched
     }
 
     /**
@@ -213,7 +213,7 @@ class OutgoingObjectScanTest {
         overwrittenObject("HEAD:notes/today.md") { it.copyOf(it.size / 2) }
         val calls = RecordingCalls(repo.root)
 
-        scanned(calls = calls) shouldBe SearchOutcome.UNSEARCHED
+        scanned(calls = calls) shouldBe SearchOutcome.Unsearched
 
         calls.reads shouldBe 1
     }
@@ -227,7 +227,7 @@ class OutgoingObjectScanTest {
             if (READ in args) listOf("git", "-c", "alias.stall=!sleep 10", "stall") else plain(args)
         }
 
-        scanned(calls = stalling) shouldBe SearchOutcome.UNSEARCHED
+        scanned(calls = stalling) shouldBe SearchOutcome.Unsearched
     }
 
     @Test
@@ -235,7 +235,7 @@ class OutgoingObjectScanTest {
         committed("notes/today.md", "a note\n")
         val calls = RecordingCalls(repo.root, before = { if (READ in it) deletedObject("HEAD:notes/today.md") })
 
-        scanned(calls = calls) shouldBe SearchOutcome.UNSEARCHED
+        scanned(calls = calls) shouldBe SearchOutcome.Unsearched
     }
 
     /** `head` exits 0, so git's own answer is cut short with nothing to say so but its length. */
@@ -247,7 +247,7 @@ class OutgoingObjectScanTest {
             if (READ in args) listOf("git", "-c", CUT_SHORT, "cut") else plain(args)
         }
 
-        scanned(calls = cutting) shouldBe SearchOutcome.UNSEARCHED
+        scanned(calls = cutting) shouldBe SearchOutcome.Unsearched
     }
 
     /**

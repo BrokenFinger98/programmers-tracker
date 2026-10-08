@@ -342,17 +342,17 @@ class CommandLineGitSync(
         val stored = credential.stored()
         if (stored == StoredCredential.Unreadable) return refused(CREDENTIAL_UNREADABLE, what)
         return when (search(stored)) {
-            SearchOutcome.CLEAN -> true
-            SearchOutcome.FOUND -> refused(CREDENTIAL_FOUND, what)
-            SearchOutcome.UNSEARCHED -> refused(CREDENTIAL_UNSEARCHED, what)
+            SearchOutcome.Clean -> true
+            SearchOutcome.FoundInContent -> refused(CREDENTIAL_FOUND, what)
+            SearchOutcome.Unsearched -> refused(CREDENTIAL_UNSEARCHED, what)
         }
     }
 
     // One `git grep` search of a commit's side, its arguments [search]: a match, a clean end, or neither.
     private fun grepped(stored: StoredCredential, search: List<String>): SearchOutcome {
-        val outcome = greps(stored, search).firstOrNull { it != NO_MATCH } ?: return SearchOutcome.CLEAN
-        if (outcome == MATCH) return SearchOutcome.FOUND
-        return SearchOutcome.UNSEARCHED
+        val outcome = greps(stored, search).firstOrNull { it != NO_MATCH } ?: return SearchOutcome.Clean
+        if (outcome == MATCH) return SearchOutcome.FoundInContent
+        return SearchOutcome.Unsearched
     }
 
     // The token shapes first, then what is stored — the second only runs if the first found nothing. The
