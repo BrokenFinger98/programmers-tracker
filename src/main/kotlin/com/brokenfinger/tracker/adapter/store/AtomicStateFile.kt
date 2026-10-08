@@ -2,9 +2,11 @@ package com.brokenfinger.tracker.adapter.store
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFileAttributes
 
 /**
  * A read-modify-write state document written temp-then-replace
@@ -25,12 +27,16 @@ class AtomicStateFile(private val path: Path) {
     /** The current document, or null when it has never been written. */
     fun read(): String? = runCatching { Files.readString(path, CHARSET) }.getOrElse { failed(it) }
 
-    /** Replaces the document. A reader sees either the whole previous one or the whole new one. */
+    /**
+     * Replaces the document. A reader sees either the whole previous one or the whole new one, and
+     * the document keeps the permissions it had.
+     */
     fun write(text: String) {
         Files.createDirectories(directory)
         val temp = Files.createTempFile(directory, path.fileName.toString(), SUFFIX)
         runCatching {
             Files.writeString(temp, text, CHARSET)
+            keepPermissions(temp)
             replace(temp)
         }.onFailure {
             Files.deleteIfExists(temp)
@@ -43,6 +49,20 @@ class AtomicStateFile(private val path: Path) {
      * document exactly as it was — nothing is written and no debris is left behind.
      */
     fun update(transform: (String?) -> String) = write(transform(read()))
+
+    /**
+     * A temporary file starts readable by its owner alone, and the replace would hand that to the
+     * document. A document that is there keeps what it had instead: the owner's `.gitignore` is
+     * written through here (#360), and a replace must not narrow it. Only a regular file's are
+     * kept — a link's own bits say nothing about a document — and a filesystem with no POSIX
+     * permissions has none to keep.
+     */
+    private fun keepPermissions(temp: Path) {
+        val current = runCatching { Files.readAttributes(path, PosixFileAttributes::class.java, NOFOLLOW_LINKS) }
+        val attributes = current.getOrNull() ?: return
+        if (!attributes.isRegularFile) return
+        Files.setPosixFilePermissions(temp, attributes.permissions())
+    }
 
     // ATOMIC_MOVE is the guarantee we want; where the filesystem cannot give it, an ordinary
     // replace is still better than writing the target in place.

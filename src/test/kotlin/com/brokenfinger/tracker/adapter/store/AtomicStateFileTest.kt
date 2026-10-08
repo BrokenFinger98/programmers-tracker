@@ -1,13 +1,17 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import kotlin.io.path.name
 
 class AtomicStateFileTest {
@@ -92,6 +96,36 @@ class AtomicStateFileTest {
 
         Files.exists(root.resolve(".ps/hints.json")) shouldBe true
     }
+
+    /**
+     * A temporary file is created readable by its owner alone, and the replace hands that to the
+     * document. A document someone else made — the owner's `.gitignore` (#360) — keeps what it had.
+     */
+    @Test
+    fun `a replace keeps the permissions of the document it replaces`() {
+        assumeTrue(canPlantLinksIn(root), "this test reads POSIX permissions")
+        val file = timers().also { it.write("""{"a":1}""") }
+        Files.setPosixFilePermissions(path(), PosixFilePermissions.fromString("rw-rw-r--"))
+
+        file.write("""{"b":2}""")
+
+        permissionsOf(path()) shouldBe "rw-rw-r--"
+    }
+
+    /** Only a regular file's are kept: a link's own bits say nothing about a document, and are often everyone's. */
+    @Test
+    fun `a document that replaces a link takes none of the link's own permissions`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.writeString(root.resolve("elsewhere.json"), "{}")
+        aLink(path(), elsewhere)
+
+        timers().write("""{"a":1}""")
+
+        Files.isSymbolicLink(path()) shouldBe false
+        permissionsOf(path()) shouldBe "rw-------"
+    }
+
+    private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 
     private fun timers() = AtomicStateFile(path())
 
