@@ -1661,6 +1661,95 @@ class CommandLineGitSyncTest {
         sync().hasRemote() shouldBe true
     }
 
+    // Where ls-remote asks is where the push goes (#405) -----------------------------------------
+
+    /**
+     * The gate critic's chain (#405, measured): `remote get-url --push` rewrites a URL once, and `ls-remote`, handed
+     * the rewritten URL, rewrote it again — B to A, then A to C. C said what it held, the push went to A, and a token
+     * only C held landed on A. A push URL `ls-remote` would rewrite again is not pushed to, and that is said once.
+     */
+    @Test
+    fun `a push URL ls-remote would rewrite again is not pushed to, and that is said once`() {
+        val (a, b, c) = listOf("A", "B", "C").map { bareAt("$it/repo.git") }
+        aTokenPushedThenRemoved(to = c.toString())
+        git("remote", "add", "origin", b.toString())
+        rewritten(from = b, to = a)
+        rewritten(from = a, to = c)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.push() shouldBe false } }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(a) shouldContainExactly emptyList()
+    }
+
+    /** One rewrite is git's own, as the push makes it: a remote rewritten once is asked, and pushed, where git sends it. */
+    @Test
+    fun `a push URL rewritten once is pushed where git sends it`() {
+        val (a, b) = listOf("A", "B").map { bareAt("$it/repo.git") }
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("remote", "add", "origin", b.toString())
+        rewritten(from = b, to = a)
+
+        sync().push() shouldBe true
+
+        refsAt(a) shouldContainExactly listOf("refs/heads/main")
+        refsAt(b) shouldContainExactly emptyList()
+    }
+
+    /**
+     * A branch whose remote is a URL is handed to `ls-remote` and to `git push` as it is, and each rewrites it once.
+     * A `pushInsteadOf` rule rewrites only the push's: it would go where nothing was asked what it holds.
+     */
+    @Test
+    fun `a branch whose remote is a URL a pushInsteadOf rule rewrites is not pushed to`() {
+        val (u, p) = listOf("U", "P").map { bareAt("$it/repo.git") }
+        aTokenPushedThenRemoved(to = u.toString())
+        git("config", "branch.main.remote", u.toString())
+        rewritten(from = u, to = p, kind = "pushInsteadOf")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(p) shouldContainExactly emptyList()
+    }
+
+    /** An `insteadOf` rule rewrites the URL for both alike, so the push goes where `ls-remote` asked. */
+    @Test
+    fun `a branch whose remote is a URL an insteadOf rule rewrites is pushed where both go`() {
+        val (u, v) = listOf("U", "V").map { bareAt("$it/repo.git") }
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("config", "branch.main.remote", u.toString())
+        rewritten(from = u, to = v)
+
+        sync().push() shouldBe true
+
+        refsAt(v) shouldContainExactly listOf("refs/heads/main")
+    }
+
+    /** Said once while the rules disagree; once they agree, a later disagreement is said again. */
+    @Test
+    fun `a rewrite that comes back after the rules agreed is said again`() {
+        val (a, b, c) = listOf("A", "B", "C").map { bareAt("$it/repo.git") }
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("remote", "add", "origin", b.toString())
+        rewritten(from = b, to = a)
+        val sync = sync()
+        rewritten(from = a, to = c)
+        sync.push() shouldBe false
+        git("config", "--unset", "url.${c.parent}/.insteadOf")
+        sync.push() shouldBe true
+        rewritten(from = a, to = c)
+        committedByAnotherTool("notes/later.md")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+    }
+
     /**
      * A push sends what its remote lacks, and a pulled string the remote already holds is not sent again.
      * #373 read HEAD's whole tree at every push besides, which refused every push for it.
@@ -2124,17 +2213,22 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * Another tool committed a token and pushed it to `origin`, then the token was removed in a new commit:
-     * HEAD's tree is clean, and the token is in its history and on `origin`.
+     * Another tool committed a token and pushed it to [to] — `origin`, or a repository's path — then the token was
+     * removed in a new commit: HEAD's tree is clean, and the token is in its history and there.
      */
-    private fun aTokenPushedThenRemoved() {
+    private fun aTokenPushedThenRemoved(to: String = "origin") {
         written(".gitignore", ".ps/\n")
         written("notes/pasted.md", "${aGithubShapedToken()}\n")
         git("add", "--all")
         git("commit", "--message", "a token another tool committed")
-        git("push", "--quiet", "origin", "main")
+        git("push", "--quiet", to, "main")
         git("rm", "--quiet", "notes/pasted.md")
         git("commit", "--message", "the token removed")
+    }
+
+    /** `url.<[to]>/.<[kind]> = <[from]>/`: git sends what is addressed under [from]'s directory to [to]'s instead. */
+    private fun rewritten(from: Path, to: Path, kind: String = "insteadOf") {
+        git("config", "url.${to.parent}/.$kind", "${from.parent}/")
     }
 
     /** An empty bare repository called [name], beside the record repository. */
