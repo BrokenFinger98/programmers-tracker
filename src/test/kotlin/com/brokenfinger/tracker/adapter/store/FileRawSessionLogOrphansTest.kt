@@ -149,6 +149,32 @@ class FileRawSessionLogOrphansTest {
             Orphans(emptyList(), unread = 0, unlisted = true)
     }
 
+    /**
+     * The link check ran before git was asked for its history, and the files were read after it answered, so a pull
+     * in between could swap `orphans/` for a link that was then read through (the review of PR #401, inferred). The
+     * directory is checked again once git has answered, and listed anew.
+     */
+    @Test
+    fun `an orphans directory swapped for a link while git answers is not read through`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
+        Files.writeString(orphans.resolve("131528.jsonl"), "{}\n")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve("131528.jsonl"), "{}\n".repeat(40))
+        val swapping = object : TrackedState {
+            override fun tracksAnything(): Boolean = false
+
+            override fun pathsEverTracked(): TrackedHistory {
+                Files.move(orphans, root.resolve(".ps/raw/moved-away"))
+                aLink(orphans, elsewhere)
+                return TrackedHistory.Known(emptySet())
+            }
+        }
+
+        logGuardedBy(aStateDirectory(root, swapping)).orphans() shouldBe
+            Orphans(emptyList(), unread = 0, unlisted = true)
+    }
+
     /** As a pull delivers it: committed upstream with `git add --force`, checked out here. Git's answer decides. */
     @Test
     fun `an orphans file git checked out is not counted`(@TempDir base: Path) {

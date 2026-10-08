@@ -235,11 +235,11 @@ class FileRawSessionLog(
 
     /**
      * The orphans, read only where a frame could be written now, as [unprocessed] reads the work list (#378): `.ps`
-     * the tracker's own with git tracking nothing there, then no link on the way, checked after git answers. Only a
-     * regular file no larger than [orphanBytes] is opened, without following a link, and never one git has ever
-     * tracked. A FIFO, a device or a link is never read: one hung the boot and every MCP call, another reported a
-     * file outside as orphaned frames (the review of #387, measured). What is passed over is counted, and an
-     * orphans directory that could not be listed is said to be, so a refusal never reads as a whole history.
+     * the tracker's own with git tracking nothing there, then no link on the way, checked after each of git's
+     * answers. Only a regular file no larger than [orphanBytes] is opened, without following a link, and never one
+     * git has ever tracked. A FIFO, a device or a link is never read: one hung the boot and every MCP call, another
+     * reported a file outside as orphaned frames (the review of #387, measured). What is passed over is counted, and
+     * an orphans directory that could not be listed is said to be, so a refusal never reads as a whole history.
      */
     override fun orphans(): Orphans {
         if (!Files.isDirectory(directory.resolve(ORPHANS))) return Orphans.NONE
@@ -269,10 +269,18 @@ class FileRawSessionLog(
     private fun orphansUnknownToGit(named: List<Path>, guard: StateDirectory): Orphans {
         if (named.isEmpty()) return Orphans.NONE
         return when (val history = guard.pathsEverTracked()) {
-            is TrackedHistory.Known -> orphansIn(named, history.paths)
+            is TrackedHistory.Known -> orphansStillUsable(guard, history.paths)
             is TrackedHistory.Unanswered -> orphansUnanswered(named.size, history.reason)
         }
     }
+
+    // Checked again once git has answered, and listed anew: a pull while git answered could have put a link where
+    // `orphans/` was, and what is read is read just after this (the review of PR #401).
+    private fun orphansStillUsable(guard: StateDirectory, known: Set<String>): Orphans =
+        when (val orphans = guard.pathFor(RAW, ORPHANS)) {
+            is StateDirectory.Usable -> orphansIn(namedLikeOrphans(orphans.directory), known)
+            is StateDirectory.Refused -> orphansNotListed(orphans.refusal)
+        }
 
     private fun orphansUnanswered(named: Int, reason: String): Orphans {
         sayOnce(ORPHANS_UNANSWERED_KEY) { logger.warn(ORPHANS_UNANSWERED, named, reason) }
