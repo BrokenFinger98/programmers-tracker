@@ -20,6 +20,7 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -27,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -293,6 +295,21 @@ class RawSessionReconcilerTest {
 
         records().shouldBeEmpty()
         Files.isSymbolicLink(session) shouldBe true
+    }
+
+    /**
+     * Only a regular file is replayed: a FIFO on the work list would hold the boot for a writer that never comes. What
+     * this pins is that the pass returns at all — the timeout fails it if the check is removed — with the session
+     * failed, as one that cannot be settled.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a stored session that is a FIFO is not waited on, and fails as one that cannot be settled`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val fifo = Files.createDirectories(root.resolve(".ps/raw")).resolve("20260805T090000000Z-$LESSON_ID.jsonl")
+        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+
+        reconcile() shouldBe ReconcileReport(failed = 1)
     }
 
     // Harness --------------------------------------------------------------------------------
