@@ -129,3 +129,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-10-08] ingest | repair steps, the link bound and the exam_prep prompt (10-07, 10-08) → 9 pages updated, 4 created
 
 ## [2026-10-08] ingest | the first exam_prep run → 1 page updated, 1 created
+
+## [2026-10-08] lint | three source pages written, two dead decision links fixed → 2 pages updated, 3 created
