@@ -211,9 +211,9 @@ class DailyBackupTest {
     }
 
     /**
-     * The check runs every minute while a day is due, and the reason a record stayed uncommitted is
-     * said where it happened. That the day is held is said once for each scheduled backup, not at every
-     * check: a merge left open overnight would otherwise say it hundreds of times.
+     * A held day is tried again, and the reason a record stayed uncommitted is said where it happened, at
+     * each try. That the day is held is said once for each scheduled backup, not at every try: a merge
+     * left open overnight would otherwise say it at each of them.
      */
     @Test
     fun `a day held back is said once for each scheduled backup`() {
@@ -221,12 +221,13 @@ class DailyBackupTest {
         val clock = MovableClock(EVENING)
         val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
 
-        val evening = warningsWhile(DailyBackup::class) { repeat(3) { backup.runIfDue() shouldBe false } }
+        val evening = warningsWhile(DailyBackup::class) { ticks(backup, clock, count = 4) } // tried at 0, 1, 3
         clock.now = NEXT_EVENING
-        val next = warningsWhile(DailyBackup::class) { repeat(2) { backup.runIfDue() shouldBe false } }
+        val next = warningsWhile(DailyBackup::class) { ticks(backup, clock, count = 2) } // tried at 0, 1
 
         evening.single() shouldContain "uncommitted"
         next.single() shouldContain "uncommitted"
+        backupLog().lastSuccessAt() shouldBe null
     }
 
     /**
@@ -293,6 +294,76 @@ class DailyBackupTest {
         backupLog().lastSuccessAt() shouldBe null
     }
 
+    /**
+     * A refusal that stands — here a note the content search refuses — held the day, and every check then
+     * ran git, the records repository's hooks and the search again, and said why: 1,440 times a day (#390).
+     * The backup tries again a minute after the first failure, then twice as long each time, up to an
+     * hour: seven tries in the first two hours, where there were 120.
+     */
+    @Test
+    fun `a held backup is tried again on a backoff, not at every check`() {
+        repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
+
+        val heard = warnedWhile { ticks(backup, clock, count = 120) }
+
+        heard.count { "git reconcile refused" in it } shouldBe 7
+        heard.count { "held back" in it } shouldBe 1
+        backupLog().lastSuccessAt() shouldBe null
+    }
+
+    /** The owner's fix is picked up by the next try: within the hour, at the latest. */
+    @Test
+    fun `a fix is picked up by the next try`() {
+        val note = repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
+        ticks(backup, clock, count = 70) // tried at 0, 1, 3, 7, 15, 31 and 63 minutes; the next try is at 123
+        Files.writeString(note, "a note with no token in it\n")
+
+        ticks(backup, clock, count = 53)
+        backupLog().lastSuccessAt() shouldBe null
+
+        backup.runIfDue() shouldBe true
+        backupLog().lastSuccessAt() shouldBe EVENING.plus(Duration.ofMinutes(123))
+    }
+
+    /** A push that really failed is tried again on the same backoff, said at each try, and lands once it can. */
+    @Test
+    fun `a push that keeps failing is tried again on the backoff, and lands once it can`() {
+        val unreachable = GitWorkspace(base.resolve("unreachable"))
+        val arrivesLater = base.resolve("arrives-later.git")
+        unreachable.git("remote", "add", "origin", arrivesLater.toString())
+        unreachable.write("log/submissions.jsonl", A_RECORD)
+        val clock = MovableClock(EVENING)
+        val backup = DailyBackup(sync(unreachable.root), backupLog(), clock, zone = SEOUL)
+
+        val heard = warningsWhile(DailyBackup::class) { ticks(backup, clock, count = 16) } // 0, 1, 3, 7, 15
+        unreachable.git("init", "--bare", "-b", "main", arrivesLater.toString(), at = base)
+        ticks(backup, clock, count = 16) // the next try is at 31
+
+        heard.count { "could not push" in it } shouldBe 5
+        backupLog().lastSuccessAt() shouldBe EVENING.plus(Duration.ofMinutes(31))
+    }
+
+    /**
+     * A backup the machine slept through is tried at the next start, here at 22:05 the next evening, and
+     * fails into a backoff that runs past that evening's 23:00. That hour is a new scheduled backup: it is
+     * tried, and said, at once.
+     */
+    @Test
+    fun `the next scheduled backup is tried at once, whatever the last one waits for`() {
+        repo.write("notes/pasted.md", "${aGithubShapedToken()}\n")
+        val clock = MovableClock(LATE_NEXT_EVENING)
+        val backup = DailyBackup(sync(repo.root), backupLog(), clock, zone = SEOUL)
+
+        val heard = warnedWhile { ticks(backup, clock, count = 56) } // 22:05 to 23:00
+
+        heard.count { "git reconcile refused" in it } shouldBe 7 // 22:05, :06, :08, :12, :20, :36, and 23:00
+        heard.count { "held back" in it } shouldBe 2
+    }
+
     // Harness --------------------------------------------------------------------------------
 
     /** [count] checks a minute apart, as the schedule makes them, from the clock's time on. */
@@ -341,6 +412,9 @@ class DailyBackupTest {
 
         /** 2026-08-06, 23:30 in Seoul — the evening after [EVENING], past the next scheduled hour. */
         val NEXT_EVENING: Instant = Instant.parse("2026-08-06T14:30:00Z")
+
+        /** 2026-08-06, 22:05 in Seoul — the 5th's backup still due, the 6th's not yet. */
+        val LATE_NEXT_EVENING: Instant = Instant.parse("2026-08-06T13:05:00Z")
 
         /** 2026-08-05, 22:00 in Seoul — an hour short of it. */
         val BEFORE_THE_HOUR: Instant = Instant.parse("2026-08-05T13:00:00Z")

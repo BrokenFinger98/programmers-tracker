@@ -24,6 +24,11 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * The last success is persisted rather than held in memory for the same reason: the process
  * restarting is the normal case, not the exceptional one.
+ *
+ * **A try that does not count is tried again on a backoff** (#390): a minute later, then twice as long
+ * each time, up to an hour ([BackupRetry]). The check runs every minute, and while the day was due every
+ * one of them ran git, the records repository's hooks and the content search again, and said why: 1,440
+ * times a day for a refusal that stands. The next scheduled backup starts over, and so does a restart.
  */
 class DailyBackup(
     private val git: GitSync,
@@ -47,11 +52,27 @@ class DailyBackup(
      */
     private val heldSaidFor = AtomicReference<Instant?>()
 
+    /** The scheduled backup being tried again after a try that did not count, and when it may be (#390). */
+    private val retry = AtomicReference<BackupRetry?>()
+
     /** Backs up when the most recent scheduled hour has not been. Returns whether a backup was recorded. */
     fun runIfDue(): Boolean {
         val due = mostRecentDue()
         if (!isDue(due)) return false
-        return performed(due)
+        if (retry.get()?.waits(due, clock.instant()) == true) return false
+        return attempted(due)
+    }
+
+    // A try that did not count is tried again on the backoff, and one that counted ends it.
+    private fun attempted(due: Instant): Boolean {
+        val counted = performed(due)
+        retry.set(retryAfter(due, counted))
+        return counted
+    }
+
+    private fun retryAfter(due: Instant, counted: Boolean): BackupRetry? {
+        if (counted) return null
+        return BackupRetry.after(retry.get(), due, clock.instant())
     }
 
     /**
@@ -109,7 +130,7 @@ class DailyBackup(
     // Warn rather than throw: a backup that could not go up costs a day of remote history, and
     // the local commits — the record itself — are already durable.
     private fun incomplete(): Boolean {
-        logger.warn("Daily backup could not push; the day stays due and the next start retries")
+        logger.warn(NOT_PUSHED)
         return false
     }
 
@@ -125,8 +146,13 @@ class DailyBackup(
 
         const val HELD_BACK =
             "Daily backup held back: records are left uncommitted, and the reconciliation's own warning " +
-                "says why; whatever was already committed is pushed. The day stays due and every check " +
-                "tries again. This process says so once for each scheduled backup."
+                "says why; whatever was already committed is pushed. The day stays due and is tried again, " +
+                "a minute later at first and at most an hour apart. This process says so once for each " +
+                "scheduled backup."
+
+        const val NOT_PUSHED =
+            "Daily backup could not push; the day stays due and is tried again, a minute later at first " +
+                "and at most an hour apart."
     }
 }
 
