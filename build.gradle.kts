@@ -79,6 +79,17 @@ dependencies {
 // calculators exist — a gate over an empty package is dead config, and a global
 // threshold rewards test-gaming rather than covering the failure branches that matter.
 kover {
+    currentProject {
+        instrumentation {
+            // Kover instruments every Test task and makes its reports and its verification depend
+            // on all of them. `check` runs `koverVerify`, so `verifyBranchCoverage`, `check` and
+            // the `build` gate all ran `integrationTest` — the tests that connect to the real
+            // Programmers server and run only when somebody names them (development-rules §6.5).
+            // A line only an integration test reached would also have counted toward a floor.
+            // Measured on Kover 0.9.9 (#362): with this line the task leaves all three graphs.
+            disabledForTestTasks.add("integrationTest")
+        }
+    }
     reports {
         filters {
             excludes {
