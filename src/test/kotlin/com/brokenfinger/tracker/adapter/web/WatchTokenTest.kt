@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.web
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
@@ -14,6 +15,7 @@ import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -134,6 +136,23 @@ class WatchTokenTest {
         heard.single() shouldNotContain elsewhere.toString()
         // As a boolean, so a failure cannot print the token either.
         heard.single().contains(tokenFile().readText().trim()) shouldBe false
+    }
+
+    /**
+     * A FIFO where the token file should be held the constructor, and the server's start with it, until something
+     * wrote into it (#387's review). It reads as no token now, never opened, and the new token replaces it, said.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO where the token file should be is replaced, not waited on`() {
+        assumeTrue(madeFifo(tokenFile()), "this test makes a FIFO")
+        lateinit var token: WatchToken
+
+        val heard = warningsWhile(WatchToken::class) { token = WatchToken("", tokenFile().toString()) }
+
+        Files.isRegularFile(tokenFile(), NOFOLLOW_LINKS) shouldBe true
+        shouldNotThrowAny { token.verify(tokenFile().readText().trim()) }
+        heard.single() shouldContain "is not a regular file"
     }
 
     /** A dangling link read as no token, and the write created the token where it pointed. */

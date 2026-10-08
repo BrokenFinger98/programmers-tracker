@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -32,8 +33,10 @@ class UnauthorizedWatchException : RuntimeException("a valid ${WatchController.T
  * [AtomicStateFile] — as the push credential is. It used to be written in place and narrowed
  * after, so it sat in a file others could read until the narrowing, and went through a link or
  * into every other name the file had. A link where the token should be reads as no token, and
- * the new one replaces it: said, since the extension's copy then stops matching. On Windows,
- * which has no POSIX permissions, the file gets what its directory gives a new one, as before.
+ * the new one replaces it: said, since the extension's copy then stops matching. So does a FIFO,
+ * which is never opened: opening one to read waited for a writer, and held the server's start
+ * (#387's review). On Windows, which has no POSIX permissions, the file gets what its directory
+ * gives a new one, as before.
  *
  * It stays beside the tool rather than joining the state that moved into the record
  * repository (#126): that state describes the records and travels with them, while this is a
@@ -73,17 +76,26 @@ class WatchToken(
     }
 
     private fun store(generated: String) {
-        if (Files.isSymbolicLink(file)) log.warn(REPLACING_A_LINK, file)
+        replaced()?.let { log.warn(REPLACING, file, it) }
         runCatching { state.write(generated) }
             .onSuccess { log.info("Generated a local /watch token at {} — paste it into the extension.", file) }
             .onFailure { log.warn("Could not persist the generated /watch token at {}: {}", file, it.message) }
     }
 
+    // What stands where the token goes and is no regular file — a link, a FIFO (#387's review) — which the new one
+    // replaces, never read or written through.
+    private fun replaced(): String? {
+        if (Files.isSymbolicLink(file)) return "a symbolic link"
+        if (Files.exists(file, NOFOLLOW_LINKS) && !Files.isRegularFile(file, NOFOLLOW_LINKS)) return NOT_A_FILE
+        return null
+    }
+
     private companion object {
         /** 256 bits. The token guards a process holding a session cookie; do not shrink it. */
         const val TOKEN_BYTES = 32
-        const val REPLACING_A_LINK =
-            "Replacing {}, a symbolic link, with a new /watch token rather than reading or writing through it " +
+        const val NOT_A_FILE = "not a regular file"
+        const val REPLACING =
+            "Replacing {}, which is {}, with a new /watch token rather than reading or writing through it " +
                 "(#387). Paste the new one into the extension; to keep the token elsewhere, point " +
                 "tracker.watch.token-file at that file itself."
         val log = LoggerFactory.getLogger(WatchToken::class.java)!!
