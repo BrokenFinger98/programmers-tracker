@@ -26,7 +26,8 @@ import java.util.concurrent.ConcurrentHashMap
  * such answer and is thrown as it comes. Anything else standing where the file should be is refused — a link, dangling
  * or not, a directory, a FIFO, which is never opened — said once per reason for this instance, naming the path the
  * reader was handed and the part of it at fault, never the content and never where a link leads, and thrown as
- * [RefusedReadException]. What a refusal means is each reader's own to say.
+ * [RefusedReadException]. What a refusal means is each reader's own to say
+ * ([[decisions/2026-10-08-a-refused-read-is-not-an-empty-one]]).
  *
  * **A hard link is read.** It is the file itself rather than a pointer to one, as #354 accepted for reads: git cannot
  * deliver one, and making it takes a shell on this machine. Its writer will not append to one (#361), so a log with a

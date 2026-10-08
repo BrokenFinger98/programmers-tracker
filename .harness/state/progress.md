@@ -5763,3 +5763,34 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - S4: `WatchToken.writeText`.
   - S5 and Q7: the reads that still follow a link.
 - **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
+
+## 2026-10-08 — #387 the reads that still followed a link, and the watch token
+- **Branch** `fix/387-reads-never-follow-links`, from `41f713e` (main with #354, #360, #361).
+- **Audit first.** Every read in `src/main`, by path, by whether it followed a link, and by the change;
+  the table is in the ADR. The issue named three readers (the log, `RunLog`'s duplicate check, the
+  seed ledger). Two more were found, the raw work list's replay, which makes records, and
+  `VaultDashboard`'s own reads of a seed (a FIFO there blocked the boot), and a way of reading wrong
+  several shared: `Files.exists`, which read a directory that could not be searched as "nothing there". Every reader under `problems/` already went through
+  `ProblemFiles` but `RunLog`'s check.
+- **The bound.** `92def1b` takes the walk out of `RecordWrites` into `RecordBound`, `RecordWritesTest`
+  unchanged; `9b2dead` adds `RecordReads`, which reads through it, and asks existence of the filesystem.
+- **The refused read.** A refused log is thrown, never answered as empty:
+  - `fec0729`: MCP answers a fault rather than "no submissions";
+  - `9ca927f`: the writer reads its history when the first grading needs it, and records nothing until it
+    can, with no restart;
+  - `33cea8d`: the boot's attachment pass says so and goes on.
+- **The readers.** `ab97557` `RunLog`'s check through `ProblemFiles`; `aa15954` each seed read once
+  through the bound, the ledger hashing bytes; `4394b5e` the work list listed and replayed through no
+  link.
+- **The watch token.** `4541914` written by `AtomicStateFile`, beside and moved, owner-only from
+  creation; a link there is replaced, said. A new adapter edge, `web → store`, in development-rules §1.
+- **Junctions.** `8954d2c` two tests enabled on Windows only, made with `mklink /J`; not yet run.
+- **Mutation.** 29 mutants, 27 killed. `934d09a` pins the replay's FIFO check, whose mutant survived
+  until then. Two survive, race-only: the read's open and the replay's open without `NOFOLLOW_LINKS`.
+- **Gates**, all exit 0: check; test 2,178 (43 new, 0 failures, 11 skipped: the 9 as before and the two
+  junction tests off Windows), node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 85%,
+  `adapter/web` 80%, `application` 88%); guards.
+- **Docs.** ADR [[decisions/2026-10-08-a-refused-read-is-not-an-empty-one]], notes in #354's and #361's
+  ADRs, the index, `SECURITY.md`, `docs/mcp.md` and its twin.
+- **Pending.** CI on the three OSes, and the junction tests' first run on windows-latest. Live: after a
+  rebuild, every MCP answer and page should be unchanged, with no `Not reading` line at boot.

@@ -430,6 +430,13 @@ You do not have to configure this. The server decides from how your client opens
   reads to the push token under the repository's `.ps/`. A `problems` directory that is itself a
   link is not followed, so one linked elsewhere on purpose yields no statement and no code. A file
   refused this way is logged with its path and the reason, never with its content.
+- **The submission log is read through no link, and a log that cannot be read is no empty
+  history.** Every tool answers from `log/submissions.jsonl`, which is read only from a regular file
+  in a real `log/` directory, walked as the server walks it to append. A link a clone or a pull put
+  there — at the file or at `log/` — is refused rather than read as your history. While it stands,
+  every tool fails as a fault of ours, answered as the JSON-RPC internal error: no count at all, rather
+  than counts from wherever the link led, or a `count` of 0 from a log that was never read. The server
+  log says why, once.
 - **No Programmers session cookie is ever on this path**, at any log level.
 - Nothing is logged on the normal path — not the request and not the answer — because every
   answer is a piece of your solving history. A fault of ours is logged by its exception's class
