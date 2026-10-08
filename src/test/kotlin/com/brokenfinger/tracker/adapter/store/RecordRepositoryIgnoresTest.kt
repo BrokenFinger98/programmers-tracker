@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -247,7 +248,7 @@ class RecordRepositoryIgnoresTest {
      */
     @Test
     fun `a read-only gitignore is left as it is, and said`() {
-        assumeTrue(canPlantLinksIn(root), "this test sets POSIX permissions")
+        assumeTrue(keepsPosixPermissions(root), "this test sets POSIX permissions")
         val file = write(".gitignore", "# mine, read-only on purpose\n")
         Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("r--r--r--"))
         assumeTrue(!Files.isWritable(file), "a superuser writes it anyway")
@@ -283,7 +284,7 @@ class RecordRepositoryIgnoresTest {
      */
     @Test
     fun `a gitignore that gains a rule keeps its permissions`() {
-        assumeTrue(canPlantLinksIn(root), "this test reads POSIX permissions")
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
         val file = write(".gitignore", "# mine\n")
         Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(GROUP_WRITABLE))
 

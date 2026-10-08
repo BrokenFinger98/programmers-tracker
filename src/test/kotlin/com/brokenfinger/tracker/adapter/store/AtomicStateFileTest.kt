@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
@@ -106,7 +107,7 @@ class AtomicStateFileTest {
      */
     @Test
     fun `a state file is written owner-only, even after someone widened it`() {
-        assumeTrue(canPlantLinksIn(root), "this test reads POSIX permissions")
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
         val file = timers().also { it.write("""{"a":1}""") }
         Files.setPosixFilePermissions(path(), PosixFilePermissions.fromString("rw-rw-rw-"))
 
@@ -121,7 +122,7 @@ class AtomicStateFileTest {
      */
     @Test
     fun `a replace keeps the permissions of the document it replaces, when asked to`() {
-        assumeTrue(canPlantLinksIn(root), "this test reads POSIX permissions")
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
         val file = keeping().also { it.write("""{"a":1}""") }
         Files.setPosixFilePermissions(path(), PosixFilePermissions.fromString("rw-rw-r--"))
 
