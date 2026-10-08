@@ -24,7 +24,11 @@ import java.util.concurrent.TimeUnit
  * switch that changes how a pathspec reads: the exclusions that keep `.ps` out are pathspec magic, and
  * `GIT_LITERAL_PATHSPECS=1` reads `:(exclude,glob,icase)[.]ps` as a file name (the review's ENV).
  */
-internal class GitProcess(private val root: Path, private val inherited: Map<String, String> = System.getenv()) {
+internal class GitProcess(
+    private val root: Path,
+    private val inherited: Map<String, String> = System.getenv(),
+    private val discard: (Path) -> Unit = { Files.deleteIfExists(it) },
+) {
     /** Runs [command] — `git` and its arguments — and answers how it ended. Never waits past [TIMEOUT]. */
     fun run(command: List<String>, input: String? = null): GitResult =
         inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(command, input, stdout, stderr) } }
@@ -40,8 +44,15 @@ internal class GitProcess(private val root: Path, private val inherited: Map<Str
         try {
             return block(file)
         } finally {
-            Files.deleteIfExists(file)
+            discarded(file)
         }
+    }
+
+    // Windows will not delete a file a process still holds, and a git that has exited can leave a child
+    // holding its output: `git push` to a local path runs receive-pack. The answer is read by then, so a
+    // file that will not go is left for the JVM to try again at exit rather than costing the answer.
+    private fun discarded(file: Path) {
+        runCatching { discard(file) }.onFailure { file.toFile().deleteOnExit() }
     }
 
     private fun exitCodeOf(command: List<String>, input: String?, stdout: Path, stderr: Path): Int {

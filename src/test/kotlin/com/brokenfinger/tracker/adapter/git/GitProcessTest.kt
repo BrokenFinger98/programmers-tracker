@@ -6,6 +6,7 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -65,6 +66,21 @@ class GitProcessTest {
 
             answer.stdout.trim() shouldBe "notes/today.md"
         }
+    }
+
+    /**
+     * Windows will not delete a file that a process still holds open, and a git that has exited can
+     * leave a child holding its output: `git push` to a local path runs receive-pack. On Windows CI
+     * the push's answer was thrown away for that, and a push was reported as one that "could not run".
+     */
+    @Test
+    fun `an output file that cannot be deleted does not lose the answer`() {
+        val process = GitProcess(repo.root, discard = { throw FileSystemException(it.toString()) })
+
+        val answer = process.run(listOf("git", "rev-parse", "--show-toplevel"))
+
+        answer.succeeded() shouldBe true
+        Path.of(answer.stdout.trim()).toRealPath() shouldBe repo.root.toRealPath()
     }
 
     private fun run(vararg args: String, inherited: Map<String, String>): GitResult =

@@ -628,3 +628,7 @@ and whose `.gitignore` is a regular file holding the rule, a rebuilt server shou
 boot. Its startup reconciliation should succeed, and its next push should carry no
 `.ps` path. The owner's repository was checked by names only, before this branch: no `.p*` path in any
 commit, no tracked symlink, `.ps` a real directory (#360's newest comment).
+
+**Windows CI found two things the reviews could not (PR #379).**
+- **Test setup.** Git writes objects read-only, and Windows will not delete a read-only file. The runner's `core.autocrlf` also made `hash-object` print a warning that the helper read as the object id.
+- **A product bug in `GitProcess`.** Windows will not delete a file a process still holds, and `git push` to a local path leaves receive-pack holding the output file after git exits. The cleanup in `finally` then threw, discarding the answer already read, so a push could be reported as one that "could not run". Cleanup is now best effort: a file that will not go is retried by the JVM at exit. `GitProcessTest` pins it, and the test fails against the throwing cleanup.
