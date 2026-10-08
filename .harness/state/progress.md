@@ -1115,7 +1115,8 @@ changes what `log/submissions.jsonl` means. Design §5.1 calls it "every submiss
 each", and every consumer that reads the JSONL directly must now resolve newest-per-key or
 silently double-count. That is a change to the data contract, not an implementation detail,
 so it is written up as a **proposed** ADR
-([[decisions/2026-08-06-record-corrections-by-append]]) and left for the owner.
+([[decisions/2026-08-05-code-pending-correction-append]], proposed as
+`2026-08-06-record-corrections-by-append`) and left for the owner.
 
 Also worth noting: the worker reported 549 tests where the tree has 513. Nothing is missing —
 `verifyEveryTestClassRan` passes and all 53 classes produced results; the worker miscounted
@@ -5643,3 +5644,122 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - Docs: the #360 ADR's layers 5 and 6 corrected, the pin's two reasons, an accepted cost for the records repository's hooks under `LC_ALL=C` (measured: bash `${#x}` counts bytes, 6 against 2 for a two-syllable Hangul word; Ruby's default encoding US-ASCII; Python 3 unchanged; no `git.mo` in the tracker's image), and the review's paragraph. The wire-git ADR's decision 4 points at its amendment, which names the per-minute repeats of `CREDENTIAL_FOUND` and a failing pre-commit hook while a day is held, left to #390.
   - Mutation, this round, all killed: the pin removed 3 tests; a constant dedupe key 1; a quote-refusing pattern 1; the date ignored 2; the dedupe removed 3; the directory holding the day 4.
   - Gates, all exit 0: check; test (2,065 JUnit across 160 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 85%, 232/272; `application` 88%, 344/387; `adapter/config` 65% at its floor); guards.
+## 2026-10-08 — #381 the test-class check leaves out classes tagged integration (branch fix/381-integration-classes-counted)
+- **The defect, reproduced.** #362 found it and left it (scope): `verifyEveryTestClassRan` demanded a result file from every source declaring `@Test`, and `test` excludes `@Tag("integration")`. With a scratch class tagged `integration` that does nothing and touches no network, `./scripts/test.sh` on the branch's base: `:test` passed, `:verifyEveryTestClassRan` failed with "these test classes declare @Test but produced no results, so they never ran: ScratchIntegrationTest", exit 1; 160 result files, none for it. Latent, as in #362: no integration test is in the tree, so the first real one would have failed `scripts/test.sh` and CI's test step.
+- **The case the check exists for, measured on the same code.** An untagged class whose only `@Test` is `fun neverRuns() = 1 + 1`, which returns Int: JUnit 6.0.3 says nothing, `:test` passes, no result file. The old check named it and the tagged class alike, so a fix that only silenced the message would have lost it.
+- **The fix** (`38af9e7`). `testClassesOwingAResult` owes a result to a source that has `@Test` and no line beginning `@Tag("integration")` unindented, read from the source the way `@Test` already was. Left out rather than counted from `integrationTest`'s results: that task runs only when named, so a verdict reading its results would change with the invocation. The anchor is deliberate. A mention in a comment, or the tag on one method or nested class, leaves nothing out, so a class that `test` runs in part still owes a result. A class tagged only on its methods fails the check, loudly, and the message says to tag the class. A false alarm is the safe way to be wrong here; a class nobody checks is not.
+- **The pin** (`09c0bba`). The build has no harness for its own tasks, so `proveTestClassFilter()` runs first in the task: a class tagged `integration` must be left out and one tagged only on a method kept, or the task fails saying its verdict would mean nothing (the canary of [[decisions/2026-08-10-guards-must-prove-they-ran]]). Four mutants of the filter each fail with that message: tag ignored (kept `[LiveTest, MixedTest]`), pattern unanchored (`[]`), a pattern that never matches (`[LiveTest, MixedTest]`), one that matches every source (`[]`).
+- **End to end**, final build file, `./scripts/test.sh`, scratch classes removed after each run: a tagged class alone exit 0, and the same with CRLF line endings (Windows runners check out with `core.autocrlf=true`); the untagged Int-returning class alone exit 1 naming it; both together exit 1 naming only the untagged one; a class tagged only on its method exit 1 naming it; an untagged class that mentions the tag in a comment exit 1 naming it. The tagged scratch class does run under `./gradlew integrationTest`, with its own result file, so leaving it out of this check hides nothing that runs nowhere. With no integration class, `integrationTest` succeeds with no results.
+- **Limits.** A source scan, like the check it extends: a line starting `@Tag("integration")` at column 0 inside a block comment or a raw string would leave its class out, and an inherited or composed tag is not seen, so that class fails loudly. Nothing here checks an integration class's own tests, which are run by name, by hand.
+- Docs: development-rules §6.5 gains one bullet. No ADR: the pattern is the guards ADR's, and the choice and its cost are in the task's comment; the last commit carries `Wiki-Skip`.
+- Gates, all exit 0 from `clean`, on a tree rebased onto #384: check; test (2,051 JUnit in 160 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (every package at or above its floor, `adapter/config` 65% at its own); guards (12 checks).
+- Pending: CI has not run this branch. The three-OS `gates` job is the first run of the check on Windows checkouts; here that case was measured with a scratch class converted to CRLF.
+## 2026-10-08 — #365 the tool path reads arguments strictly and quotes unknown keys (branch fix/365-strict-tool-arguments)
+- **The defects, reproduced on the dispatcher before any change.** `McpCall.arguments()` read anything but a JSON object as `{}`. `"arguments": "x"`, `[]` or `5` made `submissions`, `list_problems`, `review_queue`, `slow_passes` and `repair_steps` answer over everything on record (`submissions`: `count` 3 of 3), in both eras, and made `get_problem` and `stats` answer "lessonId is required" / "groupBy is required". `McpToolInvoker.checked` joined unknown keys raw: `unknown argument(s): a, b`, and a key `"a\nb"` put a raw newline into the message.
+- **Change.** `0d8ea58` renames `promptArguments()` to `strictArguments()`. `adc0d0c`: `tools/call` reads through it in both eras; a non-object is `-32602` "arguments must be an object", on 400 modern and 200 handshake, as an unknown tool is; absent or `null` is none; the lenient `arguments()` lost its last caller and is deleted; `stringArgument` reads through the strict reader; the prompt's refusal loses "of strings", which was untrue of a tool. `8e69e5e`: `McpArguments.unknown` quotes each key as a JSON string and names what the owner takes in the order given ("takes no arguments" for none); `McpToolCatalog.argumentsOf` reads each tool's list from its own schema, so the invoker's seven `*_ARGS` sets are gone; the prompt's copy of the message goes (it appends ", in that order"). `6be93aa` (the issue's optional item): `McpArguments.optionalText` is the one text-argument reader for `repair_steps` and the prompt. `3b44f3a`: `mcp.md` and its twin.
+- **Error kind, checked against the spec and the code.** The CallToolRequest schema types `arguments` as an optional object in 2025-11-25 and 2026-07-28 (spec repository at `0a11bf68c7`), and the tools page makes a request failing it a protocol error and input validation a tool error. Unknown keys and bad values were and stay `isError`: `checked` and every value check throw `IllegalArgumentException` inside `executed`.
+- **Tests** (adapter.mcp 303 → 317). `McpDispatcherTest` 39 → 41: every tool × a string, an array, a number and a boolean × both eras, pinning status, code and message; absent and `null` on `submissions` in both eras (a pin); the prompt's non-object test now pins the message. `McpCallTest` 18 → 19: `stringArgument` through the strict reader; the non-object test pins four shapes, 400 and the message. `McpToolInvokerTest` 93 → 95: `"a, b"` and `"a\nb"` as exact text; every tool's list in schema order (`get_problem takes lessonId, include`, `list_problems takes level, part, tag, status`; sorted they would differ). `McpToolCatalogTest` 26 → 28: `argumentsOf` is the schema's properties in order; a schema without `properties` takes none. `McpArgumentsTest` 7, new.
+  - Red first: the dispatcher table failed at `submissions with arguments "x"` (`expected error … but actual was null`); `stringArgument` threw nothing; both message pins showed "of strings"; the invoker tests expected `unknown argument(s): "a, b"; stats takes groupBy` but got `unknown argument(s): a, b`; `McpArgumentsTest` and `argumentsOf` did not compile before their code. Two exceptions: the absent/`null` pin held already, and the schema-without-`properties` test was written after its code; mutants showed both red.
+- **Mutation** (24, each reverted, all killed). Step 2 (8): lenient reading in the modern era, in the handshake era, the old message, `null` refused, absent refused, a lenient `stringArgument`, the refusal on 200, another code. Step 3 (10): keys unquoted, no list, the list sorted, no "takes no arguments", keys in arrival order, the owner left out, `argumentsOf` sorted, `properties` required, unknown keys let through, the invoker naming another list than it checks. Step 4 (6): `null` read as a value, the reader trimming, a number read as its digits, the refusal reworded, the prompt not trimming, the prompt keeping a blank.
+- **Wiki.** The exam_prep ADR's Outcome records #365; its D4 line and its accepted cost are marked superseded and closed. No new ADR: this applies the decision that ADR made for the prompt.
+- Branched from main 4f77194 (#384, fast-forwarded before the first commit) and rebased onto dce9423 (#388) at the end: no conflict, `progress.md` merged by `union`. The hashes above are the rebased ones.
+- Gates, all exit 0 on the rebased tree: check; test (2,065 JUnit across 161 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/mcp` 92%, 334/362, the same 28 uncovered as before); guards.
+- **Review of PR #393** (approved, five non-blocking points), fixed in commits on top of the pushed head `2aef317`, without a rebase.
+  - N1 `67760e9`: nothing pinned that the arguments refusal comes before the tool lookup. The dispatcher's table names only tools that exist, and two mutants that let the unknown-tool refusal win, one per era, survived all 317 MCP tests. A pin now sends `exam_start` with `"arguments": "x"` in both eras. It passed on the code as it stood, and both mutants die on it: their answer had the same code and status, with `unknown tool; this server exposes …` as the message. The order is the reference TypeScript SDK's (1.32.1: `setRequestHandler` parses against the schema before the handler looks the tool up, `src/shared/protocol.ts:1461`, `src/server/mcp.ts:226`; read rather than run, and it answers that parse failure with `-32603`).
+  - N2 `1639a44`: `McpCall.stringArgument`, a third text reader with no caller outside its tests since #46, is deleted with its test. The two tests that also used it assert on `strictArguments()`.
+  - N3 `979777c`: `McpArguments.unknown` is renamed `unknownArgumentsMessage`; the invoker had passed it a local also called `unknown`. Red first: the tests, pointed at the new name, did not compile.
+  - N3, N4 `a27f1c3`: the comment above `McpCall`'s readers describes the two that remain instead of a lenient sibling that is gone, and `strictArguments`' KDoc says why a JSON `null` is read as none although it fails the schema.
+  - N5: the ADR names #364 as the issue that added the strict reader, and records the order and the SDK's.
+  - Gates, all exit 0 after the review: check; test (2,065 JUnit across 161 classes, 0 failures, 9 skipped; node 4/4; adapter.mcp still 317, `McpDispatcherTest` 41 → 42 and `McpCallTest` 19 → 18); build; `verifyBranchCoverage` (`adapter/mcp` 92%, 330/358, still 28 uncovered: the four branches of `stringArgument` went with it); guards.
+- Pending: live. The running container predates the branch; after a rebuild, `tools/call` `submissions` with `"arguments": "x"` should answer `-32602`, and `stats` with `{"groupBy":"verdict","a, b":1}` should quote the key.
+## 2026-10-08 — #385 the wiki's dead links: three source pages written, two decision links repointed (branch docs/385-wiki-dead-links)
+- **The defect.** Six `[[…]]` links under `docs/` resolved to no page. `index.md:116–118` and `concepts/assumption-vs-measurement.md:324` linked three `sources/2026-08-14-*` pages no commit had held: #313 and #321 wrote the raw sessions and the index lines, and never the pages. `decisions/2026-08-08-run-raw-sessions.md:113` and `decisions/2026-08-11-a-hole-in-the-record-is-reported-not-filled.md:47` linked `decisions/2026-08-06-record-corrections-by-append`, the slug #366 repointed under `src/`.
+- **Pages** (`255c916`, `ee14be3`, `a167321`): `the-warnings-and-what-was-under-them`, `the-clean-slate`, `the-first-run-test-and-what-it-found`, each written from its raw session alone — summary, key claims linking the decisions and concepts they touch, what turned out wrong. Measured and asserted are marked as the raw marks them; every link resolves to a tracked page; `raw/` untouched. `0842267` moves "six PRs merged" to the day the raw counts it for (#311, #312, #313, #315, #317, #318 on main).
+- **Links** (`df29ffb`): both decisions now link `decisions/2026-08-05-code-pending-correction-append`. Neither sentence names the slug in prose; `updated:` bumped on both. The last commit repairs the seventh the same way: this file's 2026-08-06 entry for #36 linked the ADR by the name it was proposed under, and now links the filed page and keeps the proposed name as text; the guards ADR's outcome and §9's comment say all seven are repaired.
+- **Transcript check, before the concept was touched.** None of the 23 older transcripts in the project's directory is from 2026-08-14: all are 2026-10-06 sessions (07:13–13:22 UTC), each matches `#316` exactly once, in this file's `2026-08-14 · #316` heading injected at session start, and none holds an August timestamp. `gh` could not reach GitHub for the PR body. The evidence was the day's own records: the raw sessions, the ADRs, this file's 2026-08-14 entries and the merge commits.
+- **Disagreements, corrected.** `9fe4763`: `index.md:118` names the two defects instead of "only a first run could surface", which came from f17296f's message. `012b2c4`: the concept keeps the owner's approval of the moved push marked ⚠️ (unverified), since no record mentions it; "cited approvingly one message earlier" becomes the records' account, a different option (one commit scope) just turned down on the same sentence; "the afternoon" stays, as the segment's PRs merged 14:34–16:51 KST; "added two" gives way to naming #302's estimate, the `codePending` double write and the clean-slate runner tables. `b59dde3`: the guards ADR's #366 section gains an outcome and §9's comment its count — six repaired, and the seventh is this file's 2026-08-06 entry for #36, not the exam-prep plan's grep pattern, which was always one of the ten that are not claims. `ac3a994`: the push ADR cites the first-run raw instead of the warnings raw; the seed ADR cites the first-run and clean-slate raws and keeps the warnings raw for the #308 contrast.
+- **Left alone.** The schema's two examples, the vault's own links in the tag-map plan and spec, the exam-prep plan's ellipsis placeholder. The dead slug in `raw/sessions/2026-08-11-expiry-has-no-socket-signal.md` (immutable). `SeedLedger` (#300) has no ADR of its own (out of scope).
+- **Verified.** The issue's lint, run as separate `git ls-files` and `git grep` calls with the same resolution, prints only the left-alone links (10). §9's resolution over every tracked file outside `src/`, `raw/` and `guards.sh` fails 10: exactly its ten that are not claims (one of them a vault tag link in this file, which the docs-only lint does not read). Gates, both exit 0: guards (221 source citations, two more than before `ac3a994`; 111 links under `src/`); check.
+- Pending: not pushed; CI has not run this branch; main has moved (#384 also appends to this file), so the branch is rebased before its PR.
+## 2026-10-08 — #361 no writer follows a link (branch fix/361-writers-never-follow-links)
+- **Audit first.** Every write, create, move and delete in `src/main` was grepped and classified by
+  path, by what a link at the file or on the way could redirect, and by what it writes. The issue named
+  six writers. Eight more were found: the code files and the raw copy (a link on the way, which the
+  rename and `CREATE_NEW` never covered), `log/submissions.jsonl`, the tag notes, the vault seeds, the
+  heartbeat marker (at the root when `.git` is not a directory), and the runner sweep, which was a
+  *delete* through a linked problem directory. `.ps` and the `.gitignore` were already #360's. The
+  lock and the stale-lock removal are not exposed; the watch token, the session file and git's temp
+  files are outside the root.
+- **The bound.** `a4fd9ef` adds `RecordWrites` (`adapter/store`, internal): every directory from the
+  real root walked one name at a time, created where absent, and each a real directory whose real path
+  is the path walked; the walk is bounded at `problems` or the root. Operations: `replace` (temp and
+  move, a link replaced; mode kept, or owner-only on request), `writeOnce`, `appendLine` (regular file
+  or none, no-follow), `createNew` and `deleteIn`. A refusal is one WARN per reason, never quoting a
+  link's target, then thrown unless the writer asked to skip.
+- **The boot pass.** `cd37817`: `attachPending` leaves a record whose attachment throws pending
+  (`DEFERRED`) and goes on to the next record. It ran unwrapped at boot, so a standing refusal would
+  have crash-looped the container.
+- **The writers.** `592c02d` (under `problems/`) and `2c064fa` (the root's level):
+  - Record writes throw: code files (still owner-only), the run log, the raw copy, the statement and
+    the submission log.
+  - The page, the index, the tag notes, the examples and the runner skip.
+  - A seed that is a link is left alone.
+  - The heartbeat replaces a linked marker and reads without following one.
+  - A linked `statement.md` is now replaced once rather than refetched at every boot.
+  - Pressing Run Code after a refused `examples.json` (the comment's route) replaces the link.
+- **Pins from the mutation review.** `6e512d7` a marker linked to a changing file no longer makes the
+  repository look held. `c707631` a failure that is no refusal still reaches a skipping writer.
+  `cd087a5` a root-level write outside the root is refused for the true reason.
+- **Tests.** 73 new (2,044 → 2,117; 9 skipped, as before: 8 C# and the `icase` test). Red evidence
+  was saved per class:
+  - 20 of the 33 first helper tests failed against a stub making the old raw `Files` calls.
+  - Every new writer test was red against the unchanged writers on the exposure itself, except two
+    pins (owner-only code files; a dangling link where the raw copy goes, refused already) and two
+    `CodeArtifacts` cases that were red only on the warning (the rename never wrote through a link
+    at the file).
+  - `attachPending` threw out before `cd37817`.
+  - The heartbeat read threw `RecordRepositoryLockedException` against the old read.
+- **Mutation.** 37 mutants, 35 killed. The two survivors are race-only: the append's
+  `NOFOLLOW_LINKS`, and the seeds' raw write behind their link check. The climb-out check survived
+  until `cd087a5`.
+- **Measured.** Over 2,000 writes on this host: a replace 0.22–0.24 ms against 0.04 ms, an append
+  0.07–0.08 ms against 0.03 ms.
+- **Docs.** ADR [[decisions/2026-10-08-no-writer-follows-a-link]] (the audit table, options, each
+  writer's posture, costs), the index, #354's pointer, and a `SECURITY.md` posture line.
+- **Pending.** Live: after a rebuild, pages and code byte-identical, `git status` clean after a boot
+  with nothing to recover, and no `Not writing` or `Replacing` line. CI on the three OSes has not run;
+  Windows skips every link test. Follow-ups: `JsonlRecordStore.read()` and `RunLog`'s idempotency read
+  still follow a link (readers, outside #354's bound); handle-based writes, with #360's.
+
+## 2026-10-08 — #361 review round (security S1–S5, quality Q1–Q7)
+- **Two reviews of `dd259a2`**, neither blocking the merge. Four findings were fixed on the branch,
+  each test red against the code before it; the coordinator files the rest.
+- **Folded aliases (S1, Q1, Q2).** `0523221`: each directory must be listed in its parent under
+  exactly the name walked, and both the listing and the real path are compared as text after NFC.
+  - The review measured `wrote into alias: true` in the image, where the real path echoes the name.
+  - It predicted that Windows' case-blind `Path.equals` fails the folding test.
+  - It measured that an HFS+ image refused the first write into a new Korean-titled directory.
+  - The fix takes the listing and the real path through a `DiskAnswers` seam, like
+    `StateDirectory`'s listing, and `namesOnDisk` is now shared. Tests play the image, HFS+ and a
+    real path that leads elsewhere.
+  - Cost, median of nine rounds: a replace beside 700 sibling directories went from 234 µs to
+    617 µs, and a boot's 110 replaces from 26.3 ms to 36.4 ms. Listing 700 entries takes 0.36–0.53 ms.
+- **The root-level bound (S3).** `5a160c3`: no `.` or `..` below the root. The target is no longer
+  normalized, and the root is walked as configured. Each root-level writer keeps an allow-list of
+  first names: `log`, `tags`, the seeds, the heartbeat marker. Both measured paths
+  (`log/../.ps/git-credentials`, `.git/hooks/pre-commit`) were written before the change.
+- **A hard link (S2).** `fefb790`: an append refuses a file with `unix:nlink` above 1. It is skipped
+  on Windows, which has no `unix` view.
+- **The boot pass (Q3).** `d76b2c9`: an I/O failure is logged by its class, any other fault as an
+  ERROR with its stack, and cancellation is rethrown. The fetch is already wrapped by `fetched`.
+- **Pin.** `69687d3`: the `problems` name itself is refused.
+- **Mutation.** 16 mutants of the new behaviours, plus two rerun on rewritten lines; all killed.
+- **Gates.** check, test, build, `verifyBranchCoverage` and guards all exit 0. Tests: 2,128, 0
+  failures, 9 skipped. Coverage: `adapter/store` 84% (615/726), `application` 88% (340/383).
+- **Follow-ups the coordinator files**, also in the ADR's costs:
+  - Q4: a rename over an open file on Windows.
+  - Q5: a crash's temp file, committed by the next reconcile.
+  - Q6: duplication with `StateDirectory` and `AtomicStateFile`.
+  - S4: `WatchToken.writeText`.
+  - S5 and Q7: the reads that still follow a link.
+- **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.

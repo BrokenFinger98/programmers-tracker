@@ -70,6 +70,12 @@ Stated where it is implemented rather than repeated here:
   grants it nothing it did not have; it is stated here rather than assumed away:
   [`extension/README.md`](extension/README.md#permissions-and-why-each-is-needed) and
   [`decisions/2026-09-29-the-sensor-hands-over-the-session`](docs/llm-wiki/wiki/decisions/2026-09-29-the-sensor-hands-over-the-session.md).
+- **Writes into your records** — no writer in the record repository follows a symbolic link a
+  clone or pull could plant: one where a file the server owns should be is replaced, one where a log
+  or one of your own seeds should be is refused or left alone, and one on the way to any of them is
+  refused — though each check is of a path at one moment, so a process racing the server on your
+  machine is not stopped by it
+  ([#361](https://github.com/BrokenFinger98/programmers-tracker/issues/361)).
 - **This repository** — `scripts/guards.sh` fails the build on a committed record, a
   session-cookie-shaped string or the live `/watch` token, and the pre-push hook runs it.
 

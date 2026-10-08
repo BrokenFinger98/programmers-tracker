@@ -9,7 +9,7 @@ import java.nio.file.attribute.PosixFilePermissions
 // Object mother for a planted link (dev rules §6.4, #354). Git stores symbolic links, so a records
 // repository can arrive by clone or pull with a link under problems/ aimed at what its root also holds —
 // the push token first of all. Every reader that must refuse one is tested against the same planting,
-// so "refused" means the same thing in each of them.
+// so "refused" means the same thing in each of them — and every writer too (#361).
 
 /** The credential inside [A_PUSH_TOKEN_LINE] — what must never appear in an answer, a page or a log line. */
 const val A_PUSH_CREDENTIAL = "not-a-real-token"
@@ -38,6 +38,17 @@ fun aLink(link: Path, target: Path): Path {
     Files.createDirectories(link.parent)
     return Files.createSymbolicLink(link, link.parent.relativize(target))
 }
+
+/** What a file outside the records holds before a writer meets a link to it, and must still hold after (#361). */
+const val NOT_OURS = "not ours\n"
+
+/** A file outside the records repository, holding [NOT_OURS] — where a planted link would lead a writer. */
+fun aFileNotOurs(directory: Path, name: String = "not-ours.md"): Path =
+    Files.writeString(directory.resolve(name), NOT_OURS)
+
+/** The names directly in [directory], sorted: empty when nothing was created there. */
+fun namesIn(directory: Path): List<String> =
+    Files.list(directory).use { entries -> entries.map { it.fileName.toString() }.sorted().toList() }
 
 /** Whether links and FIFOs can be made under [root] at all — a POSIX filesystem, which a Windows runner's is not. */
 fun canPlantLinksIn(root: Path): Boolean = root.fileSystem.supportedFileAttributeViews().contains("posix")

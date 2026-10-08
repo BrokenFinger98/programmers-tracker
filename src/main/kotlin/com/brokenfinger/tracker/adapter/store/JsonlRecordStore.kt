@@ -3,11 +3,9 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.application.RecordStore
 import com.brokenfinger.tracker.application.RecordedSubmission
 import org.slf4j.LoggerFactory
-import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 
 /**
  * File-backed [RecordStore] — `log/submissions.jsonl`, append-only.
@@ -20,16 +18,24 @@ import java.nio.file.StandardOpenOption
  * torn final line, and refusing to read the file because of it would cost every record
  * before it — a grading Programmers has already broadcast can never be fetched again
  * (protocol doc §11).
+ *
+ * **Appended through no link** (#361). [root] is the records repository the log lies in — two
+ * directories up from `log/submissions.jsonl`, as [RecordLayout.submissionLog] places it — and
+ * the append is bounded there: `log/` a real directory, the log a regular file or none. A pull
+ * can deliver the log as a link; the append is then refused and thrown, as any failed append is:
+ * nothing is appended where the link leads, and the writer leaves the grading's frames on the
+ * work list to be replayed.
  */
-class JsonlRecordStore(private val file: Path) : RecordStore {
+class JsonlRecordStore(private val file: Path, root: Path = file.toAbsolutePath().parent.parent) : RecordStore {
+    private val writes = RecordWrites.underRoot(root, setOf(RecordLayout.LOG))
+
     override fun append(line: String) {
         val record = line.trimEnd('\r', '\n')
         require(record.isNotBlank()) { "a submission record must not be blank" }
         require(!record.contains('\n')) { "a submission record must be one line" }
-        Files.createDirectories(file.toAbsolutePath().parent)
-        // A torn line has no line break of its own, so healing it here keeps a crash costing
-        // one record rather than gluing the next one onto the wreckage and losing both.
-        Files.writeString(file, heal() + record + "\n", CHARSET, *APPEND_MODE)
+        // A torn line has no line break of its own, so healing it keeps a crash costing one
+        // record rather than gluing the next one onto the wreckage and losing both.
+        writes.appendLine(file, record)
     }
 
     override fun read(): List<RecordedSubmission> {
@@ -44,25 +50,9 @@ class JsonlRecordStore(private val file: Path) : RecordStore {
         return records
     }
 
-    private fun heal(): String = if (endsMidLine()) "\n" else ""
-
-    private fun endsMidLine(): Boolean {
-        val size = runCatching { Files.size(file) }.getOrElse { return false }
-        if (size == 0L) return false
-        return lastByte(size) != NEWLINE
-    }
-
-    private fun lastByte(size: Long): Byte = Files.newByteChannel(file).use { channel ->
-        val buffer = ByteBuffer.allocate(1)
-        channel.position(size - 1).read(buffer)
-        buffer.get(0)
-    }
-
     companion object {
         private val logger = LoggerFactory.getLogger(JsonlRecordStore::class.java)
-        private val APPEND_MODE = arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND)
         private val CHARSET = StandardCharsets.UTF_8
-        private const val NEWLINE = '\n'.code.toByte()
 
         /** The log lives under the record repository, not next to the tool (design §5.1). */
         fun under(recordRoot: Path): JsonlRecordStore = JsonlRecordStore(RecordLayout(recordRoot).submissionLog())

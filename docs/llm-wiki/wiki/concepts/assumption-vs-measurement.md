@@ -318,22 +318,32 @@ The practical rule this leaves: when a claim explains *why* a number is what it 
 about the number and can be checked against it. `find`, a downloaded artifact and a method-level
 counter each settled one of these; none needed an argument.
 
-## Two more the same day, and one I reversed before it shipped
+## More the same day, and one I reversed before it shipped
 
-The afternoon of 2026-08-14 added two, and they differ from the three above in a way worth keeping
-([[sources/2026-08-14-the-first-run-test-and-what-it-found]]).
+2026-08-14 did not stop at the three. The morning's runner value tables asserted two refusals the
+code does not make, and both were pinned as the behaviour that exists, labelled never measured
+([[sources/2026-08-14-the-clean-slate]]). The afternoon, whose pull requests merged between 14:34
+and 16:51 KST, added more ([[sources/2026-08-14-the-first-run-test-and-what-it-found]]): #302's
+estimate of ~30 uncovered branches in C, which Kover's method counters put at 47 before a test was
+written, and a double write I nearly reported, which was the `codePending` correction append. The
+two below differ from the three above in a way worth keeping.
 
 **The one I caught myself, mid-implementation.** #316 needed a decision, and I recommended moving
 the push that a pass triggers to after the source fetch — one push, tidy, and the owner approved
-it. Reading the code to build it turned up `copiedRawPath`'s own comment: *"the verdict is
-unrecoverable and the copy is not."* Moving the push makes the unrecoverable half wait on a
-network fetch of the recoverable half, which is a milder form of the option I had just rejected on
-exactly that ground. The push is now **added** rather than moved.
+it ⚠️ (unverified). Reading the code to build it turned up `copiedRawPath`'s own comment: *"the
+verdict is unrecoverable and the copy is not."* Moving the push makes the unrecoverable half wait
+on a network fetch of the recoverable half, which is a milder form of the option I had just
+rejected on exactly that ground. The push is now **added** rather than moved.
+
+*No record of the day mentions an approval — not the raw session, the ADR, the progress entry or
+the merge commit — and the day's transcript is no longer among the project's transcripts.*
 
 The claim was not refuted by a measurement — it was refuted by a sentence already written in the
-repository, which I had cited approvingly one message earlier while arguing against a *different*
-option. **A principle you can quote is not the same as one you have applied**, and the gap between
-the two closed only because implementing it meant reading the file again.
+repository, the same sentence on which I had just turned down a *different* option, committing
+everything in one scope ([[decisions/2026-08-14-the-push-waits-for-the-fetch-the-commit-does-not]]
+rejects it with that quotation). **A principle you can quote is not the same as one you have
+applied**, and the gap between the two closed only because implementing it meant reading the file
+again.
 
 **The one I could not settle from this side.** The #314 issue body stated that opening the vault in
 Obsidian rewrites `dashboard.base`. The restored file then sat untouched for 75 minutes with the

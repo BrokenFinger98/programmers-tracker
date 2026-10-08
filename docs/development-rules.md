@@ -292,6 +292,10 @@ tests with it.
 - Nothing may depend on `integrationTest`. Kover would otherwise instrument it and make
   `verifyBranchCoverage`, `check` and `build` run it, so `build.gradle.kts` turns that off and
   fails the build, before any task runs, if a task in the graph depends on it (#362)
+- Tag the class, not its methods: `@Tag("integration")`, unindented, above the class. `test`
+  excludes the tag, so such a class leaves no result file, and `verifyEveryTestClassRan` (which
+  demands one from every test class) leaves out exactly the classes tagged that way. A class
+  tagged only on its methods fails that check (#381)
 - Session cookie is read from `TRACKER_SESSION_FILE` (default `~/.ps/session`);
   no session cookie → **skip via JUnit assumption — that is not a failure**
 - Never run in CI

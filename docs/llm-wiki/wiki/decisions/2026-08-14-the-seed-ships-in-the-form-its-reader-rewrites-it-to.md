@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [obsidian, vault, seeds, record-keeping]
 created: 2026-08-14
-updated: 2026-08-14
-sources: [raw/sessions/2026-08-14-the-warnings-and-what-was-under-them.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-warnings-and-what-was-under-them.md]
 ---
 
 # `dashboard.base` ships in the form Obsidian rewrites it to, and a file that already matches is ours

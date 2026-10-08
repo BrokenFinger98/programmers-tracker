@@ -6,9 +6,11 @@ import com.brokenfinger.tracker.domain.SubmissionRecordJson
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.domain.calc.TagCoverage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
+import java.io.IOException
 
 /**
  * Stage 3 of the capture pipeline — the late, retryable code attachment
@@ -79,10 +81,44 @@ class CodeAttachment(
     private suspend fun passOver(pending: List<SubmissionRecord>): AttachReport {
         var report = AttachReport()
         for (record in pending) {
-            report = report.and(attach(record))
+            report = report.and(retried(record))
             if (report.hasStopped()) return report
         }
         return report
+    }
+
+    /**
+     * One record's retry. Writing its files can fail for as long as the cause stands — a link on their path is
+     * refused until someone removes it (#361) — and the startup runner catches nothing, so one such record would
+     * end every boot the same way. It stays pending instead, as it does when this fails at capture time, and the
+     * pass goes on to the next.
+     *
+     * An I/O failure, a refused write among them, is said by its kind alone. Anything else is a fault in this code
+     * and is said as loudly as the log can, with its stack, and the pass still goes on. Cancellation belongs to the
+     * coroutine machinery and ends the pass. No detail of the fetch reaches either log line: [fetched] has turned
+     * whatever the fetcher threw into an outcome before anything here can throw.
+     */
+    private suspend fun retried(record: SubmissionRecord): AttachOutcome {
+        try {
+            return attach(record)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failed: IOException) {
+            return notWritten(record, failed)
+        } catch (fault: Exception) {
+            return faulted(record, fault)
+        }
+    }
+
+    // The kind of failure alone: a message can carry a path, and the one it carries can be where a link leads.
+    private fun notWritten(record: SubmissionRecord, cause: IOException): AttachOutcome {
+        logger.warn(NOT_WRITTEN, record.lessonId, cause.javaClass.simpleName)
+        return AttachOutcome.DEFERRED
+    }
+
+    private fun faulted(record: SubmissionRecord, fault: Exception): AttachOutcome {
+        logger.error(FAULTED, record.lessonId, fault)
+        return AttachOutcome.DEFERRED
     }
 
     private suspend fun fetched(record: SubmissionRecord): CodeFetch =
@@ -198,6 +234,9 @@ class CodeAttachment(
 
     private companion object {
         val logger = LoggerFactory.getLogger(CodeAttachment::class.java)
+
+        const val NOT_WRITTEN = "Lesson {} keeps its code pending — its files were not written ({})"
+        const val FAULTED = "Lesson {} keeps its code pending — attaching it failed with a fault, not an I/O failure"
     }
 }
 

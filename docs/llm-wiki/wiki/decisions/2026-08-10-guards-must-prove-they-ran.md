@@ -274,3 +274,12 @@ What it leaves unchecked, on purpose:
   today). Adding it is one word in the pathspec; it was left out because the issue named `src/`.
 - **Order.** A link may be written before its ADR, but both must be staged by the push. A branch
   that runs the guards between the two sees a failure that is correct and temporary.
+
+**Outcome, 2026-10-08 (#385).** All seven real breakages are repaired. `/wiki-lint` wrote the
+three source pages from their raw sessions, which resolved the three index entries and the
+concept, and the two decisions now link the ADR under its real name. The seventh was the
+2026-08-06 history entry in `.harness/state/progress.md`, which linked the ADR by the name it was
+proposed under; it now links the filed page and keeps the proposed name as text. Re-measured with
+the same resolution, 10 links fail outside `src/`, `raw/` and `guards.sh` — exactly the ten that
+are not claims. A lint over `docs/` alone, like #385's, still prints the exam-prep plan's grep
+pattern; that is the ellipsis placeholder, one of the ten.

@@ -4,11 +4,18 @@ import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.SubmissionRecordJson
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
+import com.brokenfinger.tracker.support.fixtures.NOT_OURS
+import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.logging.loggedWhile
+import com.brokenfinger.tracker.support.logging.warningsWhile
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -17,6 +24,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.time.Clock
 
@@ -31,6 +39,9 @@ import java.time.Clock
 class FileDerivedArtifactsTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `a submit points at its attempt copy, which is the code of that grading and never changes`() {
@@ -232,6 +243,119 @@ class FileDerivedArtifactsTest {
         Files.readString(statementFile()) shouldBe "body\n"
     }
 
+    // Written over a link, never through one (#361) ---------------------------------------------------
+
+    /**
+     * A linked statement reads as absent (#354), so it was fetched again at every boot, while this writer saw a
+     * file there through the link, wrote nothing, and was counted as having filled it. A link is not a statement
+     * anyone wrote, so the write-once rule does not keep it: it is replaced, once.
+     */
+    @Test
+    fun `a statement that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val statement = aLink(statementFile(), token)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeStatement(aSubmissionRecord(), PROBLEM) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.isSymbolicLink(statement) shouldBe false
+        Files.readString(statement) shouldBe "the problem\n"
+        heard.single() shouldContain statement.toString()
+    }
+
+    /** Measured in #354's review: a dangling `statement.md` made this writer create a file outside `problems/`. */
+    @Test
+    fun `a statement that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-statement.md")
+        val statement = aLink(statementFile(), nowhere)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeStatement(aSubmissionRecord(), PROBLEM) }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.readString(statement) shouldBe "the problem\n"
+        heard.single() shouldContain statement.toString()
+    }
+
+    /** Thrown, so the statement backfill counts the problem as not filled, which it was not. */
+    @Test
+    fun `a problem directory that is a link gets no statement, and nothing is written where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/$DIRECTORY"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { artifacts().writeStatement(aSubmissionRecord(), PROBLEM) }
+        }
+
+        namesIn(outside).shouldBeEmpty()
+        heard.single() shouldContain "problems/$DIRECTORY is a symbolic link"
+    }
+
+    /** The runner is committed and pushed, and was written through a link standing where it should be. */
+    @Test
+    fun `a runner that is a link is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val token = aPushTokenIn(root)
+        val runner = aLink(problemWithExamples().resolve("runner_test.cpp"), token)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeRunner(aCppRecord(), CPP) }
+
+        Files.readString(token) shouldBe "$A_PUSH_TOKEN_LINE\n"
+        Files.readString(runner) shouldContain "solution(arg1, arg2)"
+        heard.single() shouldContain runner.toString()
+    }
+
+    @Test
+    fun `a runner that is a dangling link is replaced, and nothing is created where it pointed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-runner.cpp")
+        val runner = aLink(problemWithExamples().resolve("runner_test.cpp"), nowhere)
+
+        artifacts().writeRunner(aCppRecord(), CPP)
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.readString(runner) shouldContain "solution(arg1, arg2)"
+    }
+
+    /**
+     * A read may follow a link that stays inside `problems/` (#354), so the examples are found through one. The
+     * runner beside them is written through no link at all: it is skipped, and said.
+     */
+    @Test
+    fun `no runner is written through a problem directory linked to another problem's`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val other = Files.createDirectories(root.resolve("problems/1-other"))
+        Files.writeString(other.resolve("examples.json"), EXAMPLES)
+        aLink(root.resolve("problems/$DIRECTORY"), other)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeRunner(aCppRecord(), CPP) }
+
+        namesIn(other) shouldBe listOf("examples.json")
+        heard.single() shouldContain "problems/$DIRECTORY is a symbolic link"
+    }
+
+    /** The stale-runner sweep deleted files of a runner's names wherever a linked problem directory led. */
+    @Test
+    fun `no stale runner is swept through a problem directory that is a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = aFileNotOurs(outside, "RunnerTest.java")
+        aLink(root.resolve("problems/$DIRECTORY"), outside)
+
+        val heard = warningsWhile(RecordWrites::class) { artifacts().writeRunner(aCppRecord(), CPP) }
+
+        Files.readString(elsewhere) shouldBe NOT_OURS
+        heard.single() shouldContain "problems/$DIRECTORY is a symbolic link"
+    }
+
+    private fun problemWithExamples(): Path {
+        val directory = Files.createDirectories(root.resolve("problems/$DIRECTORY"))
+        Files.writeString(directory.resolve("examples.json"), EXAMPLES)
+        return directory
+    }
+
+    private fun aCppRecord() = aSubmissionRecord(language = "cpp")
+
     private fun statementFile(): Path =
         RecordLayout(root).statementFile(aSubmissionRecord().lessonId, aSubmissionRecord().title)
 
@@ -248,5 +372,10 @@ class FileDerivedArtifactsTest {
             """.trimIndent()
 
         val CODE_V2 = CODE_V1.replace("return num1 * num2;", "return (long) num1 * num2;")
+
+        const val DIRECTORY = "120804-두-수의-곱-구하기"
+        const val CPP = "int solution(int num1, int num2) { return num1 * num2; }"
+        const val EXAMPLES = """[{"input": "6, 7", "expected": "42"}]"""
+        const val PROBLEM = "the problem"
     }
 }

@@ -39,26 +39,41 @@ import java.nio.file.Path
  *
  * Failure is logged, never thrown. A grading Programmers has broadcast cannot be replayed
  * (protocol §11), and losing one to a dashboard file would be the wrong trade in every direction.
+ *
+ * ### A link where a seed should be
+ *
+ * Left alone, and said (#361). A pull can deliver one, and following it the refresh overwrote
+ * whatever it led to when the ledger recorded that file's bytes, while a dangling one read as no
+ * seed and the write created the file it named. A link is also something someone made, which a
+ * seed never replaces. A seed that is written goes through [RecordWrites], so it is replaced
+ * whole beside its own name rather than written in place.
  */
 class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
+    private val writes = RecordWrites.underRoot(recordRoot, SEEDS.toSet())
+
     fun ensure() {
         SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }
     }
 
     private fun seed(seed: String) {
         val file = recordRoot.resolve(seed)
+        if (Files.isSymbolicLink(file)) return leftAlone(file)
         val shipped = shipped(seed)
         if (adopted(seed, file, shipped)) return
         if (Files.exists(file) && !ledger.isUnchanged(seed, file)) return
         val fresh = !Files.exists(file)
         if (!fresh && Files.readString(file) == shipped) return
-        Files.createDirectories(recordRoot)
-        Files.writeString(file, shipped)
+        if (!writes.replaceOrSkip(file, shipped)) return
         ledger.record(seed, shipped)
-        if (fresh) {
-            logger.info("Wrote {} — seeded once; it is yours to edit from here", file)
-            return
-        }
+        announced(file, fresh)
+    }
+
+    private fun leftAlone(file: Path) {
+        logger.warn(LEFT_ALONE, file)
+    }
+
+    private fun announced(file: Path, fresh: Boolean) {
+        if (fresh) return logger.info("Wrote {} — seeded once; it is yours to edit from here", file)
         logger.info("Refreshed {} — it was still exactly as this server wrote it, so it was ours to update", file)
     }
 
@@ -107,5 +122,8 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
         val SEEDS = listOf("dashboard.base", "README.md", "README.ko.md")
 
         val logger = LoggerFactory.getLogger(VaultDashboard::class.java)
+
+        const val LEFT_ALONE =
+            "Left {} alone: it is a symbolic link, and a seed is written neither through one nor over one"
     }
 }

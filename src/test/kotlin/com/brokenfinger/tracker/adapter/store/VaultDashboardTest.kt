@@ -1,14 +1,22 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.support.fixtures.NOT_OURS
+import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
+import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
+import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 
 /**
@@ -24,7 +32,49 @@ class VaultDashboardTest {
     @TempDir
     lateinit var root: Path
 
+    @TempDir
+    lateinit var outside: Path
+
     private val dashboard: Path get() = root.resolve("dashboard.base")
+
+    // A seed is the reader's: never written through a link, and never over one (#361) ----------------
+
+    /**
+     * A link standing at a seed is left alone. Following it, the refresh overwrote what it led to whenever the
+     * ledger recorded that file's bytes; and a link is something someone made, which a seed never replaces.
+     */
+    @Test
+    fun `a seed that is a link is left alone, and the file it leads to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = aFileNotOurs(outside)
+        val readme = aLink(root.resolve("README.md"), elsewhere)
+        SeedLedger(root, aStateDirectory(root)).record("README.md", NOT_OURS)
+
+        val heard = warningsWhile(VaultDashboard::class) {
+            VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+        }
+
+        Files.readString(elsewhere) shouldBe NOT_OURS
+        Files.isSymbolicLink(readme) shouldBe true
+        heard.single() shouldContain readme.toString()
+        heard.single() shouldNotContain elsewhere.toString()
+    }
+
+    /** A dangling link read as no seed, and the write created the file it named, wherever that was. */
+    @Test
+    fun `a seed that is a dangling link is left alone, and nothing is created where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-seed.base")
+        aLink(dashboard, nowhere)
+
+        val heard = warningsWhile(VaultDashboard::class) {
+            VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+        }
+
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+        Files.isSymbolicLink(dashboard) shouldBe true
+        heard.single() shouldContain dashboard.toString()
+    }
 
     @Test
     fun `writes the dashboard into a vault that has none`() {
