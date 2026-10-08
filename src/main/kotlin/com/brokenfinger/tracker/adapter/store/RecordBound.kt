@@ -16,7 +16,8 @@ import java.text.Normalizer
  * **The bound.** The target must lie below the root as configured and name no `.` or `..` on the way — nobody is
  * handed one, and folding one away lexically let a root-level path climb back out — and it must fall under the bound:
  * inside `problems/` for a problem's files, and at the root's own level only the names kept there (`log`, `tags`, the
- * seeds, the heartbeat's marker), so never `.git` or `.ps`. Only the root is resolved, physically and from the path as
+ * seeds, the heartbeat's marker), so never `.git` or `.ps` for a record writer or reader; [StateDirectory] asks for a
+ * bound of `.ps` alone, to make `.ps` itself (#386). Only the root is resolved, physically and from the path as
  * configured, as git and the lock resolve it, because it may sit behind a link by configuration (macOS's `/var`, a
  * `~/ps-records` link).
  *
@@ -150,7 +151,10 @@ internal class RecordBound private constructor(
         fun underProblems(layout: RecordLayout, disk: DiskAnswers = DiskAnswers()): RecordBound =
             RecordBound(layout.configuredRoot(), setOf(RecordLayout.PROBLEMS), insideFirstName = true, disk = disk)
 
-        /** Files at the root's own level, under [firstNames] alone — never `.git` or `.ps`. */
+        /**
+         * Files at the root's own level, under [firstNames] alone — for a record writer or reader never `.git` or
+         * `.ps`, which [StateDirectory] alone names, to make `.ps` itself (#386).
+         */
         fun underRoot(root: Path, firstNames: Set<String>, disk: DiskAnswers = DiskAnswers()): RecordBound =
             RecordBound(root.toAbsolutePath(), firstNames, insideFirstName = false, disk = disk)
     }
