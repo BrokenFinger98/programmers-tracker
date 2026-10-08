@@ -132,9 +132,14 @@ class TokenPatternsTest {
         foundHere(probes, nothingStored) shouldContainExactly byGit
     }
 
+    /**
+     * The stored values, as `git grep -F -f -` reads them: a line each, and a CR before the newline is part
+     * of the line ending, not of the value — the secret of [STORED_ENDING_IN_CR] is searched for without it.
+     */
     @Test
     fun `the stored values find exactly what git grep -F finds`() {
-        val stored = StoredCredential.of("$A_PUSH_TOKEN_LINE\n$STORED_WITH_UMLAUTS\n") as StoredCredential.Patterns
+        val lines = listOf(A_PUSH_TOKEN_LINE, STORED_WITH_UMLAUTS, STORED_ENDING_IN_CR)
+        val stored = StoredCredential.of(lines.joinToString("\n", postfix = "\n")) as StoredCredential.Patterns
         val probes = storedProbes()
         val byGit = foundByGit(probes, listOf("-F", "-f", "-"), stored.asInput())
 
@@ -170,6 +175,7 @@ class TokenPatternsTest {
         "umlauts-utf8" to "pässwörd".toByteArray(Charsets.UTF_8),
         "umlauts-latin1" to "pässwörd".toByteArray(Charsets.ISO_8859_1),
         "nul-beside" to byteArrayOf(0) + bytes(A_PUSH_CREDENTIAL) + byteArrayOf(0),
+        "cr-ended" to bytes("the cr-ended-secret, with no CR after it"),
         "nothing" to bytes("x-access-token and github.com"),
     )
 
@@ -205,5 +211,8 @@ class TokenPatternsTest {
 
         /** A credential line whose secret is not ASCII, so its UTF-8 bytes and its characters differ. */
         const val STORED_WITH_UMLAUTS = "https://someone:pässwörd@example.invalid"
+
+        /** A credential line whose secret decodes to one that ends in a CR, just before its newline on stdin. */
+        const val STORED_ENDING_IN_CR = "https://someone:cr-ended-secret%0D@example.invalid"
     }
 }

@@ -178,6 +178,22 @@ class OutgoingObjectScanTest {
         scanned() shouldBe SearchOutcome.UNSEARCHED
     }
 
+    /** Every id is answered for, in the order asked: a description that leaves one out is not taken for one. */
+    @Test
+    fun `a description that leaves an object out is unsearched`() {
+        committed("notes/today.md", "a note\n")
+        val calls = describing { it.copy(stdout = withoutItsLastLine(it.stdout)) }
+
+        scanned(calls = calls) shouldBe SearchOutcome.UNSEARCHED
+    }
+
+    @Test
+    fun `a description git exits non-zero on is unsearched, however whole it looks`() {
+        committed("notes/today.md", "a note\n")
+
+        scanned(calls = describing { it.copy(code = FATAL) }) shouldBe SearchOutcome.UNSEARCHED
+    }
+
     /** A loose object that will not inflate is listed — `rev-list` asks only that it exists — and told missing. */
     @Test
     fun `an object git cannot describe is unsearched`() {
@@ -217,7 +233,7 @@ class OutgoingObjectScanTest {
     @Test
     fun `an object gone before it is read is unsearched`() {
         committed("notes/today.md", "a note\n")
-        val calls = RecordingCalls(repo.root) { args -> if (READ in args) deletedObject("HEAD:notes/today.md") }
+        val calls = RecordingCalls(repo.root, before = { if (READ in it) deletedObject("HEAD:notes/today.md") })
 
         scanned(calls = calls) shouldBe SearchOutcome.UNSEARCHED
     }
@@ -236,9 +252,14 @@ class OutgoingObjectScanTest {
 
     /**
      * [ProcessCalls] over the workspace, recording each `cat-file --batch`'s input — the ids it was asked
-     * to read — after letting [before] act on the arguments of every call first.
+     * to read. [before] acts on the arguments of every call first, and [answered] may alter git's real
+     * answer to a call that is read whole.
      */
-    private class RecordingCalls(root: Path, private val before: (List<String>) -> Unit = {}) : GitCalls {
+    private class RecordingCalls(
+        root: Path,
+        private val before: (List<String>) -> Unit = {},
+        private val answered: (List<String>, GitResult) -> GitResult = { _, answer -> answer },
+    ) : GitCalls {
         private val real = ProcessCalls(GitProcess(root), ::plain)
         private val inputs = mutableListOf<String>()
 
@@ -248,7 +269,7 @@ class OutgoingObjectScanTest {
 
         override fun answer(args: List<String>, input: String?): GitResult {
             before(args)
-            return real.answer(args, input)
+            return answered(args, real.answer(args, input))
         }
 
         override fun <T : Any> streamed(args: List<String>, input: String?, read: (InputStream) -> T): T? {
@@ -257,6 +278,12 @@ class OutgoingObjectScanTest {
             return real.streamed(args, input, read)
         }
     }
+
+    /** Git's real answers, with its description of the objects — `cat-file --batch-check` — altered by [change]. */
+    private fun describing(change: (GitResult) -> GitResult): GitCalls =
+        RecordingCalls(repo.root, answered = { args, answer -> if (DESCRIBE in args) change(answer) else answer })
+
+    private fun withoutItsLastLine(text: String): String = text.trimEnd().lines().dropLast(1).joinToString("\n")
 
     private fun scanned(
         range: List<String> = listOf("HEAD"),
@@ -303,6 +330,12 @@ class OutgoingObjectScanTest {
     private companion object {
         /** The argument that makes a call a read of content rather than a question about type and size. */
         const val READ = "--batch"
+
+        /** The argument that makes a call a question about each object's type and size. */
+        const val DESCRIBE = "--batch-check"
+
+        /** How git exits when it dies. */
+        const val FATAL = 128
 
         /** `cat-file --batch` with its answer cut at 60 bytes, by a `head` that exits 0. */
         const val CUT_SHORT = "alias.cut=!git cat-file --batch | head -c 60"
