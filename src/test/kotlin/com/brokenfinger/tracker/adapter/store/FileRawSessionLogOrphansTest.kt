@@ -238,6 +238,61 @@ class FileRawSessionLogOrphansTest {
         log.orphans() shouldBe Orphans(emptyList(), unread = 1, unlisted = false)
     }
 
+    // Kept, never written through a link (#378) ------------------------------------------------------
+
+    /**
+     * A link where a lesson's orphans go made the append fail and the frame was lost (#378). It is held in
+     * memory like a refused frame, never written through the link, and written once the link is gone. The link
+     * is not replaced: the file is append-only, and a link there stands for history a replacement would drop.
+     */
+    @Test
+    fun `an orphan whose file is a link is kept, never written through, and written once it is gone`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val notOurs = Files.writeString(outside.resolve("not-ours.jsonl"), "")
+        val link = aLink(root.resolve(".ps/raw/orphans/120804.jsonl"), notOurs)
+        val log = log()
+
+        log.orphaned(120804, """{"lost":1}""")
+        Files.readString(notOurs) shouldBe ""
+        Files.delete(link)
+        log.orphaned(120804, """{"lost":2}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/120804.jsonl")) shouldBe
+            listOf("""{"lost":1}""", """{"lost":2}""")
+    }
+
+    /** The orphans held for a lesson whose file is a link wait; the next grading's frames are not stopped by them. */
+    @Test
+    fun `orphans held behind a link do not stop the next grading's frames`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val git = ChangingAnswer(true)
+        val log = logGuardedBy(aStateDirectory(root, git))
+        log.orphaned(120804, """{"held":1}""")
+        aLink(root.resolve(".ps/raw/orphans/120804.jsonl"), Files.writeString(outside.resolve("x.jsonl"), ""))
+        git.answer = false
+        val session = log.start(131528)
+
+        log.append(session, """{"n":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw").resolve(session.value)) shouldBe listOf("""{"n":1}""")
+        Files.readString(outside.resolve("x.jsonl")) shouldBe ""
+    }
+
+    @Test
+    fun `an orphan file that is a link is said once, never where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps/raw/orphans/120804.jsonl"), Files.writeString(outside.resolve("x.jsonl"), ""))
+        val log = log()
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            log.orphaned(120804, """{"a":1}""")
+            log.orphaned(120804, """{"b":2}""")
+        }
+
+        heard.single() shouldContain "is not a regular file"
+        heard.single() shouldNotContain outside.toString()
+    }
+
     private fun log() = logGuardedBy(aStateDirectory(root))
 
     private fun logGuardedBy(state: StateDirectory) = FileRawSessionLog.under(root, Clock.systemUTC(), state)

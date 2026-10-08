@@ -172,10 +172,26 @@ class FileRawSessionLog(
     // only direct children whose name parses as a session.
     override fun orphaned(lessonId: Long, frameText: String) {
         val line = lineOf(frameText)
-        val orphans = writable(ORPHANS) ?: return hold(heldOrphans.computeIfAbsent(lessonId) { orphanList() }, line)
+        val orphans = writable(ORPHANS) ?: return holdOrphan(lessonId, line)
         releaseHeld()
-        appendLine(orphans.resolve("$lessonId$SUFFIX"), line)
+        val file = orphans.resolve("$lessonId$SUFFIX")
+        if (isThereButNotAFile(file)) return heldBehind(lessonId, line)
+        appendLine(file, line)
     }
+
+    private fun holdOrphan(lessonId: Long, line: String) =
+        hold(heldOrphans.computeIfAbsent(lessonId) { orphanList() }, line)
+
+    // Anything but a regular file where a lesson's orphans go — a link, most likely — loses no frame (#378): it is held
+    // like a refused frame and written once a regular file or nothing stands there. The link is never replaced: the
+    // file is append-only, and a link there stands for history a replacement would drop. Said once, never where.
+    private fun heldBehind(lessonId: Long, line: String) {
+        sayOnce(ORPHAN_NOT_A_FILE_KEY) { logger.warn(ORPHAN_NOT_A_FILE) }
+        holdOrphan(lessonId, line)
+    }
+
+    private fun isThereButNotAFile(file: Path): Boolean =
+        Files.exists(file, LinkOption.NOFOLLOW_LINKS) && !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
 
     /**
      * What is still held when the server stops. Written into `.ps` if it is usable now — a live
@@ -428,13 +444,15 @@ class FileRawSessionLog(
         subdirectory(RETIRED)?.let { recorded ->
             heldRuns.keys.forEach { name -> heldRuns.remove(name)?.let { appendedAll(recorded.resolve(name), it) } }
         }
-        subdirectory(ORPHANS)?.let { orphans ->
-            heldOrphans.keys.forEach { id ->
-                heldOrphans.remove(id)?.let { held ->
-                    appendedAll(orphans.resolve("$id$SUFFIX"), synchronized(held) { held.toList() })
-                }
-            }
-        }
+        subdirectory(ORPHANS)?.let { orphans -> heldOrphans.keys.forEach { id -> releaseOrphans(orphans, id) } }
+    }
+
+    // A lesson whose orphans file is a link keeps its frames held: written through it, they would land where it
+    // leads, and the throw would stop whichever grading's frame asked for the release (#378).
+    private fun releaseOrphans(orphans: Path, lessonId: Long) {
+        val file = orphans.resolve("$lessonId$SUFFIX")
+        if (isThereButNotAFile(file)) return
+        heldOrphans.remove(lessonId)?.let { held -> appendedAll(file, synchronized(held) { held.toList() }) }
     }
 
     private fun flushEverything() {
@@ -569,6 +587,11 @@ class FileRawSessionLog(
                 "holds more than {} bytes, or git has tracked its name. Said once."
         private const val ORPHANS_UNANSWERED =
             "{} orphaned-frame file(s) were not read: git could not say what it has ever tracked under .ps. Said once."
+        private const val ORPHAN_NOT_A_FILE =
+            "An orphaned frame was held in memory rather than written: where its lesson's orphans go is not a " +
+                "regular file — a link, most likely — and an append-only file is never replaced. It is written " +
+                "once a regular file or nothing stands there, and lost if the server stops first. Said once."
+        private const val ORPHAN_NOT_A_FILE_KEY = "orphan not a file"
         private const val ORPHANS_KEY = "orphans: "
         private const val ORPHANS_PASSED_KEY = "orphans passed over"
         private const val ORPHANS_UNANSWERED_KEY = "orphans unanswered"
