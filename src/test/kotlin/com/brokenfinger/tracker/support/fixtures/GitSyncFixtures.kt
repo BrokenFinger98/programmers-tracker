@@ -18,4 +18,6 @@ private object QuietGitSync : GitSync {
     override fun push(): Boolean = true
 
     override fun hasRemote(): Boolean = true
+
+    override fun hasPushCredential(): Boolean = false
 }
