@@ -1,24 +1,22 @@
 package com.brokenfinger.tracker.adapter.git
 
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -242,7 +240,7 @@ class CommandLineGitSyncTest {
         val fresh = Files.createDirectories(base.resolve("fresh-install"))
         val sync = CommandLineGitSync(fresh) { }
 
-        val heard = warningsWhile {
+        val heard = warningsWhile(CommandLineGitSync::class) {
             repeat(3) { sync.commitSubmission(aWrongSubmit(), listOf(fresh.resolve("Solution.java"))) shouldBe false }
             sync.reconcile() shouldBe false
             sync.push() shouldBe false
@@ -269,7 +267,7 @@ class CommandLineGitSyncTest {
 
         val sync = CommandLineGitSync(records) { }
 
-        val heard = warningsWhile { sync.reconcile() shouldBe false }
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe false }
         heard.single() shouldContain "not a git repository"
         // The proof that matters: the enclosing project's work was never touched.
         git("status", "--porcelain", at = enclosing) shouldContain "secret-wip.txt"
@@ -285,7 +283,7 @@ class CommandLineGitSyncTest {
         git("init", "-b", "main", at = fresh)
         Files.writeString(fresh.resolve("note.md"), "the user fixed it while we were running")
 
-        warningsWhile { sync.reconcile() shouldBe false } shouldContainExactly emptyList()
+        warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe false } shouldContainExactly emptyList()
         git("status", "--porcelain", at = fresh).trim() shouldBe "?? note.md"
     }
 
@@ -385,13 +383,48 @@ class CommandLineGitSyncTest {
         statusOf(".ps/git-credentials") shouldBe "A  .ps/git-credentials"
     }
 
-    /** What this class said while [action] ran. Logback is what the application logs through. */
-    private fun warningsWhile(action: () -> Unit): List<String> {
-        val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        logger.addAppender(appender)
-        runCatching(action).also { logger.detachAppender(appender) }.getOrThrow()
-        return appender.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+    /**
+     * Reconciliation leaves `.ps/` out either way, but every other rule in `.gitignore` — Finder
+     * noise, editor state — stands or falls with the file. So git not ignoring `.ps/` is said, once,
+     * with its likely causes, and with nothing read out of any file.
+     */
+    @Test
+    fun `git not ignoring the state directory is said once, with its likely cause`() {
+        aPushTokenIn(root)
+        written("log/submissions.jsonl", RECORD)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(3) { sync.reconcile() shouldBe true } }
+
+        heard.size shouldBe 1
+        heard.single() shouldContain "git does not ignore .ps/"
+        heard.single() shouldContain "symbolic link"
+        heard.single() shouldContain "leaves .ps/ out regardless"
+        heard.single() shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /**
+     * The rule the server writes is `.ps/`, which git applies to directories only, so a question
+     * about `.ps` before the directory exists is answered "not ignored". A fresh repository has no
+     * state directory yet, and its working rule is not broken.
+     */
+    @Test
+    fun `nothing is said when the rule works, even before the state directory exists`() {
+        written(".gitignore", ".ps/\n")
+        written("log/submissions.jsonl", RECORD)
+
+        warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true } shouldContainExactly emptyList()
+    }
+
+    /** Git answers "not ignored" for a path it tracks, and a file forced into the index is tracked. The rule still works. */
+    @Test
+    fun `a state file staged by hand does not make a working rule look broken`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        git("add", "--force", "--", ".ps/git-credentials")
+        written("log/submissions.jsonl", RECORD)
+
+        warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true } shouldContainExactly emptyList()
     }
 
     private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor)

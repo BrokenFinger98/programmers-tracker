@@ -9,6 +9,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * [GitSync] over the `git` command line, run inside the record repository.
@@ -52,6 +53,9 @@ class CommandLineGitSync(
      * calls still ask once.
      */
     private val isRepository: Boolean by lazy { detectRepository() }
+
+    /** Whether git's ignore rules for `.ps/` were already asked about — once, like [isRepository]. */
+    private val stateIgnoreAsked = AtomicBoolean()
 
     override fun commitSubmission(record: SubmissionRecord, paths: List<Path>): Boolean =
         inRepository("commit") { commitScoped(record, paths) }
@@ -113,8 +117,26 @@ class CommandLineGitSync(
     }
 
     private fun commitEverything(): Boolean {
+        warnOnceUnlessStateIgnored()
         if (!isDirty(RECONCILE_SCOPE)) return true
         return retryingOnContention("reconcile") { stageAllAndCommit() }
+    }
+
+    /**
+     * Says once per instance, on the first reconciliation, when git's own rules do not ignore
+     * `.ps/` — a `.gitignore` without the rule, or one git cannot read, such as a link. The
+     * pathspec keeps `.ps/` out of reconciliation either way; the warning is for every other rule
+     * in that file, which stands or falls with it, and for every `git add` that is not ours.
+     *
+     * The question is the rules', so it is asked as `.ps/` and without the index. Asked as `.ps`,
+     * git applies the directory rule `.ps/` only to a directory that exists, and a fresh repository
+     * has none yet; asked of the index, a state file someone staged by hand reads as "not
+     * ignored" because it is tracked. Each would report a working rule as broken.
+     */
+    private fun warnOnceUnlessStateIgnored() {
+        if (stateIgnoreAsked.getAndSet(true)) return
+        if (git(listOf("check-ignore", "--quiet", "--no-index", STATE_DIRECTORY)).code != NOT_IGNORED) return
+        logger.warn(STATE_NOT_IGNORED, root)
     }
 
     private fun pushed(): Boolean {
@@ -265,6 +287,18 @@ class CommandLineGitSync(
         const val NOT_A_REPOSITORY =
             "{} is not a git repository, so records are written but never committed. " +
                 "Run `git init` there and restart to keep a history — this is said only once."
+
+        private const val STATE_NOT_IGNORED =
+            "git does not ignore .ps/ in {}: its .gitignore lacks the rule, or git cannot read the " +
+                "file — git never follows a .gitignore that is a symbolic link, and then none of its " +
+                "rules (.DS_Store, editor state) apply. Reconciliation leaves .ps/ out regardless. " +
+                "Make .gitignore a regular file that holds the rule. This is said only once."
+
+        /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
+        private const val STATE_DIRECTORY = ".ps/"
+
+        /** `git check-ignore` exits 1 for a path no rule ignores; 0 is ignored, 128 is an error. */
+        private const val NOT_IGNORED = 1
 
         /**
          * Four retries and then the next reconciliation takes over. An external lock holder
