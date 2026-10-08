@@ -76,6 +76,14 @@ interface RawSessionLog {
     fun unprocessed(): List<RawSession>
 
     /**
+     * What the last [unprocessed] left on the work list without returning it (#377): sessions refused with
+     * where they lie, named in git's history, kept while git could not say, or not regular files. They stay
+     * there, unread, until a later start; until then no record represents them, and a reader of the history
+     * has to be told so (#169). Nothing left, before [unprocessed] has run.
+     */
+    fun unreplayed(): LeftUnreplayed
+
+    /**
      * What has been orphaned, per lesson, so it can be reported rather than merely written.
      *
      * [orphaned] announces each frame once, in a warning, at the moment it arrives. After
@@ -97,6 +105,21 @@ interface RawSessionLog {
  * stranded and *where to read it*, and stops.
  */
 data class OrphanedFrames(val lessonId: Long, val frames: Int, val path: Path)
+
+/**
+ * Sessions a start left on the work list without replaying them (#377): [counted] of them, and whether a raw
+ * directory that could not be listed — through a link, or at all — may hold more ([uncounted]). A count and a
+ * flag, never a guess at how many lie where nothing was listed.
+ */
+data class LeftUnreplayed(val counted: Int, val uncounted: Boolean) {
+    /** Whether the work list was replayed whole. */
+    fun isNothing(): Boolean = counted == 0 && !uncounted
+
+    companion object {
+        /** A start that left nothing, or none yet. */
+        val NOTHING = LeftUnreplayed(0, uncounted = false)
+    }
+}
 
 /**
  * Identity of one raw session log. It doubles as a file name, so it is constrained to

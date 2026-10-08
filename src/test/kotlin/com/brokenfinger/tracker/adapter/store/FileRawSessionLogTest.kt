@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.adapter.git.TrackedStateEntries
+import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
@@ -715,6 +716,77 @@ class FileRawSessionLogTest {
         }
 
         heard.single() shouldContain "1 raw session(s) were left in place, not replayed: git could not say"
+    }
+
+    // What a start leaves unreplayed is kept for the history's readers (#377, #169) ---------------
+
+    /**
+     * Left in place at a start, a session is a grading no record represents until a later start, and MCP said
+     * nothing of it: the WARN reached the log alone (the review of PR #395). The log keeps the count for readers.
+     */
+    @Test
+    fun `sessions a start leaves in place are counted for the history's readers`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val log = logGuardedBy(aStateDirectory(root) { true })
+
+        log.unprocessed()
+
+        log.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
+    }
+
+    @Test
+    fun `sessions git has known, or could not vouch for, are counted as left`() {
+        aSessionLeftBehind(120804)
+        aSessionLeftBehind(131528)
+        val known = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = setOf("raw/$A_SESSION"))))
+        val unanswered = logGuardedBy(aStateDirectory(root, ChangingAnswer(false, history = null)))
+
+        known.unprocessed()
+        unanswered.unprocessed()
+
+        known.unreplayed() shouldBe LeftUnreplayed(1, uncounted = false)
+        unanswered.unreplayed() shouldBe LeftUnreplayed(2, uncounted = false)
+    }
+
+    @Test
+    fun `a session file that is a link is counted as left`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val frames = Files.createDirectories(root.resolve("problems/zz")).resolve("frames.jsonl")
+        aLink(root.resolve(".ps/raw/$A_SESSION"), Files.writeString(frames, """{"n":1}""" + "\n"))
+        val log = logGuardedBy(aStateDirectory(root))
+
+        log.unprocessed()
+
+        log.unreplayed() shouldBe LeftUnreplayed(1, uncounted = false)
+    }
+
+    /** Nothing is listed through a link, so nothing is counted there: the readers are told it may hold some. */
+    @Test
+    fun `a raw directory that was not listed may hold sessions, uncounted`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve(A_SESSION), """{"n":1}""" + "\n")
+        aLink(root.resolve(".ps/raw"), elsewhere)
+        val log = logGuardedBy(aStateDirectory(root))
+
+        log.unprocessed()
+
+        log.unreplayed() shouldBe LeftUnreplayed(0, uncounted = true)
+    }
+
+    /** Each start answers for itself: once the work list is replayed whole, nothing is said to be left. */
+    @Test
+    fun `a work list replayed whole leaves nothing, though an earlier start left some`() {
+        val git = ChangingAnswer(true)
+        aSessionLeftBehind()
+        val log = logGuardedBy(aStateDirectory(root, git))
+        log.unprocessed()
+        git.answer = false
+
+        log.unprocessed() shouldHaveSize 1
+
+        log.unreplayed() shouldBe LeftUnreplayed.NOTHING
     }
 
     @Test

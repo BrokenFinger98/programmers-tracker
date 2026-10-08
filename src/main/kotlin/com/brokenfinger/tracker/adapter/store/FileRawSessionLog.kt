@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
@@ -84,6 +85,10 @@ class FileRawSessionLog(
     private val heldChars = AtomicLong()
 
     private val said = ConcurrentHashMap.newKeySet<String>()
+
+    /** What the last [unprocessed] left on the work list, for the history's readers (#377). */
+    @Volatile
+    private var left = LeftUnreplayed.NOTHING
 
     /**
      * A name no other session holds.
@@ -205,10 +210,19 @@ class FileRawSessionLog(
      * and a replay records it as a grading of the owner's. Otherwise nothing is read: each session is left
      * where it is, never moved or deleted, since it may be the owner's own. Git is asked first and the links
      * checked after, just before the listing, so a link swapped in while git answers is not listed through.
+     * What is left is kept for [unreplayed] until the next call.
      */
     override fun unprocessed(): List<RawSession> {
-        if (!Files.isDirectory(directory)) return emptyList()
-        val guard = guard ?: return sessionsIn(directory)
+        val work = workList()
+        left = work.left
+        return work.replayable
+    }
+
+    override fun unreplayed(): LeftUnreplayed = left
+
+    private fun workList(): WorkList {
+        if (!Files.isDirectory(directory)) return WorkList.leaving(0)
+        val guard = guard ?: return everyFileIn(sessionsIn(directory))
         val state = guard.forWriting()
         if (state is StateDirectory.Refused) return leftInPlace(state.refusal, guard.pathFor(RAW))
         return when (val raw = guard.pathFor(RAW)) {
@@ -217,19 +231,23 @@ class FileRawSessionLog(
         }
     }
 
+    // Built bare, as tests build it, the log has no guard and replays every regular file.
+    private fun everyFileIn(listed: Listing): WorkList =
+        WorkList(listed.files, LeftUnreplayed(listed.others, uncounted = false))
+
     // A session git has ever tracked, in any spelling, may be what a pull delivered, and untracking it leaves the
     // file behind: never replayed (#377). One question to git, only when a session waits; unanswered, none is.
-    private fun unknownToGit(sessions: List<RawSession>, guard: StateDirectory): List<RawSession> {
-        if (sessions.isEmpty()) return sessions
-        val known = guard.pathsEverTracked() ?: return unanswered(sessions)
-        val (delivered, ours) = sessions.partition { session -> known.any { isPathOf(session, it) } }
+    private fun unknownToGit(listed: Listing, guard: StateDirectory): WorkList {
+        if (listed.files.isEmpty()) return WorkList.leaving(listed.others)
+        val known = guard.pathsEverTracked() ?: return unanswered(listed)
+        val (delivered, ours) = listed.files.partition { session -> known.any { isPathOf(session, it) } }
         if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
-        return ours
+        return WorkList(ours, LeftUnreplayed(delivered.size + listed.others, uncounted = false))
     }
 
-    private fun unanswered(sessions: List<RawSession>): List<RawSession> {
-        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, sessions.size) }
-        return emptyList()
+    private fun unanswered(listed: Listing): WorkList {
+        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size) }
+        return WorkList.leaving(listed.files.size + listed.others)
     }
 
     // `raw/<name>` below the state directory, in any case: git keeps a name as it was committed, and a filesystem
@@ -241,11 +259,11 @@ class FileRawSessionLog(
     }
 
     // Regular files alone (#377): the tracker writes no link there, so one named like a session is not its own,
-    // and is never read through. Those passed over are said once, by how many.
-    private fun sessionsIn(raw: Path): List<RawSession> {
+    // and is never read through. Those passed over are said once, by how many, and counted as left.
+    private fun sessionsIn(raw: Path): Listing {
         val (files, others) = namedLikeSessions(raw).partition(::isARegularFile)
         if (others.isNotEmpty()) sayOnce(NOT_A_FILE) { logger.warn(NOT_REGULAR_FILES, others.size) }
-        return files.sortedBy { it.id.value }
+        return Listing(files.sortedBy { it.id.value }, others.size)
     }
 
     private fun isARegularFile(session: RawSession): Boolean =
@@ -254,17 +272,20 @@ class FileRawSessionLog(
     private fun namedLikeSessions(raw: Path): List<RawSession> =
         Files.list(raw).use { entries -> entries.toList().mapNotNull { sessionOf(it) } }
 
-    // Said once with how many and why. Counted only where the directory was inspected and no link is on the way;
-    // otherwise nothing is listed, and the message names no link that may not be there.
-    private fun leftInPlace(refusal: StateDirectory.Refusal, raw: StateDirectory.Inspection): List<RawSession> {
-        val left = (raw as? StateDirectory.Usable)?.let { sessionsIn(it.directory).size }
-        if (left != 0) sayOnce("$NOT_REPLAYED${refusal.name}") { warnLeft(left, refusal) }
-        return emptyList()
+    // Said once with how many and why. Counted only where the directory was inspected and no link is on the way.
+    private fun leftInPlace(refusal: StateDirectory.Refusal, raw: StateDirectory.Inspection): WorkList {
+        val listed = (raw as? StateDirectory.Usable)?.let { sessionsIn(it.directory) } ?: return notCounted(refusal)
+        if (listed.files.isNotEmpty()) {
+            sayOnce("$NOT_REPLAYED${refusal.name}") { logger.warn(LEFT_IN_PLACE, listed.files.size, refusal.reason) }
+        }
+        return WorkList.leaving(listed.files.size + listed.others)
     }
 
-    private fun warnLeft(left: Int?, refusal: StateDirectory.Refusal) {
-        if (left == null) return logger.warn(NOT_COUNTED, refusal.reason)
-        logger.warn(LEFT_IN_PLACE, left, refusal.reason)
+    // Nothing is listed through a link or where the directory could not be inspected, so nothing is counted, and
+    // the message names no link that may not be there.
+    private fun notCounted(refusal: StateDirectory.Refusal): WorkList {
+        sayOnce("$NOT_REPLAYED${refusal.name}") { logger.warn(NOT_COUNTED, refusal.reason) }
+        return WorkList(emptyList(), LeftUnreplayed(0, uncounted = true))
     }
 
     private fun sessionOf(file: Path): RawSession? {
@@ -422,6 +443,16 @@ class FileRawSessionLog(
     }
 
     private enum class Verdict { UNDECIDED, DISK, MEMORY }
+
+    // Named like sessions in a raw directory: the regular files, and how many others were passed over.
+    private class Listing(val files: List<RawSession>, val others: Int)
+
+    // What a start replays, and what it leaves on the work list for a later one.
+    private class WorkList(val replayable: List<RawSession>, val left: LeftUnreplayed) {
+        companion object {
+            fun leaving(count: Int) = WorkList(emptyList(), LeftUnreplayed(count, uncounted = false))
+        }
+    }
 
     companion object {
         // Basic ISO, UTC, millisecond precision: sortable as text and colon-free, because

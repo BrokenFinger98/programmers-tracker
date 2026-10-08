@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.mcp
 
+import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.OrphanedFrames
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
@@ -184,11 +185,17 @@ class McpToolInvoker(private val query: RecordQuery) {
      * Counts, not prose: the explanation is in every tool's description, which a client receives
      * once from `tools/list`, and repeating a paragraph on every answer is weight the client
      * pays for on every call (#187).
+     *
+     * `sessionsNotReplayed` counts the sessions the last start left on its work list rather than
+     * replay, and `rawDirectoryNotListed` says one could not be listed, so how many it holds is
+     * unknown (#377). Each is written only when it has something to say.
      */
-    private fun incompleteHistory(orphans: List<OrphanedFrames>): JsonObject = buildJsonObject {
+    private fun incompleteHistory(orphans: List<OrphanedFrames>, left: LeftUnreplayed): JsonObject = buildJsonObject {
         put("lessonsWithOrphanedFrames", orphans.size)
         put("frames", orphans.sumOf { it.frames })
         put("lessons", JsonArray(orphans.map { JsonPrimitive(it.lessonId) }))
+        if (left.counted > 0) put("sessionsNotReplayed", left.counted)
+        if (left.uncounted) put("rawDirectoryNotListed", true)
     }
 
     // An absent key is omitted rather than written as null — it means the grouping value
@@ -283,8 +290,9 @@ class McpToolInvoker(private val query: RecordQuery) {
      */
     private fun withGaps(payload: JsonObject): JsonObject {
         val orphans = query.orphanedFrames()
-        if (orphans.isEmpty()) return payload
-        return JsonObject(mapOf("incompleteHistory" to incompleteHistory(orphans)) + payload)
+        val left = query.unreplayedSessions()
+        if (orphans.isEmpty() && left.isNothing()) return payload
+        return JsonObject(mapOf("incompleteHistory" to incompleteHistory(orphans, left)) + payload)
     }
 
     private fun failed(message: String): JsonObject = buildJsonObject {

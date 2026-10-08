@@ -303,6 +303,15 @@ record represents** — a grading whose opening frame was missed cannot be turne
 of them exist on the author's machine from defects fixed on 2026-08-11. The field names the
 lessons and counts the frames.
 
+It also says so when the last start left raw sessions on its work list rather than replay them, and
+`sessionsNotReplayed` counts them. A start leaves a session where it is in four cases: the state
+directory is not the tracker's own, git tracks something under it, git has ever tracked that session's
+name (a pull can deliver one), or git cannot say what it has tracked. Until a later start replays them,
+they are gradings no record represents. Where the raw directory could not be listed at all, through a link
+or otherwise, nothing there was counted, so `rawDirectoryNotListed` says so instead of a count. Unlike
+orphaned frames, these can still become records: a start that finds the cause gone replays them. A
+session git has tracked is the exception and is never replayed.
+
 `incompleteHistory` is **the first key of an answer**, ahead of the payload, in `structuredContent`
 and in the text copy of it alike. A client that cuts a large answer cuts its end, and a warning at
 the end was the first thing lost: the counts arrived looking whole. Claude Code caps a tool result at
