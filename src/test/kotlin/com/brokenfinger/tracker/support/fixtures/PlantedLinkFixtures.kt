@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.adapter.git.PushCredential
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
 
 // Object mother for a planted link (dev rules §6.4, #354). Git stores symbolic links, so a records
@@ -73,9 +74,20 @@ fun <T> sealedWhile(directory: Path, action: () -> T): T {
     }
 }
 
-/** [path] made a FIFO, which only `mkfifo` makes; false where there is none to run. Its parent must exist. */
-fun madeFifo(path: Path): Boolean =
+/**
+ * [path] made a FIFO, which only `mkfifo` makes: false where there is none to run, and false where one ran and no
+ * FIFO is there. CI's Windows runner has an `mkfifo` that exits 0, and the two tests that trusted its exit code found
+ * nothing at [path] (PR #401). Its parent must exist.
+ */
+fun madeFifo(path: Path): Boolean = ranMkfifo(path) && isAFifo(path)
+
+private fun ranMkfifo(path: Path): Boolean =
     runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false)
+
+// Neither a regular file, a directory nor a link, as the JVM sees one: what a FIFO is.
+private fun isAFifo(path: Path): Boolean = runCatching {
+    Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS).isOther
+}.getOrDefault(false)
 
 /** `.p` and U+017F, LATIN SMALL LETTER LONG S, which case-folds to `s`: APFS answers `.ps` with it (#360). */
 const val A_LONG_S_STATE_DIRECTORY = ".pſ"

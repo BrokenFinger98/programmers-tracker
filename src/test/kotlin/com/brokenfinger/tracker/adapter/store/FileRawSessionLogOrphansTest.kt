@@ -87,6 +87,7 @@ class FileRawSessionLogOrphansTest {
     @Test
     @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     fun `a FIFO under orphans is never opened, and the call returns at once`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
         val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
         assumeTrue(madeFifo(orphans.resolve("1.jsonl")), "this test makes a FIFO")
 

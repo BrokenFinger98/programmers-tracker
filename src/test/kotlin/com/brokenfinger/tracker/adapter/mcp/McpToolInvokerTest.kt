@@ -371,6 +371,7 @@ class McpToolInvokerTest {
     @Test
     @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     fun `a FIFO under orphans neither hangs a tool call nor goes unmentioned`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
         val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
         assumeTrue(madeFifo(orphans.resolve("1.jsonl")), "this test makes a FIFO")
         val invoker = invokerOver(aSubmissionRecord())
