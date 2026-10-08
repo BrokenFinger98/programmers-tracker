@@ -14,9 +14,11 @@ import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
 import com.brokenfinger.tracker.support.fixtures.aRawSessionId
 import com.brokenfinger.tracker.support.fixtures.aSessionOf
 import com.brokenfinger.tracker.support.fixtures.aSettledCapture
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.aTruncatedStream
 import com.brokenfinger.tracker.support.fixtures.anAssembledSession
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContainExactly
@@ -295,14 +297,119 @@ class RecordWriterTest {
             logLines() shouldHaveSize 2
         }
 
+    /**
+     * A grading refused while the server runs keeps nothing it took (#387's review). Measured in the deployed image:
+     * with `log/` made a link after attempt 1, two gradings were refused, and the first after the link was gone took
+     * attempt 4, beside copies 002 and 003 that no record named. Each refused grading now takes its copy back, and
+     * what it took in memory is read again from the log, so the next grading is numbered as a restart would number it.
+     */
+    @Test
+    fun `a grading refused while the server runs takes no number from the next one`(@TempDir outside: Path) =
+        runBlocking<Unit> {
+            assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+            val writer = writer(rawLog = boundedRawLog())
+            writer.write(aSubmit(1, liveRaw("g1.jsonl")))
+            linkTheLog(outside)
+            repeat(2) { shouldThrow<IOException> { writer.write(aSubmit(it + 2, liveRaw("g${it + 2}.jsonl"))) } }
+            unlinkTheLog(outside)
+
+            val next = writer.write(aSubmit(4, liveRaw("g4.jsonl")))!!
+
+            next.attempt shouldBe 2
+            namesIn(root.resolve(next.rawPath!!).parent) shouldBe listOf("001.raw.jsonl", "002.raw.jsonl")
+            namesIn(rawDirectory()) shouldBe listOf("g2.jsonl", "g3.jsonl")
+        }
+
+    /**
+     * And a restart before any other grading replays them under their own numbers, each beside its own copy (#387's
+     * review). Measured: the numbers were right, but each copy met the one its refusal had left, so neither record had
+     * its frames beside it.
+     */
+    @Test
+    fun `a refused grading replays under its own number, with its copy beside it`(@TempDir outside: Path) =
+        runBlocking<Unit> {
+            assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+            val running = writer(rawLog = boundedRawLog())
+            running.write(aSubmit(1, liveRaw("g1.jsonl")))
+            linkTheLog(outside)
+            repeat(2) { shouldThrow<IOException> { running.write(aSubmit(it + 2, liveRaw("g${it + 2}.jsonl"))) } }
+            unlinkTheLog(outside)
+            val restarted = writer(rawLog = boundedRawLog())
+
+            val replayed = (2..3).map { restarted.replay(aSubmit(it, aRawSessionId("g$it.jsonl")))!! }
+
+            replayed.map { it.attempt } shouldBe listOf(2, 3)
+            replayed.map { it.rawPath?.substringAfterLast('/') } shouldBe listOf("002.raw.jsonl", "003.raw.jsonl")
+        }
+
+    /** What a failed append took goes back even when nothing was copied — the shape a full disk leaves. */
+    @Test
+    fun `a failed append gives its number back`() = runBlocking<Unit> {
+        val store = FailingStore(JsonlRecordStore.under(root))
+        val writer = writer(store)
+        shouldThrow<IllegalStateException> { writer.write(aSubmit(1)) }
+        store.failing = false
+
+        writer.write(aSubmit(2))!!.attempt shouldBe 1
+    }
+
+    /** Nor does it leave a gap: the next grading's is measured from the last one recorded, as after a restart. */
+    @Test
+    fun `a failed append leaves no gap behind`() = runBlocking<Unit> {
+        val moving = MovingClock()
+        val store = FailingStore(JsonlRecordStore.under(root)).apply { failing = false }
+        val writer = writer(store, clock = moving)
+        writer.write(aSubmit(1))
+        moving.advance(Duration.ofSeconds(100))
+        store.failing = true
+        shouldThrow<IllegalStateException> { writer.write(aSubmit(2)) }
+        store.failing = false
+        moving.advance(Duration.ofSeconds(200))
+
+        writer.write(aSubmit(3))!!.sincePrevSec shouldBe 300
+    }
+
+    /**
+     * A copy that could not be taken back — its frames were held only in memory, or the delete failed — keeps its
+     * number taken, so no later grading is numbered into it while the server runs; and it is said, with where it lies.
+     */
+    @Test
+    fun `a copy that cannot be taken back keeps its number taken, and says so`() = runBlocking<Unit> {
+        val store = FailingStore(JsonlRecordStore.under(root))
+        val writer = writer(store, rawLog = KeptCopies(FileRawSessionLog(rawDirectory())))
+        val heard = warningsWhile(RecordWriter::class) {
+            runBlocking { shouldThrow<IllegalStateException> { writer.write(aSubmit(1, liveRaw("g1.jsonl"))) } }
+        }
+        store.failing = false
+
+        writer.write(aSubmit(2, liveRaw("g2.jsonl")))!!.attempt shouldBe 2
+        heard.single() shouldContain "attempts/001.raw.jsonl was kept"
+    }
+
+    // The raw log as the composition root builds it: copies walked through no link, `.ps` checked (#360, #361).
+    private fun boundedRawLog(): RawSessionLog =
+        FileRawSessionLog.under(root, Clock.fixed(NOW, ZoneOffset.UTC), aStateDirectory(root))
+
+    // `log/` turned into a link while the server runs, as a pull can deliver one — and then the owner's repair.
+    private fun linkTheLog(outside: Path) {
+        Files.move(root.resolve("log"), outside.resolve("log"))
+        aLink(root.resolve("log"), outside.resolve("log"))
+    }
+
+    private fun unlinkTheLog(outside: Path) {
+        Files.delete(root.resolve("log"))
+        Files.move(outside.resolve("log"), root.resolve("log"))
+    }
+
     private fun writer(
         store: RecordStore = JsonlRecordStore.under(root),
         clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC),
+        rawLog: RawSessionLog = FileRawSessionLog(rawDirectory()),
     ): RecordWriter {
         val layout = RecordLayout(root)
         return RecordWriter.of(
             store = store,
-            rawLog = FileRawSessionLog(rawDirectory()),
+            rawLog = rawLog,
             rawAttemptPath = AttemptRawPath(layout::rawAttemptFile),
             recordRoot = root,
             git = aQuietGitSync(),
@@ -399,7 +506,8 @@ class RecordWriterTest {
         stored() shouldHaveSize 1
     }
 
-    private fun aSubmit(nth: Int) = aSettledCapture(frames = listOf("""{"type":"finish","nth":$nth}"""))
+    private fun aSubmit(nth: Int, rawSessionId: RawSessionId = aRawSessionId()) =
+        aSettledCapture(rawSessionId = rawSessionId, frames = listOf("""{"type":"finish","nth":$nth}"""))
 
     private fun aRun(rawSessionId: RawSessionId = aRawSessionId()) = aSettledCapture(
         session = anAssembledSession("algorithm-run-pass.jsonl"),
@@ -437,6 +545,11 @@ private class UnreadableStore(private val delegate: RecordStore) : RecordStore {
         if (unreadable) throw IOException("the log could not be read")
         return delegate.read()
     }
+}
+
+/** A raw log that cannot take a copy back, as when its frames were held only in memory (#387's review). */
+private class KeptCopies(private val delegate: RawSessionLog) : RawSessionLog by delegate {
+    override fun withdraw(session: RawSessionId, copy: Path): Boolean = false
 }
 
 /** Fails every append until told otherwise — the shape a full disk leaves behind. */

@@ -501,6 +501,95 @@ class FileRawSessionLogTest {
         Files.exists(nowhere, LinkOption.NOFOLLOW_LINKS) shouldBe false
     }
 
+    // A copy taken back when its record was not appended (#387's review) ----------------------------------------
+
+    /** The copy goes, so a replay can make it again under the number it is then given; the work list keeps the frames. */
+    @Test
+    fun `a copy whose every frame is on the work list is taken back, and the frames stay there`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+
+        log.withdraw(session, copy) shouldBe true
+
+        Files.exists(copy, LinkOption.NOFOLLOW_LINKS) shouldBe false
+        Files.readAllLines(stateRaw(session)) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** Frames held in memory while `.ps` was refused have no other copy on disk, so theirs is kept. */
+    @Test
+    fun `a copy holding frames held only in memory is kept, as their one copy on disk`() {
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+
+        log.withdraw(session, copy) shouldBe false
+
+        Files.readAllLines(copy) shouldContainExactly listOf("""{"n":1}""")
+    }
+
+    /** Only this log's own copy: something else standing where it was — a link — is not its to delete. */
+    @Test
+    fun `what stands where the copy was and is no regular file is kept`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.delete(copy)
+        aLink(copy, Files.writeString(outside.resolve("not-ours.jsonl"), "kept\n"))
+
+        log.withdraw(session, copy) shouldBe false
+
+        Files.isSymbolicLink(copy) shouldBe true
+        Files.readString(outside.resolve("not-ours.jsonl")) shouldBe "kept\n"
+    }
+
+    /** And nothing is deleted through a directory that became a link after the copy was made. */
+    @Test
+    fun `nothing is taken back through an attempts directory that became a link`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.move(copy.parent, root.resolve("moved-attempts"))
+        Files.writeString(outside.resolve(copy.fileName.toString()), "not ours\n")
+        aLink(copy.parent, outside)
+
+        shouldThrow<RefusedWriteException> { log.withdraw(session, copy) }
+
+        Files.readString(outside.resolve(copy.fileName.toString())) shouldBe "not ours\n"
+    }
+
+    @Test
+    fun `a copy already gone is nothing to take back`() {
+        val log = boundedLog()
+        val session = sessionOf(log)
+        val copy = log.complete(session, attemptFile())
+        Files.delete(copy)
+
+        log.withdraw(session, copy) shouldBe true
+    }
+
+    /** Built bare, as the guard can be, it takes back its copy where it was told to make it. */
+    @Test
+    fun `a bare log takes its copy back where it made it`() {
+        val log = logAt(startedAt)
+        val session = sessionOf(log)
+        val copy = log.complete(session, root.resolve("attempts/001.raw.jsonl"))
+
+        log.withdraw(session, copy) shouldBe true
+
+        Files.exists(copy) shouldBe false
+    }
+
+    private fun boundedLog(): FileRawSessionLog =
+        FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+
+    private fun sessionOf(log: FileRawSessionLog): RawSessionId =
+        log.start(120804).also { log.append(it, """{"n":1}""") }
+
+    private fun attemptFile(): Path = root.resolve("problems/120804-x/attempts/002.raw.jsonl")
+
     private fun stateRaw(session: RawSessionId): Path = root.resolve(".ps/raw").resolve(session.value)
 
     /** One instant, so every session opened with it collides unless the log prevents it. */

@@ -100,6 +100,16 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
         names.forEach { name -> runCatching { Files.deleteIfExists(real.resolve(name)) } }
     }
 
+    /**
+     * Deletes [target] when it is a regular file, its directory walked through no link and nothing made on the way;
+     * true when nothing is left there (#387's review). Anything else standing there — a link, a directory — is not this
+     * writer's to delete, and is kept: false. A directory on the way that is refused is thrown, as for every write.
+     */
+    fun removeFile(target: Path): Boolean {
+        val directory = bounded(target) { bound.existing(target.toAbsolutePath().parent) } ?: return true
+        return removedIfRegular(directory.resolve(target.fileName))
+    }
+
     // The target's own directory, walked from the real root and created where absent, then the target's name in it.
     // Null from the walk only when a directory vanished between being made and being looked at.
     private fun fileIn(target: Path): Path =
@@ -230,6 +240,17 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
         fun underRoot(layout: RecordLayout, firstNames: Set<String>): RecordWrites =
             underRoot(layout.configuredRoot(), firstNames)
     }
+}
+
+/**
+ * [file] deleted when it is a regular file, never following a link; true when nothing is left there (#387's review).
+ * What else stands there is kept, and false.
+ */
+internal fun removedIfRegular(file: Path): Boolean {
+    if (!isThere(file)) return true
+    if (!Files.isRegularFile(file, NOFOLLOW_LINKS)) return false
+    Files.deleteIfExists(file)
+    return true
 }
 
 /**

@@ -56,21 +56,29 @@ class RecordWriter private constructor(
 ) {
     /**
      * The attempt counter, the gaps and the capture keys, as the log restores them — the one authority for each
-     * (decisions 2 and 6). Read when the first grading needs them rather than when the writer is built, and read again
-     * at the next grading while a read fails, since a failure is never kept (#387).
+     * (decisions 2 and 6). Read when the first grading needs them rather than when the writer is built, read again at
+     * the next grading while a read fails, since a failure is never kept (#387), and read again after an append fails.
      *
      * A log that cannot be read — one a link stands in for is refused — gives no attempt number, and a number counted
      * from nothing could take an attempt that exists and replace that attempt's code. So nothing is recorded meanwhile:
-     * each grading throws, as a failed append does, and keeps its frames on the work list. The first grading after the
-     * log reads again is numbered from it, with no restart.
+     * each grading throws, as a failed append does, and keeps its frames on the work list.
+     *
+     * A grading whose append failed keeps nothing it took (#387's review): its copy is taken back, and its number, its
+     * gap and its key are forgotten with everything held here, for the next grading to read again from the log. So the
+     * first grading after the log reads and appends again is numbered from it, as a restart would number it. Measured
+     * before: with `log/` a link after attempt 1, two refused gradings left copies 002 and 003 that no record named, and
+     * the next grading took attempt 4.
      */
-    private val restored = lazy { Restored.of(store.read()) }
+    @Volatile
+    private var held: Restored? = null
 
-    private val attempts: AttemptAuthority get() = restored.value.attempts
+    private fun restored(): Restored = held ?: Restored.of(store.read()).also { held = it }
 
-    private val gaps: SubmissionGaps get() = restored.value.gaps
+    private val attempts: AttemptAuthority get() = restored().attempts
 
-    private val captured: MutableSet<CaptureKey> get() = restored.value.captured
+    private val gaps: SubmissionGaps get() = restored().gaps
+
+    private val captured: MutableSet<CaptureKey> get() = restored().captured
 
     /**
      * Records one settled grading and returns it, or null when it was a duplicate an
@@ -84,7 +92,7 @@ class RecordWriter private constructor(
         val added = captured.add(key)
         // A write that never landed was never a capture, so a key this call introduced goes
         // back: a retry from the raw log must not be mistaken for a replay of a stored record.
-        runCatching { record(capture, key) }.onFailure { if (added) captured.remove(key) }.getOrThrow()
+        runCatching { record(capture, key) }.onFailure { if (added) released(key) }.getOrThrow()
     }
 
     /**
@@ -109,7 +117,12 @@ class RecordWriter private constructor(
     suspend fun replay(capture: SettledCapture): SubmissionRecord? = withContext(writerDispatcher) {
         val key = capture.captureKey()
         if (!captured.add(key)) return@withContext duplicate(capture)
-        runCatching { record(capture, key) }.onFailure { captured.remove(key) }.getOrThrow()
+        runCatching { record(capture, key) }.onFailure { released(key) }.getOrThrow()
+    }
+
+    // Out of what is held, without reading the log to do it: forgotten, it is read again from a log without this key.
+    private fun released(key: CaptureKey) {
+        held?.captured?.remove(key)
     }
 
     /**
@@ -119,7 +132,8 @@ class RecordWriter private constructor(
      * queue for good, while the log said its frames were kept. Copying leaves the source in
      * place until the record naming its destination is durable; an interruption anywhere
      * before [RawSessionLog.discard] therefore replays, and the capture key drops the
-     * replay as the duplicate it is.
+     * replay as the duplicate it is. An append that fails takes back what this grading took
+     * first, so the replay finds its number free and nothing in its way ([appended]).
      */
     private fun record(capture: SettledCapture, key: CaptureKey): SubmissionRecord {
         val attempt = attempts.allocate(capture.lessonId, capture.action())
@@ -128,7 +142,7 @@ class RecordWriter private constructor(
         // Inside the confined section like the attempt number, and for the same reason: the log
         // is the one authority for both, and a second reader would race the write (#207).
         val record = capture.toRecord(at, attempt, key, copied, gaps.sincePrevious(capture.lessonId, at))
-        store.append(SubmissionRecordJson.encode(record))
+        appended(record, capture)
         retireRaw(capture, copied != null)
         // After the append, inside the same confined section: the examples are a derived
         // write to the problem directory and must not interleave with another grading's
@@ -137,6 +151,33 @@ class RecordWriter private constructor(
         examples.replace(capture.lessonId, capture.problem?.title, capture.session.examples)
         committed(record)
         return record
+    }
+
+    /**
+     * Appends [record], or takes back what it took and rethrows (#387's review): its copy is withdrawn, and what is
+     * held here forgotten, for the log to restore at the next grading. A copy that stays — the one copy on disk of
+     * frames held in memory, or one that could not be deleted — keeps its number taken instead, so no later grading
+     * is numbered into it while the server runs, and is said.
+     */
+    private fun appended(record: SubmissionRecord, capture: SettledCapture) {
+        runCatching { store.append(SubmissionRecordJson.encode(record)) }
+            .onFailure { notAppended(record, capture) }
+            .getOrThrow()
+    }
+
+    private fun notAppended(record: SubmissionRecord, capture: SettledCapture) {
+        val copy = record.rawPath ?: return forget()
+        if (withdrawn(capture, copy)) return forget()
+        logger.warn(KEPT, record.lessonId, copy)
+    }
+
+    private fun withdrawn(capture: SettledCapture, copy: String): Boolean =
+        runCatching { rawLog.withdraw(capture.rawSessionId, recordRoot.resolve(copy)) }
+            .onFailure { logger.warn(NOT_WITHDRAWN, capture.lessonId, it.javaClass.simpleName) }
+            .getOrDefault(false)
+
+    private fun forget() {
+        held = null
     }
 
     /**
@@ -251,6 +292,10 @@ class RecordWriter private constructor(
         private const val NONE_KEPT = "No raw frames were kept for lesson {}, so its record has no raw copy"
         private const val NOT_COPIED =
             "Raw frames for lesson {} were not copied beside the record ({}); they are kept with the runs instead"
+        private const val KEPT =
+            "Lesson {} was not recorded, and the copy of its frames at {} was kept, so its attempt number stays " +
+                "taken until the server restarts"
+        private const val NOT_WITHDRAWN = "The copy of lesson {}'s frames could not be taken back ({})"
 
         /**
          * Opens the writer over an existing record repository, which restores **both** in-memory
