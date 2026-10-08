@@ -60,7 +60,7 @@ object McpPromptCatalog {
 
     // Worded as a tool's refusal is, and quoted the same way; "in that order", because a prompt's order is positional.
     private fun unknownArguments(unknown: Set<String>): String =
-        McpArguments.unknown(ExamPrepPrompt.NAME, unknown, ExamPrepScope.ARGUMENTS) + ", in that order"
+        McpArguments.unknownArgumentsMessage(ExamPrepPrompt.NAME, unknown, ExamPrepScope.ARGUMENTS) + ", in that order"
 
     // Named, because three String? in a row would compile in any order.
     private fun readScope(arguments: JsonObject): ExamPrepScope = ExamPrepScope(

@@ -234,7 +234,7 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun checked(tool: String, arguments: JsonObject): JsonObject {
         val taken = McpToolCatalog.argumentsOf(tool)
         val unknown = arguments.keys - taken.toSet()
-        require(unknown.isEmpty()) { McpArguments.unknown(tool, unknown, taken) }
+        require(unknown.isEmpty()) { McpArguments.unknownArgumentsMessage(tool, unknown, taken) }
         return arguments
     }
 

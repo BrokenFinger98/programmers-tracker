@@ -17,7 +17,7 @@ class McpArgumentsTest {
     /** A key is the client's text: quoted, "a, b" stays one item and a newline cannot break the message (#365). */
     @Test
     fun `each unknown key is quoted as a JSON string, so a comma or a newline stays inside one item`() {
-        val message = McpArguments.unknown("stats", setOf("a, b", "a\nb"), listOf("groupBy"))
+        val message = McpArguments.unknownArgumentsMessage("stats", setOf("a, b", "a\nb"), listOf("groupBy"))
 
         message shouldBe "unknown argument(s): \"a\\nb\", \"a, b\"; stats takes groupBy"
         message shouldNotContain "\n"
@@ -26,7 +26,7 @@ class McpArgumentsTest {
     /** Sorted, so the same call is refused in the same words whatever order its keys came in. */
     @Test
     fun `several unknown keys come back sorted`() {
-        McpArguments.unknown("stats", setOf("b", "a"), listOf("groupBy")) shouldBe
+        McpArguments.unknownArgumentsMessage("stats", setOf("b", "a"), listOf("groupBy")) shouldBe
             "unknown argument(s): \"a\", \"b\"; stats takes groupBy"
     }
 
@@ -35,14 +35,14 @@ class McpArgumentsTest {
     fun `what the owner takes is named in the order given`() {
         val taken = listOf("since", "language", "part", "lessonId", "limit")
 
-        McpArguments.unknown("repair_steps", setOf("verdict"), taken) shouldBe
+        McpArguments.unknownArgumentsMessage("repair_steps", setOf("verdict"), taken) shouldBe
             "unknown argument(s): \"verdict\"; repair_steps takes since, language, part, lessonId, limit"
     }
 
     /** No tool takes none today; one that did must not be answered "takes" and nothing after it. */
     @Test
     fun `an owner that takes no arguments says so`() {
-        McpArguments.unknown("ping", setOf("x"), emptyList()) shouldBe
+        McpArguments.unknownArgumentsMessage("ping", setOf("x"), emptyList()) shouldBe
             "unknown argument(s): \"x\"; ping takes no arguments"
     }
 
