@@ -409,13 +409,13 @@ class CommandLineGitSyncTest {
     fun `a state file staged by hand is not committed by reconciliation`() {
         written(".gitignore", ".ps/\n")
         aPushTokenIn(root)
-        git("add", "--force", "--", ".ps/git-credentials")
+        git("add", "--force", "--", PushCredential.FILE)
         written("log/submissions.jsonl", RECORD)
 
         sync().reconcile() shouldBe true
 
         filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
-        statusOf(".ps/git-credentials") shouldBe "A  .ps/git-credentials"
+        statusOf(PushCredential.FILE) shouldBe "A  ${PushCredential.FILE}"
     }
 
     /**
@@ -434,8 +434,22 @@ class CommandLineGitSyncTest {
         heard.size shouldBe 1
         heard.single() shouldContain "git does not ignore .ps/"
         heard.single() shouldContain "symbolic link"
-        heard.single() shouldContain "leaves .ps/ out regardless"
+        heard.single() shouldContain "own commits still leave .ps/ out"
         heard.single() shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /** The case the warning exists for: a `.gitignore` git will not read, because it is a link. */
+    @Test
+    fun `a gitignore that is a link is said once, with its cause`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".gitignore"), base.resolve("nowhere"))
+        written("log/submissions.jsonl", RECORD)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+
+        heard.single() shouldContain "git does not ignore .ps/"
+        heard.single() shouldContain "symbolic link"
     }
 
     /**
@@ -456,7 +470,7 @@ class CommandLineGitSyncTest {
     fun `a state file staged by hand does not make a working rule look broken`() {
         written(".gitignore", ".ps/\n")
         aPushTokenIn(root)
-        git("add", "--force", "--", ".ps/git-credentials")
+        git("add", "--force", "--", PushCredential.FILE)
         written("log/submissions.jsonl", RECORD)
 
         warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true } shouldContainExactly emptyList()

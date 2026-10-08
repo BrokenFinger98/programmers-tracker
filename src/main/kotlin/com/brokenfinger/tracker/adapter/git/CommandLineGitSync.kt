@@ -37,6 +37,23 @@ import java.util.concurrent.atomic.AtomicBoolean
  * git call is skipped for the lifetime of this instance. Failing each commit forever and
  * logging each one would bury every other message the tool has to say, and the records
  * themselves are written either way.
+ *
+ * **Nothing it commits or pushes carries the push token (#360).** The token lives in `.ps/`,
+ * inside the repository, and a clone or a pull can deliver what switches a single guard off — a
+ * `.gitignore` git will not read, a link where a file was, a name the filesystem folds to `.ps`.
+ * So the guards are layered, each covering what the one before cannot:
+ *
+ * 1. Reconciliation leaves `.ps/` out by pathspec, in any ASCII case, whatever `.gitignore`
+ *    says ([RECONCILE_SCOPE]).
+ * 2. Git runs only while `.ps` is the real state directory ([StateDirectory]): not a link a pull
+ *    swapped in, and not a name the filesystem folds to it.
+ * 3. The credential is replaced, never written through a link ([GithubRemote]), and git is only
+ *    pointed at it while it is a regular file ([PushCredential]).
+ * 4. The content gate: what is staged, before every commit, and every commit a push would send,
+ *    before the push, are searched for the token itself. It is the last line, and the only one
+ *    that does not depend on a path.
+ *
+ * Every refusal is one WARN that names why and never the token, and a false — fail closed.
  */
 class CommandLineGitSync(
     private val root: Path,
@@ -73,7 +90,7 @@ class CommandLineGitSync(
 
     // `git remote` lists names and prints nothing when there is none, so an empty answer is the
     // whole signal. A failure to run it answers false: unknown is not "configured".
-    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.output.isNotBlank() }
+    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
@@ -99,7 +116,7 @@ class CommandLineGitSync(
     // unrelated working tree under our message and pushed it (#93).
     private fun detectRepository(): Boolean {
         val top = runCatching { git(listOf("rev-parse", "--show-toplevel")) }.getOrNull()
-        if (top != null && top.succeeded() && isRoot(top.output.trim())) return true
+        if (top != null && top.succeeded() && isRoot(top.stdout.trim())) return true
         logger.warn(NOT_A_REPOSITORY, root)
         return false
     }
@@ -153,8 +170,8 @@ class CommandLineGitSync(
      */
     private fun warnOnceUnlessStateIgnored() {
         if (stateIgnoreAsked.getAndSet(true)) return
-        if (git(listOf("check-ignore", "--quiet", "--no-index", STATE_DIRECTORY)).code != NOT_IGNORED) return
-        logger.warn(STATE_NOT_IGNORED, root)
+        if (git(listOf("check-ignore", "--quiet", "--no-index", STATE_DIRECTORY)).code != NO_RULE_MATCHED) return
+        logger.warn(STATE_NOT_IGNORED_WARNING, root)
     }
 
     /**
@@ -396,11 +413,13 @@ class CommandLineGitSync(
             "{} is not a git repository, so records are written but never committed. " +
                 "Run `git init` there and restart to keep a history — this is said only once."
 
-        private const val STATE_NOT_IGNORED =
+        private const val STATE_NOT_IGNORED_WARNING =
             "git does not ignore .ps/ in {}: its .gitignore lacks the rule, or git cannot read the " +
                 "file — git never follows a .gitignore that is a symbolic link, and then none of its " +
-                "rules (.DS_Store, editor state) apply. Reconciliation leaves .ps/ out regardless. " +
-                "Make .gitignore a regular file that holds the rule. This is said only once."
+                "rules (.DS_Store, editor state) apply. The tracker's own commits still leave .ps/ out, " +
+                "and it commits or pushes nothing that carries the push token; another tool's git add " +
+                "does not hold back. Make .gitignore a regular file that holds the rule. " +
+                "This is said only once."
 
         /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
         private const val STATE_DIRECTORY = ".ps/"
@@ -439,7 +458,7 @@ class CommandLineGitSync(
         private const val REVISIONS_PER_SEARCH = 256
 
         /** `git check-ignore` exits 1 for a path no rule ignores; 0 is ignored, 128 is an error. */
-        private const val NOT_IGNORED = 1
+        private const val NO_RULE_MATCHED = 1
 
         /**
          * Four retries and then the next reconciliation takes over. An external lock holder

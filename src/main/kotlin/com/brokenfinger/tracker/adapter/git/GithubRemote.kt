@@ -28,8 +28,8 @@ import java.util.concurrent.TimeUnit
  *   never the privacy.
  * - **The token never reaches a log or a remote URL.** [GithubToken] renders masked, and pushes
  *   authenticate through a credential store at `.ps/git-credentials` — owner-only, inside the
- *   directory every record repository already gitignores — so a failed push logged with git's
- *   own words cannot contain it.
+ *   verified state directory — so a failed push logged with git's own words cannot contain it.
+ *   What keeps it out of a commit is [CommandLineGitSync]'s, not the store's location (#360).
  * - **An existing `origin` is left alone, with one exception**: a *GitHub* SSH URL is repointed
  *   at HTTPS. SSH is retired and the image no longer ships `openssh-client`, so leaving it would
  *   not respect a choice — it would guarantee a push that cannot succeed. Any other remote,

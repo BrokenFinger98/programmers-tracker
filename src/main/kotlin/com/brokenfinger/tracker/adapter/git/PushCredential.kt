@@ -11,8 +11,10 @@ import java.nio.file.Path
  * **without writing into the record repository's own config** (#267).
  *
  * The file itself stays where #258 put it — `<records>/.ps/git-credentials`, owner-only, inside
- * the directory the server already gitignores, so it can never be committed and a failed push
- * logged with git's own words can never contain the token.
+ * the state directory the tracker's own commits leave out. A path alone was not enough to keep it
+ * out of a commit (#360), so before every commit and push the token itself is searched for
+ * ([stored] feeds that search). A failed push logged with git's own words cannot contain it: the
+ * remote URL carries none.
  *
  * The *pointer* is the part that moved. It used to be `git config credential.helper` in the
  * record repository's `.git/config`, holding an absolute path — and inside a container that path

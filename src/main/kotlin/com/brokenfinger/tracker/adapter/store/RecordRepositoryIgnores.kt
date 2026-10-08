@@ -42,7 +42,8 @@ import java.nio.file.StandardOpenOption
  * **Never through a link (#360).** Git stores links, so a `.gitignore` can arrive as one, and
  * reading and writing through it put the rules into whatever it pointed at — while git, which
  * never follows a linked `.gitignore`, ignored nothing. A `.gitignore` that is not a regular file
- * is neither read nor written, and said so; one that is gains its missing rules by replacement.
+ * is neither read nor written, and said so; one that is gains its missing rules by replacement,
+ * unless its owner made it read-only.
  *
  * Runs on every boot and appends each rule at most once. Failure is logged, never thrown: a
  * grading Programmers has already broadcast cannot be replayed (protocol §11), and losing one to
