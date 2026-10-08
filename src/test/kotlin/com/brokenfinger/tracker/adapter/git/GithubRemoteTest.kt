@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
@@ -289,6 +290,28 @@ class GithubRemoteTest {
         val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
 
         Files.readString(store) shouldBe "https://x-access-token:someone-else@github.com\n"
+        heard.single() shouldContain "git tracks files under .ps"
+        git("status", "--porcelain").trim() shouldBe ""
+    }
+
+    /**
+     * U1's token half: on APFS a pulled `.pſ/git-credentials` is the store itself, tracked under a
+     * name no ASCII rule folds. The real token was renamed onto it, and another tool's `commit -a`
+     * published it (the review of ea1357c).
+     */
+    @Test
+    fun `stores no token where a fold of the name is tracked`() {
+        assumeTrue(foldsTogether(dir, A_LONG_S_STATE_DIRECTORY, ".ps"), "this filesystem does not fold U+017F")
+        repo.write(".gitignore", ".ps/\n")
+        repo.write(PushCredential.FILE, "https://x-access-token:junk@github.com\n")
+        val blob = repo.git("hash-object", "-w", PushCredential.FILE).trim()
+        repo.git("add", ".gitignore")
+        repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$A_LONG_S_STATE_DIRECTORY/git-credentials")
+        repo.git("commit", "--message", "as a pull delivers it")
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.readString(repo.root.resolve(PushCredential.FILE)) shouldBe "https://x-access-token:junk@github.com\n"
         heard.single() shouldContain "git tracks files under .ps"
         git("status", "--porcelain").trim() shouldBe ""
     }

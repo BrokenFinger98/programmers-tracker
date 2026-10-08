@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
@@ -59,6 +60,34 @@ class TrackedStateEntriesTest {
         repo.write("decoy", "decoy\n")
         val blob = repo.git("hash-object", "-w", "decoy").trim()
         repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,.PS/x")
+
+        TrackedStateEntries(repo.root).any() shouldBe true
+    }
+
+    /**
+     * `.pſ` — `.p` and U+017F — folds to `.ps` on APFS, so `.pſ/x` in the index is a file inside the
+     * real state directory, and an ASCII-only `icase` pathspec never named it (U1, the review of
+     * ea1357c). Asked of the index itself, so it holds where nothing folds as well.
+     */
+    @Test
+    fun `an entry under a Unicode case fold of the name is answered yes`() {
+        repo.write("decoy", "decoy\n")
+        val blob = repo.git("hash-object", "-w", "decoy").trim()
+        repo.git("update-index", "--add", "--cacheinfo", "100644,$blob,$A_LONG_S_STATE_DIRECTORY/x")
+
+        TrackedStateEntries(repo.root).any() shouldBe true
+    }
+
+    /**
+     * Whatever the name, an entry whose first segment is the state directory on disk is under it — a
+     * fold no case rule knows, a short name, a link. A tracked link to `.ps` shows it on any filesystem.
+     */
+    @Test
+    fun `an entry the filesystem resolves to the state directory is answered yes`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val state = Files.createDirectories(repo.root.resolve(".ps"))
+        aLink(repo.root.resolve("elsewhere"), state)
+        repo.git("add", "elsewhere")
 
         TrackedStateEntries(repo.root).any() shouldBe true
     }

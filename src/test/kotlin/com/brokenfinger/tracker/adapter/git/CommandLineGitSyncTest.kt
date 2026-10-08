@@ -851,6 +851,31 @@ class CommandLineGitSyncTest {
         subjects() shouldContainExactly listOf("as a clone delivers it")
     }
 
+    /**
+     * U1, the review of ea1357c: on APFS a pulled `.pſ/timers.json` lands inside the real `.ps`, while
+     * the index records `.pſ/timers.json`. The name on disk stays `.ps`, so the listing passed, and the
+     * ASCII-only `icase` question found nothing tracked: the server rewrote the timers, committed them
+     * and pushed them.
+     */
+    @Test
+    fun `state a fold of the name tracks is never written, committed or pushed`() {
+        assumeTrue(foldsTogether(base, A_LONG_S_STATE_DIRECTORY, ".ps"), "this filesystem does not fold U+017F")
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        val timers = written(".ps/timers.json", "{}")
+        git("add", ".gitignore")
+        trackedAs("$A_LONG_S_STATE_DIRECTORY/timers.json", timers)
+        git("commit", "--message", "as a pull delivers it")
+        val state = StateDirectory(root, TrackedStateEntries(root))
+
+        FileProblemTimer.under(root, Clock.systemUTC(), state).startIfAbsent(120804)
+
+        Files.readString(root.resolve(".ps/timers.json")) shouldBe "{}"
+        sync().reconcile() shouldBe false
+        sync().push() shouldBe false
+        git("ls-tree", "-r", "--name-only", "main", at = remote).trim() shouldBe "README.md"
+    }
+
     /** The same on any case-insensitive volume with `.PS`, where a `.gitignore` git cannot read ignores nothing. */
     @Test
     fun `a state directory the filesystem folds from another case refuses every commit`() {
@@ -1099,6 +1124,15 @@ class CommandLineGitSyncTest {
         val file = root.resolve(relative)
         Files.createDirectories(file.parent)
         return Files.writeString(file, content)
+    }
+
+    /**
+     * [file] recorded in the index as [path] — what a pull leaves behind when it checks out [path] into a
+     * directory the filesystem folds to the one [file] is in.
+     */
+    private fun trackedAs(path: String, file: Path) {
+        val blob = git("hash-object", "-w", root.relativize(file).toString()).trim()
+        git("update-index", "--add", "--cacheinfo", "100644,$blob,$path")
     }
 
     /** A bare repository the record repository already pushed its first commit to. */
