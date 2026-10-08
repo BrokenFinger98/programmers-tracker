@@ -3,6 +3,8 @@ package com.brokenfinger.tracker.application
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.Duration
 import java.time.Instant
 
@@ -16,8 +18,22 @@ class BackupRetryTest {
     fun `the first failure is tried again a minute later`() {
         val retry = BackupRetry.of(null, DUE, FAILED)
 
+        retry.waits(DUE, FAILED) shouldBe true
         retry.waits(DUE, FAILED.plusSeconds(59)) shouldBe true
         retry.waits(DUE, FAILED.plusSeconds(60)) shouldBe false
+    }
+
+    /**
+     * A clock set back after a failure does not stretch the wait (the review of #399): set back 10, 30 or
+     * 60 minutes, the retry came that much later. A check before the failure cannot tell how long it has
+     * been since, so it does not wait.
+     */
+    @ParameterizedTest
+    @ValueSource(longs = [10, 30, 60])
+    fun `a clock set back after a failure does not wait`(minutes: Long) {
+        val (atTheCap, failedAt) = retriesOf(failures = 7).last()
+
+        atTheCap.waits(DUE, failedAt.minus(Duration.ofMinutes(minutes))) shouldBe false
     }
 
     @Test
@@ -37,9 +53,9 @@ class BackupRetryTest {
     /** The next scheduled backup is a new one: it is tried when it falls due, whatever the last one waited for. */
     @Test
     fun `another scheduled backup does not wait`() {
-        val atTheCap = retriesOf(failures = 7).last().first
+        val (atTheCap, failedAt) = retriesOf(failures = 7).last()
 
-        atTheCap.waits(NEXT_DUE, FAILED) shouldBe false
+        atTheCap.waits(NEXT_DUE, failedAt) shouldBe false // inside the hour the last one waits for
     }
 
     @Test
