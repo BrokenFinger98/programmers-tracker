@@ -26,19 +26,17 @@ class SeedLedgerTest {
 
     @Test
     fun `a file still exactly as we wrote it is ours to update`() {
-        write("README.md", "the shipped page")
         ledger().record("README.md", "the shipped page")
 
-        ledger().isUnchanged("README.md", root.resolve("README.md")).shouldBeTrue()
+        ledger().isUnchanged("README.md", bytesOf("the shipped page")).shouldBeTrue()
     }
 
     /** One character. The rule #254 states is that editing is respected forever. */
     @Test
     fun `a file changed by a single character is theirs`() {
-        write("README.md", "the shipped page.")
         ledger().record("README.md", "the shipped page")
 
-        ledger().isUnchanged("README.md", root.resolve("README.md")).shouldBeFalse()
+        ledger().isUnchanged("README.md", bytesOf("the shipped page.")).shouldBeFalse()
     }
 
     /**
@@ -47,37 +45,38 @@ class SeedLedgerTest {
      */
     @Test
     fun `a file we have no record of is treated as edited`() {
-        write("README.md", "whatever was there")
-
-        ledger().isUnchanged("README.md", root.resolve("README.md")).shouldBeFalse()
+        ledger().isUnchanged("README.md", bytesOf("whatever was there")).shouldBeFalse()
     }
 
+    /**
+     * The ledger hashes what it is handed and reads no seed itself (#387): it used to read the file at the path it was
+     * given, through a link if one stood there. The one read of a seed is [VaultDashboard]'s, through the bound its
+     * writer takes.
+     */
     @Test
-    fun `a file that is not there is not unchanged either`() {
+    fun `the ledger answers for the bytes it is handed, and reads no seed`() {
         ledger().record("README.md", "the shipped page")
 
-        ledger().isUnchanged("README.md", root.resolve("README.md")).shouldBeFalse()
+        ledger().isUnchanged("README.md", bytesOf("the shipped page")).shouldBeTrue()
+        Files.exists(root.resolve("README.md")).shouldBeFalse()
     }
 
     /** A corrupt ledger must never become a reason to overwrite somebody's file. */
     @Test
     fun `an unreadable ledger answers edited for everything`() {
-        write("README.md", "the shipped page")
         ledger().record("README.md", "the shipped page")
         Files.writeString(root.resolve(".ps/seeds.json"), "{ this is not json")
 
-        ledger().isUnchanged("README.md", root.resolve("README.md")).shouldBeFalse()
+        ledger().isUnchanged("README.md", bytesOf("the shipped page")).shouldBeFalse()
     }
 
     @Test
     fun `recording one seed does not forget the others`() {
-        write("README.md", "page")
-        write("dashboard.base", "query")
         ledger().record("README.md", "page")
         ledger().record("dashboard.base", "query")
 
-        ledger().isUnchanged("README.md", root.resolve("README.md")).shouldBeTrue()
-        ledger().isUnchanged("dashboard.base", root.resolve("dashboard.base")).shouldBeTrue()
+        ledger().isUnchanged("README.md", bytesOf("page")).shouldBeTrue()
+        ledger().isUnchanged("dashboard.base", bytesOf("query")).shouldBeTrue()
     }
 
     /** Beside the timers and the backup marker — process state, which the records gitignore (#126). */
@@ -88,10 +87,7 @@ class SeedLedgerTest {
         Files.exists(root.resolve(".ps/seeds.json")).shouldBeTrue()
     }
 
-    private fun write(name: String, content: String) {
-        Files.createDirectories(root)
-        Files.writeString(root.resolve(name), content)
-    }
+    private fun bytesOf(content: String): ByteArray = content.toByteArray()
 
     private fun ledger() = SeedLedger(root, aStateDirectory(root))
 

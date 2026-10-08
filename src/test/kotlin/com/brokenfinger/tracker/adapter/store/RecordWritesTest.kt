@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.NOT_OURS
 import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
+import com.brokenfinger.tracker.support.fixtures.aJunction
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
@@ -20,6 +21,8 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
@@ -576,6 +579,26 @@ class RecordWritesTest {
 
         refusal.message shouldContain "problems resolves to another path"
         namesIn(root.resolve("problems")).shouldBeEmpty()
+    }
+
+    /**
+     * The case above, made for real (#387): a junction is a Windows directory that leads elsewhere without being a
+     * symbolic link, so the link check passes it. The real path does not: it answers where the junction leads, which
+     * is not the path walked. Claimed since #361, and untested until a junction was made on windows-latest.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    fun `a junction where a problem directory should be is refused, and nothing is written where it leads`() {
+        Files.createDirectories(root.resolve("problems"))
+        val junction = aJunction(root.resolve("problems/1-x"), outside)
+        try {
+            val refusal = shouldThrow<RefusedWriteException> { problems().replace(inProblem("README.md"), "page\n") }
+
+            refusal.message shouldContain "problems/1-x resolves to another path"
+            namesIn(outside).shouldBeEmpty()
+        } finally {
+            Files.deleteIfExists(junction)
+        }
     }
 
     // Said once, thrown unless skipped, never quoted ---------------------------------------------

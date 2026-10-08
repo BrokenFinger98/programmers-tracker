@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
+import com.brokenfinger.tracker.adapter.store.RefusedReadException
 import com.brokenfinger.tracker.domain.Outcome
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
@@ -61,6 +62,9 @@ import java.time.ZoneOffset
 class McpToolInvokerTest {
     @TempDir
     lateinit var root: Path
+
+    @TempDir
+    lateinit var outside: Path
 
     @Test
     fun `submissions answers the whole history`() {
@@ -302,6 +306,25 @@ class McpToolInvokerTest {
 
         cut.keys.toList() shouldBe listOf("incompleteHistory", "count", "total", "truncated", "steps")
         whole.keys.toList() shouldBe listOf("incompleteHistory", "count", "total", "steps")
+    }
+
+    /**
+     * Every tool answers from the submission log, and one a link stands in for is refused rather than read (#387).
+     * Read on, each answer counted whatever the link led to — here another repository's log — as this learner's
+     * history. Answered as empty, each would say "no submissions", which absent never means; and `incompleteHistory`
+     * could not say otherwise, since it counts orphaned frames, not a log that was never read. So every tool fails as a
+     * fault of ours, which the dispatcher answers as an internal error: no count at all.
+     */
+    @Test
+    fun `a submission log that is a link fails every tool as a fault, never answers with counts`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = aRecordRepository(outside).containing(aSubmissionRecord()).logFile()
+        aLink(aRecordRepository(root).logFile(), elsewhere)
+        val invoker = McpToolInvoker(aRecordRepository(root).query())
+
+        everyToolCall().forEach { (tool, args) ->
+            withClue(tool) { shouldThrow<RefusedReadException> { invoker.call(tool, args) } }
+        }
     }
 
     /** The table above is only a claim about every tool while it holds every tool. */

@@ -299,6 +299,25 @@ class CodeAttachmentTest {
         resolved().codePending shouldBe true
     }
 
+    /**
+     * The log names what to retry, and a log that cannot be read names nothing (#387): one a link stands in for is
+     * refused rather than read. The startup runner catches nothing, so a throw here would end every boot the same way
+     * for as long as the link stands. Nothing is retried, the records keep their code pending, and that is said — by
+     * the failure's kind alone, since its message can carry a path.
+     */
+    @Test
+    fun `a log that cannot be read retries nothing, says so, and ends no boot`() = runBlocking<Unit> {
+        val pass = CodeAttachment(fetches(CODE_V2), unreadable(), artifacts(), anEmptyCatalog(), Dispatchers.Unconfined)
+
+        val heard = warningsWhile(CodeAttachment::class) {
+            runBlocking { pass.attachPending() shouldBe AttachReport() }
+        }
+
+        heard.single() shouldContain "could not be read"
+        heard.single() shouldContain "IOException"
+        heard.single() shouldNotContain A_PATH_IT_MAY_NAME
+    }
+
     // Harness ----------------------------------------------------------------------------------
 
     private fun untouched(record: SubmissionRecord) {
@@ -377,6 +396,11 @@ class CodeAttachmentTest {
     }
 
     private fun store(): RecordStore = JsonlRecordStore.under(root)
+
+    /** A log that cannot be read: the shape one a link stands in for leaves behind (#387). */
+    private fun unreadable(): RecordStore = object : RecordStore by store() {
+        override fun read(): List<RecordedSubmission> = throw IOException(A_PATH_IT_MAY_NAME)
+    }
 
     private fun problemDirectory(): Path = root.resolve("problems/120804-두-수의-곱-구하기")
 

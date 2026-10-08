@@ -5764,6 +5764,53 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - S5 and Q7: the reads that still follow a link.
 - **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
 
+## 2026-10-08 — #387 the reads that still followed a link, and the watch token
+- **Branch** `fix/387-reads-never-follow-links`, from `41f713e` (main with #354, #360, #361).
+- **Audit first.** Every read in `src/main`, by path, by whether it followed a link, and by the change;
+  the table is in the ADR. The issue named three readers (the log, `RunLog`'s duplicate check, the
+  seed ledger). Two more were found, the raw work list's replay, which makes records, and
+  `VaultDashboard`'s own reads of a seed (a FIFO there blocked the boot), and a way of reading wrong
+  several shared: `Files.exists`, which read a directory that could not be searched as "nothing there". Every reader under `problems/` already went through
+  `ProblemFiles` but `RunLog`'s check.
+- **The bound.** `723b544` takes the walk out of `RecordWrites` into `RecordBound`, `RecordWritesTest`
+  unchanged; `828fd0d` adds `RecordReads`, which reads through it, and asks existence of the filesystem.
+- **The refused read.** A refused log is thrown, never answered as empty:
+  - `23275fc`: MCP answers a fault rather than "no submissions";
+  - `af64882`: the writer reads its history when the first grading needs it, and records nothing until it
+    can, with no restart;
+  - `8295461`: the boot's attachment pass says so and goes on.
+- **The readers.** `7098d45` `RunLog`'s check through `ProblemFiles`; `874d731` each seed read once
+  through the bound, the ledger hashing bytes; `d2bc06c` the work list listed and replayed through no
+  link.
+- **The watch token.** `6137b75` written by `AtomicStateFile`, beside and moved, owner-only from
+  creation; a link there is replaced, said. A new adapter edge, `web → store`, in development-rules §1.
+- **Junctions.** `2fe85b7` two tests enabled on Windows only, made with `mklink /J`; not yet run.
+- **Mutation.** 29 mutants, 27 killed. `3235b97` pins the replay's FIFO check, whose mutant survived
+  until then. Two survive, race-only: the read's open and the replay's open without `NOFOLLOW_LINKS`.
+- **Gates**, all exit 0: check; test 2,178 (43 new, 0 failures, 11 skipped: the 9 as before and the two
+  junction tests off Windows), node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 85%,
+  `adapter/web` 80%, `application` 88%); guards.
+- **Docs.** ADR [[decisions/2026-10-08-a-refused-read-is-not-an-empty-one]], notes in #354's and #361's
+  ADRs, the index, `SECURITY.md`, `docs/mcp.md` and its twin.
+- **Pending.** CI on the three OSes, and the junction tests' first run on windows-latest. Live: after a
+  rebuild, every MCP answer and page should be unchanged, with no `Not reading` line at boot.
+- **Review round.** The adversarial review of PR #398 blocked it, measuring on the APFS host and in the
+  runtime image (uid 1000):
+  - High-1, `orphans()` follows links: a pulled link to `/proc/self/fd/1` or a FIFO under
+    `.ps/raw/orphans` hung the boot and timed out every MCP tool. The ADR's audit row and accepted cost
+    are corrected; the code fix is #378's.
+  - Medium-1, `9f63366`: a failed append withdraws its raw copy and forgets the writer's indexes, read
+    again from the log at the next grading. The critic's sequence now gives attempt 2, not 4, and a
+    replay finds no leftover in its way.
+  - Low-1, `588a52b`: `/watch` answers without the last record and says why in `recordsUnread`, never
+    500; the badge shows red `!`.
+  - Low-2, `af8796b`: `AtomicStateFile` reads a regular file only, so a FIFO at the watch token no
+    longer hangs the start.
+  - Mutation: 18 mutants, 17 killed, two of them after the pins in `46acd3d`; one survives,
+    near-equivalent.
+  - Gates, all exit 0: check; test 2,224 (18 new, 0 failures, 11 skipped as before), node 4 of 4;
+    build; `verifyBranchCoverage` (`adapter/store` 85%, `adapter/web` 82%, `application` 89%); guards.
+  - Pending, as before: CI on the three OSes, the junction tests' first run, and the live check.
 ## 2026-10-08 — #377 a raw session git delivered is never replayed (branch fix/377-raw-replay-guard)
 - **Both findings reproduced** before any change, as tests that failed against `41f713e`:
   - the reconciler recorded a session under a state directory git tracks anything in, and one behind
@@ -5904,3 +5951,22 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Gates**, all exit 0: check; test (2,268 JUnit across 166 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 88%, 341/384; `adapter/config` 65% at its floor); guards.
 - **Found, not fixed.** The commit side still reads file content alone, so a file named with a token is committed by a reconciliation and every push is then refused until history is rewritten.
 - Pending: CI; not verified live.
+
+## 2026-10-08 — #387 merged with main at 258ed10, #377 among it (branch fix/387-reads-never-follow-links)
+- **`5a86aaa`**, a merge, no rebase. Five files conflicted, all on the raw work list both branches had
+  bounded. The listing is #377's (`forWriting()`, then `pathFor("raw")`, regular files alone, no session
+  git has ever tracked, `sessionsNotReplayed`), which does all that #387's `listable()` did, so that went.
+  The replay's read is main's, with #387's regular-file check kept before its open. `withdraw` is kept.
+  `docs/mcp.ko.md` holds both paragraphs, its header the merged page's blob `edb4123`.
+- **Where the two disagreed:** a linked or FIFO session is now passed over at the listing (an empty
+  report) where #387 failed it at the read (`failed=1`). Three #387 tests were changed to that: the
+  linked-raw WARN in #377's words, the linked session's empty report, and the FIFO test split into the
+  listing case and a swap-after-listing case that pins the read's check.
+- Every test name of both sides is in the merge, but main's two renames and the one #387 removed.
+- **Mutation spot checks**: 6 of 7 killed; the read's open following a link survives, race-only.
+- **Gates**, all exit 0: check; test 2,403 (169 classes, 0 failures, 11 skipped), node 4 of 4; build;
+  `verifyBranchCoverage` (`adapter/store` 85%, `adapter/git` 89%, `adapter/web` 82%, `application` 89%);
+  guards 12 of 12.
+- The ADR's accepted cost is now precise: `sessionsNotReplayed` counts what the last start left, not
+  gradings refused while the server runs.
+- **Pending.** Not pushed. CI, the junction tests' first run and the live check, as before.

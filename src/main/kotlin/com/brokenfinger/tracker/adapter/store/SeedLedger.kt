@@ -1,7 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
 import kotlinx.serialization.json.Json
-import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 
@@ -31,15 +30,20 @@ import java.security.MessageDigest
 class SeedLedger(recordRoot: Path, state: StateDirectory) {
     private val ledger = AtomicStateFile.under(recordRoot, LEDGER, state)
 
-    /** True only when the file is exactly what we last wrote — never for a file we have no record of. */
-    fun isUnchanged(seed: String, file: Path): Boolean {
+    /**
+     * True only when [current] is exactly what we last wrote for [seed] — never for a seed we have no record of.
+     *
+     * It hashes the bytes it is handed and reads no seed itself (#387). It used to read the file at the path it was
+     * given, through a link if one stood there; the one read of a seed is now [VaultDashboard]'s, through the bound its
+     * writer takes.
+     */
+    fun isUnchanged(seed: String, current: ByteArray): Boolean {
         val recorded = recorded()[seed] ?: return false
-        val current = runCatching { hashOf(Files.readString(file)) }.getOrNull() ?: return false
-        return recorded == current
+        return recorded == hashOf(current)
     }
 
     fun record(seed: String, content: String) {
-        ledger.write(JSON.encodeToString(recorded() + (seed to hashOf(content))))
+        ledger.write(JSON.encodeToString(recorded() + (seed to hashOf(content.toByteArray()))))
     }
 
     /**
@@ -50,8 +54,8 @@ class SeedLedger(recordRoot: Path, state: StateDirectory) {
         runCatching { JSON.decodeFromString<Map<String, String>>(ledger.read() ?: NOTHING_RECORDED) }
             .getOrDefault(emptyMap())
 
-    private fun hashOf(content: String): String =
-        MessageDigest.getInstance("SHA-256").digest(content.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun hashOf(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private companion object {
         const val LEDGER = "seeds.json"

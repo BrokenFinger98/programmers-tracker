@@ -173,6 +173,34 @@ class RunLogTest {
         heard.single() shouldContain runs.toString()
     }
 
+    // Read for the duplicate check through no link out of problems/ (#387) ---------------------------
+
+    /**
+     * The duplicate check read the run log through a link, so a file elsewhere that held this run's id made the append
+     * be skipped as done: nothing refused, and the record took its code for kept. The check reads through #354's bound
+     * now, as every reader under `problems/` does: a link out reads as no line, so the append runs, and its own bound
+     * refuses the link and throws — the record keeps its code pending.
+     */
+    @Test
+    fun `a run log linked out of problems is not read for the duplicate check, so the append is refused`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val run = aRun()
+        val elsewhere = Files.writeString(outside.resolve("runs.jsonl"), aLineHolding(run.recordId()))
+        val runs = aLink(layout().runLog(120804, TITLE), elsewhere)
+
+        val heard = warningsWhile(ProblemFiles::class) {
+            shouldThrow<RefusedWriteException> { log().append(run, "select 1\n") }
+        }
+
+        Files.readString(elsewhere) shouldBe aLineHolding(run.recordId())
+        heard.single() shouldContain runs.toString()
+        heard.single() shouldContain "leads out of problems/"
+    }
+
+    // A whole run line naming [recordId], as the log writes one.
+    private fun aLineHolding(recordId: String): String =
+        """{"recordId":"$recordId","language":"java","codeFetchedAt":"2026-10-03T15:21:02+09:00","code":"x"}""" + "\n"
+
     private fun aRun(ts: String = "2026-10-03T15:21:02+09:00", verdict: Verdict = Verdict.WRONG) = aSubmissionRecord(
         ts = OffsetDateTime.parse(ts),
         action = GradingAction.RUN,

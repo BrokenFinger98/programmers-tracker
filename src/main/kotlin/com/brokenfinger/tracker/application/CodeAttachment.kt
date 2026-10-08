@@ -72,10 +72,24 @@ class CodeAttachment(
      * because an expired session and a rate limit are shared by every remaining record.
      */
     suspend fun attachPending(): AttachReport {
-        val pending = RecordHistory.of(store.read()).filter { it.codePending }
+        val pending = pendingInLog() ?: return AttachReport()
         if (pending.isEmpty()) return AttachReport()
         logger.info("Retrying the code attachment of {} record(s) left pending", pending.size)
         return passOver(pending)
+    }
+
+    /**
+     * What the log still resolves to `codePending`, or null when it cannot be read — one a link stands in for is
+     * refused rather than read (#387). The startup runner catches nothing, so a throw here would end every boot the
+     * same way while the link stands: it is said, by its kind alone, and nothing is retried.
+     */
+    private fun pendingInLog(): List<SubmissionRecord>? {
+        try {
+            return RecordHistory.of(store.read()).filter { it.codePending }
+        } catch (unread: IOException) {
+            logger.warn(LOG_UNREAD, unread.javaClass.simpleName)
+            return null
+        }
     }
 
     private suspend fun passOver(pending: List<SubmissionRecord>): AttachReport {
@@ -237,6 +251,8 @@ class CodeAttachment(
 
         const val NOT_WRITTEN = "Lesson {} keeps its code pending — its files were not written ({})"
         const val FAULTED = "Lesson {} keeps its code pending — attaching it failed with a fault, not an I/O failure"
+        const val LOG_UNREAD =
+            "The submission log could not be read ({}), so no record's code was retried; each keeps its code pending"
     }
 }
 

@@ -257,3 +257,13 @@ Found in the audit and left for their own issues:
   push token, and the next pass push it. It sits at the root, outside `problems/`, so outside this
   decision — and it is the more serious of the two. Decided on 2026-10-08:
   [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]].
+
+**Extended to the root, 2026-10-08 (#387).** The audit for #387 found every reader under `problems/`
+going through `ProblemFiles` but one: `RunLog`'s duplicate check, listed above as reading nothing that
+leaves. A file elsewhere that held a run's id made the append be skipped as done, with nothing refused, so
+it now reads through `ProblemFiles` too, and the append's own bound refuses the link. The files the writers
+keep at the root's own level — the submission log and the seeds — and the raw work list under `.ps` are
+read through #361's walk rather than this bound: their writers follow no link at all, and this bound
+follows one that stays inside, which at the root would read a linked log the writer has stopped writing.
+The audit and what a refused read means there:
+[[decisions/2026-10-08-a-refused-read-is-not-an-empty-one]].
