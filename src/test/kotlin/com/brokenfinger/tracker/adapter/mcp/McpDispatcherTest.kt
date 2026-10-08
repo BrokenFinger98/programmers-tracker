@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.support.fixtures.FailingGradingCodes
+import com.brokenfinger.tracker.support.fixtures.aCallParams
 import com.brokenfinger.tracker.support.fixtures.aLegacyCall
 import com.brokenfinger.tracker.support.fixtures.aModernCall
 import com.brokenfinger.tracker.support.fixtures.aPromptGetParams
@@ -10,8 +11,10 @@ import com.brokenfinger.tracker.support.fixtures.aRun
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aToolCallParams
 import com.brokenfinger.tracker.support.fixtures.anInitializeParams
+import com.brokenfinger.tracker.support.fixtures.argumentsThatAreNotAnObject
 import com.brokenfinger.tracker.support.fixtures.headersFor
 import com.brokenfinger.tracker.support.logging.loggedWhile
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.maps.shouldContainKey
@@ -22,6 +25,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeBlank
 import io.kotest.matchers.string.shouldNotContain
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -378,16 +382,10 @@ class McpDispatcherTest {
 
     @Test
     fun `prompt arguments that are not an object are refused, 400 modern and 200 handshake`() {
-        val params = buildJsonObject {
-            put("name", "exam_prep")
-            put("arguments", "java")
-        }
-        val modern = aModernCall("prompts/get", params)
+        val params = aCallParams("exam_prep", JsonPrimitive("java"))
 
-        dispatcher.dispatch(modern, headersFor(modern)).status shouldBe 400
-        val legacy = dispatcher.dispatch(aLegacyCall("prompts/get", params), McpHeaders())
-        legacy.status shouldBe 200
-        errorOf(legacy)["code"]!!.jsonPrimitive.int shouldBe McpErrors.INVALID_PARAMS
+        answerModern("prompts/get", params).shouldBeTheArgumentsRefusal(onStatus = 400)
+        answerLegacy("prompts/get", params).shouldBeTheArgumentsRefusal(onStatus = 200)
     }
 
     @Test
@@ -396,6 +394,52 @@ class McpDispatcherTest {
         val wrapped = "=?base64?" + java.util.Base64.getEncoder().encodeToString("exam_prep".toByteArray()) + "?="
 
         dispatcher.dispatch(call, headersFor(call).copy(name = wrapped)).status shouldBe 200
+    }
+
+    // ---------------------------------------------------------------- a tool call's arguments
+
+    /**
+     * The CallToolRequest schema types `arguments` as an optional object (2025-11-25 and 2026-07-28), so a call that
+     * carries anything else is malformed: a protocol error, `-32602`, on 400 to a modern client and on 200 to a
+     * handshake one, as an unknown tool is. Read as no arguments instead, the five tools that take only optional
+     * ones answered over everything on record, and `get_problem` and `stats` said that a required argument was
+     * missing from a call that had sent arguments (#365).
+     */
+    @Test
+    fun `tool arguments that are not an object are refused for every tool, 400 modern and 200 handshake`() {
+        McpToolCatalog.NAMES.forEach { tool ->
+            argumentsThatAreNotAnObject().forEach { notAnObject ->
+                withClue("$tool with arguments $notAnObject") {
+                    val params = aCallParams(tool, notAnObject)
+                    answerModern("tools/call", params).shouldBeTheArgumentsRefusal(onStatus = 400)
+                    answerLegacy("tools/call", params).shouldBeTheArgumentsRefusal(onStatus = 200)
+                }
+            }
+        }
+    }
+
+    /**
+     * The structure of a call is checked before its tool is looked up, as the reference TypeScript SDK parses a request
+     * against its schema before its handler looks the tool up. A call that is wrong in both ways is refused for its
+     * arguments; the table above names only tools that exist, so it says nothing about this order.
+     */
+    @Test
+    fun `an unknown tool with arguments that are not an object is refused for its arguments, in both eras`() {
+        val params = aCallParams("exam_start", JsonPrimitive("x"))
+
+        answerModern("tools/call", params).shouldBeTheArgumentsRefusal(onStatus = 400)
+        answerLegacy("tools/call", params).shouldBeTheArgumentsRefusal(onStatus = 200)
+    }
+
+    /** `arguments` is optional: absent or null narrows nothing, so `submissions` answers with the whole log. */
+    @Test
+    fun `absent or null tool arguments are a whole request, in both eras`() {
+        listOf(aCallParams("submissions", null), aCallParams("submissions", JsonNull)).forEach { params ->
+            withClue(params) {
+                countIn(answerModern("tools/call", params)) shouldBe 1
+                countIn(answerLegacy("tools/call", params)) shouldBe 1
+            }
+        }
     }
 
     // ---------------------------------------------------------------- a fault of ours
@@ -454,6 +498,24 @@ class McpDispatcherTest {
         body.toString() shouldNotContain FAULT
     }
 
+    private fun answerModern(method: String, params: JsonObject): McpHttpResponse {
+        val call = aModernCall(method, params)
+        return dispatcher.dispatch(call, headersFor(call))
+    }
+
+    private fun answerLegacy(method: String, params: JsonObject): McpHttpResponse =
+        dispatcher.dispatch(aLegacyCall(method, params), McpHeaders())
+
+    // One reader serves both paths, so a malformed `arguments` is answered alike whichever method carried it.
+    // The error first: before the fix a tool call answered a result, and the comparison shows which.
+    private fun McpHttpResponse.shouldBeTheArgumentsRefusal(onStatus: Int) {
+        body!!["error"] shouldBe ARGUMENTS_REFUSAL
+        status shouldBe onStatus
+    }
+
+    private fun countIn(response: McpHttpResponse): Int =
+        resultOf(response)["structuredContent"]!!.jsonObject["count"]!!.jsonPrimitive.int
+
     private fun resultOf(response: McpHttpResponse): JsonObject = response.body!!["result"]!!.jsonObject
 
     private fun errorOf(response: McpHttpResponse): JsonObject = response.body!!["error"]!!.jsonObject
@@ -461,5 +523,11 @@ class McpDispatcherTest {
     private companion object {
         /** What a fault of ours says, standing in for what the tool had read; it must reach no answer and no log. */
         const val FAULT = "fault-marker-7c1e: what the tool had read"
+
+        /** The JSON-RPC error an `arguments` that is not an object is answered with, on either path. */
+        val ARGUMENTS_REFUSAL = buildJsonObject {
+            put("code", McpErrors.INVALID_PARAMS)
+            put("message", "arguments must be an object")
+        }
     }
 }

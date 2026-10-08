@@ -86,6 +86,16 @@ the facts that set its date so you can disagree with the schedule — see
 `since` takes a date (`2026-08-01`), read in the offset the record itself carries, or a full
 offset date-time (`2026-08-01T09:00:00+09:00`), read as an instant.
 
+**A refusal names the argument, and what the tool takes.** A value a tool cannot use, or a name it
+does not take, comes back as a tool error (`isError: true`) saying what was wrong, so a model can
+correct it and call again. A name the tool does not take is quoted, so `"a, b"` stays one name, and
+the refusal lists what the tool takes in the order of the table above:
+`unknown argument(s): "a, b"; stats takes groupBy`. An `arguments` that is not an object — a
+string, a list, a number — is refused before any tool runs, as a protocol error: JSON-RPC `-32602`,
+on HTTP 400 to a modern client and 200 to a handshake one, as for an unknown tool. It is refused
+rather than read as no arguments because five of the seven tools take only optional ones, and for
+them no arguments asks for everything on record. Absent or `null` is no arguments.
+
 **The two surfaces group differently, on purpose.** `review_queue` and `slow_passes` key on
 (problem, language) — a pass demonstrates a language, so solving something in Java does not
 schedule away the Kotlin version
