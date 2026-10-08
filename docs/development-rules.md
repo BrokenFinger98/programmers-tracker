@@ -48,6 +48,18 @@ Class suffixes keep the Spring convention — `XxxController` · `XxxService` ·
 The dependency direction is `adapter → application → domain`, and `protocol → domain` happens only in `parse`.
 **`domain` imports nothing.**
 
+**Adapters depend on each other one way, never in a cycle, and only for a primitive the other
+adapter owns** — never for its behaviour, which goes through a port the composition root
+(`adapter/config`) wires. Two such edges exist, and a new one is added to this list:
+
+- `git → store` — `StateDirectory`, `AtomicStateFile` and the `TrackedState` port: whether `.ps`
+  is the tracker's own directory, and the write that never follows a link (#360).
+- `mcp → web` — `WatchToken` and `UnauthorizedWatchException`: the one token check both
+  endpoints answer to (since #46).
+
+`adapter/store` imports no other adapter. When it needs an answer only git has, it declares the
+port (`TrackedState`) and `adapter/config` hands it the git adapter's implementation.
+
 **What may cross into `application` and what may not** — see
 [[decisions/2026-08-05-protocol-dependency-direction]]. The two halves behave differently
 and the rule states both, because a rule stricter than its reason invites drift:

@@ -28,7 +28,16 @@ Three secrets, in three places, on purpose.
 credential inside it would be pushed too, so `session` and `watch-token` stay in the checkout
 ([#126](https://github.com/BrokenFinger98/programmers-tracker/issues/126)). The GitHub credential
 is the exception that proves it: it sits under `<records>/.ps/`, which the server adds to that
-repository's `.gitignore` itself rather than trusting one to already be there.
+repository's `.gitignore` itself rather than trusting one to already be there. Nor does it trust
+the rule alone: git reads none from a `.gitignore` that is a symbolic link, and a clone or a pull
+can put a link, a case variant or a tracked file where `.ps/` was. So the server's own commits leave
+`.ps` and everything under it out, whatever that file says. It runs no commit or push, and stores no
+credential, while `.ps` is not a real directory of its own, holds a link or holds anything git
+tracks, or while git cannot say whether it does. And before every commit and every push it searches
+the file content it would send for the stored token and for anything shaped like a GitHub token,
+refusing if it finds one. Commit and tag messages are not searched. A token that reached a commit
+is revoked on GitHub; removing it from history does not make it secret again
+([#360](https://github.com/BrokenFinger98/programmers-tracker/issues/360)).
 
 None of the three may appear in a log line, an exception message or a debug dump at any level.
 That is a rule in [`CLAUDE.md`](CLAUDE.md) rather than a habit, and the value classes are shaped so
