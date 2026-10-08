@@ -27,9 +27,9 @@ import java.nio.file.Path
  * directory that is no repository, a git that did not finish — and the callers decide what unknown
  * means for them.
  *
- * **And what git has ever tracked there** ([pathsEverTracked], #377), read from every ref's history: once
- * untracked, a raw session a pull delivered is a file like the tracker's own, and only the history still
- * names it. Judged by the same first segment.
+ * **And what git has ever tracked there** ([pathsEverTracked], #377), read from every ref's history and every
+ * reflog: once untracked, a raw session a pull delivered is a file like the tracker's own, and only the history
+ * still names it. Judged by the same first segment.
  */
 class TrackedStateEntries(private val root: Path, environment: Map<String, String> = System.getenv()) :
     TrackedState {
@@ -38,9 +38,10 @@ class TrackedStateEntries(private val root: Path, environment: Map<String, Strin
     override fun tracksAnything(): Boolean? = runCatching { listed() }.getOrNull()
 
     /**
-     * Every path any commit a ref reaches has added, changed or removed below the state directory, by the part
-     * below it (#377): a pull can deliver a raw session there, and untracking it leaves the file behind. One
-     * `git log` over every ref ([HISTORY]); its first segments are judged as [tracksAnything] judges the index.
+     * Every path a commit has added, changed or removed below the state directory, by the part below it, for every
+     * commit a ref or a reflog entry reaches (#377): a pull can deliver a raw session there, and untracking it
+     * leaves the file behind. One `git log` ([HISTORY]); its first segments are judged as [tracksAnything]
+     * judges the index. Unanswered, with why, when git fails, times out or cannot be started.
      */
     override fun pathsEverTracked(): TrackedHistory =
         runCatching { inHistory() }.getOrElse { TrackedHistory.Unanswered(it.javaClass.simpleName) }

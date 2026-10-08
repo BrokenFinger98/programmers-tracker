@@ -181,7 +181,8 @@ fun interface TrackedState {
 
     /**
      * Every path git has ever tracked below the state directory, relative to it and spelled as git stored it
-     * (#377): what a pull may have delivered there, whether or not git still tracks it. When git cannot say,
+     * (#377): what a pull may have delivered there, whether or not git still tracks it. Ever, as far as git
+     * remembers: a reflog entry that expired, or a history rewritten, names a path no more. When git cannot say,
      * [TrackedHistory.Unanswered] carries its reason — and an answer never given is that, so unknown is never
      * "nothing".
      */
