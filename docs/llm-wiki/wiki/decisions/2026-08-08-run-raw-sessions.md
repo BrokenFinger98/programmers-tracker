@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [data-model, records, recovery]
 author: BrokenFinger98
 created: 2026-08-08
-updated: 2026-08-11
+updated: 2026-10-08
 sources: [raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-07-adversarial-review.md, raw/sessions/2026-08-10-sensor-verified.md]
 ---
 
@@ -110,4 +110,4 @@ and never joins the work list, because without a `start` there is no action and 
 to derive a record from. Frames carrying no grading facts at all (welcome, the subscription
 confirmation) are still just dropped: they are protocol noise, not evidence.
 
-Related: [[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-06-record-corrections-by-append]].
+Related: [[decisions/2026-08-05-write-serialization]] · [[decisions/2026-08-05-code-pending-correction-append]].

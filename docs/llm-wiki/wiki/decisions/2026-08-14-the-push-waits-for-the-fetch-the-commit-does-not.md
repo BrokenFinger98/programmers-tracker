@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [git, durability, capture-pipeline, record-keeping]
 created: 2026-08-14
-updated: 2026-08-14
-sources: [raw/sessions/2026-08-14-the-warnings-and-what-was-under-them.md]
+updated: 2026-10-08
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md]
 ---
 
 # A pass pushes twice: the verdict immediately, the solution when the fetch returns
