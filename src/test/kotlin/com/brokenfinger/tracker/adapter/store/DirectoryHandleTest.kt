@@ -287,11 +287,15 @@ class DirectoryHandleTest {
         }
     }
 
-    /** An absolute name would leave the directory behind, and a second segment would be reached through a link. */
+    /**
+     * An absolute name would leave the directory behind, one of a single segment included — such as `/var`, which this
+     * names, a directory nothing can be appended to — and a second segment would be reached through a link.
+     */
     @ParameterizedTest
     @EnumSource(Held::class)
     fun `a name is one name, never a path`(held: Held) {
-        val names = listOf("raw/s.jsonl", outside.resolve("s.jsonl").toString(), "..", ".", "")
+        val rootedAndSingle = outside.root.resolve(outside.getName(0)).toString()
+        val names = listOf("raw/s.jsonl", outside.resolve("s.jsonl").toString(), rootedAndSingle, "..", ".", "")
 
         opened(held).use { directory ->
             names.forEach { name -> shouldThrow<IllegalArgumentException> { directory.append(name, bytes("frame\n")) } }
