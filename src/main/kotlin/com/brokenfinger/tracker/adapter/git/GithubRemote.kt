@@ -138,8 +138,13 @@ class GithubRemote(
      * file renamed over the store replaces whatever stands there, the link included, and starts
      * owner-only ([AtomicStateFile]).
      */
-    private fun storeCredential(): Boolean {
-        val directory = StateDirectory(recordRoot).verified() ?: return notStored()
+    private fun storeCredential(): Boolean =
+        when (val inspection = StateDirectory(recordRoot, TrackedStateEntries(recordRoot)).inspected()) {
+            is StateDirectory.Usable -> stored(inspection.directory)
+            is StateDirectory.Refused -> notStored(inspection.reason)
+        }
+
+    private fun stored(directory: Path): Boolean {
         val store = AtomicStateFile(directory.resolve(PushCredential.STORE))
         store.write("https://x-access-token:${token!!.raw()}@github.com\n")
         // No `git config` here on purpose. The pointer is passed per command instead, because
@@ -148,11 +153,12 @@ class GithubRemote(
     }
 
     /**
-     * `.ps` is not the tracker's own state directory (#360): a credential written there would be a
-     * path git tracks. Nothing is stored and nothing is wired on top of it; the token is not named.
+     * `.ps` is not the tracker's own, holds a link, or holds a file git tracks (#360): a credential
+     * written there would be a path a commit can carry. Nothing is stored and nothing is wired on top
+     * of it; the token is not named.
      */
-    private fun notStored(): Boolean {
-        logger.warn(STATE_DIRECTORY_REFUSED, recordRoot)
+    private fun notStored(reason: String): Boolean {
+        logger.warn(CREDENTIAL_NOT_STORED, recordRoot, reason)
         return false
     }
 
@@ -222,10 +228,7 @@ class GithubRemote(
         /** Both spellings GitHub hands out, with the trailing `.git` optional. */
         val GITHUB_SSH = Regex("""(?:ssh://)?git@github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?""")
 
-        const val STATE_DIRECTORY_REFUSED =
-            "What answers to .ps in {} is not the tracker's own state directory — a link, or a name the " +
-                "filesystem folds to .ps, such as .PS — so the push credential is not stored there and origin " +
-                "is not wired. Replace it with a real directory named exactly .ps."
+        const val CREDENTIAL_NOT_STORED = "The push credential is not stored in {}, and origin is not wired: {}."
 
         val logger = LoggerFactory.getLogger(GithubRemote::class.java)
     }

@@ -27,13 +27,37 @@ import java.nio.file.Path
  * where the real path of an alias came back as `.ps`. The real path catches what is a directory and
  * still leads elsewhere.
  *
- * Only git and the credential consult this. Raw frames, timers, the backup marker and the seed
- * ledger are still written into whatever answers to `.ps`: a capture is never dropped over where it
- * lands, and nothing written there is committed or pushed by the tracker while git refuses.
+ * **Its contents are inspected too ([inspected]).** A pull can deliver a tracked file or a link
+ * *inside* the real directory — a credential store holding one letter, `.ps/raw` leading into the
+ * tree — and git runs, and the credential is stored, only while nothing below `.ps` is a link and git
+ * tracks nothing there. What git tracks is git's to say: [TrackedState] is answered by the git adapter
+ * and handed in by the composition root, so this package runs no git.
  */
-class StateDirectory(private val recordRoot: Path) {
+class StateDirectory(private val recordRoot: Path, private val tracked: TrackedState = TrackedState.UNASKED) {
     /** The state directory, created if absent, or null when what answers to [NAME] is not it. Never throws. */
     fun verified(): Path? = runCatching { verify(recordRoot.resolve(NAME)) }.getOrNull()
+
+    /**
+     * Whether git may run over the record repository and the credential be stored there: [verified],
+     * with no link anywhere below it, and nothing below it tracked by git. Never throws; a refusal
+     * carries a reason a WARN can say, which names no path below `.ps` and no content.
+     */
+    fun inspected(): Inspection {
+        val directory = verified() ?: return Refused(NOT_THE_DIRECTORY)
+        val linked = runCatching { holdsALink(directory) }.getOrNull() ?: return Refused(NOT_INSPECTED)
+        if (linked) return Refused(HOLDS_A_LINK)
+        return trackedOrNot(directory)
+    }
+
+    private fun trackedOrNot(directory: Path): Inspection = when (tracked.any()) {
+        false -> Usable(directory)
+        true -> Refused(TRACKED)
+        null -> Refused(UNANSWERED)
+    }
+
+    // Walked without following a link, so a link is seen as one and never entered.
+    private fun holdsALink(directory: Path): Boolean =
+        Files.walk(directory).use { paths -> paths.anyMatch { Files.isSymbolicLink(it) } }
 
     private fun verify(directory: Path): Path? {
         if (!Files.exists(directory, NOFOLLOW_LINKS)) Files.createDirectory(directory)
@@ -46,7 +70,50 @@ class StateDirectory(private val recordRoot: Path) {
     private fun listedByItsOwnName(): Boolean =
         Files.newDirectoryStream(recordRoot).use { entries -> entries.any { it.fileName.toString() == NAME } }
 
+    sealed interface Inspection
+
+    /** Git may run, and the credential be stored, in [directory]. */
+    data class Usable(val directory: Path) : Inspection
+
+    /** Neither may, because of [reason]. */
+    data class Refused(val reason: String) : Inspection
+
     companion object {
         const val NAME = ".ps"
+
+        /** [NAME] as a glob with no literal text before its first wildcard, for git pathspecs. */
+        val GLOB = "[${NAME.first()}]${NAME.drop(1)}"
+
+        private const val UNTRACK = "if git tracks it, run `git rm -r --cached .ps` and commit that"
+
+        const val NOT_THE_DIRECTORY =
+            "what answers to .ps is not the tracker's own state directory — a link, or a name the filesystem " +
+                "folds to .ps, such as .PS. Replace it with a real directory named exactly .ps; $UNTRACK"
+
+        const val HOLDS_A_LINK =
+            ".ps holds a symbolic link, and whatever is written through it lands where it leads. Remove the " +
+                "link; $UNTRACK"
+
+        const val TRACKED =
+            "git tracks files under .ps, so whatever the server writes there is a change any `commit -a` " +
+                "publishes, the push credential included. Run `git rm -r --cached .ps` and commit that"
+
+        const val UNANSWERED = "git could not say whether it tracks anything under .ps"
+
+        const val NOT_INSPECTED = "what lies under .ps could not be read through"
+    }
+}
+
+/**
+ * Whether git tracks anything under the state directory — a question for git, which this package
+ * does not run. The git adapter answers it and the composition root hands it in (#360).
+ */
+fun interface TrackedState {
+    /** True when git tracks an entry under `.ps`, in any case; false when none; null when git cannot say. */
+    fun any(): Boolean?
+
+    companion object {
+        /** Nobody to ask: the filesystem decides alone. */
+        val UNASKED = TrackedState { false }
     }
 }

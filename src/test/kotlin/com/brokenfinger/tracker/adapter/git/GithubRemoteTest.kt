@@ -257,20 +257,40 @@ class GithubRemoteTest {
 
     /**
      * A pull replaces the ignored credential file with a tracked link, and the token written through it
-     * lands in the tracked file it leads to (#360). The store is replaced — the link with it — never
-     * written through, and the file the link led to is left exactly as it was.
+     * landed in the tracked file it leads to (#360). Replacing the link was not enough either: the store
+     * then shows as a changed tracked path, which any `commit -a` publishes. A link under `.ps` stops
+     * the store altogether, and both ends are left exactly as they were.
      */
     @Test
-    fun `replaces a link at the credential path rather than writing through it`() {
+    fun `stores nothing when the credential path is a link`() {
         assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
         val tracked = repo.write("problems/notes-sync.md", "someone's notes\n")
         val store = aLink(repo.root.resolve(PushCredential.FILE), tracked)
 
-        remote().ensure()
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
 
         Files.readString(tracked) shouldBe "someone's notes\n"
-        Files.isSymbolicLink(store) shouldBe false
-        Files.readString(store) shouldContain "x-access-token:ghp_test_token@github.com"
+        Files.isSymbolicLink(store) shouldBe true
+        heard.single() shouldContain "holds a symbolic link"
+        heard.single() shouldNotContain "ghp_test_token"
+    }
+
+    /**
+     * A pull delivered `.ps/git-credentials` as a file git tracks. Renamed over it, the token became a
+     * modified tracked file, and another tool's `commit -a` and push published it (measured by the
+     * review). It is not stored, and the tracked file is left as it came.
+     */
+    @Test
+    fun `stores no token over a store git tracks`() {
+        val store = repo.write(PushCredential.FILE, "https://x-access-token:someone-else@github.com\n")
+        repo.git("add", "--force", PushCredential.FILE)
+        repo.git("commit", "--message", "as a pull delivers it")
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.readString(store) shouldBe "https://x-access-token:someone-else@github.com\n"
+        heard.single() shouldContain "git tracks files under .ps"
+        git("status", "--porcelain").trim() shouldBe ""
     }
 
     /** Nor into a directory the filesystem folds to `.ps`, delivered by a clone. */

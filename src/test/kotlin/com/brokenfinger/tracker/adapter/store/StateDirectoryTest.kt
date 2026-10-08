@@ -6,6 +6,7 @@ import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -76,4 +77,54 @@ class StateDirectoryTest {
     fun `a records directory that is not there is answered, never thrown`() {
         StateDirectory(root.resolve("no/such/records")).verified().shouldBeNull()
     }
+
+    // Whether git may run over it: nothing linked or tracked inside (#360) ----------------------
+
+    @Test
+    fun `a real directory holding no link and nothing tracked is usable`() {
+        Files.createDirectories(root.resolve(".ps/raw"))
+
+        StateDirectory(root).inspected() shouldBe StateDirectory.Usable(root.resolve(".ps"))
+    }
+
+    /** A pull delivered `.ps/raw` as a link into the tree; raw frames written through it become tracked paths. */
+    @Test
+    fun `a link anywhere inside refuses`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw/recorded"), tracked)
+
+        refusalOf(StateDirectory(root)) shouldContain "holds a symbolic link"
+    }
+
+    /** What the filesystem cannot see: git tracking an entry the server is about to write over. */
+    @Test
+    fun `anything git tracks inside refuses, with how to stop it being tracked`() {
+        Files.createDirectory(root.resolve(".ps"))
+
+        val reason = refusalOf(StateDirectory(root) { true })
+
+        reason shouldContain "git tracks files under .ps"
+        reason shouldContain "git rm -r --cached .ps"
+    }
+
+    /** Unknown is not clean: git that cannot be asked refuses too. */
+    @Test
+    fun `git that cannot say refuses`() {
+        Files.createDirectory(root.resolve(".ps"))
+
+        refusalOf(StateDirectory(root) { null }) shouldContain "could not say"
+    }
+
+    @Test
+    fun `what is not the state directory is refused with how to replace it`() {
+        Files.writeString(root.resolve(".ps"), "not a directory\n")
+
+        val reason = refusalOf(StateDirectory(root))
+
+        reason shouldContain "is not the tracker's own state directory"
+        reason shouldContain "git rm -r --cached .ps"
+    }
+
+    private fun refusalOf(state: StateDirectory): String = (state.inspected() as StateDirectory.Refused).reason
 }

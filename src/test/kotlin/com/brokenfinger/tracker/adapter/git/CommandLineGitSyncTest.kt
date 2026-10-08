@@ -410,36 +410,94 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * Git's answer is read from stdout alone, and a status that failed answers nothing there. That is
-     * not a clean tree: the reconciliation goes on, fails where git says why, and says so.
+     * An index git cannot read answers nothing on stdout, and nothing is not a clean tree. Since #360's
+     * third round the first to notice is the question of what git tracks under `.ps`, which reads the
+     * same index: the reconciliation is refused, and says why.
      */
     @Test
-    fun `a status that fails is reported, never taken for a clean tree`() {
+    fun `an index git cannot read is never taken for a clean tree`() {
         written(".gitignore", ".ps/\n")
         written("log/submissions.jsonl", RECORD)
         Files.writeString(root.resolve(".git/index"), "not an index")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
 
-        heard.single() shouldContain "git reconcile failed"
+        heard.single() shouldContain "git could not say whether it tracks anything under .ps"
     }
 
     /**
-     * Someone forced a state file into the index. A commit that names its paths takes only those, so
-     * the file stays staged and goes no further — an editor's staged note is kept out of a submit
-     * commit the same way.
+     * Someone forced a state file into the index, by hand or with a pull. Git tracks it now, so whatever
+     * the server writes there is a change any `commit -a` publishes, the credential first of all.
+     * Nothing is committed or pushed until it is out of the index, and the warning says how (#360).
      */
     @Test
-    fun `a state file staged by hand is not committed by reconciliation`() {
+    fun `a state file staged by hand stops every commit and push until it is unstaged`() {
         written(".gitignore", ".ps/\n")
         aPushTokenIn(root)
         git("add", "--force", "--", PushCredential.FILE)
         written("log/submissions.jsonl", RECORD)
+        val sync = sync()
 
-        sync().reconcile() shouldBe true
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync.reconcile() shouldBe false
+            sync.push() shouldBe false
+        }
 
-        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
-        statusOf(PushCredential.FILE) shouldBe "A  ${PushCredential.FILE}"
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "git rm -r --cached .ps" }
+        subjects() shouldContainExactly emptyList()
+    }
+
+    /**
+     * A pull delivered a store git tracks, holding one letter. Searched for, that letter matched every
+     * commit and raised a false alarm about a token. The store is refused for what it is — tracked —
+     * and the warning says how to stop that (#360).
+     */
+    @Test
+    fun `a credential store a pull delivered stops every commit and push for what it is`() {
+        written(".gitignore", ".ps/\n")
+        written(PushCredential.FILE, "e\n")
+        git("add", "--all")
+        git("add", "--force", "--", PushCredential.FILE)
+        git("commit", "--message", "as a pull delivers it")
+        written("log/submissions.jsonl", RECORD)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync.reconcile() shouldBe false
+            sync.push() shouldBe false
+        }
+
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "git tracks files under .ps" }
+        heard.forEach { it shouldNotContain "carries" }
+    }
+
+    /**
+     * `.ps` is the real directory, but a pull put a tracked link inside it, `.ps/raw`, leading into the
+     * tree, so the raw frames written through it are tracked paths. The identity check sees only `.ps`;
+     * the walk below it is what refuses (#360).
+     */
+    @Test
+    fun `a link inside the state directory stops every commit and push`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        written(".gitignore", ".ps/\n")
+        written("problems/zz/README.md", "decoy\n")
+        aLink(root.resolve(".ps/raw"), root.resolve("problems/zz"))
+        git("add", "--all")
+        git("add", "--force", "--", ".ps/raw")
+        git("commit", "--message", "as a pull delivers it")
+        written(".ps/raw/a-run.jsonl", RAW_FRAME)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync.reconcile() shouldBe false
+            sync.push() shouldBe false
+        }
+
+        heard.size shouldBe 2
+        heard.forEach { it shouldContain "holds a symbolic link" }
+        subjects() shouldContainExactly listOf("as a pull delivers it")
     }
 
     /**
@@ -489,29 +547,39 @@ class CommandLineGitSyncTest {
         warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true } shouldContainExactly emptyList()
     }
 
-    /** Git answers "not ignored" for a path it tracks, and a file forced into the index is tracked. The rule still works. */
-    @Test
-    fun `a state file staged by hand does not make a working rule look broken`() {
-        written(".gitignore", ".ps/\n")
-        aPushTokenIn(root)
-        git("add", "--force", "--", PushCredential.FILE)
-        written("log/submissions.jsonl", RECORD)
-
-        warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe true } shouldContainExactly emptyList()
-    }
-
     // Nothing the tracker commits or pushes carries the push token (#360) -----------------------
 
     /**
      * Another tool committed the state directory — an editor's git plugin running `add -A` under a
-     * `.gitignore` git cannot read. The tracker did not make that commit, but its push would send it,
-     * so the push looks at every commit it would send before sending any.
+     * `.gitignore` git cannot read. Git tracks the store now, so the tracker sends nothing at all, and
+     * the commit stays on this machine.
+     */
+    @Test
+    fun `a state directory another tool committed stops every push`() {
+        val remote = remoteInitialised()
+        aPushTokenIn(root)
+        written("notes.md", "my note\n")
+        git("add", "--all")
+        git("commit", "--message", "vault backup (editor plugin)")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "git push refused"
+        heard.single() shouldContain "git rm -r --cached .ps"
+        subjects(at = remote) shouldContainExactly listOf("init")
+        everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
+    }
+
+    /**
+     * The tracker did not make this commit, but its push would send it, so the push looks at every
+     * commit it would send before sending any — here a note another tool committed with the token in it.
      */
     @Test
     fun `a commit another tool made with the push token is never pushed`() {
         val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
         aPushTokenIn(root)
-        written("notes.md", "my note\n")
+        written("notes.md", "my token is $A_PUSH_CREDENTIAL\n")
         git("add", "--all")
         git("commit", "--message", "vault backup (editor plugin)")
 
@@ -556,15 +624,14 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * Only a regular file is the credential. A link at its path was put there by someone else — a pull
-     * can deliver one — and what it leads to is not ours to search for, so nothing goes out unchecked.
+     * Only a regular file is the credential. Anything else at its path — here a directory; a link is
+     * refused before this, by the walk below `.ps` — cannot be searched for, so nothing goes out
+     * unchecked.
      */
     @Test
     fun `a credential store that is not a regular file refuses every commit and push`() {
-        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         written(".gitignore", ".ps/\n")
-        val target = written("problems/zz/notes.md", "someone's notes\n")
-        aLink(root.resolve(PushCredential.FILE), target)
+        Files.createDirectories(root.resolve(PushCredential.FILE))
         written("log/submissions.jsonl", RECORD)
         val sync = sync()
 

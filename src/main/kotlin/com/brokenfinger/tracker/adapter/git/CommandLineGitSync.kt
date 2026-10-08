@@ -65,7 +65,7 @@ class CommandLineGitSync(
      */
     private val credential = PushCredential(root)
 
-    private val stateDirectory = StateDirectory(root)
+    private val stateDirectory = StateDirectory(root, TrackedStateEntries(root))
 
     /**
      * Asked once, on the first git call rather than at construction — the composition root
@@ -98,14 +98,20 @@ class CommandLineGitSync(
     }
 
     /**
-     * Git runs only while `.ps` is the tracker's own state directory (#360). A link a pull swapped
-     * in, or a name the filesystem folds to `.ps`, turns every state write into a path git tracks —
-     * raw frames, timers, the credential — so while it is anything else, nothing is committed or
-     * pushed. Checked on every call, because a pull can change it while the server runs.
+     * Commits and pushes run only while `.ps` is the tracker's own state directory, with no link below
+     * it and nothing below it tracked by git (#360). A link a pull swapped in, a name the filesystem
+     * folds to `.ps`, a link inside it or a file git tracks there turns state the server writes into
+     * a path a commit can carry — raw frames, timers, the credential. Checked on every call, because a
+     * pull can change it while the server runs.
      */
-    private fun inVerifiedState(what: String): Boolean {
-        if (stateDirectory.verified() != null) return true
-        return refused(STATE_DIRECTORY_REFUSED, what)
+    private fun inVerifiedState(what: String): Boolean = when (val inspection = stateDirectory.inspected()) {
+        is StateDirectory.Usable -> true
+        is StateDirectory.Refused -> refusedState(what, inspection.reason)
+    }
+
+    private fun refusedState(what: String, reason: String): Boolean {
+        logger.warn(STATE_REFUSED, what, root, reason)
+        return false
     }
 
     // `rev-parse` is git's own answer and covers what a `.git` directory test does not — a
@@ -438,10 +444,8 @@ class CommandLineGitSync(
         private val IN_PROGRESS =
             listOf("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply")
 
-        private const val STATE_DIRECTORY_REFUSED =
-            "git {} refused in {}: what answers to .ps there is not the tracker's own state directory — a " +
-                "link, or a name the filesystem folds to .ps, such as .PS — so whatever is written into it is " +
-                "a path git tracks. Replace it with a real directory named exactly .ps."
+        /** Why is the state directory's own, from [StateDirectory]: never a path below `.ps`, never content. */
+        private const val STATE_REFUSED = "git {} refused in {}: {}."
 
         private const val CREDENTIAL_FOUND =
             "git {} refused in {}: what it would send carries the push token stored in .ps/git-credentials. " +
