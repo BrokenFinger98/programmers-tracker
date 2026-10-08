@@ -886,7 +886,7 @@ class McpToolInvokerTest {
     /**
      * Past validation an IllegalArgumentException can only be an invariant of ours breaking, and
      * `executed` would hand it to the model as advice to correct arguments that were fine. It leaves
-     * as a state fault instead, which `McpController` answers as an internal error.
+     * as a state fault instead, which `McpDispatcher` answers as an internal error.
      *
      * The seam is the code port. No record and no file can break the invariants behind repair steps
      * (the query groups by problem before it asks), but the query reads code for every problem it

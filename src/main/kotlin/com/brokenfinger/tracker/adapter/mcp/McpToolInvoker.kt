@@ -245,7 +245,7 @@ class McpToolInvoker(private val query: RecordQuery) {
     // For a tool whose arguments have all been checked by the time it works. An IllegalArgumentException
     // from there is a broken invariant of ours, which `executed` would hand to the model as advice to
     // correct arguments that were fine. Rethrown as a state fault it passes through `executed` and ends
-    // as the controller's internal error, with the cause kept for the log.
+    // as the internal error the dispatcher answers the call with; the log names its class alone.
     private fun <T> ourFault(work: () -> T): T = try {
         work()
     } catch (broken: IllegalArgumentException) {

@@ -25,7 +25,9 @@ import io.kotest.matchers.string.shouldBeEmpty
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -279,12 +281,14 @@ class McpControllerTest {
         errorCode(response) shouldBe McpErrors.FORBIDDEN_ORIGIN
     }
 
+    /** No id can be read from a body that does not parse, and JSON-RPC answers `null` when it cannot be. */
     @Test
-    fun `refuses a malformed JSON-RPC envelope`() {
+    fun `refuses a malformed JSON-RPC envelope, with a null id`() {
         val response = post("{ not json")
 
         response.status shouldBe 400
         errorCode(response) shouldBe McpErrors.PARSE
+        json(response)["id"] shouldBe JsonNull
     }
 
     @Test
@@ -319,50 +323,49 @@ class McpControllerTest {
     }
 
     /**
-     * A fault of ours behind valid arguments is answered as one: the JSON-RPC internal error with the
-     * status the modern binding gives it, and nothing of the exception on the wire. The fault is a code
-     * store throwing what an invariant of ours would (`repair_steps` is the tool that reads code, and the
-     * scratch log holds a problem for it to read); the tool must not turn it into advice for the model.
+     * A fault of ours behind valid arguments is answered as one, to the call that met it: the JSON-RPC
+     * internal error carrying the request's id, on HTTP 200, and nothing of the exception on the wire.
+     * The fault is a code store throwing what an invariant of ours would (`repair_steps` is the tool that
+     * reads code, and the scratch log holds a problem for it to read); the tool must not turn it into
+     * advice for the model.
      *
-     * Modern era, where 500 is what the binding assigns an internal error. The handshake era's answer
-     * to the same fault is not pinned here.
+     * 200 in both eras (#355): the modern binding assigns `-32603` no status, and Claude Code reads a
+     * non-2xx answer as JSON-RPC only when it is a 400, so on a 500 neither the error nor its id would be
+     * read ([[decisions/2026-10-08-a-fault-of-ours-answers-its-call-on-200]]).
      */
     @Test
-    fun `answers a broken invariant behind a repair_steps call as an internal error and says nothing of it`() {
+    fun `answers a broken invariant behind a modern repair_steps call to the call, and says nothing of it`() {
         codes.failure = IllegalArgumentException(INVARIANT)
 
-        val response = postModern(
-            "tools/call",
-            aToolCallParams("repair_steps"),
-            name = "repair_steps",
-        )
+        val response = postModern("tools/call", aToolCallParams("repair_steps"), name = "repair_steps", id = 42)
 
-        response.status shouldBe 500
-        errorCode(response) shouldBe McpErrors.INTERNAL
-        response.contentAsString.shouldNotContain(INVARIANT)
-        response.contentAsString.shouldNotContain("Exception")
-        response.contentAsString.shouldNotContain("at com.brokenfinger")
+        response.shouldBeTheInternalErrorOf(id = 42)
+    }
+
+    @Test
+    fun `answers a broken invariant behind a handshake repair_steps call to the call, and says nothing of it`() {
+        codes.failure = IllegalArgumentException(INVARIANT)
+
+        val response = post(aLegacyBody("tools/call", aToolCallParams("repair_steps"), id = 41))
+
+        response.shouldBeTheInternalErrorOf(id = 41)
     }
 
     /**
-     * The same fault behind the other call that reads code, `get_problem` with `include`: an internal
-     * error on the wire, with nothing of the exception in it. The same call without `include` never asks
-     * the store for code, so a store that is broken is not a broken `get_problem` — the answer a client
-     * that does not use `include` gets must not depend on it.
+     * The same fault behind the other call that reads code, `get_problem` with `include`: the internal
+     * error, with nothing of the exception in it. The same call without `include` never asks the store
+     * for code, so a store that is broken is not a broken `get_problem` — the answer a client that does
+     * not use `include` gets must not depend on it.
      */
     @Test
     fun `answers a broken invariant behind a get_problem include as an internal error, a plain call unaffected`() {
         codes.failure = IllegalArgumentException(INVARIANT)
 
-        val asked = postModern("tools/call", aGetProblemParams(include = "runs"), name = "get_problem")
+        val asked = postModern("tools/call", aGetProblemParams(include = "runs"), name = "get_problem", id = 43)
         val plain = postModern("tools/call", aGetProblemParams(include = null), name = "get_problem")
 
-        asked.status shouldBe 500
-        errorCode(asked) shouldBe McpErrors.INTERNAL
-        asked.contentAsString.shouldNotContain(INVARIANT)
-        asked.contentAsString.shouldNotContain("Exception")
-        asked.contentAsString.shouldNotContain("at com.brokenfinger")
-        plain.status shouldBe 200
+        asked.shouldBeTheInternalErrorOf(id = 43)
+        json(plain)["result"]!!.jsonObject["isError"]!!.jsonPrimitive.booleanOrNull!!.shouldBeFalse()
     }
 
     @Test
@@ -414,6 +417,16 @@ class McpControllerTest {
 
     private fun errorCode(response: MockHttpServletResponse): Int =
         json(response)["error"]!!.jsonObject["code"]!!.jsonPrimitive.int
+
+    // The id first: it is what the client matches the answer to its call by.
+    private fun MockHttpServletResponse.shouldBeTheInternalErrorOf(id: Int) {
+        json(this)["id"] shouldBe JsonPrimitive(id)
+        status shouldBe 200
+        errorCode(this) shouldBe McpErrors.INTERNAL
+        contentAsString.shouldNotContain(INVARIANT)
+        contentAsString.shouldNotContain("Exception")
+        contentAsString.shouldNotContain("at com.brokenfinger")
+    }
 
     private fun promptText(result: JsonObject): String =
         result["messages"]!!.jsonArray.single().jsonObject["content"]!!.jsonObject["text"]!!.jsonPrimitive.content

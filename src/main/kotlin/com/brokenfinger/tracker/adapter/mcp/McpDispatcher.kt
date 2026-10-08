@@ -24,6 +24,9 @@ data class McpHeaders(val protocolVersion: String? = null, val method: String? =
  * legacy answer carries none of that and keeps every JSON-RPC-level failure on `200`,
  * because a handshake-era client reads a non-2xx as a transport fault and never sees the
  * error we wrote for it.
+ *
+ * A fault of ours is answered here too, to the call that met it: its id, `-32603`, and `200`
+ * in both eras, because the binding assigns that code no status ([McpFailure.internal]).
  */
 class McpDispatcher(private val tools: McpToolInvoker) {
     fun dispatch(call: McpCall, headers: McpHeaders): McpHttpResponse =
@@ -155,8 +158,10 @@ class McpDispatcher(private val tools: McpToolInvoker) {
     private fun requestedVersion(call: McpCall): String? =
         (call.params["protocolVersion"] as? JsonPrimitive)?.contentOrNull
 
+    // Every refusal is answered to the call it met, by its id and in its era. A fault of ours too (#355),
+    // which used to leave here and be answered by the controller with no id, on HTTP 500.
     private fun refused(thrown: Throwable, call: McpCall): McpHttpResponse {
-        val failure = thrown as? McpFailure ?: throw thrown
+        val failure = McpFailure.from(thrown)
         val status = failure.status.takeIf { call.isModern() } ?: 200
         return McpHttpResponse(status, JsonRpc.error(call.id, failure.code, failure.message, failure.data))
     }

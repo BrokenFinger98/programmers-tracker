@@ -2,7 +2,6 @@ package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.adapter.web.UnauthorizedWatchException
 import com.brokenfinger.tracker.adapter.web.WatchToken
-import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -31,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController
  * The endpoint never sees a Programmers session cookie. It logs nothing on the normal path
  * at all — not the request, not the answer, and at no level — because every answer it
  * gives is a piece of the user's solving history. The one thing written is a fault of
- * ours, and even that carries no request content.
+ * ours, and even that is written by its class alone ([McpFailure.from]).
  */
 @RestController
 class McpController(
@@ -71,17 +70,12 @@ class McpController(
         return dispatcher.dispatch(McpCall.from(rawBody.orEmpty()), headers)
     }
 
-    // A fault of ours is answered as one. It never carries the exception outward: dumping
-    // request internals or a stack trace into a response is forbidden (CLAUDE.md).
-    private fun refused(thrown: Throwable): McpHttpResponse = when (thrown) {
-        is McpFailure -> thrown.response()
-        is UnauthorizedWatchException -> McpFailure.unauthorized().response()
-        else -> internal(thrown)
-    }
-
-    private fun internal(thrown: Throwable): McpHttpResponse {
-        log.error("An MCP request failed", thrown)
-        return McpFailure.internal().response()
+    // What the dispatcher did not answer: a refusal before any call was read, which has no id to echo
+    // (JSON-RPC answers null then), or a fault outside the dispatcher. A fault of ours never carries the
+    // exception outward: dumping request internals or a stack trace into a response is forbidden (CLAUDE.md).
+    private fun refused(thrown: Throwable): McpHttpResponse {
+        if (thrown is UnauthorizedWatchException) return McpFailure.unauthorized().response()
+        return McpFailure.from(thrown).response()
     }
 
     private fun answer(response: McpHttpResponse): ResponseEntity<String> = ResponseEntity
@@ -94,7 +88,5 @@ class McpController(
 
         /** The same local credential as `/watch`; one process, one token. */
         const val TOKEN_HEADER = "X-Tracker-Token"
-
-        private val log = LoggerFactory.getLogger(McpController::class.java)!!
     }
 }
