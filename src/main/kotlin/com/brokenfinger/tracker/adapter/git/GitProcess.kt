@@ -82,7 +82,22 @@ internal class GitProcess(
         /** Generous for a local repository, and short enough that nothing waits on it. */
         val TIMEOUT: Duration = Duration.ofSeconds(60)
 
-        private val PINNED = mapOf("GIT_TERMINAL_PROMPT" to "0", "GIT_NO_REPLACE_OBJECTS" to "1")
+        /**
+         * `LC_ALL=C`, for two reasons (#372):
+         *
+         * - The tracker reads git's own words — a directory git could not open, an `error:` from a
+         *   search, the index lock — and a git built with translations says them in the server's
+         *   language: under Korean git 2.48.1 translated the first, under German its `warning:` prefix
+         *   too.
+         * - The content gate's `git grep -E` reads bytes as bytes only in the C locale. In a UTF-8 locale
+         *   macOS's regex stopped at a byte that is not UTF-8, so a token after one on the same line was
+         *   missed, with exit 1 and nothing on stderr (Homebrew's git and Apple's; glibc made no
+         *   difference).
+         *
+         * Paths and commit messages are bytes to git either way; the Korean ones the tests commit and
+         * read back are unchanged under it.
+         */
+        private val PINNED = mapOf("GIT_TERMINAL_PROMPT" to "0", "GIT_NO_REPLACE_OBJECTS" to "1", "LC_ALL" to "C")
 
         private val UNSET = setOf(
             "GIT_DIR",

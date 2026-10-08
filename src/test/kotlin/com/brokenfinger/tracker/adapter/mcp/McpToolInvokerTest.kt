@@ -459,6 +459,39 @@ class McpToolInvokerTest {
         message(result).shouldContain("limit")
     }
 
+    /**
+     * A key is the client's text (#365). Joined raw, "a, b" read as two arguments and a newline broke the message;
+     * quoted as a JSON string, each key is one item. It stays a tool error, so a model can drop the key and retry.
+     */
+    @Test
+    fun `an unknown argument comes back quoted as one item, with what the tool takes`() {
+        mapOf("a, b" to "\"a, b\"", "a\nb" to "\"a\\nb\"").forEach { (key, quoted) ->
+            val result = invokerOver().call("stats", arguments("groupBy" to "verdict", key to 1))
+
+            withClue("key = $quoted") {
+                failed(result).shouldBeTrue()
+                message(result) shouldBe "unknown argument(s): $quoted; stats takes groupBy"
+            }
+        }
+    }
+
+    /**
+     * What a tool takes is named in the order its schema lists it, which is the order `tools/list` showed the client,
+     * so the refusal reads like the tool's documentation. Sorted, `get_problem` would lead with `include` and
+     * `list_problems` would put `status` before `tag`.
+     */
+    @Test
+    fun `every tool refusing a key names what it takes, in its schema's order`() {
+        TAKEN.keys shouldContainExactlyInAnyOrder McpToolCatalog.NAMES
+
+        TAKEN.forEach { (tool, taken) ->
+            withClue(tool) {
+                message(invokerOver().call(tool, arguments("bogus" to 1))) shouldBe
+                    "unknown argument(s): \"bogus\"; $tool takes $taken"
+            }
+        }
+    }
+
     // list_problems ------------------------------------------------------------------------
 
     /**
@@ -1367,7 +1400,7 @@ class McpToolInvokerTest {
 
     // The refusal teaches: it names the argument and what it takes, so a model that guessed a value can
     // retry without a second look. Any refusal at all would not do — an argument the tool did not know
-    // is answered "unknown argument(s): include", which names it and teaches nothing.
+    // is answered `unknown argument(s): "include"; …`, which names it and none of the values it takes.
     private fun JsonObject.shouldBeAnIncludeRefusal() {
         failed(this).shouldBeTrue()
         message(this).shouldContain("include")
@@ -1464,6 +1497,17 @@ class McpToolInvokerTest {
 
     private companion object {
         val PROGRESS_FIELDS = setOf("attempted", "passed", "passedFirstSubmit", "runsBeforePass")
+
+        /** What each tool takes, as its schema lists it and as `docs/mcp.md` documents it. */
+        val TAKEN = mapOf(
+            "submissions" to "since, verdict",
+            "get_problem" to "lessonId, include",
+            "stats" to "groupBy",
+            "list_problems" to "level, part, tag, status",
+            "review_queue" to "limit",
+            "slow_passes" to "thresholdMs",
+            "repair_steps" to "since, language, part, lessonId, limit",
+        )
 
         /** Every key `include` can add to an item; the default answer carries none of them. */
         val CODE_KEYS = listOf(

@@ -30,20 +30,21 @@ import kotlinx.serialization.json.putJsonArray
  * An argument a model can fix — a date it spelled wrong, a `groupBy` it does not offer —
  * comes back as a **tool execution error** (`isError: true`) carrying the correction,
  * which the client is expected to hand to the model. An unknown tool is a **protocol
- * error**, because no rewording of the arguments will make it exist.
+ * error**, because no rewording of the arguments will make it exist. So is an `arguments` that
+ * is not an object, which [McpCall.strictArguments] refuses before any tool is reached (#365).
  *
  * Nothing here writes. The record repository is opened read-only through [RecordQuery], so
  * a prompt-injected instruction to "delete my failures" has no path to act on.
  */
 class McpToolInvoker(private val query: RecordQuery) {
     fun call(name: String?, arguments: JsonObject): JsonObject = when (name) {
-        McpToolCatalog.SUBMISSIONS -> executed { submissions(checked(arguments, SUBMISSION_ARGS)) }
-        McpToolCatalog.GET_PROBLEM -> executed { problem(checked(arguments, PROBLEM_ARGS)) }
-        McpToolCatalog.STATS -> executed { stats(checked(arguments, STATS_ARGS)) }
-        McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(arguments, LIST_ARGS)) }
-        McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(arguments, REVIEW_ARGS)) }
-        McpToolCatalog.SLOW_PASSES -> executed { slowPasses(checked(arguments, SLOW_ARGS)) }
-        McpToolCatalog.REPAIR_STEPS -> executed { repairSteps(checked(arguments, REPAIR_ARGS)) }
+        McpToolCatalog.SUBMISSIONS -> executed { submissions(checked(name, arguments)) }
+        McpToolCatalog.GET_PROBLEM -> executed { problem(checked(name, arguments)) }
+        McpToolCatalog.STATS -> executed { stats(checked(name, arguments)) }
+        McpToolCatalog.LIST_PROBLEMS -> executed { listProblems(checked(name, arguments)) }
+        McpToolCatalog.REVIEW_QUEUE -> executed { reviewQueue(checked(name, arguments)) }
+        McpToolCatalog.SLOW_PASSES -> executed { slowPasses(checked(name, arguments)) }
+        McpToolCatalog.REPAIR_STEPS -> executed { repairSteps(checked(name, arguments)) }
         else -> throw McpFailure(
             McpErrors.INVALID_PARAMS,
             400,
@@ -142,17 +143,18 @@ class McpToolInvoker(private val query: RecordQuery) {
 
     // The arguments are read here, and the filter that holds their rules is built here — outside the
     // wrapper, so what it refuses is the caller's mistake and comes back in its own words. Reading
-    // checks only the JSON type (a number is not text; a blank is the filter's to refuse), so the rules
-    // live in one place. A JSON null is "not given": the text reader knows it, and the number readers,
-    // which are the older tools', get a copy without nulls. Past this point an IllegalArgumentException
-    // is not the caller's. The default limit is the cap that keeps one argument-less call from returning
-    // every step on record; the answer says when it applied.
+    // checks only the JSON type (a number is not text; a blank is the filter's to refuse, where `text()`
+    // would read it as absent and widen the question), so the rules live in one place. A JSON null is
+    // "not given": the text reader knows it, and the number readers, which are the older tools', get a
+    // copy without nulls. Past this point an IllegalArgumentException is not the caller's. The default
+    // limit is the cap that keeps one argument-less call from returning every step on record; the answer
+    // says when it applied.
     private fun repairSteps(arguments: JsonObject): JsonObject {
         val numbers = withoutNulls(arguments)
         val filter = RepairStepFilter(
-            since = arguments.optionalText("since")?.let(Since::from),
-            language = arguments.optionalText("language"),
-            part = arguments.optionalText("part"),
+            since = McpArguments.optionalText(arguments, "since")?.let(Since::from),
+            language = McpArguments.optionalText(arguments, "language"),
+            part = McpArguments.optionalText(arguments, "part"),
             limit = numbers.wholeNumber("limit") ?: McpToolCatalog.REPAIR_STEPS_DEFAULT_LIMIT,
         )
         val lessonId = optionalLessonId(numbers)
@@ -234,10 +236,12 @@ class McpToolInvoker(private val query: RecordQuery) {
             ?: throw IllegalArgumentException("verdict must be one of ${Verdict.entries.joinToString()}")
 
     // The schemas say `additionalProperties: false`, so the server enforces it rather than
-    // answering a narrower question than the one it was asked.
-    private fun checked(arguments: JsonObject, allowed: Set<String>): JsonObject {
-        val unknown = arguments.keys - allowed
-        require(unknown.isEmpty()) { "unknown argument(s): ${unknown.sorted().joinToString()}" }
+    // answering a narrower question than the one it was asked. It checks against the schema's own
+    // list, and the refusal quotes each key and names that list, in the schema's order (#365).
+    private fun checked(tool: String, arguments: JsonObject): JsonObject {
+        val taken = McpToolCatalog.argumentsOf(tool)
+        val unknown = arguments.keys - taken.toSet()
+        require(unknown.isEmpty()) { McpArguments.unknownArgumentsMessage(tool, unknown, taken) }
         return arguments
     }
 
@@ -308,22 +312,9 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun JsonObject.text(name: String): String? =
         (this[name] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
-    // The JSON-type check and nothing more. Absent or JSON null is "not given". A JSON string is read as
-    // it came, blank included: Since and RepairStepFilter refuse a blank in their own words, where
-    // `text()` would have read it as absent and widened the question that was asked. Anything else is
-    // refused under the argument's name — a number is not the text of its digits, so `language: 5` is a
-    // mistake to say so, not the language "5". Safe on its own: a JSON null is skipped here, never read
-    // as the text "null".
-    private fun JsonObject.optionalText(name: String): String? {
-        val raw = this[name]
-        if (raw == null || raw is JsonNull) return null
-        return (raw as? JsonPrimitive)?.takeIf { it.isString }?.content
-            ?: throw IllegalArgumentException("$name must be text")
-    }
-
     // A JSON null is how some clients say "not given", as good as leaving the key out. The number
     // readers are the older tools', which refuse a null, so `repair_steps` hands them a copy without
-    // its nulls; the text reader above knows a null itself.
+    // its nulls; the text reader, McpArguments.optionalText, knows a null itself.
     private fun withoutNulls(arguments: JsonObject): JsonObject = JsonObject(arguments.filterValues { it !is JsonNull })
 
     // Absent means "do not narrow"; present but not a number is the client's mistake and is
@@ -332,15 +323,5 @@ class McpToolInvoker(private val query: RecordQuery) {
         val raw = this[name] ?: return null
         return (raw as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
             ?: throw IllegalArgumentException("$name must be a whole number")
-    }
-
-    private companion object {
-        val SUBMISSION_ARGS = setOf("since", "verdict")
-        val PROBLEM_ARGS = setOf("lessonId", "include")
-        val STATS_ARGS = setOf("groupBy")
-        val LIST_ARGS = setOf("level", "part", "tag", "status")
-        val REVIEW_ARGS = setOf("limit")
-        val SLOW_ARGS = setOf("thresholdMs")
-        val REPAIR_ARGS = setOf("since", "language", "part", "lessonId", "limit")
     }
 }

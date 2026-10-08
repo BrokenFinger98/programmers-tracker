@@ -3,7 +3,10 @@ package com.brokenfinger.tracker.support.fixtures
 import com.brokenfinger.tracker.adapter.mcp.McpCall
 import com.brokenfinger.tracker.adapter.mcp.McpHeaders
 import com.brokenfinger.tracker.adapter.mcp.McpProtocol
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -59,6 +62,19 @@ fun aToolCallParams(name: String, arguments: JsonObject = JsonObject(emptyMap())
 
 fun aPromptGetParams(name: String = "exam_prep", arguments: JsonObject = JsonObject(emptyMap())): JsonObject =
     aToolCallParams(name, arguments)
+
+/**
+ * The params of a `tools/call` or a `prompts/get` whose `arguments` is exactly [arguments], of any JSON type, and left
+ * out when it is null.
+ */
+fun aCallParams(name: String, arguments: JsonElement?): JsonObject = buildJsonObject {
+    put("name", name)
+    arguments?.let { put("arguments", it) }
+}
+
+/** What a malformed client might send as `arguments`: a string, an array, a number, a boolean. None is an object. */
+fun argumentsThatAreNotAnObject(): List<JsonElement> =
+    listOf(JsonPrimitive("x"), JsonArray(emptyList()), JsonPrimitive(5), JsonPrimitive(true))
 
 fun aLegacyCall(method: String, params: JsonObject = JsonObject(emptyMap()), id: Int? = 1): McpCall =
     McpCall.from(aLegacyBody(method, params, id))
