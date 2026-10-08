@@ -380,6 +380,7 @@ class McpToolInvokerTest {
 
         gaps["orphanFilesNotRead"]!!.jsonPrimitive.int shouldBe 1
         gaps["lessonsWithOrphanedFrames"]!!.jsonPrimitive.int shouldBe 0
+        gaps.shouldNotContainKey("orphansNotListed")
     }
 
     /** A refusal is not a whole history: an answer says the orphans could not be listed rather than none exist. */

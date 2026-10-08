@@ -134,6 +134,18 @@ class FileRawSessionLogOrphansTest {
             Orphans(emptyList(), unread = 1, unlisted = false)
     }
 
+    /** Under a refused state directory the orphans are counted by name, and never through a link. */
+    @Test
+    fun `a linked orphans directory under a refused state directory is not counted through`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.createDirectories(root.resolve("problems/zz"))
+        Files.writeString(elsewhere.resolve("120802.jsonl"), "{}\n")
+        aLink(root.resolve(".ps/raw/orphans"), elsewhere)
+
+        logGuardedBy(aStateDirectory(root) { true }).orphans() shouldBe
+            Orphans(emptyList(), unread = 0, unlisted = true)
+    }
+
     /** As a pull delivers it: committed upstream with `git add --force`, checked out here. Git's answer decides. */
     @Test
     fun `an orphans file git checked out is not counted`(@TempDir base: Path) {
@@ -226,6 +238,16 @@ class FileRawSessionLogOrphansTest {
         git.historyAsked shouldBe 1
     }
 
+    /** Git's history excludes an orphans file by its whole path: `raw/orphans` itself, or a path below a file, none. */
+    @Test
+    fun `a history path that is no orphans file's own excludes none`() {
+        val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
+        Files.writeString(orphans.resolve("131528.jsonl"), "{}\n")
+        val git = ChangingAnswer(false, history = setOf("raw/orphans", "raw/orphans/131528.jsonl/x"))
+
+        logGuardedBy(aStateDirectory(root, git)).orphans().read.map { it.lessonId } shouldBe listOf(131528L)
+    }
+
     /** Git that cannot say what it has ever tracked: none is read, each is counted, and that is said. */
     @Test
     fun `no orphans file is read while git cannot say what it has ever tracked, and why is said`() {
@@ -265,6 +287,23 @@ class FileRawSessionLogOrphansTest {
 
         log.orphaned(120804, """{"lost":1}""")
         Files.readString(notOurs) shouldBe ""
+        Files.delete(link)
+        log.orphaned(120804, """{"lost":2}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/120804.jsonl")) shouldBe
+            listOf("""{"lost":1}""", """{"lost":2}""")
+    }
+
+    /** A link that leads nowhere is a link all the same: the append would have thrown and lost the frame. */
+    @Test
+    fun `an orphan whose file is a link to nothing is kept, and nothing is made where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-through-the-link.jsonl")
+        val link = aLink(root.resolve(".ps/raw/orphans/120804.jsonl"), nowhere)
+        val log = log()
+
+        log.orphaned(120804, """{"lost":1}""")
+        Files.exists(nowhere) shouldBe false
         Files.delete(link)
         log.orphaned(120804, """{"lost":2}""")
 

@@ -457,6 +457,56 @@ class FileRawSessionLogTest {
         heard.last() shouldContain "reached 30 characters"
     }
 
+    /**
+     * Written once `.ps` is usable, settled frames leave their share, and a frame dropped over it never entered it:
+     * refused again, the share holds as much as before.
+     */
+    @Test
+    fun `the settled share is free again once what it held is written`() {
+        val git = ChangingAnswer(true)
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root, git))
+        repeat(5) { log.orphaned(120804, """{"o":$it}""") }
+        git.answer = false
+        log.orphaned(120805, """{"next":1}""")
+        git.answer = true
+
+        repeat(4) { log.orphaned(131528, """{"p":$it}""") }
+        git.answer = false
+        log.orphaned(120805, """{"next":2}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/131528.jsonl")) shouldHaveSize 4
+    }
+
+    /** A run set aside that the share cannot take is dropped, and leaves the share as it found it. */
+    @Test
+    fun `a run dropped over the share leaves the share as it found it`() {
+        val git = ChangingAnswer(true)
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root, git))
+        repeat(3) { log.orphaned(120804, """{"o":$it}""") }
+        val run = log.start(120805)
+        log.append(run, """{"r":1}""")
+        log.append(run, """{"r":2}""")
+        log.setAside(run)
+        log.orphaned(131528, """{"p":1}""")
+        git.answer = false
+        log.orphaned(120806, """{"next":1}""")
+
+        Files.readAllLines(root.resolve(".ps/raw/orphans/131528.jsonl")) shouldContainExactly listOf("""{"p":1}""")
+    }
+
+    /** One limit bounds the heap, whatever holds the frames: settled frames count toward it with the live ones. */
+    @Test
+    fun `what is held never passes the limit, settled frames included`() {
+        val log = aLogHolding(limit = 40, state = aStateDirectory(root) { true })
+        repeat(4) { log.orphaned(120804, """{"o":$it}""") }
+        val submit = log.start(131528)
+        repeat(3) { log.append(submit, """{"n":$it}""") }
+
+        val copied = log.complete(submit, root.resolve("problems/131528-x/attempts/001.raw.jsonl"))
+
+        Files.readAllLines(copied) shouldContainExactly listOf("""{"n":0}""")
+    }
+
     @Test
     fun `what is still held when the log closes is said`() {
         val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root) { true })
@@ -746,6 +796,20 @@ class FileRawSessionLogTest {
 
         replayed.map { it.lessonId } shouldContainExactly listOf(131528L)
         git.historyAsked shouldBe 1
+    }
+
+    /**
+     * Git's history excludes a session by its whole path. `raw` itself, which a pull may once have delivered as a
+     * link, and a path below a session's name are not the file on the work list, so neither excludes it.
+     */
+    @Test
+    fun `a history path that is no session's own excludes none`() {
+        aSessionLeftBehind()
+        val git = ChangingAnswer(false, history = setOf("raw", "raw/$A_SESSION/x"))
+
+        val replayed = logGuardedBy(aStateDirectory(root, git)).unprocessed()
+
+        replayed.map { it.id.value } shouldContainExactly listOf(A_SESSION)
     }
 
     /** Unknown is not "never": while git cannot say what it has ever tracked, nothing is replayed, and that is said. */

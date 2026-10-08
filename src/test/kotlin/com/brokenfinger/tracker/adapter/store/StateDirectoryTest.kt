@@ -164,6 +164,18 @@ class StateDirectoryTest {
         state.forWriting() shouldBe Usable(root.resolve(".ps"))
     }
 
+    /** A port that throws is answered as one that cannot say, with the exception's kind for why, never its message. */
+    @Test
+    fun `a history the port threw on is answered with why`() {
+        val throwing = object : TrackedState {
+            override fun tracksAnything(): Boolean = false
+
+            override fun pathsEverTracked(): TrackedHistory = throw IllegalStateException("never in a reason")
+        }
+
+        StateDirectory(root, throwing).pathsEverTracked() shouldBe TrackedHistory.Unanswered("IllegalStateException")
+    }
+
     @Test
     fun `what is not the state directory is refused with how to replace it`() {
         Refusal.NOT_THE_DIRECTORY.reason shouldContain "is not the tracker's own state directory"

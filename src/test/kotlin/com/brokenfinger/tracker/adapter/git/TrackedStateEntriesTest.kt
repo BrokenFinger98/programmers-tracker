@@ -10,6 +10,8 @@ import com.brokenfinger.tracker.support.git.GitWorkspace
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldHaveLength
+import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
@@ -168,6 +170,27 @@ class TrackedStateEntriesTest {
 
         reason shouldContain "128"
         reason shouldContain "not a git repository"
+    }
+
+    /** A git that cannot be started — no such directory, or no git at all — is answered with why, never thrown. */
+    @Test
+    fun `a history git could not be started for is answered with why`() {
+        TrackedStateEntries(base.resolve("no-such-directory")).pathsEverTracked() shouldBe
+            TrackedHistory.Unanswered("IOException")
+    }
+
+    /** Git's own line is cut at its bound, so a path it names cannot make the reason as long as it likes. */
+    @Test
+    fun `git's own line in a reason is cut at its bound`() {
+        val elsewhere = Files.createDirectories(base.resolve("a-git-file-to-nowhere"))
+        val nowhere = base.resolve("x".repeat(120)).resolve("y".repeat(120))
+        Files.writeString(elsewhere.resolve(".git"), "gitdir: $nowhere\n")
+
+        val reason = TrackedStateEntries(elsewhere).pathsEverTracked().shouldBeInstanceOf<TrackedHistory.Unanswered>()
+            .reason
+
+        reason shouldStartWith "git log exited 128: fatal: not a git repository"
+        reason.substringAfter("git log exited 128: ") shouldHaveLength 200
     }
 
     /**
