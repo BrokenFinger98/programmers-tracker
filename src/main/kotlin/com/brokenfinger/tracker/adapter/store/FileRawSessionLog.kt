@@ -264,7 +264,9 @@ class FileRawSessionLog(
             heldRuns.keys.forEach { name -> heldRuns.remove(name)?.let { appendedAll(recorded.resolve(name), it) } }
         }
         subdirectory(ORPHANS)?.let { orphans ->
-            heldOrphans.keys.forEach { id -> heldOrphans.remove(id)?.let { appendedAll(orphans.resolve("$id$SUFFIX"), it) } }
+            heldOrphans.keys.forEach { id ->
+                heldOrphans.remove(id)?.let { held -> appendedAll(orphans.resolve("$id$SUFFIX"), synchronized(held) { held.toList() }) }
+            }
         }
     }
 
