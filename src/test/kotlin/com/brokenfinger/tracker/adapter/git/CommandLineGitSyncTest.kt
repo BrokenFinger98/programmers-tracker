@@ -973,6 +973,26 @@ class CommandLineGitSyncTest {
         heard.single() shouldNotContain aGithubShapedToken()
     }
 
+    /**
+     * The `LC_ALL=C` pin's second reason (the review of #389). In a UTF-8 locale macOS's regex stops at a
+     * byte that is not UTF-8, so `git grep -E` missed a token after one on the same line, exited 1 and
+     * said nothing: measured with Homebrew git 2.48.1 here, and by the review with Apple's git as well. The
+     * fixed-string search for the stored value found it either way. In the C locale the token is found.
+     * glibc made no difference, so on Linux this passes with the pin or without it.
+     */
+    @Test
+    fun `a token after a byte that is not UTF-8 is never committed, whatever the locale`() {
+        written(".gitignore", ".ps/\n")
+        val note = root.resolve("notes/cafe.md").also { Files.createDirectories(it.parent) }
+        Files.write(note, "caf".toByteArray() + LATIN_1_E_ACUTE + " ${aGithubShapedToken()}\n".toByteArray())
+        val sync = CommandLineGitSync(root, System.getenv() + UTF_8_LOCALE, waitFor = {})
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe false }
+
+        heard.single() shouldContain "carries a GitHub token"
+        subjects() shouldContainExactly emptyList()
+    }
+
     @Test
     fun `a fine-grained GitHub token is refused with nothing stored`() {
         written(".gitignore", ".ps/\n")
@@ -1409,6 +1429,12 @@ class CommandLineGitSyncTest {
 
         /** The locale a Korean user's server runs in, where git translates what it says. */
         val KOREAN = mapOf("LC_ALL" to "ko_KR.UTF-8", "LANG" to "ko_KR.UTF-8")
+
+        /** An ordinary UTF-8 locale, as the tracker's own image sets it, where git says everything in English. */
+        val UTF_8_LOCALE = mapOf("LC_ALL" to "en_US.UTF-8", "LANG" to "en_US.UTF-8")
+
+        /** `é` in Latin-1: one byte that is never valid UTF-8 on its own. */
+        const val LATIN_1_E_ACUTE: Byte = 0xE9.toByte()
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2
