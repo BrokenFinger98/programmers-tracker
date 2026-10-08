@@ -19,7 +19,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * How a file in the records repository is written when a link could carry the write somewhere else (#361) —
@@ -53,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap
  * carry on is each writer's own posture ([[decisions/2026-10-08-no-writer-follows-a-link]]).
  */
 internal class RecordWrites private constructor(private val bound: RecordBound, private val ownerOnly: Boolean) {
-    private val said = ConcurrentHashMap.newKeySet<String>()
+    private val said = SaidOnce()
 
     /** Replaces [target] whole with [text]. A link standing there is replaced, never written through. */
     fun replace(target: Path, text: String) = replaceAt(target, fileIn(target), text)
@@ -132,7 +131,7 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
 
     private fun replacing(target: Path, file: Path) {
         val kind = kindOf(file, A_REGULAR_FILE)
-        if (said.add("$REPLACED ${bound.relative(file)}")) logger.warn(REPLACED_WARNING, target, kind)
+        said.say("$REPLACED ${bound.relative(file)}") { logger.warn(REPLACED_WARNING, target, kind) }
     }
 
     // Beside the file, so the move stays a rename within one directory, and moved over it.
@@ -198,7 +197,7 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
 
     // Once per reason for this instance, naming the path the writer was handed: never content, never a link's target.
     private fun refused(target: Path, reason: String): RefusedWriteException {
-        if (said.add(reason)) logger.warn(REFUSED_WARNING, target, reason)
+        said.say(reason) { logger.warn(REFUSED_WARNING, target, reason) }
         return RefusedWriteException(target, reason)
     }
 

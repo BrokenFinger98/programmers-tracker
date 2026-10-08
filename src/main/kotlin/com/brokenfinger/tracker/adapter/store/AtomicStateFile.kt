@@ -9,7 +9,6 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFileAttributes
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A read-modify-write state document written temp-then-replace
@@ -52,7 +51,7 @@ class AtomicStateFile(
 ) {
     private val directory: Path = path.toAbsolutePath().parent
 
-    private val said = ConcurrentHashMap.newKeySet<StateDirectory.Refusal>()
+    private val said = SaidOnce()
 
     /** The current document, or null when it has never been written — or what stands there is no regular file. */
     fun read(): String? = runCatching { readNotFollowing() }.getOrElse { failed(it) }
@@ -110,7 +109,7 @@ class AtomicStateFile(
     }
 
     private fun skipped(refusal: StateDirectory.Refusal): Boolean {
-        if (said.add(refusal)) logger.warn(NOT_WRITTEN, path.fileName, refusal.reason)
+        said.say(refusal) { logger.warn(NOT_WRITTEN, path.fileName, refusal.reason) }
         return true
     }
 

@@ -7,7 +7,6 @@ import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * How a file a writer keeps at the records repository's own level is read (#387): through [RecordBound], the walk that
@@ -34,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
  * second name is read and not added to — as with any failed append, said at every grading.
  */
 internal class RecordReads private constructor(private val bound: RecordBound) {
-    private val said = ConcurrentHashMap.newKeySet<String>()
+    private val said = SaidOnce()
 
     /** The bytes of [target], or null when nothing is there. Anything else standing there is refused, said and thrown. */
     fun readAllBytes(target: Path): ByteArray? {
@@ -64,7 +63,7 @@ internal class RecordReads private constructor(private val bound: RecordBound) {
 
     // Once per reason for this instance, naming the path the reader was handed: never content, never a link's target.
     private fun refused(target: Path, reason: String): RefusedReadException {
-        if (said.add(reason)) logger.warn(REFUSED_WARNING, target, reason)
+        said.say(reason) { logger.warn(REFUSED_WARNING, target, reason) }
         return RefusedReadException(target, reason)
     }
 
