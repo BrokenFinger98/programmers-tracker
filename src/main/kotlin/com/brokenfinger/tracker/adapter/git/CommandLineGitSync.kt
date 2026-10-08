@@ -383,6 +383,9 @@ class CommandLineGitSync(
      * a full pipe buffer would block us before we ever got to wait. Terminal prompting is
      * off, so a push cannot stop for credentials — and the timeout is there for the case
      * where it stalls anyway, because a capture must never wait on the network.
+     *
+     * Replace refs are off as well: with one in place the search read a clean replacement while the
+     * push sent the original object, which a transfer always does (#360).
      */
     private fun git(args: List<String>, input: String? = null): GitResult =
         inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(args, input, stdout, stderr) } }
@@ -414,7 +417,7 @@ class CommandLineGitSync(
             .directory(root.toFile())
             .redirectOutput(stdout.toFile())
             .redirectError(stderr.toFile())
-            .also { it.environment()[NO_PROMPT] = "0" }
+            .also { it.environment().putAll(ENVIRONMENT) }
             .start()
         feed(process, input)
         if (process.waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)) return process.exitValue()
@@ -538,7 +541,7 @@ class CommandLineGitSync(
         val TIMEOUT: Duration = Duration.ofSeconds(60)
 
         private const val GIT = "git"
-        private const val NO_PROMPT = "GIT_TERMINAL_PROMPT"
+        private val ENVIRONMENT = mapOf("GIT_TERMINAL_PROMPT" to "0", "GIT_NO_REPLACE_OBJECTS" to "1")
         private const val TIMED_OUT = -1
 
         private val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java)

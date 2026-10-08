@@ -976,6 +976,29 @@ class CommandLineGitSyncTest {
         everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
     }
 
+    /**
+     * A replace ref showed the search a clean commit in place of one that carried the token, while the
+     * push sent the original: a transfer ignores replacements (measured on 2.48.1 and 2.53.0). Every git
+     * call runs with replacements off, so the search sees what a push sends.
+     */
+    @Test
+    fun `a replace ref does not hide a commit from the search`() {
+        val remote = remoteInitialised()
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("notes.md", "my token is $A_PUSH_CREDENTIAL\n")
+        git("add", "--all")
+        git("commit", "--message", "carries the token")
+        val carrying = git("rev-parse", "HEAD").trim()
+        val cleanTree = git("rev-parse", "HEAD~1^{tree}").trim()
+        val clean = git("commit-tree", cleanTree, "-p", "HEAD~1", "-m", "looks clean").trim()
+        git("replace", carrying, clean)
+
+        sync().push() shouldBe false
+
+        everythingAt(remote) shouldNotContain A_PUSH_CREDENTIAL
+    }
+
     /** Before the first commit there is nothing to push, and no failure to report. */
     @Test
     fun `a branch with no commit yet has nothing to push, and says nothing`() {
