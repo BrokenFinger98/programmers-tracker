@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
 /**
@@ -121,6 +123,18 @@ class RecordBoundTest {
     @Test
     fun `a path is said relative to the real root, with forward slashes on every platform`() {
         problems().relative(realRoot().resolve("problems/1-x/README.md")) shouldBe "problems/1-x/README.md"
+    }
+
+    /**
+     * A directory another writer made between the look and the make is no failure (#386): the caller judges what is
+     * there after, so a link that won that race is still refused. Any other failure to make one is thrown.
+     */
+    @Test
+    fun `a directory made meanwhile is no failure to make, and any other failure is`() {
+        val made = Files.createDirectory(root.resolve("made-meanwhile"))
+
+        shouldNotThrowAny { createdOrThere(made) }
+        shouldThrow<NoSuchFileException> { createdOrThere(root.resolve("no-parent/child")) }
     }
 
     private fun problems() = RecordBound.underProblems(RecordLayout(root))
