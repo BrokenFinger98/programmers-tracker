@@ -339,7 +339,7 @@ class CommandLineGitSync(
 
     // The token shapes first, then what is stored — the second only runs if the first found nothing.
     private fun greps(stored: StoredCredential, search: List<String>): Sequence<Int> = sequence {
-        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TOKEN_SHAPES.flatMap { listOf("-e", it) } + search)))
+        yield(outcomeOf(git(listOf("grep", "-q", "-E") + TokenPatterns.SHAPES.flatMap { listOf("-e", it) } + search)))
         if (stored is Patterns) yield(outcomeOf(git(listOf("grep", "-q", "-F", "-f", "-") + search, stored.asInput())))
     }
 
@@ -579,15 +579,6 @@ class CommandLineGitSync(
 
         /** A grep that exited as if nothing matched, after failing to read something it was asked to search. */
         private const val UNREAD = -2
-
-        /**
-         * GitHub's token formats, as `git grep -E` patterns: they are not secret, so they go in argv.
-         * The classic kinds are a prefix, `_`, then 30 random and 6 checksum characters (GitHub's
-         * engineering blog), 36 in all; `_` is in the class because a stateless installation token is
-         * `ghs_<app id>_<JWT>`, whose JWT header alone runs past 36. A fine-grained token is
-         * `github_pat_` and more; its length is not documented, and the bound stays at 60.
-         */
-        private val TOKEN_SHAPES = listOf("gh[pousr]_[A-Za-z0-9_]{36,}", "github_pat_[A-Za-z0-9_]{60,}")
 
         /** Where a push goes when git names no other remote for the branch. */
         private const val DEFAULT_REMOTE = "origin"
