@@ -123,9 +123,14 @@ class CommandLineGitSync(
 
     override fun push(): Boolean = inRepository("push") { pushed() }
 
+    // A remote by name, or a branch whose remote is a URL or a path, which git pushes to as it is (#378).
+    override fun hasRemote(): Boolean = hasNamedRemote() || pushesToUrl()
+
     // `git remote` lists names and prints nothing when there is none, so an empty answer is the
     // whole signal. A failure to run it answers false: unknown is not "configured".
-    override fun hasRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+    private fun hasNamedRemote(): Boolean = git(listOf("remote")).let { it.succeeded() && it.stdout.isNotBlank() }
+
+    private fun pushesToUrl(): Boolean = currentBranch()?.let { isUrl(pushRemoteOf(it)) } == true
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
@@ -263,15 +268,20 @@ class CommandLineGitSync(
         git(listOf("rev-parse", "--verify", "--quiet", "HEAD")).takeIf { it.succeeded() }?.stdout?.trim()
 
     /**
-     * Where a push to [remote] goes: its push URLs as git resolves them — `pushurl`, else `url`. Null for a
-     * name with neither, which is nowhere to push. The push URLs, not the remote's name: `ls-remote <name>`
-     * asks the fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured).
+     * Where a push to [remote] goes: its push URLs as git resolves them — `pushurl`, else `url` — or [remote]
+     * itself when it is a URL or a path, which git accepts as a branch's remote (#378). Null for a name with
+     * neither, which is nowhere to push. The push URLs, not the remote's name: `ls-remote <name>` asks the
+     * fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured).
      */
     private fun destinationsOf(remote: String): List<String>? {
         val urls = git(listOf("remote", "get-url", "--push", "--all", remote))
-        if (!urls.succeeded()) return null
-        return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }
+        if (urls.succeeded()) return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }
+        return listOf(remote).takeIf { isUrl(remote) }
     }
+
+    // Git's own test: a remote's nickname has no directory separator, so one with a separator, or a colon,
+    // is a URL or a path, and git pushes to it as it is.
+    private fun isUrl(remote: String): Boolean = URL_SIGNS.any { it in remote }
 
     // What the destinations already hold, said once while one cannot say, until it answers again (#376).
     private fun heldByDestinations(destinations: List<String>): Set<String>? {
@@ -575,6 +585,9 @@ class CommandLineGitSync(
         private const val REMOTE_UNANSWERED =
             "git push skipped in {}: its remote could not say what it holds, so what a push would send could not " +
                 "be told, and nothing was sent. This is said once, until the remote answers again."
+
+        /** What git's own test for a remote's nickname rules out: a directory separator, and a colon besides. */
+        private val URL_SIGNS = listOf('/', '\\', ':')
 
         /**
          * Git's own line for a directory it could not open, as it says it in the C locale ([GitProcess]).

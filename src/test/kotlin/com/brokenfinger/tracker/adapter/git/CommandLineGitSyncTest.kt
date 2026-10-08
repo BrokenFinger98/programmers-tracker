@@ -1483,6 +1483,29 @@ class CommandLineGitSyncTest {
         heard.single() shouldContain "could not say what it holds"
     }
 
+    /** #378: git accepts a URL or a path as a branch's remote, and the push skipped it as a missing remote. */
+    @Test
+    fun `a branch whose remote is a URL is pushed there`() {
+        val target = bareAt("by-url.git")
+        written(".gitignore", ".ps/\n")
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "records")
+        git("config", "branch.main.remote", target.toString())
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = target).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /** The same remote, asked whether there is one at all: the backup and its report treat it as a remote (#390). */
+    @Test
+    fun `a branch whose remote is a URL has a remote`() {
+        git("config", "branch.main.remote", bareAt("by-url.git").toString())
+
+        sync().hasRemote() shouldBe true
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**
