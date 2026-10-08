@@ -91,8 +91,25 @@ interface RawSessionLog {
      * holes while every consumer believes it is complete (#169). The consumer that matters
      * is an AI asked to diagnose weaknesses from this history, and a confident diagnosis over
      * a record with silent holes is worse than no diagnosis.
+     *
+     * What the store would not read is part of the answer (#378): a refusal that answered
+     * "none" would tell every reader the history is whole.
      */
-    fun orphans(): List<OrphanedFrames>
+    fun orphans(): Orphans
+}
+
+/**
+ * The orphaned frames the store could read ([read]), and what it would not read: [unread] files named
+ * like orphans that it did not open, and whether it could not list them at all ([unlisted]) (#378).
+ */
+data class Orphans(val read: List<OrphanedFrames>, val unread: Int, val unlisted: Boolean) {
+    /** Whether there is nothing to tell: no orphan read, none passed over, nothing unlisted. */
+    fun isNothing(): Boolean = read.isEmpty() && unread == 0 && !unlisted
+
+    companion object {
+        /** No orphan anywhere the store could look. */
+        val NONE = Orphans(emptyList(), 0, unlisted = false)
+    }
 }
 
 /**

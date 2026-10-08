@@ -322,6 +322,12 @@ or otherwise, nothing there was counted, so `rawDirectoryNotListed` says so inst
 orphaned frames, these can still become records: a start that finds the cause gone replays them. A
 session git has tracked is the exception and is never replayed.
 
+Orphaned frames are read under the same rule. Some files under `orphans/` are never opened: one that is
+not a regular file (a link, a FIFO or a device), one larger than 16 MiB, and one whose name git has ever
+tracked. A FIFO there once hung every answer. For those files `orphanFilesNotRead` gives a count instead
+of their frames. Where the orphans could not be listed at all, `orphansNotListed` says so. Either way the
+warning is present, because a refusal does not mean the history is whole.
+
 `incompleteHistory` is **the first key of an answer**, ahead of the payload, in `structuredContent`
 and in the text copy of it alike. A client that cuts a large answer cuts its end, and a warning at
 the end was the first thing lost: the counts arrived looking whole. Claude Code caps a tool result at

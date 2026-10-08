@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.OrphanedFrames
+import com.brokenfinger.tracker.application.Orphans
 import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.RawSessionLog
@@ -15,6 +16,7 @@ import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -67,6 +69,7 @@ class FileRawSessionLog(
     private val guard: StateDirectory? = null,
     private val heldLimit: Long = HELD_LIMIT,
     recordRoot: Path? = null,
+    private val orphanBytes: Long = ORPHAN_BYTES,
 ) : RawSessionLog,
     AutoCloseable {
     /** Where a submit's frames are copied: under the record repository's `problems/`, through no link. */
@@ -186,22 +189,83 @@ class FileRawSessionLog(
         if (left > 0) logger.warn(LOST_AT_EXIT, left)
     }
 
-    override fun orphans(): List<OrphanedFrames> {
-        val orphans = directory.resolve(ORPHANS)
-        if (!Files.isDirectory(orphans)) return emptyList()
-        return Files.list(orphans).use { entries ->
-            entries.toList().mapNotNull { orphanOf(it) }.sortedBy { it.lessonId }
+    /**
+     * The orphans, read only where a frame could be written now, as [unprocessed] reads the work list (#378): `.ps`
+     * the tracker's own with git tracking nothing there, then no link on the way, checked after git answers. Only a
+     * regular file no larger than [orphanBytes] is opened, without following a link, and never one git has ever
+     * tracked. A FIFO, a device or a link is never read: one hung the boot and every MCP call, another reported a
+     * file outside as orphaned frames (the review of #387, measured). What is passed over is counted, and an
+     * orphans directory that could not be listed is said to be, so a refusal never reads as a whole history.
+     */
+    override fun orphans(): Orphans {
+        if (!Files.isDirectory(directory.resolve(ORPHANS))) return Orphans.NONE
+        val guard = guard ?: return orphansIn(namedLikeOrphans(directory.resolve(ORPHANS)), known = emptySet())
+        val state = guard.forWriting()
+        if (state is StateDirectory.Refused) return orphansNotRead(state.refusal, guard.pathFor(RAW, ORPHANS))
+        return when (val orphans = guard.pathFor(RAW, ORPHANS)) {
+            is StateDirectory.Usable -> orphansUnknownToGit(namedLikeOrphans(orphans.directory), guard)
+            is StateDirectory.Refused -> orphansNotListed(orphans.refusal)
         }
+    }
+
+    // Under a refused state directory the orphans are counted by name where no link is on the way, never opened.
+    private fun orphansNotRead(refusal: StateDirectory.Refusal, inspection: StateDirectory.Inspection): Orphans {
+        val orphans = (inspection as? StateDirectory.Usable)?.directory ?: return orphansNotListed(refusal)
+        val named = namedLikeOrphans(orphans).size
+        if (named > 0) sayOnce("$ORPHANS_KEY${refusal.name}") { logger.warn(ORPHANS_NOT_READ, named, refusal.reason) }
+        return Orphans(emptyList(), named, unlisted = false)
+    }
+
+    private fun orphansNotListed(refusal: StateDirectory.Refusal): Orphans {
+        sayOnce("$ORPHANS_KEY${refusal.name}") { logger.warn(ORPHANS_NOT_LISTED, refusal.reason) }
+        return Orphans(emptyList(), 0, unlisted = true)
+    }
+
+    // Git is asked what it has ever tracked only when a file waits to be read; unanswered, none is read.
+    private fun orphansUnknownToGit(named: List<Path>, guard: StateDirectory): Orphans {
+        if (named.isEmpty()) return Orphans.NONE
+        val known = guard.pathsEverTracked() ?: return orphansUnanswered(named.size)
+        return orphansIn(named, known)
+    }
+
+    private fun orphansUnanswered(named: Int): Orphans {
+        sayOnce(ORPHANS_UNANSWERED_KEY) { logger.warn(ORPHANS_UNANSWERED, named) }
+        return Orphans(emptyList(), named, unlisted = false)
+    }
+
+    private fun orphansIn(named: List<Path>, known: Set<String>): Orphans {
+        val read = named.mapNotNull { orphanOf(it, known) }.sortedBy { it.lessonId }
+        val unread = named.size - read.size
+        if (unread > 0) sayOnce(ORPHANS_PASSED_KEY) { logger.warn(ORPHANS_PASSED_OVER, unread, orphanBytes) }
+        return Orphans(read, unread, unlisted = false)
     }
 
     // A count of lines, not of gradings: several gradings sit in one file end to end with no
     // separator, and saying "3 gradings" would be a claim this class cannot support.
-    private fun orphanOf(file: Path): OrphanedFrames? {
-        val lessonId = ORPHAN_NAME.matchEntire(file.fileName.toString())?.groupValues?.get(1)?.toLongOrNull()
-            ?: return null
-        val frames = runCatching { Files.readAllLines(file, CHARSET).count { it.isNotBlank() } }.getOrElse { 0 }
+    private fun orphanOf(file: Path, known: Set<String>): OrphanedFrames? {
+        val lessonId = lessonIdOf(file) ?: return null
+        if (!isAReadableOrphan(file) || known.any { isPath(it, RAW, ORPHANS, file.fileName.toString()) }) return null
+        val frames = runCatching { framesIn(file) }.getOrNull() ?: return null
         return OrphanedFrames(lessonId, frames, file)
     }
+
+    // Names only: an entry whose name is a lesson's, whatever it is. Nothing is opened here.
+    private fun namedLikeOrphans(orphans: Path): List<Path> =
+        Files.list(orphans).use { entries -> entries.toList().filter { lessonIdOf(it) != null } }
+
+    private fun lessonIdOf(file: Path): Long? =
+        ORPHAN_NAME.matchEntire(file.fileName.toString())?.groupValues?.get(1)?.toLongOrNull()
+
+    // A regular file, judged without following a link, and small enough to count: never a FIFO, a device or a link.
+    private fun isAReadableOrphan(file: Path): Boolean = runCatching {
+        val attributes = Files.readAttributes(file, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        attributes.isRegularFile && attributes.size() <= orphanBytes
+    }.getOrDefault(false)
+
+    // Counted line by line and opened without following a link, so one swapped in after the check fails here.
+    private fun framesIn(file: Path): Int = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)
+        .bufferedReader(CHARSET)
+        .useLines { lines -> lines.count { it.isNotBlank() } }
 
     /**
      * The work list, read only from where a frame would be written now (#377): `.ps` the tracker's own,
@@ -236,7 +300,7 @@ class FileRawSessionLog(
     private fun unknownToGit(listed: Listing, guard: StateDirectory): WorkList {
         if (listed.files.isEmpty()) return listed.keeping(emptyList())
         val known = guard.pathsEverTracked() ?: return unanswered(listed)
-        val (delivered, ours) = listed.files.partition { session -> known.any { isPathOf(session, it) } }
+        val (delivered, ours) = listed.files.partition { session -> known.any { isPath(it, RAW, session.id.value) } }
         if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
         return listed.keeping(ours)
     }
@@ -246,12 +310,12 @@ class FileRawSessionLog(
         return listed.keeping(emptyList())
     }
 
-    // `raw/<name>` below the state directory, in any case: git keeps a name as it was committed, and a filesystem
-    // that folds case answers it for the session's own.
-    private fun isPathOf(session: RawSession, path: String): Boolean {
+    // [path], below the state directory, is [expected] segment by segment in any case: git keeps a name as it was
+    // committed, and a filesystem that folds case answers it for the tracker's own.
+    private fun isPath(path: String, vararg expected: String): Boolean {
         val segments = path.split('/')
-        if (segments.size != 2) return false
-        return segments[0].equals(RAW, ignoreCase = true) && segments[1].equals(session.id.value, ignoreCase = true)
+        if (segments.size != expected.size) return false
+        return segments.zip(expected).all { (actual, wanted) -> actual.equals(wanted, ignoreCase = true) }
     }
 
     // Regular files alone (#377): the tracker writes no link there, so one named like a session is not its own,
@@ -494,11 +558,28 @@ class FileRawSessionLog(
             "{} raw session(s) were not replayed because each is not a regular file — a link, most likely, which " +
                 "this server never writes there — and none was read. Said once."
         private const val NOT_A_FILE = "not a file"
+        private const val ORPHANS_NOT_READ =
+            "{} orphaned-frame file(s) were counted but not read: {}. Their frames are counted once .ps is usable. " +
+                "Said once for this reason."
+        private const val ORPHANS_NOT_LISTED =
+            "Orphaned frames were not listed: {}. Their directory was not read, so nothing in it was counted. " +
+                "Said once for this reason."
+        private const val ORPHANS_PASSED_OVER =
+            "{} orphaned-frame file(s) were not read: each is not a regular file — a link, a FIFO or a device — or " +
+                "holds more than {} bytes, or git has tracked its name. Said once."
+        private const val ORPHANS_UNANSWERED =
+            "{} orphaned-frame file(s) were not read: git could not say what it has ever tracked under .ps. Said once."
+        private const val ORPHANS_KEY = "orphans: "
+        private const val ORPHANS_PASSED_KEY = "orphans passed over"
+        private const val ORPHANS_UNANSWERED_KEY = "orphans unanswered"
         private const val NOT_REPLAYED = "not replayed: "
         private const val LIMIT = "limit"
 
         /** What the log holds in memory at most, across every session, while `.ps` is refused. */
         const val HELD_LIMIT = 8_000_000L
+
+        /** The largest orphans file read to count its frames (#378). */
+        const val ORPHAN_BYTES = 16L * 1024 * 1024
 
         private val logger = LoggerFactory.getLogger(FileRawSessionLog::class.java)
 

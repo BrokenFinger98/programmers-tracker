@@ -497,8 +497,8 @@ private class RecordingRawSessionLog(private val journal: MutableList<String>) :
 
     override fun setAside(session: RawSessionId) = Unit
 
-    override fun orphans(): List<OrphanedFrames> =
-        orphans.mapIndexed { index, _ -> OrphanedFrames(index.toLong(), 1, Path.of("orphans")) }
+    override fun orphans(): Orphans =
+        Orphans(orphans.mapIndexed { index, _ -> OrphanedFrames(index.toLong(), 1, Path.of("orphans")) }, 0, false)
 
     override fun orphaned(lessonId: Long, frameText: String) {
         journal += "orphaned"

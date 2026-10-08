@@ -20,6 +20,7 @@ import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.aTornRecordLine
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -49,6 +50,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -358,6 +360,40 @@ class McpToolInvokerTest {
 
         gaps["rawDirectoryNotListed"]!!.jsonPrimitive.booleanOrNull shouldBe true
         gaps.shouldNotContainKey("sessionsNotReplayed")
+    }
+
+    /**
+     * Every answer asks for the orphans, so a FIFO under `orphans/` hung every tool call: `stats` timed out at
+     * 15 s in the deployed image (the review of #387, measured). It is never opened, and the answer says a
+     * file was passed over rather than go silent. A thread of its own, since a blocked `open` cannot be
+     * interrupted.
+     */
+    @Test
+    @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO under orphans neither hangs a tool call nor goes unmentioned`() {
+        val orphans = Files.createDirectories(root.resolve(".ps/raw/orphans"))
+        assumeTrue(madeFifo(orphans.resolve("1.jsonl")), "this test makes a FIFO")
+        val invoker = invokerOver(aSubmissionRecord())
+
+        val gaps = structured(invoker.call("stats", arguments("groupBy" to "verdict")))["incompleteHistory"]!!
+            .jsonObject
+
+        gaps["orphanFilesNotRead"]!!.jsonPrimitive.int shouldBe 1
+        gaps["lessonsWithOrphanedFrames"]!!.jsonPrimitive.int shouldBe 0
+    }
+
+    /** A refusal is not a whole history: an answer says the orphans could not be listed rather than none exist. */
+    @Test
+    fun `an answer says so when the orphans could not be listed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps/raw/orphans"), Files.createDirectories(root.resolve("problems/zz")))
+        val invoker = invokerOver(aSubmissionRecord())
+
+        val gaps = structured(invoker.call("stats", arguments("groupBy" to "verdict")))["incompleteHistory"]!!
+            .jsonObject
+
+        gaps["orphansNotListed"]!!.jsonPrimitive.booleanOrNull shouldBe true
+        gaps.shouldNotContainKey("orphanFilesNotRead")
     }
 
     /** Absence is the signal, so a complete history must not carry the field on any tool. */
