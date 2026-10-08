@@ -3,11 +3,13 @@ package com.brokenfinger.tracker.adapter.git
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
 import com.brokenfinger.tracker.support.fixtures.A_PUSH_CREDENTIAL
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -550,6 +552,77 @@ class CommandLineGitSyncTest {
         subjects(at = remote).first() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
     }
 
+    // The state directory is the real one, or git is not run at all (#360) ----------------------
+    //
+    // No credential is stored in these, so the content gate has nothing to search for: what keeps the
+    // state that lands in a tracked path out of a commit is the identity check alone.
+
+    /**
+     * Git treats an ignored file as expendable, so a pull can delete the state directory and put a
+     * tracked link into the tree in its place. Every state write then lands in a path git tracks.
+     */
+    @Test
+    fun `a state directory that is a link into the tree refuses every commit and push`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        written(".gitignore", ".ps/\n")
+        aLink(root.resolve(".ps"), Files.createDirectories(root.resolve("problems/zz")))
+        written("problems/zz/README.md", "decoy\n")
+        git("add", "--all")
+        git("commit", "--message", "as a pull delivers it")
+        written(".ps/raw/a-run.jsonl", RAW_FRAME)
+        val solution = written("problems/120804/Solution.java", CODE)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync.reconcile() shouldBe false
+            sync.commitSubmission(aWrongSubmit(), listOf(solution)) shouldBe false
+            sync.push() shouldBe false
+        }
+
+        heard.size shouldBe 3
+        heard.forEach { it shouldContain "is not the tracker's own state directory" }
+        subjects() shouldContainExactly listOf("as a pull delivers it")
+    }
+
+    /**
+     * U+017F folds to `s`, so APFS answers the server's `.ps` with a `.pſ` a clone delivered. Git sees
+     * the name on disk, which neither the ignore rule nor the pathspec names — with a healthy
+     * `.gitignore`, and silently.
+     */
+    @Test
+    fun `a state directory the filesystem folds from a long s refuses every commit`() {
+        assumeTrue(foldsTogether(base, A_LONG_S_STATE_DIRECTORY, ".ps"), "this filesystem does not fold U+017F")
+        written(".gitignore", ".ps/\n")
+        written("$A_LONG_S_STATE_DIRECTORY/readme", "decoy\n")
+        git("add", "--all")
+        git("commit", "--message", "as a clone delivers it")
+        written(".ps/raw/a-run.jsonl", RAW_FRAME)
+        written("log/submissions.jsonl", RECORD)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "is not the tracker's own state directory"
+        subjects() shouldContainExactly listOf("as a clone delivers it")
+    }
+
+    /** The same on any case-insensitive volume with `.PS`, where a `.gitignore` git cannot read ignores nothing. */
+    @Test
+    fun `a state directory the filesystem folds from another case refuses every commit`() {
+        assumeTrue(foldsTogether(base, ".PS", ".ps"), "this filesystem keeps .PS and .ps apart")
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".gitignore"), base.resolve("nowhere"))
+        written(".PS/readme", "decoy\n")
+        git("add", "--all")
+        git("commit", "--message", "as a clone delivers it")
+        written(".ps/raw/a-run.jsonl", RAW_FRAME)
+        written("log/submissions.jsonl", RECORD)
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().reconcile() shouldBe false }
+
+        heard.single() shouldContain "is not the tracker's own state directory"
+        subjects() shouldContainExactly listOf("as a clone delivers it")
+    }
+
     private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor)
 
     /** Every commit a repository holds, with its full diff — what a push could ever have delivered there. */
@@ -646,6 +719,7 @@ class CommandLineGitSyncTest {
     private companion object {
         const val CODE = "class Solution {}\n"
         const val RECORD = """{"lessonId":120804}"""
+        const val RAW_FRAME = """{"type":"frame","marker":"a frame of the server's own state"}"""
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2

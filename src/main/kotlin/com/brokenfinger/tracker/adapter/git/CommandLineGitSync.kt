@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.adapter.git.StoredCredential.Patterns
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.application.GitSync
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
@@ -47,6 +48,8 @@ class CommandLineGitSync(
      */
     private val credential = PushCredential(root)
 
+    private val stateDirectory = StateDirectory(root)
+
     /**
      * Asked once, on the first git call rather than at construction — the composition root
      * builds this before the user has any chance to fix it, and a lazy answer keeps the
@@ -71,7 +74,18 @@ class CommandLineGitSync(
 
     private fun inRepository(what: String, action: () -> Boolean): Boolean {
         if (!isRepository) return false
-        return neverThrowing(what, action)
+        return neverThrowing(what) { inVerifiedState(what) && action() }
+    }
+
+    /**
+     * Git runs only while `.ps` is the tracker's own state directory (#360). A link a pull swapped
+     * in, or a name the filesystem folds to `.ps`, turns every state write into a path git tracks —
+     * raw frames, timers, the credential — so while it is anything else, nothing is committed or
+     * pushed. Checked on every call, because a pull can change it while the server runs.
+     */
+    private fun inVerifiedState(what: String): Boolean {
+        if (stateDirectory.verified() != null) return true
+        return refused(STATE_DIRECTORY_REFUSED, what)
     }
 
     // `rev-parse` is git's own answer and covers what a `.git` directory test does not — a
@@ -356,6 +370,11 @@ class CommandLineGitSync(
 
         /** The tracker's state directory, spelled with its slash so git knows it is a directory. */
         private const val STATE_DIRECTORY = ".ps/"
+
+        private const val STATE_DIRECTORY_REFUSED =
+            "git {} refused in {}: what answers to .ps there is not the tracker's own state directory — a " +
+                "link, or a name the filesystem folds to .ps, such as .PS — so whatever is written into it is " +
+                "a path git tracks. Replace it with a real directory named exactly .ps."
 
         private const val CREDENTIAL_FOUND =
             "git {} refused in {}: what it would send carries the push token stored in .ps/git-credentials. " +

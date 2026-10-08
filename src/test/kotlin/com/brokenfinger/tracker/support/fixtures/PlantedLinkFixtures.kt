@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.support.fixtures
 
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 
 // Object mother for a planted link (dev rules §6.4, #354). Git stores symbolic links, so a records
@@ -33,3 +34,20 @@ fun canPlantLinksIn(root: Path): Boolean = root.fileSystem.supportedFileAttribut
 /** [path] made a FIFO, which only `mkfifo` makes; false where there is none to run. Its parent must exist. */
 fun madeFifo(path: Path): Boolean =
     runCatching { ProcessBuilder("mkfifo", path.toString()).start().waitFor() == 0 }.getOrDefault(false)
+
+/** `.p` and U+017F, LATIN SMALL LETTER LONG S, which case-folds to `s`: APFS answers `.ps` with it (#360). */
+const val A_LONG_S_STATE_DIRECTORY = ".pſ"
+
+/**
+ * Whether this filesystem answers [name] with an entry created as [alias] — `.PS` for `.ps` on a
+ * case-insensitive volume, [A_LONG_S_STATE_DIRECTORY] where Unicode case folding applies as well, as
+ * on APFS. A clone can deliver either, so a test that needs one probes for it under [root] first.
+ */
+fun foldsTogether(root: Path, alias: String, name: String): Boolean = runCatching {
+    val probe = Files.createTempDirectory(root, "fold")
+    val created = Files.createDirectory(probe.resolve(alias))
+    val folds = Files.exists(probe.resolve(name), LinkOption.NOFOLLOW_LINKS)
+    Files.delete(created)
+    Files.delete(probe)
+    folds
+}.getOrDefault(false)

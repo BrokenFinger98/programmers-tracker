@@ -1,6 +1,10 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import com.brokenfinger.tracker.support.git.GitWorkspace
+import com.brokenfinger.tracker.support.logging.warningsWhile
 import com.sun.net.httpserver.HttpServer
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -231,6 +235,35 @@ class GithubRemoteTest {
             perms.none { it.name.startsWith("GROUP") || it.name.startsWith("OTHERS") }.shouldBeTrue()
         }
         git("remote", "get-url", "origin") shouldNotContain "ghp_test_token"
+    }
+
+    /**
+     * `.ps` a tracked link into the tree, as a pull can leave it: the credential written there would be
+     * a path git tracks. It is not written, it is said, and nothing is wired on top of it (#360).
+     */
+    @Test
+    fun `stores no credential into a state directory that is a link`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(repo.root.resolve("problems/zz"))
+        aLink(repo.root.resolve(".ps"), tracked)
+
+        val heard = warningsWhile(GithubRemote::class) { remote().ensure() }
+
+        Files.exists(tracked.resolve("git-credentials")) shouldBe false
+        heard.single() shouldContain "is not the tracker's own state directory"
+        heard.single() shouldNotContain "ghp_test_token"
+        git("remote").trim() shouldBe ""
+    }
+
+    /** Nor into a directory the filesystem folds to `.ps`, delivered by a clone. */
+    @Test
+    fun `stores no credential into a state directory the filesystem folds`() {
+        assumeTrue(foldsTogether(dir, ".PS", ".ps"), "this filesystem keeps .PS and .ps apart")
+        val alias = Files.createDirectory(repo.root.resolve(".PS"))
+
+        remote().ensure()
+
+        Files.exists(alias.resolve("git-credentials")) shouldBe false
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonObject
@@ -82,7 +83,7 @@ class GithubRemote(
         // Always, not only when wiring: this is how an SSH setup migrates to the token (change
         // the remote URL, boot) and how a rotated token in .env takes effect. The helper only
         // ever answers for https://github.com, so an SSH remote is unaffected by its existence.
-        storeCredential()
+        if (!storeCredential()) return
         if (hasOrigin()) {
             convertGithubSsh()
             return
@@ -133,9 +134,9 @@ class GithubRemote(
      * token in `.env` takes effect, owner-only like the watch token, and inside `.ps/` so the
      * gitignore the server itself maintains keeps it out of every commit.
      */
-    private fun storeCredential() {
-        val file = PushCredential(recordRoot).file()
-        Files.createDirectories(file.parent)
+    private fun storeCredential(): Boolean {
+        val directory = StateDirectory(recordRoot).verified() ?: return notStored()
+        val file = directory.resolve(PushCredential.STORE)
         runCatching {
             Files.createFile(file, PosixFilePermissions.asFileAttribute(OWNER_ONLY))
         }
@@ -143,6 +144,16 @@ class GithubRemote(
         runCatching { Files.setPosixFilePermissions(file, OWNER_ONLY) }
         // No `git config` here on purpose. The pointer is passed per command instead, because
         // this repository's config is the user's too and the path we would write is ours (#267).
+        return true
+    }
+
+    /**
+     * `.ps` is not the tracker's own state directory (#360): a credential written there would be a
+     * path git tracks. Nothing is stored and nothing is wired on top of it; the token is not named.
+     */
+    private fun notStored(): Boolean {
+        logger.warn(STATE_DIRECTORY_REFUSED, recordRoot)
+        return false
     }
 
     /**
@@ -212,6 +223,11 @@ class GithubRemote(
         val GITHUB_SSH = Regex("""(?:ssh://)?git@github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?""")
 
         val OWNER_ONLY = PosixFilePermissions.fromString("rw-------")
+
+        const val STATE_DIRECTORY_REFUSED =
+            "What answers to .ps in {} is not the tracker's own state directory — a link, or a name the " +
+                "filesystem folds to .ps, such as .PS — so the push credential is not stored there and origin " +
+                "is not wired. Replace it with a real directory named exactly .ps."
 
         val logger = LoggerFactory.getLogger(GithubRemote::class.java)
     }

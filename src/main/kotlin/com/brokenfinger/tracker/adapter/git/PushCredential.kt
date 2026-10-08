@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -74,8 +75,11 @@ class PushCredential(private val root: Path) {
         Files.newInputStream(file, NOFOLLOW_LINKS).use { String(it.readAllBytes(), Charsets.UTF_8) }
 
     companion object {
+        /** The store's own name, inside the state directory. */
+        const val STORE = "git-credentials"
+
         /** Beside the raw frames and the timers, under the state directory (#126). */
-        const val FILE = ".ps/git-credentials"
+        const val FILE = "${StateDirectory.NAME}/$STORE"
     }
 }
 
