@@ -223,7 +223,8 @@ is written once, read normally from then on, and the backfill's count becomes tr
   extended attributes are not carried. Its mode is kept. The heartbeat now writes its marker by
   temporary file and rename at every beat. Beside a page, a `.<name>.<n>.tmp` exists for the moment
   of the write. A reconcile racing it could commit one, as it always could beside a code file.
-  ⚠️ Since #386 it is `.<name>.<n>.programmers-tracker.tmp`, and no reconcile commits it (Outcome).
+  ⚠️ Since #386 it is `.<name>.<n>.programmers-tracker.tmp`, and no reconcile commits it; one an earlier
+  build left, under the old name, is committed once after the upgrade (Outcome).
 - **Every write walks its directories.** Each step takes a stat, a listing of its parent and a real
   path. All figures are from this host (APFS, JDK 25).
   - Before the listing, over 2,000 writes of a 4 KB page: a replace took 0.22–0.24 ms against 0.04 ms
@@ -255,8 +256,8 @@ is written once, read normally from then on, and the backfill's count becomes tr
   ⚠️ Pinned by #386 in a test enabled on Windows alone; its first run there is the measurement
   (Outcome).
 - **A temporary file left by a crash stays beside its target** (Q5; filed). The next reconcile
-  commits it. Code files always had this. ⚠️ Resolved by #386: it stays, and is never committed
-  (Outcome).
+  commits it. Code files always had this. ⚠️ Resolved by #386: it stays, and under its new name is never
+  committed; one an earlier build left is committed once after the upgrade (Outcome).
 - **`RecordWrites` repeats parts of `StateDirectory` and `AtomicStateFile`** (Q6; filed): the
   per-directory checks, the rename, and a warn-once set each. Only the directory listing is shared,
   since the review round. Merging the rest is a refactor of its own. ⚠️ Resolved by #386 (Outcome).
@@ -455,7 +456,9 @@ windows-latest, not yet run. The audit, the options and each reader's posture:
 `AtomicStateFile` hand their writes to, with the three modes they use; `SaidOnce` is the warn-once set
 of four classes; `.ps` takes the walk's own step (Q6). The temporary file is now
 `.<name>.<n>.programmers-tracker.tmp`, and every reconcile leaves it out by name, so neither a crash's
-debris nor a racing write's is committed (Q5). A replace over a page held open on Windows is pinned by
+debris nor a racing write's is committed (Q5), and a seeded ignore rule keeps it from every other `git add`.
+Debris an earlier build left under the old name is committed once after the upgrade. A replace over a page
+held open on Windows is pinned by
 a test enabled there alone, which asserts the predicted failure and that nothing is lost; its first run
 on windows-latest is the measurement (Q4). The inventory, the options and the debris choice:
 [[decisions/2026-10-08-one-replace-and-no-crash-debris]].
