@@ -1222,7 +1222,7 @@ class CommandLineGitSyncTest {
      * The tracker never fetches, so a remote-tracking ref stays where the last push left it. Pointed at a new
      * remote, `origin/main` still named a commit whose tree held a token, the range left that blob out, and
      * the push sent it there (the review of 315f44e; refused before #373, whose search read every outgoing
-     * commit's whole tree). HEAD's tree is searched at every push, whatever the refs say.
+     * commit's whole tree). The range is what the remote says it holds, not what a ref remembers (#376).
      */
     @Test
     fun `a token in HEAD's tree is found, though a stale ref says it was pushed`() {
@@ -1616,6 +1616,23 @@ class CommandLineGitSyncTest {
         sync().hasRemote() shouldBe true
     }
 
+    /**
+     * A push sends what its remote lacks, and a pulled string the remote already holds is not sent again.
+     * #373 read HEAD's whole tree at every push besides, which refused every push for it.
+     */
+    @Test
+    fun `a push goes ahead when the remote already holds what HEAD carries`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/pasted.md", "${aGithubShapedToken()}\n")
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "a record")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**
@@ -1789,15 +1806,39 @@ class CommandLineGitSyncTest {
 
     /** Someone else pushed meanwhile, which is what makes the next push a non-fast-forward. */
     private fun remoteMovedAhead(remote: Path) {
-        val other = base.resolve("other-clone")
-        git("clone", remote.toString(), other.toString(), at = base)
-        git("config", "user.email", "other@example.invalid", at = other)
-        git("config", "user.name", "Other", at = other)
-        git("config", "commit.gpgsign", "false", at = other)
+        val other = anotherCloneOf(remote)
         Files.writeString(other.resolve("elsewhere.md"), "someone else's work")
         git("add", "--all", at = other)
         git("commit", "--message", "elsewhere", at = other)
         git("push", at = other)
+    }
+
+    /**
+     * [content] at [relative], committed in another clone of [remote], pushed there and pulled here: HEAD's
+     * tree holds it, and so does the remote. The clone is made once and brought up to date after that, and
+     * its `.gitignore` holds the state directory's rule, as the tracker seeds it.
+     */
+    private fun pulledFrom(remote: Path, relative: String, content: String) {
+        val other = base.resolve("other-clone").takeIf { Files.exists(it) } ?: anotherCloneOf(remote)
+        git("pull", "--quiet", "--no-rebase", "--ff-only", at = other)
+        Files.writeString(other.resolve(".gitignore"), ".ps/\n")
+        val file = other.resolve(relative)
+        Files.createDirectories(file.parent)
+        Files.writeString(file, content)
+        git("add", "--all", at = other)
+        git("commit", "--message", "pasted elsewhere", at = other)
+        git("push", "--quiet", at = other)
+        git("pull", "--quiet", "--no-rebase", "--ff-only", "origin", "main")
+    }
+
+    /** A clone of [remote] beside the record repository, with an identity of its own. */
+    private fun anotherCloneOf(remote: Path): Path {
+        val other = base.resolve("other-clone")
+        git("clone", "--quiet", remote.toString(), other.toString(), at = base)
+        git("config", "user.email", "other@example.invalid", at = other)
+        git("config", "user.name", "Other", at = other)
+        git("config", "commit.gpgsign", "false", at = other)
+        return other
     }
 
     private fun subjects(at: Path = root): List<String> {
