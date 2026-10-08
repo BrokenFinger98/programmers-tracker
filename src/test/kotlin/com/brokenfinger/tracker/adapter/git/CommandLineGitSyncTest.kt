@@ -7,10 +7,14 @@ import ch.qos.logback.core.read.ListAppender
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
+import com.brokenfinger.tracker.support.fixtures.aLink
+import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -285,6 +289,102 @@ class CommandLineGitSyncTest {
         git("status", "--porcelain", at = fresh).trim() shouldBe "?? note.md"
     }
 
+    // The state directory never enters a reconciliation (#360) --------------------------------
+
+    /**
+     * The push token sits at `.ps/git-credentials`, and one `.gitignore` rule was all that kept it out
+     * of `add --all`. Git never follows a `.gitignore` that is a link: it warns that it cannot access
+     * the file and reads no rules at all. Git stores links, so one can arrive with a clone or a pull,
+     * and the next pass would have pushed the token.
+     */
+    @Test
+    fun `a gitignore that is a link does not let reconciliation commit the push token`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".gitignore"), base.resolve("nowhere"))
+        aPushTokenIn(root)
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
+    /**
+     * The healthy repository, and the one a literal exclusion broke: with `.ps/` ignored, an argument
+     * that names `.ps` makes `add --all` report it as an ignored path and exit 1, so every
+     * reconciliation failed (git 2.48.1).
+     */
+    @Test
+    fun `a repository whose gitignore works still reconciles, the state directory left out`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
+    @Test
+    fun `with no gitignore at all, reconciliation still leaves the state directory out`() {
+        aPushTokenIn(root)
+        written(".ps/raw/recorded/a-run.jsonl", "{}")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+    }
+
+    /** A timer ticked or a frame landed, and nothing else moved: that is nothing to reconcile, not an empty commit. */
+    @Test
+    fun `a change under the state directory alone is nothing to reconcile`() {
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "records")
+        aPushTokenIn(root)
+
+        sync().reconcile() shouldBe true
+
+        subjects() shouldContainExactly listOf("records")
+    }
+
+    /**
+     * While `.gitignore` is a link, git prints its warning on every call, `status` included. The
+     * warning is not a change: read as one, a clean tree became an empty commit that failed, at
+     * every reconciliation.
+     */
+    @Test
+    fun `git's warning about a linked gitignore is not a change to reconcile`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".gitignore"), base.resolve("nowhere"))
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "records")
+
+        sync().reconcile() shouldBe true
+
+        subjects() shouldContainExactly listOf("records")
+    }
+
+    /**
+     * Someone forced a state file into the index. A commit that names its paths takes only those, so
+     * the file stays staged and goes no further — an editor's staged note is kept out of a submit
+     * commit the same way.
+     */
+    @Test
+    fun `a state file staged by hand is not committed by reconciliation`() {
+        written(".gitignore", ".ps/\n")
+        aPushTokenIn(root)
+        git("add", "--force", "--", ".ps/git-credentials")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+        statusOf(".ps/git-credentials") shouldBe "A  .ps/git-credentials"
+    }
+
     /** What this class said while [action] ran. Logback is what the application logs through. */
     private fun warningsWhile(action: () -> Unit): List<String> {
         val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java) as Logger
@@ -385,6 +485,7 @@ class CommandLineGitSyncTest {
 
     private companion object {
         const val CODE = "class Solution {}\n"
+        const val RECORD = """{"lessonId":120804}"""
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2

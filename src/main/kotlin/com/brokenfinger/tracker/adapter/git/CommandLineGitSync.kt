@@ -113,7 +113,7 @@ class CommandLineGitSync(
     }
 
     private fun commitEverything(): Boolean {
-        if (!isDirty(emptyList())) return true
+        if (!isDirty(RECONCILE_SCOPE)) return true
         return retryingOnContention("reconcile") { stageAllAndCommit() }
     }
 
@@ -131,10 +131,11 @@ class CommandLineGitSync(
         return git(listOf("commit", "--message", message, "--") + scope)
     }
 
+    // A partial commit on a branch with no commit yet is still a root commit: measured on git 2.48.1.
     private fun stageAllAndCommit(): GitResult {
-        val staged = git(listOf("add", "--all"))
+        val staged = git(listOf("add", "--all", "--") + RECONCILE_SCOPE)
         if (!staged.succeeded()) return staged
-        return git(listOf("commit", "--message", RECONCILE_MESSAGE))
+        return git(listOf("commit", "--message", RECONCILE_MESSAGE, "--") + RECONCILE_SCOPE)
     }
 
     /**
@@ -151,9 +152,16 @@ class CommandLineGitSync(
         return abandoned(what)
     }
 
-    /** Whether anything under [scope] differs from HEAD; an empty scope asks about everything. */
-    private fun isDirty(scope: List<String>): Boolean =
-        git(listOf("status", "--porcelain", "--") + scope).output.isNotBlank()
+    /**
+     * Whether anything under [scope] differs from HEAD, read from git's answer alone. A warning is
+     * not a change: while `.gitignore` is a link, git warns on every call, and that warning once
+     * made a clean tree look dirty and every reconciliation an empty commit that failed (#360). A
+     * status that failed still counts as dirty, so the commit that follows reports why.
+     */
+    private fun isDirty(scope: List<String>): Boolean {
+        val status = git(listOf("status", "--porcelain", "--") + scope)
+        return !status.succeeded() || status.stdout.isNotBlank()
+    }
 
     private fun insideRoot(paths: List<Path>): List<String> = paths.mapNotNull { relativeOf(it) }.distinct()
 
@@ -195,20 +203,23 @@ class CommandLineGitSync(
     private fun backoffFor(attempt: Int): Duration = BACKOFF_SCHEDULE.getOrElse(attempt - 1) { BACKOFF_SCHEDULE.last() }
 
     /**
-     * One `git` invocation with stderr folded into the output, so a diagnosis never depends
-     * on which stream git chose.
+     * One `git` invocation, its two streams kept apart: what git answers is read from stdout
+     * alone, and a diagnosis reads both, so it never depends on which stream git chose.
      *
-     * Output goes to a file rather than a pipe, which is what makes [TIMEOUT] a real bound:
+     * Output goes to files rather than pipes, which is what makes [TIMEOUT] a real bound:
      * a full pipe buffer would block us before we ever got to wait. Terminal prompting is
      * off, so a push cannot stop for credentials — and the timeout is there for the case
      * where it stalls anyway, because a capture must never wait on the network.
      */
     private fun git(args: List<String>): GitResult {
-        val output = Files.createTempFile("git-", ".out")
+        val stdout = Files.createTempFile("git-", ".out")
+        val stderr = Files.createTempFile("git-", ".err")
         try {
-            return GitResult(exitCodeOf(args, output), Files.readString(output))
+            val code = exitCodeOf(args, stdout, stderr)
+            return GitResult(code, Files.readString(stdout), Files.readString(stderr))
         } finally {
-            Files.deleteIfExists(output)
+            Files.deleteIfExists(stdout)
+            Files.deleteIfExists(stderr)
         }
     }
 
@@ -219,11 +230,11 @@ class CommandLineGitSync(
      */
     internal fun commandFor(args: List<String>): List<String> = listOf(GIT) + credential.gitConfig() + args
 
-    private fun exitCodeOf(args: List<String>, output: Path): Int {
+    private fun exitCodeOf(args: List<String>, stdout: Path, stderr: Path): Int {
         val process = ProcessBuilder(commandFor(args))
             .directory(root.toFile())
-            .redirectErrorStream(true)
-            .redirectOutput(output.toFile())
+            .redirectOutput(stdout.toFile())
+            .redirectError(stderr.toFile())
             .also { it.environment()[NO_PROMPT] = "0" }
             .start()
         if (process.waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)) return process.exitValue()
@@ -234,6 +245,21 @@ class CommandLineGitSync(
     companion object {
         /** What a reconciliation commit says: these files were left behind, not chosen. */
         const val RECONCILE_MESSAGE = "chore: reconcile uncommitted records"
+
+        /**
+         * Everything but what is under `.ps/`, the tracker's own state — the push token is
+         * `.ps/git-credentials`. The check, the staging and the commit all take this pathspec, so
+         * nothing under `.ps/` enters a reconciliation whatever `.gitignore` says, or whether git
+         * can read it at all (#360).
+         *
+         * **Spelled as a glob on purpose.** `add --all` exits 1 when an argument names a path the
+         * ignore rules exclude, and an exclusion counts as naming it: with `.ps/` ignored, as in a
+         * healthy repository, `:(exclude).ps`, `:!.ps` and every other spelling that starts with
+         * `.ps` failed each reconciliation (measured on git 2.48.1). git judges whether an
+         * argument names a path by its prefix before the first wildcard; `[.]` leaves this one
+         * no prefix, and still matches nothing but the dot.
+         */
+        private val RECONCILE_SCOPE = listOf(".", ":(exclude,glob)[.]ps/**")
 
         /** Said once per process, so it stays readable instead of drowning every other line. */
         const val NOT_A_REPOSITORY =
@@ -261,8 +287,11 @@ class CommandLineGitSync(
     }
 }
 
-/** One finished `git` invocation — its exit code and everything it printed. */
-private data class GitResult(val code: Int, val output: String) {
+/** One finished `git` invocation — its exit code, its answer on [stdout], and what it said on [stderr]. */
+private data class GitResult(val code: Int, val stdout: String, val stderr: String) {
+    /** Everything git printed, for a diagnosis that must not depend on which stream git chose. */
+    val output: String get() = stdout + stderr
+
     fun succeeded(): Boolean = code == 0
 
     // Git's own words when another process holds the index: "Unable to create

@@ -190,10 +190,11 @@ class RecordWriterGitTest {
         CommandLineGitSync(repo.root).reconcile() shouldBe true
 
         repo.subjects().single() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
-        // Reconciliation is `git add --all`, so this list is the whole answer to "what does
-        // the record repository publish". The raw frames for this grading are sitting in
-        // `.ps/raw` one directory up from `attempts/`, and the only reason they are absent is
-        // the rule `RecordRepositoryIgnores` wrote — which is why `.gitignore` is here (#126).
+        // Reconciliation is `git add --all` outside `.ps`, so this list is the whole answer to
+        // "what does the record repository publish". The raw frames for this grading are sitting
+        // in `.ps/raw` one directory up from `attempts/`. Reconciliation leaves them out by
+        // pathspec (#360), and the rule `RecordRepositoryIgnores` wrote keeps them out of every
+        // other `git add` — which is why `.gitignore` is here (#126).
         repo.filesInHead() shouldContainExactly listOf(
             ".gitignore",
             "log/submissions.jsonl",
