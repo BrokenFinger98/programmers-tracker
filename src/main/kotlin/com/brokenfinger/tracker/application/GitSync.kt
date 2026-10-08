@@ -38,12 +38,21 @@ interface GitSync {
      *
      * The tracker's own state, the push credential among it, is never part of it, whatever
      * the repository's ignore rules say (#360).
+     *
+     * Returns whether nothing it covers is left uncommitted, which includes "there was nothing
+     * to commit"; false when something may be — a commit that was refused, waited out the
+     * user's merge, or failed. The daily backup counts a day only on true (#372). A directory
+     * git cannot open is not seen at all, so what is under it does not make this false: it is
+     * warned about instead, once per directory.
      */
     fun reconcile(): Boolean
 
     /**
      * Pushes the current branch. Called on a pass and available as a manual trigger
      * (MCP `push()`, design §4.6).
+     *
+     * Returns whether the branch is on the remote, which includes "there is nothing to push":
+     * a branch with no commit yet (#360).
      */
     fun push(): Boolean
 

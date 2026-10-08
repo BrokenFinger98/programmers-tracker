@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The daily backup push (design §4.6).
@@ -40,11 +41,14 @@ class DailyBackup(
      */
     private val zone: ZoneId,
 ) {
-    /** Backs up when the most recent scheduled hour has not been. Returns whether it ran. */
+    /** The scheduled backup last said to be held back, so a check every minute says it once for each. */
+    private val heldSaidFor = AtomicReference<Instant?>()
+
+    /** Backs up when the most recent scheduled hour has not been. Returns whether a backup was recorded. */
     fun runIfDue(): Boolean {
         val due = mostRecentDue()
         if (!isDue(due)) return false
-        return performed()
+        return performed(due)
     }
 
     /**
@@ -53,10 +57,18 @@ class DailyBackup(
      *
      * Only a push that actually landed counts as a backup. A failed one leaves the day due, so
      * the next start tries again instead of recording a backup that never left the machine.
+     *
+     * **And only a day whose records are all committed (#372).** A reconciliation that was refused,
+     * waited out the user's merge or could not commit leaves records on this disk alone, and recording
+     * the day then told the next check there was nothing left to do. Its answer holds the record, not
+     * the push: what is committed still goes up meanwhile. Nothing to reconcile is a reconciliation that
+     * succeeded, and a branch with no commit yet and nothing to commit holds nothing to back up — that
+     * push answers "nothing to push" (#360), and the day counts.
      */
-    private fun performed(): Boolean {
-        git.reconcile()
+    private fun performed(due: Instant): Boolean {
+        val reconciled = git.reconcile()
         if (!git.push()) return incomplete()
+        if (!reconciled) return heldBack(due)
         log.succeededAt(clock.instant())
         logger.info("Daily backup pushed the record repository")
         return true
@@ -82,8 +94,20 @@ class DailyBackup(
         return false
     }
 
+    // Why a record stayed uncommitted is said where it happened, and a merge wait only once; the check
+    // runs every minute while the day is due, so this is said once for each scheduled backup.
+    private fun heldBack(due: Instant): Boolean {
+        if (heldSaidFor.getAndSet(due) != due) logger.warn(HELD_BACK)
+        return false
+    }
+
     private companion object {
         val logger = LoggerFactory.getLogger(DailyBackup::class.java)
+
+        const val HELD_BACK =
+            "Daily backup held back: the push landed, but records are left uncommitted, and the " +
+                "reconciliation's own warning says why. The day stays due and every check tries again; " +
+                "this is said once for each scheduled backup."
     }
 }
 
