@@ -20,7 +20,7 @@ recent scheduled hour has been backed up ([[decisions/2026-08-06-wire-git-into-t
 count stayed due, and every check tried it again.
 
 Measured over one simulated day of checks a minute apart, with the real `DailyBackup`,
-`CommandLineGitSync` and `FileBackupLog` on real repositories (git 2.48.1, on `e6deb23`):
+`CommandLineGitSync` and `FileBackupLog` on real repositories (git 2.48.1, on `e6deb23`, the head of #389 that main took as `cb78438`):
 
 | Case | Reconciliations and pushes | WARN lines | Git work |
 |---|---|---|---|
@@ -79,7 +79,7 @@ standing refusal to about ten tries a day and leave a fix waiting up to four hou
 
 ## Rationale
 
-The same simulated day after the change (`15734d8`):
+The same simulated day after the change (`82f2f97`):
 
 | Case | Reconciliations and pushes | WARN lines | Git work |
 |---|---|---|---|
@@ -109,8 +109,8 @@ fits.
 
 ## Outcome
 
-Implemented on `fix/390-backup-says-it-once`: `a3d0e7a` a remote-less push says nothing, `8974b24`
-no remote is not a failed push, `15734d8` the backoff.
+Implemented on `fix/390-backup-says-it-once`: `6b8e03e` a remote-less push says nothing, `d55c40f`
+no remote is not a failed push, `82f2f97` the backoff.
 
 Tests, each red first:
 
@@ -134,7 +134,7 @@ shift (1); the held line at every try (3). One equivalent mutant: a try that cou
 changes nothing, since the next check finds the day recorded and the next day is another scheduled
 backup.
 
-**On the real server.** Jars built from `e6deb23` and `15734d8`, each booted against its own copy of a
+**On the real server.** Jars built from `e6deb23` and `82f2f97`, each booted against its own copy of a
 scratch remote-less repository, with the backup due at once and checked every second
 (`TRACKER_BACKUP_CHECK_INTERVAL=PT1S`). Every outside address pointed at a closed local port, the watch
 token was a throwaway, and no GitHub token was set.
