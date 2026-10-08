@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -62,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class CommandLineGitSync(
     private val root: Path,
+    environment: Map<String, String> = System.getenv(),
     private val waitFor: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
 ) : GitSync {
     /**
@@ -70,7 +70,9 @@ class CommandLineGitSync(
      */
     private val credential = PushCredential(root)
 
-    private val stateDirectory = StateDirectory(root, TrackedStateEntries(root))
+    private val process = GitProcess(root, environment)
+
+    private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
 
     /**
      * Asked once, on the first git call rather than at construction — the composition root
@@ -380,35 +382,8 @@ class CommandLineGitSync(
 
     private fun backoffFor(attempt: Int): Duration = BACKOFF_SCHEDULE.getOrElse(attempt - 1) { BACKOFF_SCHEDULE.last() }
 
-    /**
-     * One `git` invocation, its two streams kept apart: what git answers is read from stdout
-     * alone, and a diagnosis reads both, so it never depends on which stream git chose.
-     *
-     * Output goes to files rather than pipes, which is what makes [TIMEOUT] a real bound:
-     * a full pipe buffer would block us before we ever got to wait. Terminal prompting is
-     * off, so a push cannot stop for credentials — and the timeout is there for the case
-     * where it stalls anyway, because a capture must never wait on the network.
-     *
-     * Replace refs are off as well: with one in place the search read a clean replacement while the
-     * push sent the original object, which a transfer always does (#360).
-     */
-    private fun git(args: List<String>, input: String? = null): GitResult =
-        inTempFile(".out") { stdout -> inTempFile(".err") { stderr -> ran(args, input, stdout, stderr) } }
-
-    private fun ran(args: List<String>, input: String?, stdout: Path, stderr: Path): GitResult {
-        val code = exitCodeOf(args, input, stdout, stderr)
-        return GitResult(code, Files.readString(stdout), Files.readString(stderr))
-    }
-
-    // Each file is deleted by its own `finally`, so a second that cannot be created leaves no first behind.
-    private inline fun <T> inTempFile(suffix: String, block: (Path) -> T): T {
-        val file = Files.createTempFile("git-", suffix)
-        try {
-            return block(file)
-        } finally {
-            Files.deleteIfExists(file)
-        }
-    }
+    /** One `git` invocation, as [GitProcess] runs every one of them. */
+    private fun git(args: List<String>, input: String? = null): GitResult = process.run(commandFor(args), input)
 
     /**
      * The exact argument list handed to the process, credential prefix included. Internal
@@ -416,25 +391,6 @@ class CommandLineGitSync(
      * nothing if it never reaches a git call, and that is not observable from the outside.
      */
     internal fun commandFor(args: List<String>): List<String> = listOf(GIT) + credential.gitConfig() + args
-
-    private fun exitCodeOf(args: List<String>, input: String?, stdout: Path, stderr: Path): Int {
-        val process = ProcessBuilder(commandFor(args))
-            .directory(root.toFile())
-            .redirectOutput(stdout.toFile())
-            .redirectError(stderr.toFile())
-            .also { it.environment().putAll(ENVIRONMENT) }
-            .start()
-        feed(process, input)
-        if (process.waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)) return process.exitValue()
-        process.destroyForcibly()
-        return TIMED_OUT
-    }
-
-    // Standard input is closed either way, so no command can wait on it. A command that exits before
-    // reading it closes the pipe; its exit code then says what happened.
-    private fun feed(process: Process, input: String?) {
-        runCatching { process.outputStream.use { stream -> input?.let { stream.write(it.toByteArray()) } } }
-    }
 
     companion object {
         /** What a reconciliation commit says: these files were left behind, not chosen. */
@@ -541,32 +497,8 @@ class CommandLineGitSync(
 
         val BACKOFF_SCHEDULE: List<Duration> = listOf(100L, 200L, 400L, 800L).map(Duration::ofMillis)
 
-        /** Generous for a local repository, and short enough that nothing waits on it. */
-        val TIMEOUT: Duration = Duration.ofSeconds(60)
-
         private const val GIT = "git"
-        private val ENVIRONMENT = mapOf("GIT_TERMINAL_PROMPT" to "0", "GIT_NO_REPLACE_OBJECTS" to "1")
-        private const val TIMED_OUT = -1
 
         private val logger = LoggerFactory.getLogger(CommandLineGitSync::class.java)
-    }
-}
-
-/** One finished `git` invocation — its exit code, its answer on [stdout], and what it said on [stderr]. */
-private data class GitResult(val code: Int, val stdout: String, val stderr: String) {
-    /** Everything git printed, for a diagnosis that must not depend on which stream git chose. */
-    val output: String get() = stdout + stderr
-
-    fun succeeded(): Boolean = code == 0
-
-    // Git's own words when another process holds the index: "Unable to create
-    // '<repo>/.git/index.lock': File exists." followed by "Another git process seems to be
-    // running in this repository." Measured 2026-08-05 against git 2.48.1. Both spellings are
-    // matched because the second survives a git that rewords the first.
-    fun blockedByLock(): Boolean = output.contains(LOCK) || output.contains(ANOTHER_PROCESS)
-
-    private companion object {
-        const val LOCK = "index.lock"
-        const val ANOTHER_PROCESS = "Another git process"
     }
 }

@@ -2,9 +2,7 @@ package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.adapter.store.TrackedState
-import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
 /**
  * The git adapter's answer to [TrackedState]: whether `git ls-files` lists anything under the state
@@ -19,34 +17,18 @@ import java.util.concurrent.TimeUnit
  * directory that is no repository, a git that did not finish — and the callers decide what unknown
  * means for them.
  */
-class TrackedStateEntries(private val root: Path) : TrackedState {
+class TrackedStateEntries(root: Path, environment: Map<String, String> = System.getenv()) : TrackedState {
+    private val process = GitProcess(root, environment)
+
     override fun any(): Boolean? = runCatching { listed() }.getOrNull()
 
     private fun listed(): Boolean? {
-        val output = Files.createTempFile("git-", ".out")
-        try {
-            if (exitCodeOf(output) != 0) return null
-            return Files.size(output) > 0
-        } finally {
-            Files.deleteIfExists(output)
-        }
-    }
-
-    private fun exitCodeOf(output: Path): Int {
-        val process = ProcessBuilder(listOf("git", "ls-files", "-z", "--") + PATHSPECS)
-            .directory(root.toFile())
-            .redirectOutput(output.toFile())
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start()
-        process.outputStream.close()
-        if (process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) return process.exitValue()
-        process.destroyForcibly()
-        return TIMED_OUT
+        val result = process.run(listOf("git", "ls-files", "-z", "--") + PATHSPECS)
+        if (!result.succeeded()) return null
+        return result.stdout.isNotEmpty()
     }
 
     private companion object {
         val PATHSPECS = listOf(":(glob,icase)${StateDirectory.GLOB}", ":(glob,icase)${StateDirectory.GLOB}/**")
-        const val TIMEOUT_SECONDS = 60L
-        const val TIMED_OUT = -1
     }
 }

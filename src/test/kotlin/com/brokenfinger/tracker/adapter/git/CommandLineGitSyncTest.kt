@@ -1080,7 +1080,7 @@ class CommandLineGitSyncTest {
     private fun ignoredByGit(file: Path): Boolean =
         run(listOf("check-ignore", "--quiet", "--no-index", root.relativize(file).joinToString("/")), root).first == 0
 
-    private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor)
+    private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor = waitFor)
 
     /** Every commit a repository holds, with its full diff — what a push could ever have delivered there. */
     private fun everythingAt(repository: Path): String =

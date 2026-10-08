@@ -71,6 +71,19 @@ class TrackedStateEntriesTest {
         TrackedStateEntries(repo.root).any() shouldBe false
     }
 
+    /**
+     * The question reads the repository's own index whatever the server's environment names: pointed
+     * at an empty one, it answered that nothing was tracked (#360, the review's ENV).
+     */
+    @Test
+    fun `a tracked state file is found whatever index the environment names`() {
+        repo.write(PushCredential.FILE, "e\n")
+        repo.git("add", "--force", PushCredential.FILE)
+        val environment = System.getenv() + mapOf("GIT_INDEX_FILE" to base.resolve("empty-index").toString())
+
+        TrackedStateEntries(repo.root, environment).any() shouldBe true
+    }
+
     @Test
     fun `a directory git cannot answer for is answered neither`() {
         val elsewhere = Files.createDirectories(base.resolve("not-a-repository"))

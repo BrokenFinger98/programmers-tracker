@@ -3,7 +3,6 @@ package com.brokenfinger.tracker.adapter.git
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
 /**
  * Makes the record repository exist (#258).
@@ -56,18 +55,8 @@ class RecordRepositoryInit(private val recordRoot: Path) {
     }
 
     /** Output on success, null on failure — this class only needs the distinction. */
-    private fun git(vararg args: String): String? {
-        val process = ProcessBuilder(listOf("git") + args)
-            .directory(recordRoot.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            process.destroyForcibly()
-            return null
-        }
-        return output.takeIf { process.exitValue() == 0 }
-    }
+    private fun git(vararg args: String): String? =
+        GitProcess(recordRoot).run(listOf("git") + args).takeIf { it.succeeded() }?.output
 
     private fun warn(cause: Throwable) {
         logger.warn(
@@ -79,8 +68,6 @@ class RecordRepositoryInit(private val recordRoot: Path) {
     }
 
     private companion object {
-        const val TIMEOUT_SECONDS = 30L
-
         val logger = LoggerFactory.getLogger(RecordRepositoryInit::class.java)
     }
 }

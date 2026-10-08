@@ -13,7 +13,6 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Path
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 /**
  * A GitHub token in, a private repository wired as `origin` out (#258).
@@ -198,15 +197,7 @@ class GithubRemote(
         return client.send(request, HttpResponse.BodyHandlers.ofString())
     }
 
-    private fun git(vararg args: String): String {
-        val process = ProcessBuilder(listOf("git") + args)
-            .directory(recordRoot.toFile())
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(30, TimeUnit.SECONDS)) process.destroyForcibly()
-        return output
-    }
+    private fun git(vararg args: String): String = GitProcess(recordRoot).run(listOf("git") + args).output
 
     // The token itself must not appear here, and GithubToken.toString() makes sure a lazy
     // interpolation could not leak it either.
