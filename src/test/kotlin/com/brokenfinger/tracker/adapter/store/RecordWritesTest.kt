@@ -18,12 +18,15 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.types.shouldNotBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import java.io.FileInputStream
+import java.io.IOException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -599,6 +602,29 @@ class RecordWritesTest {
         } finally {
             Files.deleteIfExists(junction)
         }
+    }
+
+    /**
+     * The measurement #386 asked for, on windows-latest: a page another process holds open, opened without sharing
+     * deletion — as `FileInputStream` opens a file, and as a sync client or a scanner may hold one — and then replaced.
+     * Predicted from the JDK, not yet run: the move needs deletion over the target, so it fails, and so does the plain
+     * replace it falls back to. The failure is the filesystem's own, not a refusal, so even a writer that skips
+     * refusals is not spared it; and the page keeps its old bytes, with nothing left beside it. If this fails on
+     * Windows, the prediction was wrong, and that is the result.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    fun `a page another process holds open without sharing deletion is not replaced, and nothing is lost`() {
+        val page = inProblem("README.md")
+        problems().replace(page, "before\n")
+
+        FileInputStream(page.toFile()).use {
+            val failure = shouldThrow<IOException> { problems().replaceOrSkip(page, "after\n") }
+            failure.shouldNotBeInstanceOf<RefusedWriteException>()
+        }
+
+        Files.readString(page) shouldBe "before\n"
+        namesIn(page.parent) shouldBe listOf("README.md")
     }
 
     // Said once, thrown unless skipped, never quoted ---------------------------------------------
