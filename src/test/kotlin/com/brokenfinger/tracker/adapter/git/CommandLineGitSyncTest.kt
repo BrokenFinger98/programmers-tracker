@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -746,6 +747,34 @@ class CommandLineGitSyncTest {
         heard.single() shouldContain "in progress"
         statusOf("notes.md") shouldBe "UU notes.md"
         subjects().first() shouldBe "ours"
+    }
+
+    /**
+     * The submit path committed inside the user's merge too: its `add` marked the conflicted log
+     * resolved, conflict markers and all, and its partial commit then failed (the review's N11). It
+     * waits as reconciliation does, and leaves the conflict as it was.
+     */
+    @Test
+    fun `a submit waits out a merge in progress and leaves it untouched`() {
+        written(".gitignore", ".ps/\n")
+        val log = written("log/submissions.jsonl", "{\"lessonId\":1}\n")
+        git("add", "--all")
+        git("commit", "--message", "base")
+        git("checkout", "--quiet", "-b", "other")
+        written("log/submissions.jsonl", "{\"lessonId\":1}\n{\"lessonId\":2}\n")
+        git("commit", "--all", "--message", "another machine")
+        git("checkout", "--quiet", "main")
+        written("log/submissions.jsonl", "{\"lessonId\":1}\n{\"lessonId\":3}\n")
+        git("commit", "--all", "--message", "this machine")
+        run(listOf("merge", "other"), root).first shouldBe 1
+        Files.writeString(log, "{\"lessonId\":4}\n", StandardOpenOption.APPEND)
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            sync().commitSubmission(aWrongSubmit(), listOf(log)) shouldBe false
+        }
+
+        heard.single() shouldContain "in progress"
+        statusOf("log/submissions.jsonl") shouldBe "UU log/submissions.jsonl"
     }
 
     /**

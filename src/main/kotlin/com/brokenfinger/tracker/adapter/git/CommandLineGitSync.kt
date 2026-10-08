@@ -136,6 +136,7 @@ class CommandLineGitSync(
     // solution file ride along with the next submit or the next reconciliation.
     private fun commitScoped(record: SubmissionRecord, paths: List<Path>): Boolean {
         if (record.action != GradingAction.SUBMIT) return true
+        if (operationInProgress()) return waitingItOut()
         val scope = insideRoot(paths)
         if (scope.isEmpty() || !isDirty(scope)) return true
         if (!committed("commit", scope, CommitMessage.of(record))) return false
@@ -192,7 +193,8 @@ class CommandLineGitSync(
     }
 
     // Records stay uncommitted until the user finishes or aborts; the next reconciliation after that
-    // picks them up. Said once, because the backup asks every minute while it is due.
+    // picks them up. Said once, because the backup asks every minute while it is due. A submit waits
+    // too: its staging marked a conflicted record resolved, markers and all (the review's N11).
     private fun waitingItOut(): Boolean {
         if (!waitingSaid.getAndSet(true)) logger.warn(OPERATION_IN_PROGRESS, root)
         return false
@@ -476,8 +478,8 @@ class CommandLineGitSync(
         private const val STATE_DIRECTORY = "${StateDirectory.NAME}/"
 
         private const val OPERATION_IN_PROGRESS =
-            "{} has a merge, cherry-pick, revert or rebase in progress, so reconciliation waits rather " +
-                "than commit inside it: records stay uncommitted until it is finished or aborted. " +
+            "{} has a merge, cherry-pick, revert or rebase in progress, so the tracker's commits wait " +
+                "rather than commit inside it: records stay uncommitted until it is finished or aborted. " +
                 "This is said only once."
 
         /** Where git marks an operation the user has open, as `git rev-parse --git-path` names them. */
