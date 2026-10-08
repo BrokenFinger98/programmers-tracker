@@ -42,6 +42,10 @@ import java.util.concurrent.atomic.AtomicLong
  * `.ps`; a run set aside and an orphan are written into `.ps` the first time it is usable again, and
  * [close] says what is still held when the server stops. Each refusal, and the limit, is said once.
  *
+ * **A boot replays only what a write would accept (#377).** [unprocessed] lists the work list only while
+ * the [guard] would let a frame be written there: what it refuses is left where it is, unread, and said
+ * once with how many.
+ *
  * **The copy beside the record goes through [RecordWrites] when the log knows its [recordRoot]** — as
  * [under], and so the composition root, builds it (#361). The copy never replaced anything, a link
  * included; the directories above it are now never made or passed through a link either. A refusal is
@@ -186,11 +190,39 @@ class FileRawSessionLog(
         return OrphanedFrames(lessonId, frames, file)
     }
 
+    /**
+     * The work list, read only from where a frame would be written now (#377): `.ps` the tracker's own,
+     * git tracking nothing there, no link on the way — what [StateDirectory.forWriting] and
+     * [StateDirectory.pathFor] answer every write. A pull can deliver a file whose name parses as a session,
+     * and a replay records it as a grading of the owner's. Otherwise nothing is read: each session is left
+     * where it is, never moved or deleted, since it may be the owner's own.
+     */
     override fun unprocessed(): List<RawSession> {
         if (!Files.isDirectory(directory)) return emptyList()
-        return Files.list(directory).use { entries ->
-            entries.toList().mapNotNull { sessionOf(it) }.sortedBy { it.id.value }
+        val guard = guard ?: return sessionsIn(directory)
+        val raw = guard.pathFor(RAW)
+        val state = guard.forWriting()
+        if (state is StateDirectory.Refused) return leftInPlace(state.refusal, raw)
+        return when (raw) {
+            is StateDirectory.Usable -> sessionsIn(raw.directory)
+            is StateDirectory.Refused -> leftInPlace(raw.refusal, raw)
         }
+    }
+
+    private fun sessionsIn(raw: Path): List<RawSession> = Files.list(raw).use { entries ->
+        entries.toList().mapNotNull { sessionOf(it) }.sortedBy { it.id.value }
+    }
+
+    // Said once with how many and why. Counted only where no link is on the way: through one, nothing is listed.
+    private fun leftInPlace(refusal: StateDirectory.Refusal, raw: StateDirectory.Inspection): List<RawSession> {
+        val left = (raw as? StateDirectory.Usable)?.let { sessionsIn(it.directory).size }
+        if (left != 0) sayOnce("$NOT_REPLAYED${refusal.name}") { warnLeft(left, refusal) }
+        return emptyList()
+    }
+
+    private fun warnLeft(left: Int?, refusal: StateDirectory.Refusal) {
+        if (left == null) return logger.warn(LEFT_BEHIND_A_LINK, refusal.reason)
+        logger.warn(LEFT_IN_PLACE, left, refusal.reason)
     }
 
     private fun sessionOf(file: Path): RawSession? {
@@ -373,6 +405,14 @@ class FileRawSessionLog(
                 ".ps is usable again. Said once."
         private const val LOST_AT_EXIT =
             "Raw frames held in memory were lost when the server stopped, because .ps was not usable: {} of them."
+        private const val LEFT_IN_PLACE =
+            "{} raw session(s) were left in place, not replayed: {}. Each is replayed as a grading at the first " +
+                "start that finds .ps usable, so remove first any that git delivered (`git ls-files .ps` lists " +
+                "them). Said once for this reason."
+        private const val LEFT_BEHIND_A_LINK =
+            "Raw sessions were not replayed: {}. Nothing behind the link was read or counted, and it is left " +
+                "as it is. Said once for this reason."
+        private const val NOT_REPLAYED = "not replayed: "
         private const val LIMIT = "limit"
 
         /** What the log holds in memory at most, across every session, while `.ps` is refused. */

@@ -66,7 +66,13 @@ interface RawSessionLog {
      */
     fun orphaned(lessonId: Long, frameText: String)
 
-    /** Sessions still awaiting stage 2 — the crash-recovery work list, oldest first. */
+    /**
+     * Sessions still awaiting stage 2 — the crash-recovery work list, oldest first.
+     *
+     * Empty, too, while the store refuses the place they lie, as it refuses a write there (#377): a pull
+     * can deliver a file that reads as a session, and replaying it would record a grading the owner never
+     * made. They are left where they are, unread, and the store says how many.
+     */
     fun unprocessed(): List<RawSession>
 
     /**
