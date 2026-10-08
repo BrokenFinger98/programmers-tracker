@@ -28,6 +28,7 @@ import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.attribute.PosixFilePermissions
+import java.text.Normalizer
 
 /**
  * The one bound every writer under the records repository goes through (#361), over a real directory.
@@ -517,6 +518,57 @@ class RecordWritesTest {
         namesIn(root.resolve("Problems")).shouldBeEmpty()
     }
 
+    // Where the filesystem folds or rewrites names (#361's review) --------------------------------
+
+    /**
+     * In the tracker's image, a Linux container over a macOS bind mount, a real path echoes the name it was asked
+     * for. So `problems` reached a hand-made alias and the write landed inside it: measured in #361's review. The
+     * parent's listing names the alias as it is on disk, and that is what refuses it there.
+     */
+    @Test
+    fun `in the image, where a real path echoes the name asked for, a folded alias is refused`() {
+        Files.createDirectories(root.resolve("problems"))
+        listOf("Problems", "PROBLEMS", "problemſ").forEach { alias ->
+            val image = DiskAnswers(realPathOf = { it }, namesIn = listingWith("problems" to alias))
+
+            val refusal = shouldThrow<RefusedWriteException> { problems(image).replace(inProblem("README.md"), "p") }
+
+            refusal.message shouldContain "problems is not listed"
+        }
+        namesIn(root.resolve("problems")).shouldBeEmpty()
+    }
+
+    /**
+     * HFS+ stores names in NFD, so the directory a first write makes for a Korean title is listed, and resolved, in
+     * a form other than the NFC one walked. Measured in #361's review: the first write was refused, the second not.
+     * Both sides are compared after NFC.
+     */
+    @Test
+    fun `on HFS+, where names come back in NFD, the first write into a new Korean directory is accepted`() {
+        val hfs = DiskAnswers(realPathOf = { Path.of(nfdOf(it.toRealPath().toString())) }, namesIn = ::nfdListing)
+        val readme = root.resolve("problems/$KOREAN_DIRECTORY/README.md")
+
+        problems(hfs).replace(readme, "page\n")
+
+        Files.readString(readme) shouldBe "page\n"
+    }
+
+    /**
+     * Where the real path answers the case on disk, as on the host and on Windows, a directory its parent lists is
+     * still refused when its real path is another. Compared as text, since Windows' `Path.equals` ignores case. This
+     * is what stops a directory that leads elsewhere without being a link, such as a Windows junction.
+     */
+    @Test
+    fun `a directory its parent lists is refused when its real path is another`() {
+        Files.createDirectories(root.resolve("problems"))
+        val elsewhere = DiskAnswers(realPathOf = { aliasedProblems(it) })
+
+        val refusal = shouldThrow<RefusedWriteException> { problems(elsewhere).replace(inProblem("README.md"), "p") }
+
+        refusal.message shouldContain "problems resolves to another path"
+        namesIn(root.resolve("problems")).shouldBeEmpty()
+    }
+
     // Said once, thrown unless skipped, never quoted ---------------------------------------------
 
     @Test
@@ -569,11 +621,31 @@ class RecordWritesTest {
 
     private fun problems() = RecordWrites.underProblems(RecordLayout(root))
 
+    private fun problems(disk: DiskAnswers) = RecordWrites.underProblems(RecordLayout(root), disk = disk)
+
+    /** The real listing, except that [renamed]'s first name is listed as its second, as a folding disk lists it. */
+    private fun listingWith(renamed: Pair<String, String>): (Path) -> Set<String> = { directory ->
+        namesOnDisk(directory).map { if (it == renamed.first) renamed.second else it }.toSet()
+    }
+
+    private fun nfdListing(directory: Path): Set<String> = namesOnDisk(directory).map(::nfdOf).toSet()
+
+    private fun nfdOf(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD)
+
+    // `problems` answered as `Problems`, a real path other than the one walked; everything else as it is.
+    private fun aliasedProblems(path: Path): Path {
+        if (path.fileName?.toString() == "problems") return path.resolveSibling("Problems")
+        return path.toRealPath()
+    }
+
     private fun inProblem(relative: String): Path = root.resolve("problems/1-x").resolve(relative)
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 
     private companion object {
         const val UNIX = "unix"
+
+        /** A problem directory named from a Korean title, in NFC as the layout makes it. */
+        const val KOREAN_DIRECTORY = "120804-두-수의-곱-구하기"
     }
 }

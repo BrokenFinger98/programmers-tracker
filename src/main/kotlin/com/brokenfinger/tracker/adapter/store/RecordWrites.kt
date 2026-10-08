@@ -19,6 +19,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
+import java.text.Normalizer
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -32,11 +33,22 @@ import java.util.concurrent.ConcurrentHashMap
  * and a dangling `statement.md` made the statement writer create a file outside `problems/`. Anything the owner
  * can write was in reach, with content drawn partly from the records.
  *
- * **The bound.** Every directory from the real root down to the target's own is walked one name at a time,
- * created where absent, and must be a real directory, not a link, whose real path is the path walked. So a write
- * never passes a link — nothing is created or written wherever one leads — and a directory that is no link yet
- * resolves elsewhere, such as a hand-made `Problems` where a filesystem folds case, is refused before anything is
- * made inside it. The target must lie below the root as configured and name no `.` or `..` on the way — no writer
+ * **The bound.** Every directory from the real root down to the target's own is walked one name at a time and
+ * created where absent. Each must be a real directory, not a link; its parent must list it under exactly the name
+ * walked; and its real path must be the path walked — both compared as text after NFC. So a write never passes a
+ * link, and nothing is created or written wherever one leads. A name the filesystem folds, such as a hand-made
+ * `Problems`, `PROBLEMS` or `problemſ` answering for `problems`, is refused before anything is made inside it. Where
+ * that is caught differs (#361's review):
+ * - on the host (APFS) and on Windows, by either check, since the real path answers the case on disk;
+ * - in the tracker's image, a Linux container over a macOS bind mount, by the listing alone, since its real path
+ *   echoes the name asked for;
+ * - on HFS+, which stores names in NFD, the first write into a new Korean-titled directory is accepted, because
+ *   both sides are compared after NFC.
+ *
+ * The real path also refuses a directory that leads elsewhere without being a link, such as a Windows junction.
+ * The listing costs a read of the parent at every step (measured in the ADR).
+ *
+ * The target must lie below the root as configured and name no `.` or `..` on the way — no writer
  * is handed one, and folding one away lexically let a root-level path climb back out — and it must fall under the
  * bound: inside `problems/` for a problem's files, and for a writer at the root's own level only the names it keeps
  * there (`log`, `tags`, the seeds, the heartbeat's marker), so never `.git` or `.ps`. Only the root is resolved,
@@ -62,6 +74,7 @@ internal class RecordWrites private constructor(
     private val firstNames: Set<String>,
     private val insideFirstName: Boolean,
     private val ownerOnly: Boolean,
+    private val disk: DiskAnswers,
 ) {
     private val said = ConcurrentHashMap.newKeySet<String>()
 
@@ -155,14 +168,31 @@ internal class RecordWrites private constructor(
         if (!Files.isDirectory(directory, NOFOLLOW_LINKS)) {
             throw refused(target, "${relative(directory)} ${kindOf(directory, A_DIRECTORY)}")
         }
-        if (directory.toRealPath() != directory) throw refused(target, "${relative(directory)} $RESOLVES_ELSEWHERE")
+        if (!listedExactly(directory)) throw refused(target, "${relative(directory)} $NOT_LISTED")
+        if (!resolvesToItself(directory)) throw refused(target, "${relative(directory)} $RESOLVES_ELSEWHERE")
         return directory
     }
+
+    // The name walked is the name on disk: its parent lists it exactly, compared after NFC because HFS+ lists NFD.
+    // This refuses a folded alias where a real path echoes the name asked for, as it does in the tracker's image.
+    // An exact hit needs no normalizing, and is the usual answer.
+    private fun listedExactly(directory: Path): Boolean {
+        val name = nfc(directory.fileName.toString())
+        val listed = disk.namesIn(directory.parent)
+        return name in listed || listed.any { nfc(it) == name }
+    }
+
+    // And the real path is the path walked, compared as text after NFC, since Windows' Path.equals ignores case. This
+    // refuses a directory that leads elsewhere without being a link, such as a Windows junction.
+    private fun resolvesToItself(directory: Path): Boolean =
+        nfc(disk.realPathOf(directory).toString()) == nfc(directory.toString())
+
+    private fun nfc(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFC)
 
     // Only the root is resolved: it may sit behind a link by configuration, and every name below it is walked.
     private fun realRoot(creating: Boolean): Path {
         if (creating) Files.createDirectories(root)
-        return root.toRealPath()
+        return disk.realPathOf(root)
     }
 
     // Made when absent — by another writer meanwhile too — and judged after, so a link that won the race is refused.
@@ -248,7 +278,7 @@ internal class RecordWrites private constructor(
     }
 
     // Relative to the real root, so a reason names the part of the path at fault and never anything beyond it.
-    private fun relative(path: Path): String = root.toRealPath().relativize(path).joinToString("/")
+    private fun relative(path: Path): String = disk.realPathOf(root).relativize(path).joinToString("/")
 
     private fun outsideTheBound(): String {
         if (insideFirstName) return "it lies outside ${firstNames.single()}/"
@@ -279,8 +309,11 @@ internal class RecordWrites private constructor(
         private const val IS_A_DIRECTORY = "is a directory"
         private const val IS_A_HARD_LINK =
             "is a hard link — another name shares the file, and an append would change it"
+        private const val NOT_LISTED =
+            "is not listed in its directory under exactly that name — the filesystem folds it from another, such as " +
+                "a case variant"
         private const val RESOLVES_ELSEWHERE =
-            "resolves to another path — a name the filesystem folds, or a directory that leads elsewhere"
+            "resolves to another path — a directory that leads elsewhere without being a link, such as a junction"
         private const val REPLACED = "replaced"
         private const val REFUSED_WARNING =
             "Not writing {}: {}. The records repository is written only through real directories, never through " +
@@ -290,15 +323,18 @@ internal class RecordWrites private constructor(
                 "Said once for this path."
 
         /** The writer of a problem's files: inside `problems/`, below the root as configured. */
-        fun underProblems(layout: RecordLayout, ownerOnly: Boolean = false): RecordWrites =
-            RecordWrites(layout.configuredRoot(), setOf(RecordLayout.PROBLEMS), insideFirstName = true, ownerOnly)
+        fun underProblems(
+            layout: RecordLayout,
+            ownerOnly: Boolean = false,
+            disk: DiskAnswers = DiskAnswers(),
+        ): RecordWrites = RecordWrites(layout.configuredRoot(), setOf(RecordLayout.PROBLEMS), true, ownerOnly, disk)
 
         /**
          * The writer of files at the root's own level — the submission log, the tag notes, the seeds, the heartbeat's
          * marker — which writes only under [firstNames], the names it keeps there. Never `.git` or `.ps` (#361).
          */
-        fun underRoot(root: Path, firstNames: Set<String>): RecordWrites =
-            RecordWrites(root.toAbsolutePath(), firstNames, insideFirstName = false, ownerOnly = false)
+        fun underRoot(root: Path, firstNames: Set<String>, disk: DiskAnswers = DiskAnswers()): RecordWrites =
+            RecordWrites(root.toAbsolutePath(), firstNames, insideFirstName = false, ownerOnly = false, disk = disk)
 
         /** [underRoot] for the records repository [layout] lays out. */
         fun underRoot(layout: RecordLayout, firstNames: Set<String>): RecordWrites =
@@ -312,3 +348,14 @@ internal class RecordWrites private constructor(
  */
 internal class RefusedWriteException(target: Path, reason: String) :
     FileSystemException(target.toString(), null, reason)
+
+/**
+ * What the filesystem answers about a path: its real path, and the names a directory lists (#361). A seam, as
+ * [StateDirectory]'s listing is, because the answers differ where the tracker runs. The tracker's image, a Linux
+ * container over a macOS bind mount, answers a real path with the name it was asked for; HFS+ lists names in NFD;
+ * Windows answers the case on disk. A test plays any of them.
+ */
+internal class DiskAnswers(
+    val realPathOf: (Path) -> Path = { it.toRealPath() },
+    val namesIn: (Path) -> Set<String> = ::namesOnDisk,
+)
