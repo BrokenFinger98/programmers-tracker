@@ -23,6 +23,8 @@ import io.kotest.assertions.withClue
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.maps.shouldNotContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -252,24 +254,56 @@ class McpToolInvokerTest {
      */
     @Test
     fun `every tool says so when gradings exist that no record represents`() {
-        val raw = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
-        raw.orphaned(120802, """{"message":{"action":"submit","type":"finish"}}""")
-        val invoker = McpToolInvoker(aRecordRepository(root).containing(aSubmissionRecord()).query(raw = raw))
+        val invoker = invokerOverAHole(aSubmissionRecord())
 
         // A pass that was lost is a problem review_queue will never schedule and a reading
         // slow_passes cannot rank — every tool reads the same history (#187).
-        listOf(
-            "submissions" to JsonObject(emptyMap()),
-            "review_queue" to JsonObject(emptyMap()),
-            "slow_passes" to JsonObject(emptyMap()),
-            "list_problems" to JsonObject(emptyMap()),
-            "repair_steps" to JsonObject(emptyMap()),
-            "get_problem" to arguments("lessonId" to 120804),
-            "stats" to arguments("groupBy" to "verdict"),
-        ).forEach { (tool, args) ->
+        everyToolCall().forEach { (tool, args) ->
             structured(invoker.call(tool, args))["incompleteHistory"]!!
                 .jsonObject["lessonsWithOrphanedFrames"]!!.jsonPrimitive.int shouldBe 1
         }
+    }
+
+    /**
+     * A client that cuts a large answer cuts its end, so a warning at the end is the first thing lost (#356):
+     * Claude Code caps a tool result at 25,000 tokens by default, and a `repair_steps` answer with long diffs
+     * reaches it. The text is checked as well as the object because the text is what a model reads and what
+     * gets cut — an object whose first key is right says nothing about the bytes if they were laid out another
+     * way. Each check names every tool that fails it, with the key that led instead.
+     */
+    @Test
+    fun `every tool puts incompleteHistory ahead of its payload, in the text a client cuts as well`() {
+        val invoker = invokerOverAHole(aSubmissionRecord())
+        val answers = everyToolCall().associate { (tool, args) -> tool to invoker.call(tool, args) }
+
+        withClue("tools whose structuredContent leads with another key, and the key that led") {
+            answers.mapValues { structured(it.value).keys.first() }.filterValues { it != "incompleteHistory" }
+                .shouldBeEmpty()
+        }
+        withClue("tools whose text does not open with the whole warning, so a cut can reach it") {
+            answers.filterValues { !message(it).startsWith(warningOpening(it)) }.keys.shouldBeEmpty()
+        }
+    }
+
+    /**
+     * The envelope `repair_steps` already had — the counts say how much of the list arrived — with the warning,
+     * which says how much of the history did, ahead of it. `truncated` is written only when the list was cut.
+     */
+    @Test
+    fun `repair_steps leads with the warning, then its counts, then the steps`() {
+        val invoker = invokerOverAHole(*failedRuns(26))
+
+        val cut = structured(invoker.call("repair_steps", JsonObject(emptyMap())))
+        val whole = structured(invoker.call("repair_steps", arguments("limit" to 30)))
+
+        cut.keys.toList() shouldBe listOf("incompleteHistory", "count", "total", "truncated", "steps")
+        whole.keys.toList() shouldBe listOf("incompleteHistory", "count", "total", "steps")
+    }
+
+    /** The table above is only a claim about every tool while it holds every tool. */
+    @Test
+    fun `the table of calls names each tool the server offers`() {
+        everyToolCall().map { it.first } shouldContainExactlyInAnyOrder McpToolCatalog.NAMES
     }
 
     @Test
@@ -1343,6 +1377,29 @@ class McpToolInvokerTest {
         catalog: com.brokenfinger.tracker.application.ProblemCatalog = anEmptyCatalog(),
         clock: Clock = Clock.systemUTC(),
     ): McpToolInvoker = McpToolInvoker(aRecordRepository(root).containing(*records).query(catalog, clock))
+
+    // A history with one hole: frames were captured for a grading that no record represents.
+    private fun invokerOverAHole(vararg records: SubmissionRecord): McpToolInvoker {
+        val raw = FileRawSessionLog.under(root, Clock.systemUTC(), aStateDirectory(root))
+        raw.orphaned(120802, """{"message":{"action":"submit","type":"finish"}}""")
+        return McpToolInvoker(aRecordRepository(root).containing(*records).query(raw = raw))
+    }
+
+    // One call per tool, each with the arguments it needs, so a table over every tool cannot leave one out.
+    private fun everyToolCall(): List<Pair<String, JsonObject>> = listOf(
+        "submissions" to JsonObject(emptyMap()),
+        "review_queue" to JsonObject(emptyMap()),
+        "slow_passes" to JsonObject(emptyMap()),
+        "list_problems" to JsonObject(emptyMap()),
+        "repair_steps" to JsonObject(emptyMap()),
+        "get_problem" to arguments("lessonId" to 120804),
+        "stats" to arguments("groupBy" to "verdict"),
+    )
+
+    // The text a client reads up to the end of the warning. Whatever follows it is payload, so a text that
+    // begins with all of this has put the warning before the first byte of the answer.
+    private fun warningOpening(result: JsonObject): String =
+        """{"incompleteHistory":${structured(result)["incompleteHistory"]}"""
 
     private fun arguments(vararg pairs: Pair<String, Any>): JsonObject = buildJsonObject {
         pairs.forEach { (key, value) ->
