@@ -5631,3 +5631,85 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - Docs: development-rules §6.5 gains one bullet. No ADR: the pattern is the guards ADR's, and the choice and its cost are in the task's comment; the last commit carries `Wiki-Skip`.
 - Gates, all exit 0 from `clean`, on a tree rebased onto #384: check; test (2,051 JUnit in 160 classes, 0 failures, 9 skipped; node 4/4); build; `verifyBranchCoverage` (every package at or above its floor, `adapter/config` 65% at its own); guards (12 checks).
 - Pending: CI has not run this branch. The three-OS `gates` job is the first run of the check on Windows checkouts; here that case was measured with a scratch class converted to CRLF.
+## 2026-10-08 — #361 no writer follows a link (branch fix/361-writers-never-follow-links)
+- **Audit first.** Every write, create, move and delete in `src/main` was grepped and classified by
+  path, by what a link at the file or on the way could redirect, and by what it writes. The issue named
+  six writers. Eight more were found: the code files and the raw copy (a link on the way, which the
+  rename and `CREATE_NEW` never covered), `log/submissions.jsonl`, the tag notes, the vault seeds, the
+  heartbeat marker (at the root when `.git` is not a directory), and the runner sweep, which was a
+  *delete* through a linked problem directory. `.ps` and the `.gitignore` were already #360's. The
+  lock and the stale-lock removal are not exposed; the watch token, the session file and git's temp
+  files are outside the root.
+- **The bound.** `a4fd9ef` adds `RecordWrites` (`adapter/store`, internal): every directory from the
+  real root walked one name at a time, created where absent, and each a real directory whose real path
+  is the path walked; the walk is bounded at `problems` or the root. Operations: `replace` (temp and
+  move, a link replaced; mode kept, or owner-only on request), `writeOnce`, `appendLine` (regular file
+  or none, no-follow), `createNew` and `deleteIn`. A refusal is one WARN per reason, never quoting a
+  link's target, then thrown unless the writer asked to skip.
+- **The boot pass.** `cd37817`: `attachPending` leaves a record whose attachment throws pending
+  (`DEFERRED`) and goes on to the next record. It ran unwrapped at boot, so a standing refusal would
+  have crash-looped the container.
+- **The writers.** `592c02d` (under `problems/`) and `2c064fa` (the root's level):
+  - Record writes throw: code files (still owner-only), the run log, the raw copy, the statement and
+    the submission log.
+  - The page, the index, the tag notes, the examples and the runner skip.
+  - A seed that is a link is left alone.
+  - The heartbeat replaces a linked marker and reads without following one.
+  - A linked `statement.md` is now replaced once rather than refetched at every boot.
+  - Pressing Run Code after a refused `examples.json` (the comment's route) replaces the link.
+- **Pins from the mutation review.** `6e512d7` a marker linked to a changing file no longer makes the
+  repository look held. `c707631` a failure that is no refusal still reaches a skipping writer.
+  `cd087a5` a root-level write outside the root is refused for the true reason.
+- **Tests.** 73 new (2,044 → 2,117; 9 skipped, as before: 8 C# and the `icase` test). Red evidence
+  was saved per class:
+  - 20 of the 33 first helper tests failed against a stub making the old raw `Files` calls.
+  - Every new writer test was red against the unchanged writers on the exposure itself, except two
+    pins (owner-only code files; a dangling link where the raw copy goes, refused already) and two
+    `CodeArtifacts` cases that were red only on the warning (the rename never wrote through a link
+    at the file).
+  - `attachPending` threw out before `cd37817`.
+  - The heartbeat read threw `RecordRepositoryLockedException` against the old read.
+- **Mutation.** 37 mutants, 35 killed. The two survivors are race-only: the append's
+  `NOFOLLOW_LINKS`, and the seeds' raw write behind their link check. The climb-out check survived
+  until `cd087a5`.
+- **Measured.** Over 2,000 writes on this host: a replace 0.22–0.24 ms against 0.04 ms, an append
+  0.07–0.08 ms against 0.03 ms.
+- **Docs.** ADR [[decisions/2026-10-08-no-writer-follows-a-link]] (the audit table, options, each
+  writer's posture, costs), the index, #354's pointer, and a `SECURITY.md` posture line.
+- **Pending.** Live: after a rebuild, pages and code byte-identical, `git status` clean after a boot
+  with nothing to recover, and no `Not writing` or `Replacing` line. CI on the three OSes has not run;
+  Windows skips every link test. Follow-ups: `JsonlRecordStore.read()` and `RunLog`'s idempotency read
+  still follow a link (readers, outside #354's bound); handle-based writes, with #360's.
+
+## 2026-10-08 — #361 review round (security S1–S5, quality Q1–Q7)
+- **Two reviews of `dd259a2`**, neither blocking the merge. Four findings were fixed on the branch,
+  each test red against the code before it; the coordinator files the rest.
+- **Folded aliases (S1, Q1, Q2).** `0523221`: each directory must be listed in its parent under
+  exactly the name walked, and both the listing and the real path are compared as text after NFC.
+  - The review measured `wrote into alias: true` in the image, where the real path echoes the name.
+  - It predicted that Windows' case-blind `Path.equals` fails the folding test.
+  - It measured that an HFS+ image refused the first write into a new Korean-titled directory.
+  - The fix takes the listing and the real path through a `DiskAnswers` seam, like
+    `StateDirectory`'s listing, and `namesOnDisk` is now shared. Tests play the image, HFS+ and a
+    real path that leads elsewhere.
+  - Cost, median of nine rounds: a replace beside 700 sibling directories went from 234 µs to
+    617 µs, and a boot's 110 replaces from 26.3 ms to 36.4 ms. Listing 700 entries takes 0.36–0.53 ms.
+- **The root-level bound (S3).** `5a160c3`: no `.` or `..` below the root. The target is no longer
+  normalized, and the root is walked as configured. Each root-level writer keeps an allow-list of
+  first names: `log`, `tags`, the seeds, the heartbeat marker. Both measured paths
+  (`log/../.ps/git-credentials`, `.git/hooks/pre-commit`) were written before the change.
+- **A hard link (S2).** `fefb790`: an append refuses a file with `unix:nlink` above 1. It is skipped
+  on Windows, which has no `unix` view.
+- **The boot pass (Q3).** `d76b2c9`: an I/O failure is logged by its class, any other fault as an
+  ERROR with its stack, and cancellation is rethrown. The fetch is already wrapped by `fetched`.
+- **Pin.** `69687d3`: the `problems` name itself is refused.
+- **Mutation.** 16 mutants of the new behaviours, plus two rerun on rewritten lines; all killed.
+- **Gates.** check, test, build, `verifyBranchCoverage` and guards all exit 0. Tests: 2,128, 0
+  failures, 9 skipped. Coverage: `adapter/store` 84% (615/726), `application` 88% (340/383).
+- **Follow-ups the coordinator files**, also in the ADR's costs:
+  - Q4: a rename over an open file on Windows.
+  - Q5: a crash's temp file, committed by the next reconcile.
+  - Q6: duplication with `StateDirectory` and `AtomicStateFile`.
+  - S4: `WatchToken.writeText`.
+  - S5 and Q7: the reads that still follow a link.
+- **Not run** in the image, on Windows or on HFS+ itself; CI has not run the branch.
