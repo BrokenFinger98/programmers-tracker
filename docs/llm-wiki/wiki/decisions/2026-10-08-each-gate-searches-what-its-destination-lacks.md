@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [security, git, credentials, push, commit]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-10
 sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory, decisions/2026-10-08-the-push-gate-reads-each-object-once]
 ---
 
@@ -83,7 +83,8 @@ every push once the remote holds a token-shaped string does not stay switched on
 
 ## Decision
 
-1. **The push range** is `HEAD --not <tips>` (`outgoingRange`, `RemoteTips`). The tips are what
+1. **The push range** is `HEAD ^<tip>…` (`outgoingRange`, `RemoteTips`; `^` rather than `--not` since #410,
+   in the Outcome). The tips are what
    `ls-remote` lists at each of the remote's push URLs, kept where this repository holds them (one
    `cat-file --batch-check`), and only what every URL holds. A destination that cannot answer stops the
    push: nothing is sent, and one WARN says so until it answers again — never git's words, since a URL can
@@ -93,7 +94,8 @@ every push once the remote holds a token-shaped string does not stay switched on
 3. **A URL as a branch's remote.** A value that `remote get-url` does not know as a name and that holds a
    `/`, `\` or `:` — git's own test of a remote's nickname, and the scp form — is its own destination, for
    `ls-remote` as for the push. `hasRemote()` answers true for it, so #390's "no remote", which asks it,
-   agrees with the push.
+   agrees with the push. Since #410, one `git remote` lists all the same — a remote of the global config,
+   which `get-url` does not see — is not pushed to.
 4. **HEAD's tree is not listed at a push.**
 5. **The commit side** (`StagingPreview`, `Introduced`). Before anything is staged, the index is copied,
    with its time, into a directory of its own; `git add --all -- <scope>` runs on the copy
@@ -101,7 +103,7 @@ every push once the remote holds a token-shaped string does not stay switched on
    -z --no-renames <base> -- <scope>` compares it with HEAD's tree, or the empty tree before the first
    commit. The paths it adds are matched as their bytes, never as UTF-16 — a path holds no NUL — and a
    match refuses as "a file or directory name" (#375's words). The blobs it leaves where something else
-   was go to the scan #373 reads with, as `rev-list --objects <ids> --not <base>`, 500 ids to a call:
+   was go to the scan #373 reads with, as `rev-list --objects <ids> ^<base>`, 500 ids to a call:
    whatever the base holds anywhere is left out, so content a commit moves is not added. Only then do the
    real `add` and the commit run. When git cannot stage the scope, the refusal is git's own words, as it
    was when the real `add` failed. No `git grep` is left in the gate.
@@ -155,6 +157,16 @@ nothing, so the range is all of HEAD's history.
   *Resolved by #402, in the Outcome.*
 - **The range's tips went on `rev-list`'s command line**, and past about 800 of them Windows' 32,767
   characters failed every push (#405, inferred by the gate critic). *Resolved by #405: they go on stdin.*
+- **A held token-shaped name in a changed directory lists every tip's tree, at every push** (the gate
+  critic's L2 on #410, measured by the critic). A push whose trees carry such a name the destination holds
+  runs `ls-tree -r` once per tip the destination holds: 20.5 s at about 2,000 tips, against 0.5 s with no
+  such name. It fails closed — a listing that does not finish refuses the push — and only a repository that
+  holds such a name and many tips pays it. Caching each tip's names, which never change, is the candidate if
+  it is ever paid; not built.
+- **Two residuals need someone writing git's config** (the gate critic on #410, accepted). The agreement
+  check, `ls-remote` and the push are separate processes, so a rule added between them is seen by some and
+  not by others; and `remote.<name>.receivepack` can have the push's far end work on another path than the
+  one `ls-remote` asks. Config that can do either can already send a push anywhere.
 
 ## Outcome
 
@@ -301,8 +313,9 @@ pass on #404, the same branch).
   rule whose base holds a space misread — `config --get-regexp` puts a space between key and value as well
   (measured) — so the rules are read with `--null`, and any listing but a match or "no key" refuses.
 - **The Windows command line (inferred by the critic).** The range put every held tip in `rev-list`'s argv,
-  and about 800 fill 32,767 characters. Every listing now goes on stdin, `--not` and all; measured here, 30,000
-  tips failed to start on argv (exit 126, past macOS's 1 MB) and ran on stdin. A test pushes past 30,000.
+  and about 800 fill 32,767 characters. Every listing now goes on stdin (each tip as `^<tip>` since #410,
+  below); measured here, 30,000 tips failed to start on argv (exit 126, past macOS's 1 MB) and ran on stdin. A
+  test pushes past 30,000.
 - **Windows CI on PR #410: a fixture difference, not a fail-open.** Nine rewrite tests failed on
   windows-latest alone, and no rule had rewritten anything. A `url.<base>` rule is a plain prefix of the URL
   as written (`starts_with` in git's `remote.c`), and the tests built each rule as "<path>/" from a Windows
@@ -331,5 +344,61 @@ skipped 3; the listing on argv again 2.
 Gates for #402 and #405, on the branch with main `e302739` merged in and the Windows fixture fix, all exit 0:
 check; test (2,693 JUnit across 178 classes, 0 failures, 12 skipped — 8 C#, three Windows-only store tests
 main brought, and the `icase` test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage`
-(`adapter/git` 89%, 520 of 578; `adapter/config` 65% at its floor); guards (12 of 12). Not verified on Windows
-until CI runs the fixed tests there, nor live.
+(`adapter/git` 89%, 520 of 578; `adapter/config` 65% at its floor); guards (12 of 12). Windows CI then ran
+green at `926535b`. Not verified live.
+
+**The gate critic's pass on PR #410: M1 and L1 fixed, L2 and two residuals accepted** (the same branch, on
+`926535b`; the costs are above).
+
+- **M1, every commit and push refused on git before 2.42 (measured; `71b1391`).** #405 put each listing on `rev-list
+  --stdin` with `--not` as a line of it, and git reads an option there only from 2.42. On 2.39.5 (Debian
+  bookworm, the critic's image) the line was "fatal: options not supported in --stdin mode", exit 128: the
+  scan could not list, so every commit and push was refused — failing closed, and nothing went out at all. A
+  listing now leaves an object out as `^<id>`, a revision every git reads there (measured on 2.39.5), and the
+  scan refuses a listing with a line that is not a revision before git is asked: an option, a newline inside
+  an argument, or an empty line, which ends git's list with exit 0 and drops what follows (measured on 2.39.5
+  and 2.48.1: an empty line before `HEAD` listed nothing). In the critic's image, its driver on a healthy
+  records repository refused both reconciliations and the push of a commit git made before the fix; after
+  it, two commits were made and pushed, and that push went out. The `adapter.git` package's 405 tests,
+  compiled here and run there through the JUnit console launcher, passed but for 11 that aborted on their
+  assumptions (root reads what is sealed; the filesystem folds neither `ſ` nor case). No CI runner has git
+  that old; the pin there is the scan's refusal, which no `--not` from any caller gets past.
+- **L1, three readings of git's answers that git does not share (the critic's S8, S9, S10b, S10c,
+  measured; `e38bc9e`).** An empty `pushInsteadOf` value is a prefix that starts every URL — git pushed a URL remote to
+  the rule's base and the URL — and it was dropped along with the nothing after the listing's last NUL; now
+  the entries are filtered and the values kept. What `ls-remote --get-url` printed was trimmed, so a rule
+  that ends a URL with a space read as no rewrite; only git's newline is taken off now. And a destination
+  equal to the remote's name was taken for a URL remote, while a remote can be named for its own push URL —
+  `sub/P.git` pushing to `sub/P.git` and fetching from C, or a `pushInsteadOf` rule sending C to the name —
+  which `ls-remote` reads as the remote, by its fetch URL: C, which held the token. Which of the two a
+  destination is, is now what `git remote get-url` says (`PushDestinations`), and every push URL of a remote
+  it knows is asked how `ls-remote` reads it.
+- **A fourth, found narrowing the third: `get-url` knows only the repository's own remotes (measured, git
+  2.48.1).** For a remote of the global config named by a path it said "No such remote" (exit 2), while
+  `ls-remote --get-url` gave that remote's fetch URL and a dry-run push went to its push URL, so "`get-url`
+  failed" alone still took it for a URL. A URL remote is also looked up in `git remote`, which lists the global
+  config's remotes too, and one it names is not pushed to. The notice now says a push URL can be the name of a
+  remote, which no rule rewrote.
+
+Red first: the scan's three lines that are not revisions (`expected:<Unsearched> but was:<Clean>`); the
+eight `Introduced` and `StagingPreview` listings that still held `--not`; five `PushRewrites` cases and the
+five pushes — the empty rule, the space, the remote named for its push URL two ways, the remote of the
+global config — each pushed where it must not (`expected:<false> but was:<true>`). Sixteen mutants, each
+killed, with how many tests each failed: the scan's check skipped 3; an empty line taken for a revision 1, an
+option 1, a newline inside a line 1; the push's range with `--not` again 32, a commit's listing 56; an empty
+value dropped again 2; the nothing after the last NUL taken for a rule 3; what `ls-remote` would ask trimmed
+again 2; a URL remote held to a remote's check 3; a URL that names a remote not looked up 3; remotes git
+could not list taken for none 1; any remote at all taken for the URL's 1; #405's second rewrite not looked
+for 10; a `pushInsteadOf` rule on a URL remote not looked for 7; and a push URL equal to its remote's name
+taken for a URL again 1. That last one survived the first run: the `git remote` lookup refuses S10b and S10c
+on the URL path too, so the two paths part only for a remote named for the one URL it fetches from and pushes
+to — asked as a remote it agrees, taken for a URL it is a name `git remote` lists. That case is now pinned as
+pushed, and kills it. Cost: `git remote` took 5.0–5.3 ms a call here, paid by a push to a URL remote beside
+the rule listing (5.0–5.3 ms in the same runs).
+
+Gates on the final code, all exit 0: check; test (2,707 JUnit across 178 classes, 0 failures, 12 skipped —
+8 C#, three Windows-only store tests, and the `icase` test on this case-insensitive host; node 4/4); build;
+`verifyBranchCoverage` (`adapter/git` 89%, 529 of 588; `adapter/config` 65% at its floor); guards (12 of
+12). S8 and S9 run on POSIX alone — E's path holds B's whole, drive letter and all on Windows, and Windows
+drops the trailing space that makes A and a space a second repository — and CI has not run this yet. Not
+verified live.
