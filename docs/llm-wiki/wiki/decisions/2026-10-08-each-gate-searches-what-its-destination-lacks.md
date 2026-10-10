@@ -142,7 +142,8 @@ nothing, so the range is all of HEAD's history.
 - **A refused preview leaves what `add` wrote**: the blobs, the token's among them, unreferenced in the
   object store until git prunes them — as the real `add` left them before.
 - **A path is matched whole.** A file added under a directory whose name already holds a token is refused,
-  though the name is HEAD's already; a file HEAD has, changed, is not.
+  though the name is HEAD's already; a file HEAD has, changed, is not. *Resolved by #402: each part is a name,
+  and one HEAD holds is not new — see the Outcome.*
 - **What changes between the preview and the commit is committed unsearched**, as before: the commit reads
   the working tree again. The push reads what was committed.
 - **The notice is once per arrival, per process.** A token-shaped string that stays in HEAD is said again
@@ -151,6 +152,9 @@ nothing, so the range is all of HEAD's history.
   token-named file the remote already has sends a new tree with that name in it, and the push is refused,
   though the name is published already (measured: a new file beside it, refused; one elsewhere, pushed).
   Reading only the names a tree adds against what the remote holds is #375's to change; a follow-up.
+  *Resolved by #402, in the Outcome.*
+- **The range's tips went on `rev-list`'s command line**, and past about 800 of them Windows' 32,767
+  characters failed every push (#405, inferred by the gate critic). *Resolved by #405: they go on stdin.*
 
 ## Outcome
 
@@ -230,4 +234,90 @@ Gates on `088b0a2`, all exit 0: check; test (2,398 JUnit across 170 classes, 0 f
 65% at its floor); guards (12 of 12).
 
 Not verified: Windows, where the copy is named through `GIT_INDEX_FILE` with a Windows path, and where the
-shell-filter and file-permission tests skip; CI has not run this branch; not live.
+shell-filter and file-permission tests skip; CI has not run this branch; not live. The gate critic asked what a
+temporary directory with a space in its path does there: the path goes in the environment, not on a command
+line, and a copy git cannot use fails its `add`, which refuses the commit in git's words — fail closed. Not run.
+
+**#402: a name the destination already holds is not new** (branch `fix/402-names-already-held`, after
+#404). #375 read every tree a push sends for its names, and a tree carries every name in its directory, so a
+file added beside a token-shaped name a pull brought in sent that name again, and every push of it was
+refused — the false alarm this page removed for content, one gate further. The commit side had its twin:
+the cost above, a file added under a pulled token-named directory refused at every reconciliation.
+
+- **The rule, both sides:** a name that carries a token is new unless the destination's trees already hold
+  an entry of that name — for a push, the trees of the tips its destinations said they hold (`ls-remote`,
+  never a tracking ref); for a commit, HEAD's tree; for what entered HEAD, the tree searched before it. A held
+  one goes out again; a push says it once for each name (by a digest), the commit side says it as it enters.
+- **Held is the name, wherever it stands — not the tree at the same path,** as the issue first suggested.
+  The leak is the string, and a string the destination publishes anywhere is not new by being sent again;
+  `rev-list --objects` names a tree once, at the first path it reaches, so a tree used at two paths has no
+  one path to compare; and a directory renamed whole would have sent every name as new. The cost: a token-
+  shaped name copied to a second place goes out, said but not refused. A name held only in the remote's
+  history, no tip's tree, is new, and refused.
+- **How a tree is read:** entry by entry — mode, space, name, NUL, and an id skipped by its length (20 or 32
+  bytes), whatever its bytes; each name matched whole, as bytes. Only a window that matches anywhere has its
+  names read; a window that matches nowhere is walked for where its last entry ends, and the last window of a
+  tree not even that, so a tree in one window that matches nowhere is never taken apart. What no entry ends
+  at a tree's end is matched as bytes, as #375 read every tree; an entry past 64 KiB is not waited on, and
+  refuses (no filesystem the records live on holds a name past 255 bytes).
+- **What is held is listed only when a name matches**, and then once: one `cat-file --batch-check` peels
+  the tips to their trees (a tip with none, a tag to a blob, holds none; measured), one `ls-tree -r -t -z
+  --name-only` per tree lists the names as bytes. Git that cannot say is no answer, and refuses.
+
+Cost, measured on the review's histories, the scan alone, before and after alternated twice (three runs
+each, on a machine other agents were loading): everything, 0.23–0.27 s on 1,660 commits either way,
+1.43–1.57 s against 1.43–1.57 s on 5,000, 3.47–3.70 s against 3.51–3.74 s on the log history (one run each
+side ran past 4.9 s under load); five commits, 26–40 ms either way. No tree there is past one window, so
+no tree that matches nowhere is taken apart. Listing what a tip holds, paid only when a name matches: 21–43
+ms for the 10,001 entries of the 5,000-commit history.
+
+Red first, against stubs that held nothing: 7 of 10 new `BatchOutput` tests, 8 of 11 `HeldNames`, 3 of 5
+`Introduced`, both scan tests, and four pushes and a reconciliation, each `expected:<true> but was:<false>`.
+31 mutants, each killed. Planning the run found three behaviours no test pinned — a tree of many windows
+walked in step, a peel short of a tip, a name not said again — pinned in `962bd5a` before it ran; the run
+left one, every name asked about, killed once its test read a tree in one window, where every name is in the
+window that matches. With how many tests each failed: held names ignored 10; a name
+that cannot be answered for taken as new 1, as held 1; a held name not handed over 3; every name asked about
+1; ids taken as 20 bytes 1; the id not skipped 1; a name read with its NUL 11; what runs past a tree's last
+entry let through 1; an entry waited on without end 1; what runs past a window dropped 10; a window that
+matches nowhere not walked 1; the first tip alone 1; a tip with no tree as no answer 1; a failed peel as
+nothing held 1; a failed listing as no names 1; whole paths held 9; listed at once 2; a peel short of a
+tip accepted 1; the names sent again not kept 3; whole paths on the commit side 4; the base's names ignored
+5; a name the base cannot answer for as held 1; every part asked about 43; the push without held names 3;
+held names from the tracking ref 1; the notice at every push 1; never said 1; the commit's base holding
+nothing 2; what entered HEAD against nothing 1; the scan not passing held names on 5.
+
+**#405: a push goes where `ls-remote` asked, and the tips go on stdin** (two findings from the gate critic's
+pass on #404, the same branch).
+
+- **A chained `insteadOf` (measured by the critic).** `remote get-url --push` applies one `url.<base>`
+  rule, and `ls-remote`, handed that URL, applied another: with B rewritten to A and A to C, C said what it
+  held, the push went to A, and a token only C held landed on A. Each push URL must be what `ls-remote
+  --get-url` makes of it (rule-free paths, `file://`, https and scp forms come back unchanged, measured), or
+  nothing is pushed, said once until the rules agree. A branch whose remote is a URL goes to both as it is,
+  each rewriting it once, so only a `pushInsteadOf` rule that starts it can part them: one does, and refuses.
+  The check is `PushRewrites`. Its first form, in `d6d5fe7`, failed open twice, both found while pinning the
+  critic's survivor (a rule listing that fails): a listing cut off by its timeout read as "no rule", and a
+  rule whose base holds a space misread — `config --get-regexp` puts a space between key and value as well
+  (measured) — so the rules are read with `--null`, and any listing but a match or "no key" refuses.
+- **The Windows command line (inferred by the critic).** The range put every held tip in `rev-list`'s argv,
+  and about 800 fill 32,767 characters. Every listing now goes on stdin, `--not` and all; measured here, 30,000
+  tips failed to start on argv (exit 126, past macOS's 1 MB) and ran on stdin. A test pushes past 30,000.
+
+Cost: `ls-remote --get-url` 6.7 ms a push URL, the rule listing 7.8 ms for a URL remote, each push.
+
+Red first: the critic's chain, a URL remote a `pushInsteadOf` rule rewrites, and the notice said again, each
+pushed where it must not (`expected:<false> but was:<true>`); the push past 30,000 tips (`could not run
+(IOException)`); the listing on argv; and `PushRewrites` against a stub (6 of 8), then against `d6d5fe7`'s
+logic (the base with a space and the timed-out listing). The first run of seven mutants, on `14d4a4a`, killed
+six and left a rule listing that fails; pinning it found the two above. On the final code, eleven, each
+killed, with how many tests each failed: the second rewrite not looked for 5; a `pushInsteadOf` rule on a
+URL remote not looked for 5; a URL remote held to a named remote's check 7; a failed listing as no rule 2;
+a listing cut off as no rule, `d6d5fe7`'s check 1; rules read without `--null`, `d6d5fe7`'s parsing 3; a URL
+`ls-remote` cannot resolve taken as agreeing 1; the notice at every attempt 1; never said again 1; the check
+skipped 3; the listing on argv again 2.
+
+Gates for #402 and #405, on the branch with main `4700074` merged in, all exit 0: check; test (2,607 JUnit
+across 176 classes, 0 failures, 12 skipped — 8 C#, three Windows-only store tests main brought, and the `icase`
+test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 89%, 520 of 578;
+`adapter/config` 65% at its floor); guards (12 of 12). Not verified on Windows, by CI, or live.
