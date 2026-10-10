@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory.Refusal
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
@@ -14,12 +15,16 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.AccessDeniedException
+import java.nio.file.FileSystemException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 import kotlin.io.path.name
@@ -253,6 +258,86 @@ class AtomicStateFileTest {
 
         heard.size shouldBe 2
         heard.last() shouldContain "git tracks files under .ps"
+    }
+
+    // What a write does to whatever stands at the document's name, pinned before #386 shares the write ------
+
+    @Test
+    fun `a link where the document should be is replaced, and the file it led to keeps its bytes`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = Files.writeString(Files.createDirectories(root.resolve("elsewhere")).resolve("a.json"), "{}")
+        aLink(path(), elsewhere)
+
+        timers().write("""{"a":1}""")
+
+        Files.readString(elsewhere) shouldBe "{}"
+        Files.isSymbolicLink(path()) shouldBe false
+        Files.readString(path()) shouldBe """{"a":1}"""
+    }
+
+    @Test
+    fun `a dangling link where the document should be is replaced, and nothing is created where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = root.resolve("elsewhere/made-by-a-state-file.json")
+        aLink(path(), nowhere)
+
+        timers().write("""{"a":1}""")
+
+        Files.exists(nowhere, LinkOption.NOFOLLOW_LINKS) shouldBe false
+        Files.readString(path()) shouldBe """{"a":1}"""
+    }
+
+    /** Replaced rather than written into, so a second name for the old document keeps what it held. */
+    @Test
+    fun `a document with a second name is replaced, and the other name keeps its bytes`() {
+        timers().write("""{"a":1}""")
+        val secondName = root.resolve("second-name.json")
+        assumeTrue(runCatching { Files.createLink(secondName, path()) }.isSuccess, "no hard link here")
+
+        timers().write("""{"b":2}""")
+
+        Files.readString(secondName) shouldBe """{"a":1}"""
+        Files.readString(path()) shouldBe """{"b":2}"""
+    }
+
+    /** The move falls back to replacing what stands there, and an empty directory is something it can replace. */
+    @Test
+    fun `an empty directory where the document should be is replaced by it`() {
+        Files.createDirectories(path())
+
+        timers().write("""{"a":1}""")
+
+        Files.readString(path()) shouldBe """{"a":1}"""
+    }
+
+    /** Failed as the filesystem fails it — no refusal of the state file's own — and nothing is left beside it. */
+    @Test
+    fun `a directory holding something where the document should be fails the write, leaving nothing beside it`() {
+        Files.writeString(Files.createDirectories(path()).resolve("inside.json"), "{}")
+
+        val failure = shouldThrow<IOException> { timers().write("""{"a":1}""") }
+
+        failure.shouldBeInstanceOf<FileSystemException>()
+        stateDirEntries() shouldContainExactly listOf("timers.json")
+        Files.readString(path().resolve("inside.json")) shouldBe "{}"
+    }
+
+    @Test
+    fun `a document is written as UTF-8`() {
+        timers().write("""{"title":"두 수의 곱"}""")
+
+        Files.readAllBytes(path()).decodeToString() shouldBe """{"title":"두 수의 곱"}"""
+    }
+
+    /** The words of the one warning this class says, once per reason. */
+    @Test
+    fun `a state file refused is said in exactly these words`() {
+        val timers = AtomicStateFile.under(root, "timers.json", aStateDirectory(root, tracked = { true }))
+
+        val heard = warningsWhile(AtomicStateFile::class) { timers.write("{}") }
+
+        heard.single() shouldBe
+            "The state file timers.json was not written: ${Refusal.TRACKED.reason}. Said once for this reason."
     }
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))

@@ -1,6 +1,5 @@
 package com.brokenfinger.tracker.adapter.store
 
-import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -27,7 +26,8 @@ import java.nio.file.Path
  * everywhere: `readdir` returns the name on disk, while `toRealPath` returns the name as asked for on
  * Linux over a case-insensitive mount — measured in the tracker's own image on a macOS bind mount,
  * where the real path of an alias came back as `.ps`. The real path catches what is a directory and
- * still leads elsewhere.
+ * still leads elsewhere. These are the checks every directory a record write walks gets, so `.ps` takes
+ * that same step, [RecordBound]'s (#386).
  *
  * **And git must track nothing that is it or under it** — a pull can deliver a tracked file inside the
  * real directory, a credential store holding one letter, a link at `.ps/raw`, under any name that comes
@@ -47,8 +47,11 @@ import java.nio.file.Path
 class StateDirectory(
     private val recordRoot: Path,
     private val tracked: TrackedState,
-    private val listing: (Path) -> Set<String> = ::namesOnDisk,
+    listing: (Path) -> Set<String> = ::namesOnDisk,
 ) {
+    // `.ps` is checked by the step every record write takes (#386), with the root's listing handed in as before.
+    private val bound = RecordBound.underRoot(recordRoot, setOf(NAME), DiskAnswers(namesIn = listing))
+
     /**
      * Whether git may commit and push over the record repository, and the credential be stored there:
      * `.ps` is the tracker's own directory and git tracks nothing that is it or under it. Git that
@@ -90,11 +93,14 @@ class StateDirectory(
         }
     }
 
+    // Made where absent, a real directory, listed by the root under exactly its name, and resolving to the path walked.
+    // The path handed back is the one configured, as callers were always given.
     private fun verified(directory: Path): Path? {
-        if (!Files.exists(directory, NOFOLLOW_LINKS)) Files.createDirectories(directory)
-        if (NAME !in listing(recordRoot)) return null
-        if (!Files.isDirectory(directory, NOFOLLOW_LINKS)) return null
-        if (directory.toRealPath() != recordRoot.toRealPath().resolve(NAME)) return null
+        try {
+            bound.made(directory) ?: return null
+        } catch (out: OutOfBounds) {
+            return null
+        }
         return directory
     }
 
@@ -109,10 +115,6 @@ class StateDirectory(
     private fun isRealDirectory(directory: Path): Boolean {
         if (!Files.exists(directory, NOFOLLOW_LINKS)) createdOrThere(directory)
         return Files.isDirectory(directory, NOFOLLOW_LINKS)
-    }
-
-    private fun createdOrThere(directory: Path) {
-        runCatching { Files.createDirectory(directory) }.onFailure { if (it !is FileAlreadyExistsException) throw it }
     }
 
     sealed interface Inspection

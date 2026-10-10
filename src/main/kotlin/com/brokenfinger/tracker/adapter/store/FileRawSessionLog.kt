@@ -98,7 +98,7 @@ class FileRawSessionLog(
     private val settledLimit = heldLimit - heldLimit / LIVE_SHARE
     private val settledChars = AtomicLong()
 
-    private val said = ConcurrentHashMap.newKeySet<String>()
+    private val said = SaidOnce()
 
     /** What the last [unprocessed] left on the work list, for the history's readers (#377). */
     @Volatile
@@ -648,7 +648,7 @@ class FileRawSessionLog(
     }
 
     private fun sayOnce(key: String, warn: () -> Unit) {
-        if (said.add(key)) warn()
+        said.say(key, warn)
     }
 
     private fun orphanList(): MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())

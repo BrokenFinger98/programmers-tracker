@@ -515,6 +515,40 @@ class FileRawSessionLogTest {
         Files.list(tracked).use { it.count() } shouldBe 0L
     }
 
+    /** The words the log says once each, pinned before #386 shares how a reason is said once. */
+    @Test
+    fun `holding frames and going over the limit are said in exactly these words`() {
+        val state = aStateDirectory(root) { true }
+        val log =
+            FileRawSessionLog(root.resolve(".ps/raw"), Clock.fixed(startedAt, ZoneOffset.UTC), state, heldLimit = 10)
+        val session = log.start(120804)
+
+        val heard = warningsWhile(FileRawSessionLog::class) {
+            repeat(3) { log.append(session, """{"n":$it}""") }
+        }
+
+        heard shouldContainExactly listOf(
+            "Raw frames are held in memory rather than written: ${StateDirectory.Refusal.TRACKED.reason}. A " +
+                "submit's still reach its attempt file; runs and orphans are written once .ps is usable again, and " +
+                "lost if the server stops first. Said once for this reason.",
+            "Raw frames held in memory reached 10 characters; frames beyond that are dropped until .ps is usable " +
+                "again. Said once.",
+        )
+    }
+
+    @Test
+    fun `an unlisted work list is said in exactly these words`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps/raw"), Files.createDirectories(outside.resolve("raw")))
+        val log = FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectory(root))
+
+        val heard = warningsWhile(FileRawSessionLog::class) { repeat(2) { log.unprocessed() } }
+
+        heard.single() shouldBe "Raw sessions were not replayed: ${StateDirectory.Refusal.HOLDS_A_LINK.reason}. " +
+            "Their directory was not listed, so nothing in it was read or counted, and it is left as it is. " +
+            "Said once for this reason."
+    }
+
     @Test
     fun `held frames stay within their limit, and going over it is said`() {
         val state = aStateDirectory(root) { true }

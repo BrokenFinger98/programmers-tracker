@@ -18,12 +18,15 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.types.shouldNotBeInstanceOf
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import java.io.FileInputStream
+import java.io.IOException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -601,6 +604,29 @@ class RecordWritesTest {
         }
     }
 
+    /**
+     * The measurement #386 asked for, on windows-latest: a page another process holds open, opened without sharing
+     * deletion — as `FileInputStream` opens a file, and as a sync client or a scanner may hold one — and then replaced.
+     * Predicted from the JDK, not yet run: the move needs deletion over the target, so it fails, and so does the plain
+     * replace it falls back to. The failure is the filesystem's own, not a refusal, so even a writer that skips
+     * refusals is not spared it; and the page keeps its old bytes, with nothing left beside it. If this fails on
+     * Windows, the prediction was wrong, and that is the result.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    fun `a page another process holds open without sharing deletion is not replaced, and nothing is lost`() {
+        val page = inProblem("README.md")
+        problems().replace(page, "before\n")
+
+        FileInputStream(page.toFile()).use {
+            val failure = shouldThrow<IOException> { problems().replaceOrSkip(page, "after\n") }
+            failure.shouldNotBeInstanceOf<RefusedWriteException>()
+        }
+
+        Files.readString(page) shouldBe "before\n"
+        namesIn(page.parent) shouldBe listOf("README.md")
+    }
+
     // Said once, thrown unless skipped, never quoted ---------------------------------------------
 
     @Test
@@ -649,6 +675,130 @@ class RecordWritesTest {
         } finally {
             Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
         }
+    }
+
+    // What a replace does that no case above says, pinned before #386 shares the write -----------
+
+    /** Replaced rather than written into, so a second name for the old file keeps what it held. */
+    @Test
+    fun `a replaced file with a second name is broken from it, and the other name keeps its bytes`() {
+        val file = inProblem("README.md")
+        problems().replace(file, "page\n")
+        val secondName = outside.resolve("second-name.md")
+        assumeTrue(runCatching { Files.createLink(secondName, file) }.isSuccess, "no hard link between the two")
+
+        problems().replace(file, "page again\n")
+
+        Files.readString(secondName) shouldBe "page\n"
+        Files.readString(file) shouldBe "page again\n"
+    }
+
+    /** What is not a regular file and not a link — here a FIFO — is replaced too, and said as what it is. */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO where a replaced file should be is replaced, and said as not a regular file`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        val fifo = Files.createDirectories(root.resolve("problems/1-x")).resolve("README.md")
+        assumeTrue(madeFifo(fifo), "no mkfifo on this machine")
+
+        val warning = warningsWhile(RecordWrites::class) { problems().replace(fifo, "page\n") }.single()
+
+        Files.readString(fifo) shouldBe "page\n"
+        warning shouldContain "which is not a regular file"
+    }
+
+    /** Once for the path for this instance, however often a link comes to stand there again. */
+    @Test
+    fun `a link replaced at one path is said once, however often one stands there again`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val writes = problems()
+        val file = inProblem("README.md")
+
+        val warnings = warningsWhile(RecordWrites::class) {
+            repeat(2) {
+                Files.deleteIfExists(file)
+                aLink(file, aFileNotOurs(outside, "not-ours-$it.md"))
+                writes.replace(file, "page\n")
+            }
+        }
+
+        warnings.size shouldBe 1
+    }
+
+    /** Once for each path, not once for the writer: a link at another path is said too (#386's review). */
+    @Test
+    fun `a link replaced at each of two paths is said for each`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val writes = problems()
+        val page = aLink(inProblem("README.md"), aFileNotOurs(outside))
+        val examples = aLink(inProblem("examples.json"), aFileNotOurs(outside, "other.md"))
+
+        val warnings = warningsWhile(RecordWrites::class) {
+            writes.replace(page, "page\n")
+            writes.replace(examples, "[]")
+        }
+
+        warnings.size shouldBe 2
+    }
+
+    /** Once for each reason, not once for the writer: a refusal for another reason is said too (#386's review). */
+    @Test
+    fun `a refusal for each of two reasons is said for each`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve("problems/1-x"), outside)
+        Files.createDirectories(root.resolve("problems/2-y/README.md"))
+        val writes = problems()
+
+        val warnings = warningsWhile(RecordWrites::class) {
+            writes.replaceOrSkip(inProblem("README.md"), "page\n")
+            writes.replaceOrSkip(root.resolve("problems/2-y/README.md"), "page\n")
+        }
+
+        warnings.size shouldBe 2
+    }
+
+    @Test
+    fun `a file is written as UTF-8`() {
+        problems().replace(inProblem("README.md"), "# 두 수의 곱\n")
+
+        Files.readAllBytes(inProblem("README.md")).decodeToString() shouldBe "# 두 수의 곱\n"
+    }
+
+    /** The directories a write makes on its way get what a plain mkdir gives one, as before the walk. */
+    @Test
+    fun `a directory made on the way gets what a plain mkdir gives one`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+        val plain = Files.createDirectory(outside.resolve("plain"))
+
+        problems().replace(inProblem("attempts/001.java"), "code\n")
+
+        permissionsOf(inProblem("attempts")) shouldBe permissionsOf(plain)
+        permissionsOf(root.resolve("problems")) shouldBe permissionsOf(plain)
+    }
+
+    /** The words of a refusal, which each instance says once for its reason. */
+    @Test
+    fun `a refusal is said in exactly these words`() {
+        val target = root.resolve(".ps/git-credentials")
+
+        val heard = warningsWhile(RecordWrites::class) {
+            shouldThrow<RefusedWriteException> { problems().replace(target, "x\n") }
+        }
+
+        heard.single() shouldBe "Not writing $target: it lies outside problems/. The records repository is written " +
+            "only through real directories, never through a link (#361). Said once for this reason."
+    }
+
+    /** The words of a replaced link, which each instance says once for its path. */
+    @Test
+    fun `a replaced link is said in exactly these words`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val file = aLink(inProblem("README.md"), aFileNotOurs(outside))
+
+        val heard = warningsWhile(RecordWrites::class) { problems().replace(file, "page\n") }
+
+        heard.single() shouldBe "Replacing $file, which is a symbolic link, with the file itself rather than " +
+            "writing through it (#361). Said once for this path."
     }
 
     private fun problems() = RecordWrites.underProblems(RecordLayout(root))

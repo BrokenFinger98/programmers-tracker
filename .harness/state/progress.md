@@ -6083,3 +6083,55 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Remaining.** Something other than a regular file planted where the server had just written its copy still
   keeps the number until a restart, and the next copy then goes with the runs. Not verified live.
 - **Pending.** Not pushed.
+
+## 2026-10-08 — #386 one write for records and state, and no crash debris in a commit
+- **Branch** `refactor/386-one-write-primitive`, rebased onto main at `9b4dcc1` (#387 squashed as
+  `40bc5f5`, #377 before it, #376 and #378's store half after it). Two earlier merges, of #387's review
+  fixes and of main, are replaced by the rebase; the pin one of them changed is changed where it is made.
+- **Inventory first.** Every behaviour of `AtomicStateFile`, `StateDirectory`'s creation and
+  `RecordWrites.replaceAt` that an observer could see, and whether a test said it. `a92652d` pins what
+  none did: links, hard links and directories at the target, UTF-8, `mkdir`'s modes, and the exact
+  words each class says once. The table is in the ADR.
+- **One write.** `ce60e12` one `SaidOnce` for four classes; `5fa6c7a` `.ps` verified by the walk's own
+  step, `RecordBound.made()`; `a38fc20` `FileReplacement` and its three `FileMode`s. Every pin and every
+  test of both callers passed unchanged; only the temporary file's name changed.
+- **The debris.** `331c051` names it `.<name>.<n>.programmers-tracker.tmp`, and `RECONCILE_SCOPE` leaves
+  it out of every reconcile — chosen over a boot sweep, which cannot precede a live pass or the backup,
+  nor reach a file in flight. The coupling is one constant, on the `git → store` edge of §1.
+- **Windows.** `8934dc5`, a test enabled there alone: a page held open by `FileInputStream`, which does
+  not share deletion, then replaced. It asserts an `IOException` that is not a refusal, the old bytes
+  kept and nothing beside. Not run. If it holds, the page is skipped for that write and rewritten at the
+  next refresh; no fallback to an in-place write.
+- **Mutation.** 21 mutants, 19 killed, one of them after the pin `b1415ed`. Two survive: owner-only left
+  to the JDK's default (the same mode on the default filesystem) and `REPLACE_EXISTING` alone
+  (race-only).
+- **Gates**, all exit 0 on the rebased branch: check; test 2,545 (174 classes, 0 failures, 12 skipped:
+  the 11 as before and the Windows pin off Windows), node 4 of 4; build; `verifyBranchCoverage`
+  (`adapter/store` 87%, `adapter/git` 88%, `adapter/web` 82%, `application` 89%); guards 12 of 12.
+- **Docs.** ADR [[decisions/2026-10-08-one-replace-and-no-crash-debris]]; a note in #361's ADR, with Q4,
+  Q5 and Q6 marked; the index.
+- **Pending.** CI on the three OSes and the Windows pin's first run. Live: a rebuilt server should write
+  byte-identical files with the same modes, and `git status` in the records repository should show no
+  `.programmers-tracker.tmp` after a normal boot.
+
+## 2026-10-08 — #386 review round, N1–N9 (branch refactor/386-one-write-primitive)
+- **The review** approved with nothing blocking. Rebased twice meanwhile, never pushed: onto `c65d2cb`
+  once #387 was squashed, then onto `9b4dcc1` (#378's store half), keeping #401's guards beside the
+  primitive (one conflict, `FileRawSessionLog`'s fields: #401's settled budget kept, its said-once set
+  made `SaidOnce`).
+- `8894d00` **N2.** Five survivors pinned, each pin failing its mutant alone: `toAbsolutePath()` removed
+  (on a zip file system), one said-once key for a writer's replaced links, for the writer's and the
+  reader's refusals, and the reconcile's exclusion widened to visible names.
+- `66f104c` **N9.** A clean-up that fails too is kept on the failure as suppressed; pinned in an
+  append-only directory (`chflags uappnd`, macOS), red first. `f8c1464`: `SaidOnce`'s lambda renamed.
+  `FileMode` keeps its name for #374.
+- `f7409bb` **N4.** `.*.programmers-tracker.tmp` seeded as ignored beside the lock; red first, with real
+  git; the reconcile still goes through with the rule in place.
+- `646a4a8` **N6.** `RecordBound`'s "never `.git` or `.ps`" scoped to record writers and readers.
+- **Docs.** N1 (a name past 209 bytes now fails; the tracker's stop at 183), N3 (an earlier build's
+  debris committed once), N4's corrected reason, N5's wording, N7 as a candidate, N8 in the inventory;
+  #361's page qualified; the index.
+- **Gates**, all exit 0: check; test 2,553 (174 classes, 8 of them the review's, 0 failures, 12 skipped as
+  before), node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 87%, `adapter/git` 88%,
+  `adapter/web` 82%, `application` 89%); guards 12 of 12.
+- **Pending.** Not pushed: the coordinator pushes. CI, the Windows pins' first run, the live check.
