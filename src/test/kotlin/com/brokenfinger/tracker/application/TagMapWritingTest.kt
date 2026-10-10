@@ -9,14 +9,20 @@ import com.brokenfinger.tracker.domain.calc.TagCount
 import com.brokenfinger.tracker.support.fixtures.aCatalogEntry
 import com.brokenfinger.tracker.support.fixtures.aCatalogOf
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import java.io.FileInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -107,6 +113,55 @@ class TagMapWritingTest {
     }
 
     /**
+     * One page that could not be replaced — held open on Windows, a read-only mount — threw out of the loop, so every
+     * page after it, the index and the tag map kept what they held until a later boot (#407). Each page is refreshed
+     * on its own now: the one that fails is said once by the page and skipped, and the rest of the vault is written.
+     */
+    @Test
+    fun `a page that cannot be replaced is skipped, and the rest of the vault is refreshed`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val store = twoProblemsRecorded()
+        val stuck = Files.createDirectories(RecordLayout(root).problemDirectory(120804, TITLE))
+
+        unwritableWhile(stuck) {
+            assumeTrue(!Files.isWritable(stuck), "a superuser writes anyway")
+            attachment(FileDerivedArtifacts(root, store, Clock.systemDefaultZone())).refreshVault()
+        }
+
+        refreshedAfterTheStuckPage()
+    }
+
+    /** The case the issue measured: on Windows, a page another process holds open without sharing deletion. */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    fun `a page held open by another process is skipped, and the rest of the vault is refreshed`() {
+        val store = twoProblemsRecorded()
+        val artifacts = FileDerivedArtifacts(root, store, Clock.systemDefaultZone())
+        attachment(artifacts).refreshVault()
+        val layout = RecordLayout(root)
+        val held = layout.problemDirectory(120804, TITLE).resolve("README.md")
+        val rest = listOf(layout.problemDirectory(120805, TITLE).resolve("README.md"), layout.problemIndex())
+        (rest + layout.tagNote("dp")).forEach(Files::delete)
+
+        FileInputStream(held.toFile()).use { attachment(artifacts).refreshVault() }
+
+        refreshedAfterTheStuckPage()
+    }
+
+    // The first problem's page is the one that fails, so everything the vault refresh writes comes after it.
+    private fun twoProblemsRecorded(): RecordStore = store().apply {
+        append(SubmissionRecordJson.encode(aSubmissionRecord(lessonId = 120804, tags = listOf("arithmetic"))))
+        append(SubmissionRecordJson.encode(aSubmissionRecord(lessonId = 120805, tags = listOf("dp"))))
+    }
+
+    private fun refreshedAfterTheStuckPage() {
+        val layout = RecordLayout(root)
+        Files.readString(layout.problemDirectory(120805, TITLE).resolve("README.md")) shouldContain "lessonId: 120805"
+        Files.exists(layout.problemIndex()) shouldBe true
+        Files.exists(layout.tagNote("dp")) shouldBe true
+    }
+
+    /**
      * Records what it was asked to write and does the real work for everything else, so the
      * assertion is on the argument rather than on an interaction — a spy here would prove the
      * method was called and not what it was called with.
@@ -127,5 +182,10 @@ class TagMapWritingTest {
         override fun writeTagNotes(counts: List<TagCount>) {
             seen += counts
         }
+    }
+
+    private companion object {
+        /** The title every record here carries: what names a problem's directory. */
+        const val TITLE = "두 수의 곱 구하기"
     }
 }
