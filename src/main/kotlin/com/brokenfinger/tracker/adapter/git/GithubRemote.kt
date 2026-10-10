@@ -45,6 +45,7 @@ class GithubRemote(
     private val recordRoot: Path,
     private val token: GithubToken?,
     private val apiBase: String = "https://api.github.com",
+    private val state: StateDirectory = StateDirectory(recordRoot, TrackedStateEntries(recordRoot)),
 ) {
     fun ensure() {
         // First, and regardless of the token: an install from before #267 carries our pointer in
@@ -136,20 +137,22 @@ class GithubRemote(
      * file was, and a token written through it lands in the tracked file it leads to. A temporary
      * file renamed over the store replaces whatever stands there, the link included, and starts
      * owner-only ([AtomicStateFile]).
+     *
+     * **Into the `.ps` that was checked, held open (#374).** Once git had answered, the token was
+     * written by a path to `.ps`, resolved again: `.ps` swapped for a link meanwhile led it into the
+     * tracked directory the link named (measured on main). The content gate would still refuse to
+     * commit or push it, but the token lay in the records tree; it is now written through the
+     * directory held, or not at all.
      */
-    private fun storeCredential(): Boolean =
-        when (val inspection = StateDirectory(recordRoot, TrackedStateEntries(recordRoot)).forGit()) {
-            is StateDirectory.Usable -> stored(inspection.directory)
-            is StateDirectory.Refused -> notStored(inspection.refusal.reason)
-        }
-
-    private fun stored(directory: Path): Boolean {
-        val store = AtomicStateFile(directory.resolve(PushCredential.STORE))
-        store.write("https://x-access-token:${token!!.raw()}@github.com\n")
-        // No `git config` here on purpose. The pointer is passed per command instead, because
-        // this repository's config is the user's too and the path we would write is ours (#267).
-        return true
+    private fun storeCredential(): Boolean = when (val inspection = state.forGit()) {
+        is StateDirectory.Usable -> stored()
+        is StateDirectory.Refused -> notStored(inspection.refusal.reason)
     }
+
+    // No `git config` here on purpose. The pointer is passed per command instead, because this
+    // repository's config is the user's too and the path we would write is ours (#267).
+    private fun stored(): Boolean = AtomicStateFile.under(recordRoot, PushCredential.STORE, state)
+        .write("https://x-access-token:${token!!.raw()}@github.com\n")
 
     /**
      * `.ps` is not the tracker's own, git tracks something that is it or under it, or git cannot say

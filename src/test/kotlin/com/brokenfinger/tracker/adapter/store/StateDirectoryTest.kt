@@ -1,16 +1,22 @@
 package com.brokenfinger.tracker.adapter.store
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory.Opened
 import com.brokenfinger.tracker.adapter.store.StateDirectory.Refusal
 import com.brokenfinger.tracker.adapter.store.StateDirectory.Refused
 import com.brokenfinger.tracker.adapter.store.StateDirectory.Usable
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
+import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
+import com.brokenfinger.tracker.support.fixtures.SwappingBeforeTheWrite
 import com.brokenfinger.tracker.support.fixtures.UNTRACK_EVERY_SPELLING
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.aStateDirectoryHeldThrough
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -263,6 +269,131 @@ class StateDirectoryTest {
 
         Files.exists(tracked.resolve("orphans")) shouldBe false
     }
+
+    // Held, not resolved again (#374) ---------------------------------------------------------------
+
+    /** What a writer of state is handed is `.ps` itself, open, and a write through it lands there. */
+    @Test
+    fun `a writer of state is handed the state directory held open`() {
+        aStateDirectory(root).openForWriting().shouldBeInstanceOf<Opened>().handle.use {
+            it.append("x.jsonl", bytes("frame\n"))
+        }
+
+        Files.readString(root.resolve(".ps/x.jsonl")) shouldBe "frame\n"
+    }
+
+    @Test
+    fun `it is held through a handle wherever the platform gives one`() {
+        aStateDirectory(root).openForWriting().shouldBeInstanceOf<Opened>().handle.use {
+            (it is SecureDirectoryHandle) shouldBe DirectoryHandles.givesHandles(root)
+        }
+    }
+
+    @Test
+    fun `an absent record repository is made for a writer of state, as forWriting makes it`() {
+        val records = root.resolve("records")
+
+        aStateDirectory(records).openForWriting().shouldBeInstanceOf<Opened>().handle.close()
+
+        Files.isDirectory(records.resolve(".ps"), LinkOption.NOFOLLOW_LINKS) shouldBe true
+    }
+
+    @Test
+    fun `a writer of state is refused what forWriting refuses`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps"), Files.createDirectories(root.resolve("problems/zz")))
+
+        val elsewhere = root.resolve("elsewhere")
+
+        aStateDirectory(root).openForWriting() shouldBe Refused(Refusal.NOT_THE_DIRECTORY)
+        aStateDirectory(elsewhere, tracked = { true }).openForWriting() shouldBe Refused(Refusal.TRACKED)
+    }
+
+    /**
+     * N10 in the review of #360: `.ps` swapped for a link while git answers, once every check has passed. The directory
+     * held is no longer what `.ps` names, so it is not handed over, and the writer asks again at its next write.
+     */
+    @Test
+    fun `a state directory swapped for a link while git answers is refused as changed`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val swapping = ChangingAnswer(false, whileAsked = { replacedByALink(tracked) })
+
+        StateDirectory(root, swapping).openForWriting() shouldBe Refused(Refusal.CHANGED)
+
+        namesIn(tracked).shouldBeEmpty()
+        Refusal.CHANGED.transient shouldBe true
+        Refusal.CHANGED.reason shouldContain "changed while it was being checked"
+    }
+
+    /** Swapped once it is handed over, `.ps` is still the directory written in: never where the link leads. */
+    @Test
+    fun `a write through the state directory handed over lands in the one that was checked`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val aside = root.resolve("aside")
+        val handles = SwappingBeforeTheWrite(DirectoryHandles.THROUGH_A_HANDLE) { movedAsideForALink(aside, tracked) }
+
+        aStateDirectoryHeldThrough(root, handles).openForWriting().shouldBeInstanceOf<Opened>().handle.use {
+            it.append("x.jsonl", bytes("frame\n"))
+        }
+
+        namesIn(tracked).shouldBeEmpty()
+        namesIn(aside) shouldContainExactly listOf("x.jsonl")
+    }
+
+    @Test
+    fun `a writer's directory below is held open, and made where absent`() {
+        aStateDirectory(root).open("raw", "orphans").shouldBeInstanceOf<Opened>().handle.use {
+            it.append("120804.jsonl", bytes("frame\n"))
+        }
+
+        Files.readString(root.resolve(".ps/raw/orphans/120804.jsonl")) shouldBe "frame\n"
+    }
+
+    @Test
+    fun `a link on a writer's way opens nothing, and nothing is made below it`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps/raw"), tracked)
+
+        aStateDirectory(root).open("raw", "orphans") shouldBe Refused(Refusal.HOLDS_A_LINK)
+
+        namesIn(tracked).shouldBeEmpty()
+    }
+
+    @Test
+    fun `a state directory that is a link opens nothing below it`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        aLink(root.resolve(".ps"), tracked)
+
+        aStateDirectory(root).open("raw") shouldBe Refused(Refusal.HOLDS_A_LINK)
+
+        namesIn(tracked).shouldBeEmpty()
+    }
+
+    @Test
+    fun `a writer's directory under a records path that is a file is not inspected`() {
+        val notADirectory = Files.writeString(root.resolve("records"), "a file\n")
+
+        aStateDirectory(notADirectory).open("raw") shouldBe Refused(Refusal.NOT_INSPECTED)
+    }
+
+    // `.ps` deleted, as a checkout deletes an ignored directory, and a link put in its place — once.
+    private fun replacedByALink(tracked: Path) {
+        val state = root.resolve(".ps")
+        if (Files.isSymbolicLink(state)) return
+        Files.delete(state)
+        aLink(state, tracked)
+    }
+
+    private fun movedAsideForALink(aside: Path, tracked: Path) {
+        Files.move(root.resolve(".ps"), aside)
+        aLink(root.resolve(".ps"), tracked)
+    }
+
+    private fun bytes(text: String): ByteArray = text.toByteArray(Charsets.UTF_8)
 
     private fun permissionsOf(path: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(path))
 }

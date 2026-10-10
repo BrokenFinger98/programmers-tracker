@@ -25,7 +25,9 @@ class FileBackupLog(private val file: AtomicStateFile) : BackupLog {
         return runCatching { stampOf(text)?.let(Instant::parse) }.getOrElse { unreadable() }
     }
 
-    override fun succeededAt(instant: Instant) = file.write(Json.encodeToString(mapOf(LAST_SUCCESS to "$instant")))
+    override fun succeededAt(instant: Instant) {
+        file.write(Json.encodeToString(mapOf(LAST_SUCCESS to "$instant")))
+    }
 
     private fun stampOf(text: String): String? =
         Json.parseToJsonElement(text).jsonObject[LAST_SUCCESS]?.jsonPrimitive?.contentOrNull

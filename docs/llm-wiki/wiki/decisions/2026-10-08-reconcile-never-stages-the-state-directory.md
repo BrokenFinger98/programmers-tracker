@@ -105,7 +105,9 @@ reproduced with the real classes, a bare remote and fake tokens:
 - **Replace refs.** The gate read a replacement object while the push sent the original.
 - **N11.** The submit path had no merge wait.
 - **N10.** Every check is of a path at one moment, and the write resolves it again. With no store, the
-  gate also had nothing to search for.
+  gate also had nothing to search for. *Closed for the writers of `.ps` by #374, where the platform gives a
+  directory handle: a writer holds the directory it checked, open, and writes in it by name — see
+  [[decisions/2026-10-08-state-is-written-in-the-directory-it-checked]].*
 
 The second lesson: `.ps` is what is inside it as well as what it is, and a gate that searches only for
 the stored value goes blind the moment the store changes.
@@ -478,7 +480,12 @@ Two pin that a healthy repository still commits and pushes with a credential sto
   no-follow read and `CREATE_NEW` matter only inside the race (both mutants survive). A FIFO swapped
   in between the store's checks would hang boot (F13). Each needs a process racing the tracker on this
   machine, outside the clone-or-pull model. Handle-based writes (`SecureDirectoryStream`) are a
-  follow-up.
+  follow-up. *Since #374 the first two are closed for the writers of `.ps` on Linux and macOS, the
+  tracker's image over a macOS bind mount included: `.ps` and the directories below it are held open from
+  before the check to the write. Measured on main first, a swap while git answered put the timers document
+  and the push credential in the tracked directory a link led to. Windows has no handle and keeps both
+  windows; the commit's window is git's and stays — see
+  [[decisions/2026-10-08-state-is-written-in-the-directory-it-checked]].*
 - **A hard link needs local write access.** It is a regular file to every check here; git cannot
   deliver one.
 - **The gate reads file content, nothing else.** Commit and tag messages are not searched for the

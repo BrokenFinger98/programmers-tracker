@@ -38,7 +38,10 @@ something there, delete from disk what git put there before you untrack it, and 
 server never replays a raw session git has tracked, but it can tell one from its own only while git's
 history, reflogs included, still names it. An expired reflog or a rewritten history ends that
 ([#377](https://github.com/BrokenFinger98/programmers-tracker/issues/377)). It writes nothing
-through a link. And before every commit and every push it searches what it would add or send —
+through a link, not even one swapped in for `.ps` between its checks and the write: it holds the
+directory it checked open and writes in it by name, on every platform but Windows, which gives no such
+handle ([#374](https://github.com/BrokenFinger98/programmers-tracker/issues/374)). And before every
+commit and every push it searches what it would add or send —
 the file content, and the names of the files a commit adds — for the stored token and for anything
 shaped like a GitHub token, refusing if it finds one or cannot read everything it would send. A push
 is searched for what its remote says it lacks, asked at every push, and a commit for what it adds to

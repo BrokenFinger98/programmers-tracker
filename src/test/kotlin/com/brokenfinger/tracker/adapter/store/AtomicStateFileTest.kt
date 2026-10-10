@@ -2,15 +2,19 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.adapter.store.StateDirectory.Refusal
 import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
+import com.brokenfinger.tracker.support.fixtures.SwappingBeforeTheWrite
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.aStateDirectoryHeldThrough
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.madeFifo
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -338,6 +342,71 @@ class AtomicStateFileTest {
 
         heard.single() shouldBe
             "The state file timers.json was not written: ${Refusal.TRACKED.reason}. Said once for this reason."
+    }
+
+    // Through `.ps` held open, never a path resolved again (#374) -------------------------------------
+
+    @Test
+    fun `a write says whether it was made`() {
+        AtomicStateFile.under(root, "timers.json", aStateDirectory(root)).write("{}") shouldBe true
+        AtomicStateFile.under(root, "timers.json", aStateDirectory(root, tracked = { true })).write("{}") shouldBe false
+        timers().write("{}") shouldBe true
+    }
+
+    /**
+     * N10 in the review of #360, measured on main: `.ps` deleted, as a checkout deletes an ignored directory, and a link
+     * into the tree put in its place while git answered. Every check had passed, and the document written by path
+     * landed in the tracked directory. It is not written now, and that is said.
+     */
+    @Test
+    fun `a state file is not written where a state directory swapped for a link while git answers leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val git = ChangingAnswer(false, whileAsked = { replacedByALink(tracked, aside = null) })
+        val timers = AtomicStateFile.under(root, "timers.json", StateDirectory(root, git))
+
+        val heard = warningsWhile(AtomicStateFile::class) { timers.write("""{"a":1}""") shouldBe false }
+
+        namesIn(tracked).shouldBeEmpty()
+        heard.single() shouldContain Refusal.CHANGED.reason
+    }
+
+    /** The same swap with `.ps` moved aside rather than deleted: nothing is written in either directory. */
+    @Test
+    fun `a state file is not written in a state directory moved aside for a link while git answers`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val aside = root.resolve("aside")
+        val git = ChangingAnswer(false, whileAsked = { replacedByALink(tracked, aside) })
+
+        AtomicStateFile.under(root, "timers.json", StateDirectory(root, git)).write("""{"a":1}""") shouldBe false
+
+        namesIn(tracked).shouldBeEmpty()
+        namesIn(aside).shouldBeEmpty()
+    }
+
+    /** Swapped once `.ps` is handed over, the document lands in the directory checked, and nowhere else. */
+    @Test
+    fun `a state file is written in the state directory checked, whatever it comes to name`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val aside = root.resolve("aside")
+        val handles = SwappingBeforeTheWrite(DirectoryHandles.THROUGH_A_HANDLE) { replacedByALink(tracked, aside) }
+
+        AtomicStateFile.under(root, "timers.json", aStateDirectoryHeldThrough(root, handles)).write("""{"a":1}""")
+
+        namesIn(tracked).shouldBeEmpty()
+        namesIn(aside) shouldContainExactly listOf("timers.json")
+        Files.readString(aside.resolve("timers.json")) shouldBe """{"a":1}"""
+    }
+
+    // `.ps` taken away — deleted, as a checkout deletes an ignored directory, or moved — and a link put there, once.
+    private fun replacedByALink(tracked: Path, aside: Path?) {
+        val state = root.resolve(".ps")
+        if (Files.isSymbolicLink(state)) return
+        if (aside == null) Files.delete(state)
+        if (aside != null) Files.move(state, aside)
+        aLink(state, tracked)
     }
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))

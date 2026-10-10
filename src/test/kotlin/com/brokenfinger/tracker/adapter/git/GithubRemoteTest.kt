@@ -1,9 +1,12 @@
 package com.brokenfinger.tracker.adapter.git
 
+import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.support.fixtures.A_LONG_S_STATE_DIRECTORY
+import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
+import com.brokenfinger.tracker.support.fixtures.namesIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import com.sun.net.httpserver.HttpServer
@@ -72,8 +75,10 @@ class GithubRemoteTest {
         else -> 404 to "{}"
     }
 
-    private fun remote(token: String? = "ghp_test_token") =
-        GithubRemote(repo.root, token?.let(::GithubToken), apiBase = "http://127.0.0.1:${server.address.port}")
+    private fun remote(token: String? = "ghp_test_token", state: StateDirectory = aStateDirectoryAsGitAnswers()) =
+        GithubRemote(repo.root, token?.let(::GithubToken), "http://127.0.0.1:${server.address.port}", state)
+
+    private fun aStateDirectoryAsGitAnswers() = StateDirectory(repo.root, TrackedStateEntries(repo.root))
 
     @Test
     fun `creates a private repository and wires it as origin`() {
@@ -361,6 +366,31 @@ class GithubRemoteTest {
         remote().ensure()
 
         Files.exists(alias.resolve("git-credentials")) shouldBe false
+    }
+
+    /**
+     * `.ps` swapped for a link into the tree while git is asked whether it tracks anything there, as a pull swaps it
+     * (#374, N10 in the review of #360). Every check has passed by then, and the token written by path landed in the
+     * file the link leads to, a path git tracks. Written through `.ps` held open, it is not stored at all, and nothing
+     * is wired on top of it.
+     */
+    @Test
+    fun `stores no token where a state directory swapped for a link while git answers leads`() {
+        assumeTrue(canPlantLinksIn(repo.root), "this test makes symbolic links")
+        val tracked = Files.createDirectories(repo.root.resolve("problems/zz"))
+        val swapped = ChangingAnswer(false, whileAsked = { replacedByALink(repo.root.resolve(".ps"), tracked) })
+
+        remote(state = StateDirectory(repo.root, swapped)).ensure()
+
+        namesIn(tracked).shouldBeEmpty()
+        git("remote").trim() shouldBe ""
+    }
+
+    // `.ps` deleted, as a checkout deletes an ignored directory, and a link put in its place — once.
+    private fun replacedByALink(state: Path, tracked: Path) {
+        if (Files.isSymbolicLink(state)) return
+        Files.delete(state)
+        aLink(state, tracked)
     }
 
     /**

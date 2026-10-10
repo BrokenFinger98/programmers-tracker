@@ -1,8 +1,10 @@
 package com.brokenfinger.tracker.support.fixtures
 
+import com.brokenfinger.tracker.adapter.store.DirectoryHandles
 import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.adapter.store.TrackedHistory
 import com.brokenfinger.tracker.adapter.store.TrackedState
+import com.brokenfinger.tracker.adapter.store.namesOnDisk
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -28,6 +30,16 @@ const val GIT_COULD_NOT_SAY = "fatal: the history could not be read, as this tes
 
 /** The state directory of [root], with git answering [tracked]. */
 fun aStateDirectory(root: Path, tracked: TrackedState = NOTHING_TRACKED): StateDirectory = StateDirectory(root, tracked)
+
+/**
+ * The state directory of [root], held through [handles] rather than this platform's (#374) — such as handles that
+ * swap a directory for a link between the check and the write ([SwappingBeforeTheWrite]).
+ */
+fun aStateDirectoryHeldThrough(
+    root: Path,
+    handles: DirectoryHandles,
+    tracked: TrackedState = NOTHING_TRACKED,
+): StateDirectory = StateDirectory(root, tracked, ::namesOnDisk, handles)
 
 /**
  * Git's answer about `.ps`, changed between calls the way a pull or the owner's `git rm --cached` changes it:

@@ -1,14 +1,10 @@
 package com.brokenfinger.tracker.adapter.store
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption.ATOMIC_MOVE
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.attribute.FileAttribute
-import java.nio.file.attribute.PosixFileAttributes
+import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
+import java.security.SecureRandom
 
 /**
  * The one way a whole file is written in the records repository and in its state directory alike (#386): into a
@@ -24,19 +20,27 @@ import java.nio.file.attribute.PosixFilePermissions
  * **In a mode set when the file is made** ([FileMode]), so a file that must be owner-only never sits in a wider one
  * first. A regular file's own mode is kept where the mode says so; a link's own bits never are.
  *
- * Every operation on the target's directory is here, and only here: making the temporary file, writing it, setting its
- * mode, the move, the clean-up. Writing through a directory handle rather than a path (#374) changes this class and
- * the walk that hands it a directory ([RecordBound]), and none of the writers of a page, a note or a state document.
+ * **Through the directory held** (#374). Every operation on the target's directory — making the temporary file,
+ * writing it, setting its mode, the move, the clean-up — goes through a [DirectoryHandle], by name. A writer of state
+ * hands it `.ps` held open from before its check, so a link swapped in for `.ps` meanwhile is never followed; a path
+ * is held by path, so the records and every document outside `.ps` are written exactly as before.
  */
 internal class FileReplacement(private val mode: FileMode) {
-    /**
-     * Replaces [target] whole with [text], written beside it and moved over it. What stopped the write is what is
-     * thrown: a clean-up that fails too is kept on it as suppressed, never thrown in its place (#386's review).
-     */
+    /** Replaces [target] whole with [text], written beside it and moved over it, its directory held by path. */
     fun replace(target: Path, text: String) {
-        val temp = temporaryBeside(target)
-        runCatching { writtenThenMoved(temp, target, text) }.onFailure { failure ->
-            runCatching { Files.deleteIfExists(temp) }.onFailure(failure::addSuppressed)
+        val absolute = target.toAbsolutePath()
+        PathDirectoryHandle(absolute.parent).use { replace(it, absolute.fileName.toString(), text) }
+    }
+
+    /**
+     * Replaces [name] in [directory] whole with [text], written beside it and moved over it, through the handle. What
+     * stopped the write is what is thrown: a clean-up that fails too is kept on it as suppressed, never thrown in its
+     * place (#386's review).
+     */
+    fun replace(directory: DirectoryHandle, name: String, text: String) {
+        val temp = temporaryIn(directory, name)
+        runCatching { writtenThenMoved(directory, temp, name, text) }.onFailure { failure ->
+            runCatching { directory.delete(temp) }.onFailure(failure::addSuppressed)
             throw failure
         }
     }
@@ -44,18 +48,21 @@ internal class FileReplacement(private val mode: FileMode) {
     /** The temporary file a replace of [target] writes first: beside it, named after it, in its mode from the start. */
     fun temporaryBeside(target: Path): Path {
         val absolute = target.toAbsolutePath()
-        return Files.createTempFile(absolute.parent, ".${absolute.fileName}.", TEMP_SUFFIX, *mode.atCreation(absolute))
+        val temp = PathDirectoryHandle(absolute.parent).use { temporaryIn(it, absolute.fileName.toString()) }
+        return absolute.resolveSibling(temp)
     }
 
-    private fun writtenThenMoved(temp: Path, target: Path, text: String) {
-        Files.writeString(temp, text, StandardCharsets.UTF_8)
-        mode.kept(target, temp)
-        moved(temp, target)
+    // Hidden, named after its target and ending as only the tracker's own do; made in its mode where nothing stands.
+    private fun temporaryIn(directory: DirectoryHandle, name: String): String {
+        val temp = ".$name.${random.nextLong().toULong()}$TEMP_SUFFIX"
+        directory.create(temp, mode.atCreation())
+        return temp
     }
 
-    // ATOMIC_MOVE is the guarantee wanted; where a filesystem cannot give it, a plain replace still follows no link.
-    private fun moved(temp: Path, target: Path) {
-        runCatching { Files.move(temp, target, ATOMIC_MOVE) }.getOrElse { Files.move(temp, target, REPLACE_EXISTING) }
+    private fun writtenThenMoved(directory: DirectoryHandle, temp: String, name: String, text: String) {
+        directory.write(temp, text.toByteArray(StandardCharsets.UTF_8))
+        mode.kept(directory, name, temp)
+        directory.move(temp, directory, name)
     }
 
     companion object {
@@ -66,6 +73,9 @@ internal class FileReplacement(private val mode: FileMode) {
          * or a file of the owner's would be left out with it.
          */
         const val TEMP_SUFFIX = ".programmers-tracker.tmp"
+
+        // As `Files.createTempFile` names one: a name nobody can guess and plant something at first.
+        private val random = SecureRandom()
     }
 }
 
@@ -84,28 +94,26 @@ internal enum class FileMode(private val plainWhenNew: Boolean, private val keep
     KEPT_ELSE_OWNER_ONLY(plainWhenNew = false, keepsRegularFiles = true),
     ;
 
-    /** The mode [target]'s temporary file is made in. */
-    fun atCreation(target: Path): Array<FileAttribute<*>> {
-        if (POSIX !in target.fileSystem.supportedFileAttributeViews()) return emptyArray()
-        if (plainWhenNew) return arrayOf(PLAIN)
-        return arrayOf(OWNER)
+    /** The mode a temporary file is made in, where its filesystem keeps one. */
+    fun atCreation(): Set<PosixFilePermission> {
+        if (plainWhenNew) return PLAIN
+        return OWNER
     }
 
     /**
-     * Hands a regular file's own mode on to [temp], where this mode keeps one: a file rewritten in place kept its mode.
-     * A link's own bits say nothing about a file. Best effort: a mode that cannot be set leaves [temp] as it was made.
+     * Hands the regular file [name]'s own mode on to [temp], both in [directory], where this mode keeps one: a file
+     * rewritten in place kept its mode. A link's own bits say nothing about a file. Best effort: a mode that cannot be
+     * read or set leaves [temp] as it was made.
      */
-    fun kept(target: Path, temp: Path) {
+    fun kept(directory: DirectoryHandle, name: String, temp: String) {
         if (!keepsRegularFiles) return
-        val current = runCatching { Files.readAttributes(target, PosixFileAttributes::class.java, NOFOLLOW_LINKS) }
-        val attributes = current.getOrNull()?.takeIf { it.isRegularFile } ?: return
-        runCatching { Files.setPosixFilePermissions(temp, attributes.permissions()) }
+        val permissions = runCatching { directory.permissionsOf(name) }.getOrNull() ?: return
+        runCatching { directory.setPermissions(temp, permissions) }
     }
 
     companion object {
-        private const val POSIX = "posix"
-        private val PLAIN = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-rw-rw-"))
-        private val OWNER = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
+        private val PLAIN = PosixFilePermissions.fromString("rw-rw-rw-")
+        private val OWNER = PosixFilePermissions.fromString("rw-------")
 
         /** A record writer's mode: owner-only where it asks, as code files are, and otherwise a regular file's own kept. */
         fun forRecords(ownerOnly: Boolean): FileMode {

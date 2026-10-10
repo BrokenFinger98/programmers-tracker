@@ -7,9 +7,12 @@ import com.brokenfinger.tracker.support.fixtures.ChangingAnswer
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.GIT_COULD_NOT_SAY
 import com.brokenfinger.tracker.support.fixtures.NOTHING_TRACKED
+import com.brokenfinger.tracker.support.fixtures.NOT_OURS
+import com.brokenfinger.tracker.support.fixtures.SwappingBeforeTheWrite
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aListingThatFailsOnce
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
+import com.brokenfinger.tracker.support.fixtures.aStateDirectoryHeldThrough
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.madeFifo
@@ -1298,6 +1301,80 @@ class FileRawSessionLogTest {
         namesIn(root.resolve(".ps/raw")) shouldContainExactly listOf(inFlight.value, "pulled.jsonl")
         Files.readAllLines(copied) shouldContainExactly listOf("""{"m":1}""")
     }
+
+    // Through the raw directory held, never a path resolved again (#374) ---------------------------------
+
+    /**
+     * N10 in the review of #360, between a frame's check and its append: `.ps/raw` swapped for a link into the tree
+     * once every check has passed. The frame lands in the raw directory that was checked, wherever it now is.
+     */
+    @Test
+    fun `a frame is appended in the raw directory checked, never where a link swapped in for it leads`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val raw = Files.createDirectories(root.resolve(".ps/raw"))
+        val log = logHeldThrough(swappingRawFor(raw, tracked))
+        val session = log.start(120804)
+
+        log.append(session, """{"n":1}""")
+
+        namesIn(tracked).shouldBeEmpty()
+        Files.readAllLines(raw.resolveSibling("moved-away").resolve(session.value)) shouldContainExactly
+            listOf("""{"n":1}""")
+    }
+
+    /** What a discard deletes is the session in the raw directory checked: never a file where a link leads. */
+    @Test
+    fun `a discard deletes nothing where a link swapped in for the raw directory leads`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val raw = Files.createDirectories(root.resolve(".ps/raw"))
+        val log = logHeldThrough(swappingRawFor(raw, tracked))
+        val session = log.start(120804)
+        val theirs = Files.writeString(tracked.resolve(session.value), NOT_OURS)
+
+        log.discard(session)
+
+        Files.readString(theirs) shouldBe NOT_OURS
+    }
+
+    /** A run set aside moves between two directories held, both the ones checked: nothing moves where a link leads. */
+    @Test
+    fun `a run set aside moves within the raw directory checked`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val raw = Files.createDirectories(root.resolve(".ps/raw"))
+        val log = logHeldThrough(swappingRawFor(raw, tracked))
+        val run = log.start(120804)
+        Files.writeString(raw.resolve(run.value), """{"run":1}""" + "\n")
+
+        log.setAside(run)
+
+        namesIn(tracked).shouldBeEmpty()
+        Files.readAllLines(raw.resolveSibling("moved-away/recorded/${run.value}")) shouldContainExactly
+            listOf("""{"run":1}""")
+    }
+
+    @Test
+    fun `an orphan is appended in the raw directory checked, never where a link swapped in for it leads`() {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val tracked = Files.createDirectories(root.resolve("problems/zz"))
+        val raw = Files.createDirectories(root.resolve(".ps/raw"))
+        val log = logHeldThrough(swappingRawFor(raw, tracked))
+
+        log.orphaned(120804, """{"lost":1}""")
+
+        namesIn(tracked).shouldBeEmpty()
+        Files.readAllLines(raw.resolveSibling("moved-away/orphans/120804.jsonl")) shouldContainExactly
+            listOf("""{"lost":1}""")
+    }
+
+    private fun logHeldThrough(handles: DirectoryHandles) =
+        FileRawSessionLog.under(root, Clock.fixed(startedAt, ZoneOffset.UTC), aStateDirectoryHeldThrough(root, handles))
+
+    // Handles that swap `.ps/raw` for a link into the tree at the first write made through them.
+    private fun swappingRawFor(raw: Path, tracked: Path) =
+        SwappingBeforeTheWrite(DirectoryHandles.THROUGH_A_HANDLE) { swapForALink(raw, tracked) }
 
     /** A session as a crash leaves it, or a pull delivers it: a file under `.ps/raw` the work list parses. */
     private fun aSessionLeftBehind(lessonId: Long = 120804): Path {
