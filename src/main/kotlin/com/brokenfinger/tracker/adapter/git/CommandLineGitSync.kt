@@ -422,8 +422,11 @@ class CommandLineGitSync(
      * HEAD's own tree is not listed beside it (#376). #373 listed it at every push against stale refs, which
      * this range no longer trusts: what HEAD's tree holds and the destinations lack is in the range, and what
      * they hold is not sent. Listed anyway, it refused every push for a string a pull had brought in.
+     *
+     * Each tip is left out as `^<tip>`: the range goes on `rev-list`'s stdin (#405), where git before 2.42 reads
+     * no `--not`, and every push on 2.39.5 was refused (the gate critic's M1 on #410, measured).
      */
-    private fun outgoingRange(held: Set<String>): List<String> = listOf("HEAD", "--not") + held.sorted()
+    private fun outgoingRange(held: Set<String>): List<String> = listOf("HEAD") + held.sorted().map { "^$it" }
 
     // What was stored when a head was searched, kept as a digest rather than as the secret itself.
     private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {

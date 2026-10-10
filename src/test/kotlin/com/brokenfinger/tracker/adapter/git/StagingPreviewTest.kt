@@ -43,7 +43,7 @@ class StagingPreviewTest {
         val previewed = preview().of(EVERYTHING, tree).shouldBeInstanceOf<Introduced>()
 
         repo.git("add", "--all")
-        previewed.listings() shouldBe listOf(listOf(staged("added.md"), staged("changed.md"), "--not", tree))
+        previewed.listings() shouldBe listOf(listOf(staged("added.md"), staged("changed.md"), "^$tree"))
     }
 
     /** The search that refuses a commit runs before anything is staged, so a refusal leaves the index as it was. */
@@ -70,7 +70,7 @@ class StagingPreviewTest {
         val previewed = preview().of(EVERYTHING, tree).shouldBeInstanceOf<Introduced>()
 
         repo.git("add", "--all")
-        previewed.listings() shouldBe listOf(listOf(staged("link.md"), "--not", tree))
+        previewed.listings() shouldBe listOf(listOf(staged("link.md"), "^$tree"))
     }
 
     @Test
@@ -82,7 +82,7 @@ class StagingPreviewTest {
         val previewed = preview().of(listOf("notes"), tree).shouldBeInstanceOf<Introduced>()
 
         repo.git("add", "--all")
-        previewed.listings() shouldBe listOf(listOf(staged("notes/inside.md"), "--not", tree))
+        previewed.listings() shouldBe listOf(listOf(staged("notes/inside.md"), "^$tree"))
     }
 
     /** What the paths it adds are, read from the same answer: a new path, and not one it changes. */
@@ -106,7 +106,7 @@ class StagingPreviewTest {
 
         fresh.git("add", "--all")
         val first = fresh.git("rev-parse", ":first.md").trim()
-        previewed.shouldBeInstanceOf<Introduced>().listings() shouldBe listOf(listOf(first, "--not", EMPTY_TREE))
+        previewed.shouldBeInstanceOf<Introduced>().listings() shouldBe listOf(listOf(first, "^$EMPTY_TREE"))
     }
 
     /** A failure is git's own answer, so the reason reaches the log in git's words. */

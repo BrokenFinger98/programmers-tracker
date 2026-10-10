@@ -16,10 +16,12 @@ internal class Introduced private constructor(
     private val base: String,
 ) : Preview {
     /**
-     * The blobs as `rev-list` argument lists, each leaving out what [base] holds: `rev-list --objects` names a
-     * blob given to it as itself, and none that a tree after `--not` holds. [IDS_PER_LISTING] to a list.
+     * The blobs as `rev-list` listings, each leaving out what [base] holds: `rev-list --objects` names a blob given
+     * to it as itself, and none that `^<base>`'s tree holds. A listing goes on stdin, where git before 2.42 reads no
+     * `--not`, and every commit on 2.39.5 was refused (the gate critic's M1 on #410, measured). [IDS_PER_LISTING] to
+     * a list.
      */
-    fun listings(): List<List<String>> = blobs.chunked(IDS_PER_LISTING).map { it + listOf("--not", base) }
+    fun listings(): List<List<String>> = blobs.chunked(IDS_PER_LISTING).map { it + "^$base" }
 
     /**
      * The names the paths it adds hold — each part of each — matched as their bytes and never as UTF-16: a name
@@ -52,8 +54,8 @@ internal class Introduced private constructor(
 
     companion object {
         /**
-         * Ids to a `rev-list` call, on its command line: 500 of them are about 20,500 characters, well inside
-         * the 32,767 a Windows command line holds, with room for the credential option before them.
+         * Ids to a `rev-list` call. They go on its stdin since #405, so no command line's limit applies; this keeps
+         * each call's input small.
          */
         const val IDS_PER_LISTING = 500
 

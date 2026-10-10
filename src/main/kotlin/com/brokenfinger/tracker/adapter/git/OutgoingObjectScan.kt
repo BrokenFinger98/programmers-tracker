@@ -24,7 +24,7 @@ internal class OutgoingObjectScan(
     private val window: Int = BatchOutput.WINDOW,
 ) {
     /**
-     * Searches every object [listings] name — each the arguments of one `rev-list --objects` — for the token
+     * Searches every object [listings] name — each the revisions of one `rev-list --objects` — for the token
      * shapes and [stored]'s values. What two listings name is read once. A name in a tree that [held] already
      * holds is not new (#402).
      */
@@ -41,10 +41,11 @@ internal class OutgoingObjectScan(
     }
 
     // Every object one listing names, each once: rev-list prints an object the first time it reaches it, and a
-    // path after the id of each tree and blob, which only orders them. The listing goes on stdin, `--not` and all:
-    // a push past a remote of many refs leaves each one's tip out, and on the command line about 800 of them
-    // filled the 32,767 characters Windows allows (#405).
+    // path after the id of each tree and blob, which only orders them. The listing goes on stdin: a push past a
+    // remote of many refs leaves each one's tip out, and on the command line about 800 of them filled the 32,767
+    // characters Windows allows (#405). A line there that is not a [REVISION] is refused before git is asked.
     private fun listed(range: List<String>): List<String>? {
+        if (!range.all { REVISION.matches(it) }) return null
         val answer = git.answer(listOf("rev-list", "--objects", "--stdin"), linesOf(range))
         if (!answer.succeeded()) return null
         return answer.stdout.lines().filter { it.isNotEmpty() }.map { it.substringBefore(' ') }
@@ -92,6 +93,15 @@ internal class OutgoingObjectScan(
          * the names (#375). A tag is never listed: the push names one branch, and sends no tag.
          */
         private val READ_TYPES = setOf("blob", "commit", "tree")
+
+        /**
+         * A line `rev-list --stdin` reads as a revision, and nothing else: not an option, which git before 2.42
+         * refuses there — a `--not` line was "fatal: options not supported in --stdin mode" on 2.39.5, and every
+         * commit and push was refused (the gate critic's M1 on #410, measured); not an empty line, which ends the
+         * list with exit 0, so what came after it was never listed (2.39.5 and 2.48.1, measured); and no newline,
+         * which would make two. A listing leaves an object out as `^<id>`.
+         */
+        private val REVISION = Regex("[^-\\n][^\\n]*")
 
         private fun linesOf(ids: List<String>): String = ids.joinToString("\n", postfix = "\n")
     }

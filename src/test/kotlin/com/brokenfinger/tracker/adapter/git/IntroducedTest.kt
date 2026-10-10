@@ -21,7 +21,7 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().listings() shouldBe listOf(listOf(BLOB_A, BLOB_C, "--not", BASE))
+        introduced.shouldNotBeNull().listings() shouldBe listOf(listOf(BLOB_A, BLOB_C, "^$BASE"))
     }
 
     /** A link is stored as a blob of the path it holds, and a file that became one is a type change. */
@@ -34,7 +34,7 @@ class IntroducedTest {
             BASE,
         )
 
-        introduced.shouldNotBeNull().listings() shouldBe listOf(listOf(BLOB_A, BLOB_C, BLOB_D, "--not", BASE))
+        introduced.shouldNotBeNull().listings() shouldBe listOf(listOf(BLOB_A, BLOB_C, BLOB_D, "^$BASE"))
     }
 
     /** A submodule's entry names a commit in another repository: nothing here to read. */
@@ -50,7 +50,10 @@ class IntroducedTest {
         Introduced.ofReceived("", BASE).shouldNotBeNull().listings() shouldBe emptyList()
     }
 
-    /** Each list stays far inside the 32,767 characters a Windows command line holds. */
+    /**
+     * Each list leaves the base out as `^<base>`, a revision: git before 2.42 reads no option on `rev-list --stdin`,
+     * and a `--not` line there refused every commit (the gate critic's M1 on #410, measured on 2.39.5).
+     */
     @Test
     fun `the blobs come in bounded lists, each leaving out what the base holds`() {
         val ids = List(1_001) { "%040x".format(it + 1) }
@@ -58,9 +61,9 @@ class IntroducedTest {
 
         val listings = Introduced.ofReceived(answer, BASE).shouldNotBeNull().listings()
 
-        listings.map { it.size } shouldBe listOf(502, 502, 3)
-        listings.forEach { it.takeLast(2) shouldBe listOf("--not", BASE) }
-        listings.flatMap { it.dropLast(2) } shouldBe ids
+        listings.map { it.size } shouldBe listOf(501, 501, 2)
+        listings.forEach { it.last() shouldBe "^$BASE" }
+        listings.flatMap { it.dropLast(1) } shouldBe ids
     }
 
     /** SHA-256 repositories name objects with 64 characters, and git prints them whole. */
@@ -70,7 +73,7 @@ class IntroducedTest {
 
         val introduced = Introduced.ofReceived(change("000000", "100644", "0".repeat(64), longer, 'A', "a.md"), BASE)
 
-        introduced.shouldNotBeNull().listings() shouldBe listOf(listOf(longer, "--not", BASE))
+        introduced.shouldNotBeNull().listings() shouldBe listOf(listOf(longer, "^$BASE"))
     }
 
     @Test
