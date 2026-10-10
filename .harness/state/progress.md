@@ -6215,3 +6215,31 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   guards (12 of 12, docs staged).
 - **Pending.** Not pushed; CI reruns once the coordinator pushes, and the held-open refresh runs there for the first
   time.
+## 2026-10-10 — #407 PR #411's review: every writer that carries on, and a link at the target (branch fix/407-page-guard-and-move)
+- **Base.** `07b73dd`, pushed: commits on top, no rebase; gradle in the background, one command at a time.
+- `ae0ebd0` **N2, N1.** The guard moved from `ProblemReadme` into `RecordWrites.replaceOrSkip`, once: an `IOException`
+  that is no refusal is skipped and said once for the path, by its kind and `FileSystemException.reason`, never by the
+  message, which names the temporary file; anything else is thrown. Every caller gains it: the tag notes and the
+  index the review named, and the runner files, the examples, the heartbeat's marker and the seeds, whose own lines
+  now cover only what is no `IOException`. Red: `replaceOrSkip` closed to writes and through a `DiskAnswers` seam;
+  two tag notes, the first immutable under `chflags uchg` (held open on Windows), and `tags/` closed to writes; the
+  index closed to writes; the pages heard through `RecordWrites`.
+- `34ab72f` **N3.** Restored, not unsaid: by path, a link to anything or to nothing at the target is taken away as an
+  empty directory is, and the move made again, since Windows will not move over a link to a directory (the review's
+  reading). Red with a seam refusing the first atomic move: a link to a directory and a dangling link. A contract
+  test makes a real link to a directory for both handles; on Windows it runs where a link can be made.
+- **Docs, N5, N4, N6** (the commit after them). #386's ADR: a note on this round, with N4 (the fallback is
+  effectively `EXDEV`-only) and N6 (a transient sharing violation on Windows is now a skipped write; a short
+  Windows-only retry if CI shows flakes); the index line names #407; #361's ADR marks its "a skipping writer does
+  not skip" as changed.
+- **Mutation** (`mutate407r.py` in the scratchpad, against the store, git-history, MCP, application and config
+  tests, 1,419 a run): 19 mutants, 18 killed. The survivor, the directory check made to follow a link, is equivalent
+  but for a dangling Windows junction, which only a state file's move by path could meet: a link answers the link
+  check first. Per mutant in the ADR.
+- **Gates**, all exit 0, at `34ab72f`: check; test (2,661 JUnit in 176 classes, 0 failures, 14 skipped: those
+  before and the note held open on Windows; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 779
+  of 890; `application` 90%, 396 of 439; every package at or above its floor); guards (12 of 12, docs staged).
+- **Remaining.** A file the file system will not take keeps its old content until the cause goes. The Windows tests
+  (a page held open, a note held open, #386's, a real link to a directory) have not run on windows-latest for this
+  round; not verified live.
+- **Pending.** Not pushed.

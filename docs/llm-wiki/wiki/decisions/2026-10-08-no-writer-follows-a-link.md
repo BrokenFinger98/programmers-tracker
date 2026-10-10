@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [security, storage, links, records]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-10
 sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md]
 ---
 
@@ -254,7 +254,8 @@ is written once, read normally from then on, and the backfill's count becomes tr
   to rename over an open file unless it was opened to share deletion, so a page an editor holds
   open is not rewritten. The failure is an I/O error, which a skipping writer does not skip.
   ⚠️ Pinned by #386 in a test enabled on Windows alone; its first run there is the measurement
-  (Outcome).
+  (Outcome). ⚠️ Since #407's review a skipping writer skips it too, said once for the path, and only
+  what is no I/O error still reaches it (#386's page, below).
 - **A temporary file left by a crash stays beside its target** (Q5; filed). The next reconcile
   commits it. Code files always had this. ⚠️ Resolved by #386: it stays, and under its new name is never
   committed; one an earlier build left is committed once after the upgrade (Outcome).
