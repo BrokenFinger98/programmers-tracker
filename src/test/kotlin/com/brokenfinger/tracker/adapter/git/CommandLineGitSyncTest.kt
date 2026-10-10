@@ -32,6 +32,8 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.DisabledOnOs
+import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.nio.file.Files
@@ -1833,6 +1835,120 @@ class CommandLineGitSyncTest {
         val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
 
         heard.single() shouldContain "rewritten"
+    }
+
+    /**
+     * The gate critic's S8 (#410): a `pushInsteadOf` rule's value is a prefix, and an empty one starts every URL, so
+     * git pushed a URL remote to the rule's base and the URL — E, then B's path — while `ls-remote` asked B, which
+     * held the token. The empty value was read as no rule.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS, disabledReason = "E's path holds B's whole, and a Windows path starts with its drive")
+    fun `a branch whose remote is a URL an empty pushInsteadOf rule rewrites is not pushed to`() {
+        val b = bareAt("B/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(b))
+        val e = bareAt("E${urlOf(b)}")
+        git("config", "branch.main.remote", urlOf(b))
+        git("config", "url.${urlOf(base)}/E.pushInsteadOf", "")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(e) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The gate critic's S9 (#410): B is rewritten to A for the push, and `ls-remote`, handed A, would rewrite it to A
+     * and a space, which held the token. What `ls-remote` would ask was trimmed, and read as A itself.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS, disabledReason = "Windows drops a name's trailing space, which makes A and a space A")
+    fun `a push URL ls-remote would ask with a trailing space is not pushed to`() {
+        val (a, b) = listOf("A", "B").map { bareAt("$it/repo.git") }
+        aTokenPushedThenRemoved(to = urlOf(bareAt("A/repo.git ")))
+        git("remote", "add", "origin", urlOf(b))
+        rewritten(from = b, to = a)
+        git("config", "url.${urlOf(a)} .insteadOf", urlOf(a))
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(a) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The gate critic's S10b (#410): a remote named `sub/P.git` pushes to `sub/P.git`, its own name, and fetches from
+     * C. Its push URL was taken for a URL, being the remote's name as well, and never asked how `ls-remote` reads it:
+     * as that remote, by its own URL — C, which held the token.
+     */
+    @Test
+    fun `a remote whose push URL is its own name is not pushed to`() {
+        val c = bareAt("C/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(c))
+        git("init", "--quiet", "--bare", "-b", "main", "sub/P.git")
+        git("config", "remote.sub/P.git.url", urlOf(c))
+        git("config", "remote.sub/P.git.pushurl", "sub/P.git")
+        git("config", "branch.main.remote", "sub/P.git")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "the name of a remote"
+        refsAt(root.resolve("sub/P.git")) shouldContainExactly emptyList()
+    }
+
+    /** The gate critic's S10c (#410): the same, a `pushInsteadOf` rule sending the remote's URL to its own name. */
+    @Test
+    fun `a remote a pushInsteadOf rule sends to its own name is not pushed to`() {
+        val c = bareAt("C/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(c))
+        git("init", "--quiet", "--bare", "-b", "main", "sub/Q.git")
+        git("config", "remote.sub/Q.git.url", urlOf(c))
+        git("config", "url.sub/Q.git.pushInsteadOf", urlOf(c))
+        git("config", "branch.main.remote", "sub/Q.git")
+
+        sync().push() shouldBe false
+
+        refsAt(root.resolve("sub/Q.git")) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The two above are refused for where `ls-remote` reads the name, never for the name: a remote named for the one
+     * URL it fetches from and pushes to is asked there, and pushed there. Taken for a URL, as a push URL equal to its
+     * remote's name was before #410, it would be refused as a name `git remote` lists.
+     */
+    @Test
+    fun `a remote named for the one URL it fetches from and pushes to is pushed to`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("init", "--quiet", "--bare", "-b", "main", "sub/R.git")
+        git("config", "remote.sub/R.git.url", "sub/R.git")
+        git("config", "branch.main.remote", "sub/R.git")
+
+        sync().push() shouldBe true
+
+        refsAt(root.resolve("sub/R.git")) shouldContainExactly listOf("refs/heads/main")
+    }
+
+    /**
+     * `git remote get-url` knows only the remotes the repository's own config holds, and `ls-remote` and the push
+     * take one from the global config as well (measured, git 2.48.1). A branch whose remote named such a one, by a
+     * path, was taken for a URL: asked where that remote fetches — C, which held the token — and pushed where it
+     * pushes.
+     */
+    @Test
+    fun `a branch whose remote names a remote of the global config is not pushed to`() {
+        val c = bareAt("C/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(c))
+        val global = base.resolve("global.gitconfig").toString()
+        git("config", "--file", global, "remote.sub/G.git.url", urlOf(c))
+        git("config", "--file", global, "remote.sub/G.git.pushurl", "sub/G.git")
+        git("init", "--quiet", "--bare", "-b", "main", "sub/G.git")
+        git("config", "branch.main.remote", "sub/G.git")
+        val sync = CommandLineGitSync(root, environment = System.getenv() + ("GIT_CONFIG_GLOBAL" to global))
+
+        sync.push() shouldBe false
+
+        refsAt(root.resolve("sub/G.git")) shouldContainExactly emptyList()
     }
 
     /**

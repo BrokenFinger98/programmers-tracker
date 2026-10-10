@@ -324,9 +324,9 @@ class CommandLineGitSync(
         val branch = currentBranch() ?: return detached()
         val remote = pushRemoteOf(branch)
         val destinations = destinationsOf(remote) ?: return noRemote(remote)
-        if (!sentWhereAsked(remote, destinations)) return false
-        val held = heldByDestinations(destinations) ?: return false
-        if (!searchedClean(SearchedHead(head, destinations, held, fingerprintOfStore()))) return false
+        if (!sentWhereAsked(destinations)) return false
+        val held = heldByDestinations(destinations.urls) ?: return false
+        if (!searchedClean(SearchedHead(head, destinations.urls, held, fingerprintOfStore()))) return false
         val result = git(listOf("push", "--no-follow-tags", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
@@ -338,12 +338,14 @@ class CommandLineGitSync(
      * Where a push to [remote] goes: its push URLs as git resolves them — `pushurl`, else `url` — or [remote]
      * itself when it is a URL or a path, which git accepts as a branch's remote (#378). Null for a name with
      * neither, which is nowhere to push. The push URLs, not the remote's name: `ls-remote <name>` asks the
-     * fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured).
+     * fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured). Which of
+     * the two it is is what `get-url` says, never whether a push URL reads as the remote's name: a remote can be
+     * named for its own push URL, and that is still a remote's (the gate critic's S10b and S10c on #410).
      */
-    private fun destinationsOf(remote: String): List<String>? {
+    private fun destinationsOf(remote: String): PushDestinations? {
         val urls = git(listOf("remote", "get-url", "--push", "--all", remote))
-        if (urls.succeeded()) return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }
-        return listOf(remote).takeIf { isUrl(remote) }
+        if (!urls.succeeded()) return PushDestinations.OfUrl(remote).takeIf { isUrl(remote) }
+        return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }?.let { PushDestinations.OfRemote(it) }
     }
 
     // Git's own test: a remote's nickname has no directory separator, so one with a separator, or a colon,
@@ -354,8 +356,8 @@ class CommandLineGitSync(
      * Whether `ls-remote` asks the destinations the push goes to ([PushRewrites], #405), so that what each says it
      * holds is what the push leaves out; said once while it does not, until it does again.
      */
-    private fun sentWhereAsked(remote: String, destinations: List<String>): Boolean {
-        if (pushRewrites.agree(remote, destinations)) return true.also { rewrittenSaid.set(false) }
+    private fun sentWhereAsked(destinations: PushDestinations): Boolean {
+        if (pushRewrites.agree(destinations)) return true.also { rewrittenSaid.set(false) }
         if (!rewrittenSaid.getAndSet(true)) logger.warn(REWRITTEN, root)
         return false
     }
@@ -723,9 +725,11 @@ class CommandLineGitSync(
 
         /** Never the URLs: a URL can carry a credential, as git's own words can (#405). */
         private const val REWRITTEN =
-            "git push skipped in {}: a url.<base>.insteadOf or pushInsteadOf rule has its remote's URL rewritten " +
-                "where the push goes and not where it is asked what it holds, or rewritten again there, so what the " +
-                "push would send could not be told, and nothing was sent. This is said once, until the two agree."
+            "git push skipped in {}: where the push goes is not where git asks what is held there. A " +
+                "url.<base>.insteadOf or pushInsteadOf rule has the URL rewritten for one and not the other, or " +
+                "rewritten again for the asking, or a push URL is also the name of a remote, which git asks by that " +
+                "remote's own URL. So what the push would send could not be told, and nothing was sent. This is " +
+                "said once, until the two agree."
 
         /** What git's own test for a remote's nickname rules out: a directory separator, and a colon besides. */
         private val URL_SIGNS = listOf('/', '\\', ':')
