@@ -607,10 +607,10 @@ class RecordWritesTest {
     /**
      * The measurement #386 asked for, on windows-latest: a page another process holds open, opened without sharing
      * deletion — as `FileInputStream` opens a file, and as a sync client or a scanner may hold one — and then replaced.
-     * Predicted from the JDK, not yet run: the move needs deletion over the target, so it fails, and so does the plain
-     * replace it falls back to. The failure is the filesystem's own, not a refusal, so even a writer that skips
-     * refusals is not spared it; and the page keeps its old bytes, with nothing left beside it. If this fails on
-     * Windows, the prediction was wrong, and that is the result.
+     * Predicted from the JDK: the move needs deletion over the target, so it fails, and since #407 that failure is
+     * thrown as it is, with no plain replace after it. It is the filesystem's own, not a refusal, so even a writer
+     * that skips refusals is not spared it; and the page keeps its old bytes, with nothing left beside it. If this
+     * fails on Windows, the prediction was wrong, and that is the result.
      */
     @Test
     @EnabledOnOs(OS.WINDOWS)
