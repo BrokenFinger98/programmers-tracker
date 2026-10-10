@@ -6055,6 +6055,34 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Remaining.** The FIFO swap; the put-back order under concurrency; CI has not run these commits; not verified
   live.
 - **Pending.** Not pushed; the coordinator pushes.
+## 2026-10-08 — #403 a raw copy left at its number no longer costs the next record its rawPath (branch fix/403-raw-copy-collisions)
+- **Base.** Cut from #401's head (`2b61933`); main `9b4dcc1` (#401's squash, the same tree) merged in as
+  `9b7581a`, one import conflict kept. Commits on top, no rebase.
+- `305f587` **Finding 1, a crash between the copy and the append** (healthy repository). The replay met the copy
+  the crash left and recorded `rawPath=null`. `complete()` now points at a regular file already holding exactly
+  its frames: judged without following a link, its directory walked through no link, opened only when the sizes
+  agree and read to one byte past them. Anything else there is still `FileAlreadyExistsException`. The crash is a
+  clock that fails where the writer stamps the record; the real reconciler replays. Red: the replay's `rawPath`
+  was null; two raw log tests refused identical frames. Five pins: same size and different, longer, a link to the
+  same frames, the same frames behind a linked `attempts/`, a FIFO never opened.
+- `2edcee7` **Finding 2, a copy that could not be taken back** (attacked repository). Frames held only in memory
+  while `.ps` was refused left their copy at its number, and the next grading after a restart lost its copy. It
+  is now moved to the raw session's name after `unrecorded-`, outside the attempt numbering, and `withdraw` answers
+  true. Unique per grading, never replacing a name, never through a link. Nothing lists `attempts/` (the log is
+  the authority), so it is never shown as an attempt, and reconciliation commits it. The WARN says where, and that
+  moved into `.ps/raw` under the name after `unrecorded-` it is replayed (pinned); once recorded, delete it. Red:
+  the restart test recorded `rawPath=null`; three raw log tests found the copy at its number.
+- **Mutation** (23, `mutate403.py` in the scratchpad, each against the store, git-history, MCP, application and
+  config tests): 20 killed. The three survivors are the comparison's own layers, each masked by another — the
+  regular-file check, the size check, and the read's bound (race-only).
+- **Gates**, all exit 0, at `2edcee7`: check; test (2,516 JUnit in 172 classes, 0 failures, 11 skipped as before;
+  node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 86%, 735 of 852; `application` 90%, 396 of 439;
+  every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** #387's ADR: its accepted cost marked superseded for frames held in memory, and an Outcome note for
+  #403 with the mutation table.
+- **Remaining.** Something other than a regular file planted where the server had just written its copy still
+  keeps the number until a restart, and the next copy then goes with the runs. Not verified live.
+- **Pending.** Not pushed.
 
 ## 2026-10-08 — #386 one write for records and state, and no crash debris in a commit
 - **Branch** `refactor/386-one-write-primitive`, rebased onto main at `9b4dcc1` (#387 squashed as

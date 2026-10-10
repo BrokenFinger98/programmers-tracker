@@ -370,8 +370,9 @@ class RecordWriterTest {
     }
 
     /**
-     * A copy that could not be taken back — its frames were held only in memory, or the delete failed — keeps its
-     * number taken, so no later grading is numbered into it while the server runs; and it is said, with where it lies.
+     * A copy that could not be taken back — anything but a regular file stands at its name, or the delete failed — keeps
+     * its number taken, so no later grading is numbered into it while the server runs; and it is said, with where it
+     * lies. (A copy of frames held only in memory is kept under another name instead, #403.)
      */
     @Test
     fun `a copy that cannot be taken back keeps its number taken, and says so`() = runBlocking<Unit> {
@@ -400,6 +401,37 @@ class RecordWriterTest {
         writer.write(aSubmit(2, liveRaw("g2.jsonl")))!!.attempt shouldBe 2
         heard.first() shouldContain "could not be taken back (IOException)"
     }
+
+    /**
+     * A grading refused while `.ps` was refused too: its frames were held only in memory, so its copy was their one
+     * copy on disk, and was kept at its number. After a restart the next grading was given that number, met the copy,
+     * and was recorded with no raw path, beside another grading's frames (the re-check of #387, measured). The copy is
+     * kept under a name outside the attempt numbering now, so the next grading makes its own.
+     */
+    @Test
+    fun `a copy of frames held only in memory stays out of a later grading's way`(@TempDir outside: Path) =
+        runBlocking<Unit> {
+            assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+            val refusedState = aStateDirectory(root) { true }
+            val refused = FileRawSessionLog.under(root, Clock.fixed(NOW, ZoneOffset.UTC), refusedState)
+            val running = writer(rawLog = refused)
+            running.write(aSubmit(1, heldBy(refused, """{"held":1}""")))
+            linkTheLog(outside)
+            val kept = heldBy(refused, """{"held":2}""")
+            shouldThrow<IOException> { running.write(aSubmit(2, kept)) }
+            unlinkTheLog(outside)
+
+            val next = writer(rawLog = boundedRawLog()).write(aSubmit(3, liveRaw("g3.jsonl")))!!
+
+            next.attempt shouldBe 2
+            Files.readString(root.resolve(next.rawPath!!)) shouldBe """{"type":"finish"}""" + "\n"
+            Files.readString(root.resolve(next.rawPath!!).resolveSibling("unrecorded-${kept.value}")) shouldBe
+                """{"held":2}""" + "\n"
+        }
+
+    // A grading's frames held in memory by [log], as a refused `.ps` holds them.
+    private fun heldBy(log: RawSessionLog, frame: String): RawSessionId =
+        log.start(120804).also { log.append(it, frame) }
 
     // The raw log as the composition root builds it: copies walked through no link, `.ps` checked (#360, #361).
     private fun boundedRawLog(): RawSessionLog =

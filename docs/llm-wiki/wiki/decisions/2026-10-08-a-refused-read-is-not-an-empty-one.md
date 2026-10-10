@@ -263,7 +263,8 @@ Two tests were pins, green before: the owner-only mode of a generated token, and
   fix, below). That is the one copy on disk of frames held in memory while `.ps` was refused, or a copy
   whose delete failed. After a start before another grading is recorded, the number is free in the
   log again: the next grading's copy meets the kept one and goes with the runs, as any refused copy
-  does. Both are said.
+  does. Both are said. *Superseded for frames held in memory by #403, below: their copy is kept under
+  another name, and the number is free.*
 - **The junction tests have not run.** They need windows-latest, and this branch has not been pushed.
   What they exercise is pinned on every platform by the `DiskAnswers` cases that play a real path
   leading elsewhere.
@@ -455,3 +456,77 @@ bounded. Merged in `5a86aaa`, with every guarantee of both kept:
 - **Gates**, all exit 0 at `5a86aaa`: check; test 2,403 JUnit tests in 169 classes, 0 failures, 11
   skipped, node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 85%, 659 of 768;
   `adapter/git` 89%; `adapter/web` 82%; `application` 89%); guards, 12 of 12.
+
+### #403: copies left at their number
+
+The adversarial re-check of this branch found two ways, both measured, for a copy to stay at
+`attempts/NNN.raw.jsonl` with no record naming it. Each left the next grading given that number with
+`rawPath=null`, though the frames survived on disk. Branch `fix/403-raw-copy-collisions`, on #401's head,
+with main `9b4dcc1` merged in (`9b7581a`).
+
+- **A crash between the copy and the append** (`305f587`). This can happen on a healthy repository. The
+  copy outlived the process. At the next start the replay gave the grading the same number, made the
+  same copy, met the one left behind and was refused.
+  - `complete()` now points at a regular file already holding exactly the frames it would write.
+  - The file is judged without following a link, its directory walked through no link and nothing made
+    on the way. It is opened only when its size is theirs, and read no further than one byte past it,
+    so a FIFO is never opened and a large file is never read whole.
+  - Anything else there is never replaced. The copy is only ever created new, so it is still a
+    `FileAlreadyExistsException`.
+  - The crash is a clock that fails where the writer stamps the record, after the copy and before the
+    append, so none of the writer's clean-up runs. The real reconciler then replays the session.
+- **A copy that could not be taken back** (`2edcee7`). This needs an attacked repository: a grading
+  refused at its append while `.ps` was refused too. Its frames were held only in memory, so its copy
+  was their one copy on disk, and `withdraw` kept it at its number. That was this page's accepted cost
+  above, and a restart was enough to make the collision.
+  - The copy is now moved, in its own directory, to the raw session's name after `unrecorded-`,
+    outside the attempt numbering. `withdraw` answers true, since nothing is left at the number, and
+    the writer forgets what it took, as for a copy deleted.
+  - The name is the session's, so it is unique per grading. A second refused grading under the same
+    number never meets the first, and the move never replaces what already has the name.
+  - Anything at the copy's name that is not a regular file is not the log's to move. Its number stays
+    taken while the server runs, as before, and the next grading's copy after a restart is refused, as
+    any refused copy is.
+  - Nothing lists `attempts/`, because the submission log is the one authority for attempts (design
+    §4.5). MCP, the problem pages and the repair steps therefore never show the file as an attempt, and
+    reconciliation commits it with the rest of `problems/`, so it is not lost either.
+  - The WARN names where the file is and what the owner does with it. Moved into `.ps/raw` under the name
+    after `unrecorded-`, it is replayed at a start, which a reconciler test pins. Once a record of that
+    grading exists, the file can be deleted.
+- **Red first.** The crash test recorded the replay with `rawPath=null`, and the restart test recorded
+  the next grading the same way. Five raw log tests failed: two refused identical frames with
+  `FileAlreadyExistsException`, and three found the copy left at its number. The pins of what was refused
+  already, and of the replay the WARN promises, passed with the fix in.
+- **Mutation**, against the store, git-history, MCP, application and config tests:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | no copy already made pointed at | 3 |
+  | sizes alone compared | 1 |
+  | the bound's walk skipped for the comparison | 1 |
+  | a bare log comparing nothing | 1 |
+  | the copy kept at its number | 6 |
+  | true without the move | 7 |
+  | the set-aside not said | 1 |
+  | anything at the copy's name moved | 1 |
+  | what already has the name replaced | 1 |
+  | the move without the bound's walk | 1 |
+  | a bare log moving nothing | 1 |
+  | one name for every set-aside copy | 5 |
+  | the regular-file check of the comparison | none |
+  | its size check | none |
+  | its read stopping at the size | none |
+
+  The three survivors are each masked by another check the comparison keeps: the regular-file check
+  by the size and the no-follow open, the size check by the bounded read, and the read's bound by the
+  size check. The last differs only for a file that grows between the two.
+- **Gates**, all exit 0 at `2edcee7`:
+  - check;
+  - test: 2,516 JUnit tests in 172 classes, 0 failures, 11 skipped as before, and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 86% (735 of 852), `application` 90% (396 of 439), every
+    package at or above its floor;
+  - guards: 12 of 12, with this page and progress staged.
+- **What remains.** A copy at its number that is not a regular file still keeps the number until a
+  restart, and then the next grading's copy goes with the runs. That needs something planted where the
+  server had just written its own copy. Not verified live.
