@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-10-08
-sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
+updated: 2026-10-10
+sources: [raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md, raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -490,6 +490,50 @@ about the protocol. They were about our own plans, our own docs and the client o
   every reader before fixing found the worst one elsewhere: the statement inlined into the README
   that git pushes.
 
+## October 8–10: what the other machines, versions and locales said
+
+*(raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md,
+raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md,
+raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md)*
+
+The token-gate series was written on one Mac and runs in a Linux container over a macOS bind mount.
+CI ran it on Ubuntu, macOS and Windows, and a critic ran it on an older git. Several things that held on
+the author's machine did not hold elsewhere, and only running elsewhere showed it.
+
+- **The plan's pathspec, measured before it shipped.** `:(exclude).ps` makes `git add --all` exit 1
+  wherever `.ps/` is ignored, which is every healthy repository. Eight spellings failed the same way, and
+  git's source said why. The plan had never been run; its first run was the implementer's measurement
+  ([[decisions/2026-10-08-reconcile-never-stages-the-state-directory]]).
+- **The deployment folds names unlike the host.** APFS folds `ſ` (U+017F) to `s`, while git's `icase`
+  folds ASCII alone. In the container over the bind mount, `toRealPath()` of `.PS` or `.pſ` answers
+  `.ps`, so a real-path comparison that held on the host let the alias through. #361 met the same echo
+  with `Problems/`. Only a check against the parent directory's listing holds in all three places.
+- **Git for Windows' `mkfifo` makes a plain file.** It exits 0, so a helper that trusted the exit code
+  ran its FIFO tests against a regular file on windows-latest. The helper now asks the JVM what was
+  made.
+- **`insteadOf` is a string-prefix match.** Tests that built rules from Windows paths wrote `C:\…\A/`,
+  which never prefixes `C:\…\A\repo.git`. Nothing was rewritten, the tests failed, and nothing leaked.
+  Forward slashes rewrite alike on every system.
+- **In Kotlin, `List + Path` adds the path's names.** A `Path` is an `Iterable<Path>`, so `rest + path`
+  resolved to the list overload, and a Windows-only test tried to delete `Users`.
+- **Windows keeps files held.** Receive-pack still held git's output file after a push exited, so the
+  cleanup in `finally` threw and discarded git's answer. That was a product bug, and only the Windows
+  leg found it. On the same run, git's read-only objects and the runner's `autocrlf` warning broke two
+  test helpers.
+- **A test that reads git's words tests one git.** A 200-character bound was tested with git's own
+  "not a git repository" line. Git 2.48.1 here printed a long path. CI's gits printed `(null)` and
+  `(NULL)`, 35 characters, so the bound was never reached. The bound is now pinned at a seam, and the
+  real-git test asserts only the stable prefix.
+- **`rev-list --stdin` takes options only from git 2.42.** A `--not` line there refused every commit and
+  every push on Debian 12's git 2.39.5, measured in the critic's image. `^<id>` is read by every version.
+- **The locale is part of the input.** `LC_ALL=C` was pinned so that git's messages stay English: Korean
+  and German translated them, and German's `Fehler:` slipped past an `error:` check. Review then measured
+  a second reason. In a UTF-8 locale, macOS's regex stops at a byte that is not UTF-8, so `git grep -E`
+  missed a token after one, with exit 1 and nothing on stderr.
+- **An audit row is a claim too.** #387's audit called `orphans()` harmless because "only a line count
+  leaves". The critic hung the boot, and every MCP call with it, with one pulled link to
+  `/proc/self/fd/1` in the deployed image.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -538,3 +582,10 @@ about the protocol. They were about our own plans, our own docs and the client o
 - **A correction is a claim too.** Hold the replacement sentence to the same evidence as the one it
   replaces. Where a behaviour can be executed, run it — the client's own parser, the real answer —
   rather than reading it a second time.
+- **A test that depends on one tool's words, one platform's tools or one version's syntax tests that
+  version alone.** Pin the behaviour at a seam, assert only what every version says, and let the
+  three-OS matrix and an older git's image be the measurement.
+- **Measure where it runs.** A fold, a real path or a locale measured on the host says nothing about the
+  container over a bind mount that the owner deploys.
+- **Give the harmless row the same attack as the others.** An audit's "nothing leaves here" is a
+  premise. Test it before it decides what is out of scope.
