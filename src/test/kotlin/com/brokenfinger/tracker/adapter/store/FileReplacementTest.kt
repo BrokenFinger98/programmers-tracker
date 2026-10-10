@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.IOException
+import java.nio.file.AccessDeniedException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.FileSystemException
 import java.nio.file.FileSystems
@@ -314,6 +315,38 @@ class FileReplacementTest {
         failedThroughAHandle(AtomicMoveNotSupportedException(null, null, "no"))
     }
 
+    /**
+     * Windows will not move a file over a link to a directory, and the plain replace took such a link away with
+     * `RemoveDirectory` until #407 narrowed it (#407's review). A link is taken away now, as an empty directory is, and
+     * the move made again. The seam fails the first move as Windows does; a rename on Linux or macOS replaces any link.
+     */
+    @Test
+    fun `a link to a directory a move will not replace is taken away, and the directory keeps what it holds`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val directory = Files.createDirectory(outside.resolve("a-directory"))
+        Files.writeString(directory.resolve("inside.md"), "inside\n")
+        aLink(target, directory)
+
+        replacedThrough(PathDirectoryHandle(root, failingOnceAtomically()))
+
+        Files.readString(target) shouldBe "after\n"
+        namesIn(directory) shouldContainExactly listOf("inside.md")
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    /** Looked at without following it: a dangling link is a link, taken away, and nothing is made where it points. */
+    @Test
+    fun `a dangling link a move will not replace is taken away, and nothing is made where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-replace.md")
+        aLink(target, nowhere)
+
+        replacedThrough(PathDirectoryHandle(root, failingOnceAtomically()))
+
+        Files.readString(target) shouldBe "after\n"
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+    }
+
     /** A directory opened below one held by path is held the same way, its moves as narrow. */
     @Test
     fun `below a directory held by path, a move that fails is thrown too`() {
@@ -345,6 +378,18 @@ class FileReplacementTest {
     private fun failingAtomically(failure: IOException) = PathMoves { source, target, option ->
         if (option == StandardCopyOption.ATOMIC_MOVE) throw failure
         Files.move(source, target, option)
+    }
+
+    // The file system's own move, but the first atomic one is refused, as Windows refuses one over a directory's link.
+    private fun failingOnceAtomically(): PathMoves {
+        var refused = false
+        return PathMoves { source, target, option ->
+            if (option == StandardCopyOption.ATOMIC_MOVE && !refused) {
+                refused = true
+                throw AccessDeniedException(target.toString())
+            }
+            Files.move(source, target, option)
+        }
     }
 
     private fun held(): DirectoryHandle = DirectoryHandles.THROUGH_A_HANDLE.open(root)

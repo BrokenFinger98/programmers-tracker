@@ -75,8 +75,10 @@ interface DirectoryHandle : AutoCloseable {
     /**
      * [name] renamed [target] in [into], held the same way: whatever stands there — a link, an empty directory — is
      * replaced and never written through, and a directory holding something fails the move. False when there is no
-     * [name]. Atomic: a move that fails leaves [target] as it was and is thrown, unless the file system cannot move
-     * atomically at all, where it is replaced as a plain move replaces it (#407).
+     * [name]. Atomic over a file: a move that fails leaves [target] as it was and is thrown, unless the file system
+     * cannot move atomically at all, where it is replaced as a plain move replaces it (#407). An empty directory the
+     * file system will not move over is taken away first, and the move made again; by path, so is a link, which Windows
+     * will not move over when it leads to a directory (#407's review). Through a handle, `renameat` replaces any link.
      */
     fun move(name: String, into: DirectoryHandle, target: String): Boolean
 
@@ -226,13 +228,18 @@ internal class PathDirectoryHandle(
         }
     }
 
-    // `rename(2)` refuses a file over a directory, which the plain replace used to take away: an empty one still
-    // goes, and the move is tried again, as a handle does. One holding something fails as the file system fails it.
+    // `rename(2)` refuses a file over a directory, and Windows refuses one over a link to a directory too: the plain
+    // replace used to take either away. An empty directory still goes, and so does a link, to anything or to nothing
+    // (#407's review), and the move is tried again. One holding something fails as the file system fails it.
     private fun overADirectory(source: Path, target: Path, failure: IOException) {
-        if (!Files.isDirectory(target, NOFOLLOW_LINKS)) throw failure
+        if (!isALinkOrADirectory(target)) throw failure
         Files.delete(target)
         moves.move(source, target, ATOMIC_MOVE)
     }
+
+    // A link is one wherever it leads, and a directory is one only where no link stands: neither is followed.
+    private fun isALinkOrADirectory(target: Path): Boolean =
+        Files.isSymbolicLink(target) || Files.isDirectory(target, NOFOLLOW_LINKS)
 
     private companion object {
         const val POSIX = "posix"
