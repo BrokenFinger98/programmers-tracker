@@ -97,8 +97,8 @@ class OutgoingObjectScanTest {
         committedBytes("notes/before.md", beside + aGithubShapedToken().toByteArray())
         committedBytes("notes/after.md", aFineGrainedShapedToken().toByteArray() + beside)
 
-        scanned(range = listOf("HEAD~1", "--not", "HEAD~2")) shouldBe SearchOutcome.FoundInContent
-        scanned(range = listOf("HEAD", "--not", "HEAD~1")) shouldBe SearchOutcome.FoundInContent
+        scanned(range = listOf("HEAD~1", "^HEAD~2")) shouldBe SearchOutcome.FoundInContent
+        scanned(range = listOf("HEAD", "^HEAD~1")) shouldBe SearchOutcome.FoundInContent
     }
 
     /** What Windows PowerShell 5.1 writes with `>`: UTF-16LE behind a byte order mark. `git grep` finds nothing. */
@@ -157,6 +157,29 @@ class OutgoingObjectScanTest {
         scanned() shouldBe SearchOutcome.FoundInName
     }
 
+    // Names the destination already holds (#402) ----------------------------------------------------------
+
+    /** A new file beside a name the destination holds sends a tree that carries that name again; it is not new. */
+    @Test
+    fun `a name the destination holds goes out again, and is handed over as sent again`() {
+        committed("notes/${aGithubShapedToken()}.md", "a note\n")
+        val held = HeldNames(RecordingCalls(repo.root), setOf(repo.git("rev-parse", "HEAD").trim()))
+        committed("notes/today.md", "a note\n")
+
+        scanned(range = listOf("HEAD", "^HEAD~1"), held = held) shouldBe SearchOutcome.Clean
+        held.sentAgain() shouldBe listOf("${aGithubShapedToken()}.md")
+    }
+
+    /** A held name ends nothing: the rest of what goes out is still read, here a token in the new file. */
+    @Test
+    fun `what else goes out beside a held name is still read`() {
+        committed("notes/${aGithubShapedToken()}.md", "a note\n")
+        val held = HeldNames(RecordingCalls(repo.root), setOf(repo.git("rev-parse", "HEAD").trim()))
+        committed("notes/today.md", "${aGithubShapedToken('B')}\n")
+
+        scanned(range = listOf("HEAD", "^HEAD~1"), held = held) shouldBe SearchOutcome.FoundInContent
+    }
+
     // What is read, and how often ------------------------------------------------------------------------
 
     /** `git grep` over each commit read an unchanged file once per commit; here a blob is read once. */
@@ -183,6 +206,40 @@ class OutgoingObjectScanTest {
         calls.read() shouldContainExactlyInAnyOrder objectsIn(listOf("HEAD"), setOf("blob", "tree", "commit"))
     }
 
+    /**
+     * A listing goes to `rev-list` on stdin, never as its arguments: a push past a remote of many refs leaves each
+     * one's tip out, and Windows' command line holds 32,767 characters — about 800 tips (#405).
+     */
+    @Test
+    fun `a listing goes to rev-list on stdin, not on its command line`() {
+        committed("notes/a.md", "a note\n")
+        val listed = mutableListOf<List<String>>()
+        val calls = RecordingCalls(repo.root, before = { if (it.first() == "rev-list") listed += it })
+
+        scanned(range = listOf("HEAD", "^${repo.git("rev-parse", "HEAD~1").trim()}"), calls = calls)
+
+        listed shouldBe listOf(listOf("rev-list", "--objects", "--stdin"))
+    }
+
+    /**
+     * What `rev-list --stdin` reads is revisions alone. Git before 2.42 refuses an option there: a `--not` line was
+     * "fatal: options not supported in --stdin mode" on 2.39.5, and every commit and push was refused (the gate
+     * critic's M1 on #410, measured). An empty line ends the list, and what came after it was never listed, with
+     * exit 0 (2.39.5 and 2.48.1, measured). A listing leaves an object out as `^<id>`; a line that is anything else,
+     * one a newline inside an argument would make included, is refused before git is asked.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = ["--not", "", "^HEAD~1\n--not"])
+    fun `a listing line that is not a revision is unsearched, and rev-list never runs`(line: String) {
+        committed("notes/a.md", "a note\n")
+        val listed = mutableListOf<List<String>>()
+        val calls = RecordingCalls(repo.root, before = { if (it.first() == "rev-list") listed += it })
+
+        scanned(range = listOf("HEAD", line), calls = calls) shouldBe SearchOutcome.Unsearched
+
+        listed shouldBe emptyList()
+    }
+
     @Test
     fun `objects the range leaves out are not read`() {
         committed("notes/pasted.md", "${aGithubShapedToken()}\n")
@@ -190,7 +247,7 @@ class OutgoingObjectScanTest {
         committed("notes/today.md", "a note\n")
         val calls = RecordingCalls(repo.root)
 
-        scanned(range = listOf("HEAD", "--not", "HEAD~1"), calls = calls) shouldBe SearchOutcome.Clean
+        scanned(range = listOf("HEAD", "^HEAD~1"), calls = calls) shouldBe SearchOutcome.Clean
 
         calls.read() shouldNotContain pushed
     }
@@ -210,7 +267,7 @@ class OutgoingObjectScanTest {
     fun `nothing outgoing is clean, and nothing is read`() {
         val calls = RecordingCalls(repo.root)
 
-        scanned(range = listOf("HEAD", "--not", "HEAD"), calls = calls) shouldBe SearchOutcome.Clean
+        scanned(range = listOf("HEAD", "^HEAD"), calls = calls) shouldBe SearchOutcome.Clean
 
         calls.reads shouldBe 0
     }
@@ -221,7 +278,7 @@ class OutgoingObjectScanTest {
     fun `an object only a second listing names is read`() {
         committed("notes/pasted.md", "${aGithubShapedToken()}\n")
         committed("notes/today.md", "a note\n")
-        val listings = listOf(listOf("HEAD", "--not", "HEAD~1"), HEAD_TREE)
+        val listings = listOf(listOf("HEAD", "^HEAD~1"), HEAD_TREE)
 
         scanned(listings = listings) shouldBe SearchOutcome.FoundInContent
     }
@@ -368,7 +425,8 @@ class OutgoingObjectScanTest {
         calls: GitCalls = RecordingCalls(repo.root),
         bytesPerCall: Long = OutgoingObjectScan.BYTES_PER_CALL,
         listings: List<List<String>> = listOf(range),
-    ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(listings, stored)
+        held: NamesHeld = NamesHeld.NONE,
+    ): SearchOutcome = OutgoingObjectScan(calls, bytesPerCall).outcome(listings, stored, held)
 
     private fun committed(relative: String, content: String, message: String = "add $relative") =
         committedBytes(relative, content.toByteArray(), message)

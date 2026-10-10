@@ -84,20 +84,32 @@ class CommandLineGitSync(
 
     private val process = GitProcess(root, environment)
 
-    /**
-     * What a push would send, or a commit would add, searched object by object, through the same calls as
-     * everything else here.
-     */
-    private val outgoing = OutgoingObjectScan(ProcessCalls(process, ::commandFor))
+    /** The git calls the searches make, through the same process and credential as everything else here. */
+    private val calls = ProcessCalls(process, ::commandFor)
+
+    /** What a push would send, or a commit would add, searched object by object. */
+    private val outgoing = OutgoingObjectScan(calls)
 
     /** What a commit would add, staged first in a copy of the index (#376). */
     private val stagingPreview = StagingPreview(root, ::gitWith)
 
     /** What a push's destinations already hold, asked of them through the push's own credential (#376). */
-    private val remoteTips = RemoteTips(ProcessCalls(process, ::commandFor))
+    private val remoteTips = RemoteTips(calls)
+
+    /** Whether those destinations are where the push goes, every `url.<base>` rule applied (#405). */
+    private val pushRewrites = PushRewrites(calls)
 
     /** Whether a destination that could not say what it holds was already said, since it last answered. */
     private val unansweredSaid = AtomicBoolean()
+
+    /** Whether a push that would go where `ls-remote` does not ask was already said, since the rules agreed (#405). */
+    private val rewrittenSaid = AtomicBoolean()
+
+    /**
+     * Each token-shaped name a push sent again, its remote holding it already, that was said (#402) — kept as a
+     * digest, never the name. Bounded by the names a remote holds that carry a token, one or two at most.
+     */
+    private val namesSentAgainSaid = ConcurrentHashMap.newKeySet<String>()
 
     private val stateDirectory = StateDirectory(root, TrackedStateEntries(root, environment))
 
@@ -243,7 +255,7 @@ class CommandLineGitSync(
         val searched = SearchedTree(headTree() ?: return, fingerprintOfStore())
         val before = lastSearchedTree.get()?.before(searched) ?: emptyTree() ?: return
         val entered = enteredSince(before, searched.tree) ?: return
-        val outcome = searched(entered, credential.stored())
+        val outcome = searched(entered, credential.stored(), HeldNames(calls, setOf(before)))
         if (outcome == SearchOutcome.Unsearched) return
         if (outcome != SearchOutcome.Clean) logger.warn(ALREADY_COMMITTED, root)
         lastSearchedTree.set(searched)
@@ -312,8 +324,9 @@ class CommandLineGitSync(
         val branch = currentBranch() ?: return detached()
         val remote = pushRemoteOf(branch)
         val destinations = destinationsOf(remote) ?: return noRemote(remote)
-        val held = heldByDestinations(destinations) ?: return false
-        if (!searchedClean(SearchedHead(head, destinations, held, fingerprintOfStore()))) return false
+        if (!sentWhereAsked(destinations)) return false
+        val held = heldByDestinations(destinations.urls) ?: return false
+        if (!searchedClean(SearchedHead(head, destinations.urls, held, fingerprintOfStore()))) return false
         val result = git(listOf("push", "--no-follow-tags", remote, "HEAD:refs/heads/$branch"))
         return result.succeeded() || failed("push", result)
     }
@@ -325,17 +338,29 @@ class CommandLineGitSync(
      * Where a push to [remote] goes: its push URLs as git resolves them — `pushurl`, else `url` — or [remote]
      * itself when it is a URL or a path, which git accepts as a branch's remote (#378). Null for a name with
      * neither, which is nowhere to push. The push URLs, not the remote's name: `ls-remote <name>` asks the
-     * fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured).
+     * fetch URL, and with a `pushurl` apart it listed what another repository held (#376, measured). Which of
+     * the two it is is what `get-url` says, never whether a push URL reads as the remote's name: a remote can be
+     * named for its own push URL, and that is still a remote's (the gate critic's S10b and S10c on #410).
      */
-    private fun destinationsOf(remote: String): List<String>? {
+    private fun destinationsOf(remote: String): PushDestinations? {
         val urls = git(listOf("remote", "get-url", "--push", "--all", remote))
-        if (urls.succeeded()) return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }
-        return listOf(remote).takeIf { isUrl(remote) }
+        if (!urls.succeeded()) return PushDestinations.OfUrl(remote).takeIf { isUrl(remote) }
+        return urls.stdout.lines().filter { it.isNotBlank() }.ifEmpty { null }?.let { PushDestinations.OfRemote(it) }
     }
 
     // Git's own test: a remote's nickname has no directory separator, so one with a separator, or a colon,
     // is a URL or a path, and git pushes to it as it is.
     private fun isUrl(remote: String): Boolean = URL_SIGNS.any { it in remote }
+
+    /**
+     * Whether `ls-remote` asks the destinations the push goes to ([PushRewrites], #405), so that what each says it
+     * holds is what the push leaves out; said once while it does not, until it does again.
+     */
+    private fun sentWhereAsked(destinations: PushDestinations): Boolean {
+        if (pushRewrites.agree(destinations)) return true.also { rewrittenSaid.set(false) }
+        if (!rewrittenSaid.getAndSet(true)) logger.warn(REWRITTEN, root)
+        return false
+    }
 
     // What the destinations already hold, said once while one cannot say, until it answers again (#376).
     private fun heldByDestinations(destinations: List<String>): Set<String>? {
@@ -364,13 +389,28 @@ class CommandLineGitSync(
      * ea1357c). Remembered with what was searched (#378): the destinations, the tips they held that the
      * range left out, and the stored token. Keyed on the head alone, a head searched for one remote was sent
      * to another unsearched once `origin` was repointed.
+     *
+     * A name in a tree it sends is new unless the tips its destinations hold already hold it (#402): a tree
+     * carries every name in its directory, and a file added beside a name a pull brought in sent that name
+     * again, refused at every push. One that carries a token goes out again, and is said ([sayNamesSentAgain]).
      */
     private fun searchedClean(head: SearchedHead): Boolean {
         if (lastSearchedClean.get() == head) return true
-        if (!carriesNoToken("push") { outgoing.outcome(listOf(outgoingRange(head.held)), it) }) return false
+        val held = HeldNames(calls, head.held)
+        if (!carriesNoToken("push") { outgoing.outcome(listOf(outgoingRange(head.held)), it, held) }) return false
+        sayNamesSentAgain(held)
         lastSearchedClean.set(head)
         return true
     }
+
+    // Once for each name, by a digest of it: never the name, which carries the token.
+    private fun sayNamesSentAgain(held: HeldNames) {
+        val unsaid = held.sentAgain().map { namesSentAgainSaid.add(digestOf(it)) }
+        if (true in unsaid) logger.warn(NAME_SENT_AGAIN, root)
+    }
+
+    private fun digestOf(name: String): String =
+        MessageDigest.getInstance("SHA-256").digest(name.toByteArray(Charsets.ISO_8859_1)).toHexString()
 
     /**
      * What a push would send, as `rev-list` arguments: HEAD's history, less what the tips its destinations
@@ -384,8 +424,11 @@ class CommandLineGitSync(
      * HEAD's own tree is not listed beside it (#376). #373 listed it at every push against stale refs, which
      * this range no longer trusts: what HEAD's tree holds and the destinations lack is in the range, and what
      * they hold is not sent. Listed anyway, it refused every push for a string a pull had brought in.
+     *
+     * Each tip is left out as `^<tip>`: the range goes on `rev-list`'s stdin (#405), where git before 2.42 reads
+     * no `--not`, and every push on 2.39.5 was refused (the gate critic's M1 on #410, measured).
      */
-    private fun outgoingRange(held: Set<String>): List<String> = listOf("HEAD", "--not") + held.sorted()
+    private fun outgoingRange(held: Set<String>): List<String> = listOf("HEAD") + held.sorted().map { "^$it" }
 
     // What was stored when a head was searched, kept as a digest rather than as the secret itself.
     private fun fingerprintOfStore(): String = when (val stored = credential.stored()) {
@@ -443,13 +486,14 @@ class CommandLineGitSync(
         val base = headTree() ?: emptyTree() ?: return refused(CREDENTIAL_UNSEARCHED, what)
         return when (val preview = stagingPreview.of(scope, base)) {
             is Preview.Failed -> failed(what, preview.answer)
-            is Introduced -> carriesNoToken(what) { searched(preview, it) }
+            is Introduced -> carriesNoToken(what) { searched(preview, it, HeldNames(calls, setOf(base))) }
         }
     }
 
-    // The names first, which are in memory already, then the blobs, through the scan the push reads with.
-    private fun searched(introduced: Introduced, stored: StoredCredential): SearchOutcome {
-        if (introduced.namesHold(TokenPatterns.of(stored))) return SearchOutcome.FoundInName
+    // The names first, which are in memory already, less what [held] holds, then the blobs, as a push reads them.
+    private fun searched(introduced: Introduced, stored: StoredCredential, held: NamesHeld): SearchOutcome {
+        val names = introduced.namesSearched(TokenPatterns.of(stored), held)
+        if (names != SearchOutcome.Clean) return names
         return outgoing.outcome(introduced.listings(), stored)
     }
 
@@ -679,6 +723,14 @@ class CommandLineGitSync(
             "git push skipped in {}: its remote could not say what it holds, so what a push would send could not " +
                 "be told, and nothing was sent. This is said once, until the remote answers again."
 
+        /** Never the URLs: a URL can carry a credential, as git's own words can (#405). */
+        private const val REWRITTEN =
+            "git push skipped in {}: where the push goes is not where git asks what is held there. A " +
+                "url.<base>.insteadOf or pushInsteadOf rule has the URL rewritten for one and not the other, or " +
+                "rewritten again for the asking, or a push URL is also the name of a remote, which git asks by that " +
+                "remote's own URL. So what the push would send could not be told, and nothing was sent. This is " +
+                "said once, until the two agree."
+
         /** What git's own test for a remote's nickname rules out: a directory separator, and a colon besides. */
         private val URL_SIGNS = listOf('/', '\\', ':')
 
@@ -723,6 +775,13 @@ class CommandLineGitSync(
 
         /** How much of a commit's id a refusal names: more than git abbreviates to, unambiguous in practice. */
         private const val SHORT_ID = 12
+
+        /** A name its remote holds already, never which (#402): said, and the push goes ahead. */
+        private const val NAME_SENT_AGAIN =
+            "git push in {}: its remote already holds a GitHub token in a file or directory name — the one stored " +
+                "in .ps/git-credentials, or one shaped like it — and the push sends that name again beside what is " +
+                "new. It was not refused, since nothing new goes out, but it was published already: revoke the " +
+                "token on GitHub, and rename that file in every commit that has it. Said once for each such name."
 
         /** A name, never which: the name would carry the token (#375). */
         private const val CREDENTIAL_IN_A_NAME =

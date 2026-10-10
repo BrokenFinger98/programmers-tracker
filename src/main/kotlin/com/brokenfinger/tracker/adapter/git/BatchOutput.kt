@@ -45,12 +45,14 @@ internal enum class CommitPart(val said: String) {
  * Content is read [window] bytes at a time, each window repeating the last [TokenPatterns.overlap] bytes
  * of the one before: memory stays at a window however large the object, and a match across a seam lies
  * whole in one window. Each object is searched apart, as `git grep` searches each file, so nothing runs
- * from one into the next.
+ * from one into the next. A tree's names are matched one entry at a time, and a name [held] already holds
+ * is not new (#402).
  */
 internal class BatchOutput(
     private val stream: InputStream,
     private val patterns: TokenPatterns,
     private val window: Int = WINDOW,
+    private val held: NamesHeld = NamesHeld.NONE,
 ) {
     /** The first match, or the first thing that is not as asked; [SearchOutcome.Clean] when there is neither. */
     fun searched(objects: List<GitObject>): SearchOutcome {
@@ -74,7 +76,7 @@ internal class BatchOutput(
     // How [asked]'s content is searched: a commit's header apart from its message, a tree for names, a blob whole.
     private fun searchFor(asked: GitObject): ContentSearch {
         if (asked.type == COMMIT) return CommitSearch(asked.id, patterns)
-        if (asked.type == TREE) return NameSearch(patterns)
+        if (asked.type == TREE) return NameSearch(patterns, held, asked)
         return BlobSearch(patterns)
     }
 
@@ -132,20 +134,14 @@ private interface ContentSearch {
     fun next(window: String): SearchOutcome
 }
 
-/**
- * Text searched a window at a time by [matches], each window repeating the end of the one before, so nothing
- * across a seam is missed. [matches] is [TokenPatterns.foundIn] unless the text is a tree's.
- */
-private class Stretch(
-    private val patterns: TokenPatterns,
-    private val matches: (String) -> Boolean = patterns::foundIn,
-) {
+/** Text searched a window at a time, each window repeating the end of the one before, so nothing across a seam is missed. */
+private class Stretch(private val patterns: TokenPatterns) {
     private var tail = ""
 
     /** Whether [text], the next characters of this stretch, completes a match. */
     fun found(text: String): Boolean {
         val joined = tail + text
-        if (matches(joined)) return true
+        if (patterns.foundIn(joined)) return true
         tail = joined.takeLast(patterns.overlap)
         return false
     }
@@ -160,15 +156,96 @@ private class BlobSearch(patterns: TokenPatterns) : ContentSearch {
 }
 
 /**
- * A tree: its entries, each a mode, a name, a NUL and a binary object id, read as bytes alone (#375). A run of
- * token characters that touches an id ends at the NUL before it and the space after the next mode — 26 bytes at
- * most, against the 40 a token needs — so what is found is found in a name.
+ * A tree: its entries, each a mode, a space, a name, a NUL and a raw object id (#375). Each name is matched whole,
+ * as its bytes alone — a name holds no NUL, so no UTF-16 text of an ASCII character can be in one — and a name
+ * [held] already holds is not new: it goes out again, and is handed over as sent (#402). An id is skipped by its
+ * length, whatever its bytes.
+ *
+ * An entry that runs past a window waits, whole, for the next. Only a window that matches somewhere has its names
+ * matched; any other is walked for where its last whole entry ends, and the last window of a tree not even that,
+ * so a tree of one window that matches nowhere is never taken apart. What no entry ends at the end of the tree is
+ * matched as bytes, as #375 read every tree; an entry longer than any name can be is not waited on, and refuses.
  */
-private class NameSearch(patterns: TokenPatterns) : ContentSearch {
-    private val names = Stretch(patterns, patterns::foundInBytes)
+private class NameSearch(private val patterns: TokenPatterns, private val held: NamesHeld, asked: GitObject) :
+    ContentSearch {
+    private val idBytes = asked.id.length / 2
+    private var left = asked.size
+    private var pending = ""
 
-    override fun next(window: String): SearchOutcome =
-        SearchOutcome.FoundInName.takeIf { names.found(window) } ?: SearchOutcome.Clean
+    override fun next(window: String): SearchOutcome {
+        left -= window.length
+        val entries = Entries(joined(window), idBytes)
+        if (patterns.foundInBytes(entries.text)) return searched(entries)
+        if (left == 0L) return SearchOutcome.Clean
+        return kept(entries.walked())
+    }
+
+    private fun joined(window: String): String {
+        if (pending.isEmpty()) return window
+        return pending + window
+    }
+
+    // Each whole entry's name in turn, the first finding ending the search; then what runs on is kept.
+    private fun searched(entries: Entries): SearchOutcome {
+        val found = entries.names().map(::searched).firstOrNull { it != SearchOutcome.Clean }
+        return found ?: kept(entries)
+    }
+
+    private fun searched(name: String): SearchOutcome {
+        if (!patterns.foundInBytes(name)) return SearchOutcome.Clean
+        val isHeld = held.holds(name) ?: return SearchOutcome.Unsearched
+        if (!isHeld) return SearchOutcome.FoundInName
+        held.sent(name)
+        return SearchOutcome.Clean
+    }
+
+    // The entry that runs on, kept for the next window; at the tree's end, what no entry ended, matched as bytes.
+    private fun kept(entries: Entries): SearchOutcome {
+        pending = entries.text.substring(entries.end)
+        if (left == 0L) return leftOver()
+        if (pending.length > ENTRY_LIMIT) return SearchOutcome.Unsearched
+        return SearchOutcome.Clean
+    }
+
+    private fun leftOver(): SearchOutcome =
+        SearchOutcome.FoundInName.takeIf { patterns.foundInBytes(pending) } ?: SearchOutcome.Clean
+
+    private companion object {
+        /**
+         * Longer than an entry can be on any filesystem the records are checked out on, whose names stop at 255
+         * bytes: a mode, a name of 64 KiB, a NUL and an id. An entry still running past it is not read.
+         */
+        const val ENTRY_LIMIT = 64 * 1024
+    }
+}
+
+/**
+ * The whole entries of a tree in [text], from its first character — each a mode, a space, a name, a NUL and
+ * [idBytes] bytes of id — and [end], where the first entry that runs past [text] starts.
+ */
+private class Entries(val text: String, private val idBytes: Int) {
+    var end = 0
+        private set
+
+    /** Each whole entry's name in turn, [end] moving past each entry as its name is handed over. */
+    fun names(): Sequence<String> = generateSequence { nameRange()?.let { text.substring(it.first, it.last + 1) } }
+
+    /** These entries, [end] past every whole one, their names left unread. */
+    fun walked(): Entries = apply { while (nameRange() != null) Unit }
+
+    // The next whole entry's name, as where it stands in [text], [end] moved past the entry; null when it runs on.
+    private fun nameRange(): IntRange? {
+        val space = text.indexOf(' ', end)
+        if (space < 0) return null
+        val nul = text.indexOf(NUL, space + 1)
+        if (nul < 0 || nul + 1 + idBytes > text.length) return null
+        end = nul + 1 + idBytes
+        return space + 1 until nul
+    }
+
+    private companion object {
+        const val NUL = '\u0000'
+    }
 }
 
 /**

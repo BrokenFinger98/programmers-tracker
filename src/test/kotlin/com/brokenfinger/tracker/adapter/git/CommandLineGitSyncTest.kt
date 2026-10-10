@@ -32,7 +32,10 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.DisabledOnOs
+import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -1745,6 +1748,224 @@ class CommandLineGitSyncTest {
         sync().hasRemote() shouldBe true
     }
 
+    // Where ls-remote asks is where the push goes (#405) -----------------------------------------
+
+    /**
+     * The gate critic's chain (#405, measured): `remote get-url --push` rewrites a URL once, and `ls-remote`, handed
+     * the rewritten URL, rewrote it again — B to A, then A to C. C said what it held, the push went to A, and a token
+     * only C held landed on A. A push URL `ls-remote` would rewrite again is not pushed to, and that is said once.
+     */
+    @Test
+    fun `a push URL ls-remote would rewrite again is not pushed to, and that is said once`() {
+        val (a, b, c) = listOf("A", "B", "C").map { bareAt("$it/repo.git") }
+        aTokenPushedThenRemoved(to = urlOf(c))
+        git("remote", "add", "origin", urlOf(b))
+        rewritten(from = b, to = a)
+        rewritten(from = a, to = c)
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.push() shouldBe false } }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(a) shouldContainExactly emptyList()
+    }
+
+    /** One rewrite is git's own, as the push makes it: a remote rewritten once is asked, and pushed, where git sends it. */
+    @Test
+    fun `a push URL rewritten once is pushed where git sends it`() {
+        val (a, b) = listOf("A", "B").map { bareAt("$it/repo.git") }
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("remote", "add", "origin", urlOf(b))
+        rewritten(from = b, to = a)
+
+        sync().push() shouldBe true
+
+        refsAt(a) shouldContainExactly listOf("refs/heads/main")
+        refsAt(b) shouldContainExactly emptyList()
+    }
+
+    /**
+     * A branch whose remote is a URL is handed to `ls-remote` and to `git push` as it is, and each rewrites it once.
+     * A `pushInsteadOf` rule rewrites only the push's: it would go where nothing was asked what it holds.
+     */
+    @Test
+    fun `a branch whose remote is a URL a pushInsteadOf rule rewrites is not pushed to`() {
+        val (u, p) = listOf("U", "P").map { bareAt("$it/repo.git") }
+        aTokenPushedThenRemoved(to = urlOf(u))
+        git("config", "branch.main.remote", urlOf(u))
+        rewritten(from = u, to = p, kind = "pushInsteadOf")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(p) shouldContainExactly emptyList()
+    }
+
+    /** An `insteadOf` rule rewrites the URL for both alike, so the push goes where `ls-remote` asked. */
+    @Test
+    fun `a branch whose remote is a URL an insteadOf rule rewrites is pushed where both go`() {
+        val (u, v) = listOf("U", "V").map { bareAt("$it/repo.git") }
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("config", "branch.main.remote", urlOf(u))
+        rewritten(from = u, to = v)
+
+        sync().push() shouldBe true
+
+        refsAt(v) shouldContainExactly listOf("refs/heads/main")
+    }
+
+    /** Said once while the rules disagree; once they agree, a later disagreement is said again. */
+    @Test
+    fun `a rewrite that comes back after the rules agreed is said again`() {
+        val (a, b, c) = listOf("A", "B", "C").map { bareAt("$it/repo.git") }
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("remote", "add", "origin", urlOf(b))
+        rewritten(from = b, to = a)
+        val sync = sync()
+        rewritten(from = a, to = c)
+        sync.push() shouldBe false
+        git("config", "--unset", "url.${urlOf(c.parent)}/.insteadOf")
+        sync.push() shouldBe true
+        rewritten(from = a, to = c)
+        committedByAnotherTool("notes/later.md")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync.push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+    }
+
+    /**
+     * The gate critic's S8 (#410): a `pushInsteadOf` rule's value is a prefix, and an empty one starts every URL, so
+     * git pushed a URL remote to the rule's base and the URL — E, then B's path — while `ls-remote` asked B, which
+     * held the token. The empty value was read as no rule.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS, disabledReason = "E's path holds B's whole, and a Windows path starts with its drive")
+    fun `a branch whose remote is a URL an empty pushInsteadOf rule rewrites is not pushed to`() {
+        val b = bareAt("B/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(b))
+        val e = bareAt("E${urlOf(b)}")
+        git("config", "branch.main.remote", urlOf(b))
+        git("config", "url.${urlOf(base)}/E.pushInsteadOf", "")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(e) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The gate critic's S9 (#410): B is rewritten to A for the push, and `ls-remote`, handed A, would rewrite it to A
+     * and a space, which held the token. What `ls-remote` would ask was trimmed, and read as A itself.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS, disabledReason = "Windows drops a name's trailing space, which makes A and a space A")
+    fun `a push URL ls-remote would ask with a trailing space is not pushed to`() {
+        val (a, b) = listOf("A", "B").map { bareAt("$it/repo.git") }
+        aTokenPushedThenRemoved(to = urlOf(bareAt("A/repo.git ")))
+        git("remote", "add", "origin", urlOf(b))
+        rewritten(from = b, to = a)
+        git("config", "url.${urlOf(a)} .insteadOf", urlOf(a))
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "rewritten"
+        refsAt(a) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The gate critic's S10b (#410): a remote named `sub/P.git` pushes to `sub/P.git`, its own name, and fetches from
+     * C. Its push URL was taken for a URL, being the remote's name as well, and never asked how `ls-remote` reads it:
+     * as that remote, by its own URL — C, which held the token.
+     */
+    @Test
+    fun `a remote whose push URL is its own name is not pushed to`() {
+        val c = bareAt("C/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(c))
+        git("init", "--quiet", "--bare", "-b", "main", "sub/P.git")
+        git("config", "remote.sub/P.git.url", urlOf(c))
+        git("config", "remote.sub/P.git.pushurl", "sub/P.git")
+        git("config", "branch.main.remote", "sub/P.git")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "the name of a remote"
+        refsAt(root.resolve("sub/P.git")) shouldContainExactly emptyList()
+    }
+
+    /** The gate critic's S10c (#410): the same, a `pushInsteadOf` rule sending the remote's URL to its own name. */
+    @Test
+    fun `a remote a pushInsteadOf rule sends to its own name is not pushed to`() {
+        val c = bareAt("C/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(c))
+        git("init", "--quiet", "--bare", "-b", "main", "sub/Q.git")
+        git("config", "remote.sub/Q.git.url", urlOf(c))
+        git("config", "url.sub/Q.git.pushInsteadOf", urlOf(c))
+        git("config", "branch.main.remote", "sub/Q.git")
+
+        sync().push() shouldBe false
+
+        refsAt(root.resolve("sub/Q.git")) shouldContainExactly emptyList()
+    }
+
+    /**
+     * The two above are refused for where `ls-remote` reads the name, never for the name: a remote named for the one
+     * URL it fetches from and pushes to is asked there, and pushed there. Taken for a URL, as a push URL equal to its
+     * remote's name was before #410, it would be refused as a name `git remote` lists.
+     */
+    @Test
+    fun `a remote named for the one URL it fetches from and pushes to is pushed to`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/today.md")
+        git("init", "--quiet", "--bare", "-b", "main", "sub/R.git")
+        git("config", "remote.sub/R.git.url", "sub/R.git")
+        git("config", "branch.main.remote", "sub/R.git")
+
+        sync().push() shouldBe true
+
+        refsAt(root.resolve("sub/R.git")) shouldContainExactly listOf("refs/heads/main")
+    }
+
+    /**
+     * `git remote get-url` knows only the remotes the repository's own config holds, and `ls-remote` and the push
+     * take one from the global config as well (measured, git 2.48.1). A branch whose remote named such a one, by a
+     * path, was taken for a URL: asked where that remote fetches — C, which held the token — and pushed where it
+     * pushes.
+     */
+    @Test
+    fun `a branch whose remote names a remote of the global config is not pushed to`() {
+        val c = bareAt("C/repo.git")
+        aTokenPushedThenRemoved(to = urlOf(c))
+        val global = base.resolve("global.gitconfig").toString()
+        git("config", "--file", global, "remote.sub/G.git.url", urlOf(c))
+        git("config", "--file", global, "remote.sub/G.git.pushurl", "sub/G.git")
+        git("init", "--quiet", "--bare", "-b", "main", "sub/G.git")
+        git("config", "branch.main.remote", "sub/G.git")
+        val sync = CommandLineGitSync(root, environment = System.getenv() + ("GIT_CONFIG_GLOBAL" to global))
+
+        sync.push() shouldBe false
+
+        refsAt(root.resolve("sub/G.git")) shouldContainExactly emptyList()
+    }
+
+    /**
+     * #405: every tip a remote holds is left out of the range, and on the command line about 800 of them filled the
+     * 32,767 characters Windows allows, so every push failed. They go on stdin. Here more tips than macOS's
+     * command line holds, which is a megabyte; Windows' holds far fewer.
+     */
+    @Test
+    fun `a push past more tips than a command line holds goes out`() {
+        val remote = aRemoteHolding(MANY_TIPS)
+        committedByAnotherTool("notes/today.md")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
     /**
      * A push sends what its remote lacks, and a pulled string the remote already holds is not sent again.
      * #373 read HEAD's whole tree at every push besides, which refused every push for it.
@@ -1962,6 +2183,131 @@ class CommandLineGitSyncTest {
         subjects() shouldContainExactly emptyList()
     }
 
+    // A name the destination already holds is not new (#402) -------------------------------------
+    //
+    // A tree carries every name in its directory, so a file added beside a name a pull brought in sends that
+    // name again. #375 refused every push of it, though the remote held it: the commits here are another
+    // tool's, so the push alone decides.
+
+    /** #402: the new tree beside a pulled token-shaped name was refused at every push. It is said once instead. */
+    @Test
+    fun `a token-shaped name the remote already holds does not stop a push beside it, and is said once`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/${aGithubShapedToken()}.md", "a note\n")
+        val sync = sync()
+
+        val heard = warningsWhile(CommandLineGitSync::class) {
+            committedByAnotherTool("notes/today.md")
+            sync.push() shouldBe true
+            committedByAnotherTool("notes/later.md")
+            sync.push() shouldBe true
+        }
+
+        heard.single() shouldContain "already holds a GitHub token in a file or directory name"
+        heard.single() shouldNotContain aGithubShapedToken()
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /** What is held is each name, not the tree it is in: a new token-shaped name beside a held one is refused. */
+    @Test
+    fun `a new token-shaped name beside a held one is never pushed`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/${aGithubShapedToken()}.md", "a note\n")
+        val pulled = git("rev-parse", "HEAD").trim()
+        committedByAnotherTool("notes/${aGithubShapedToken('B')}.md")
+
+        val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
+
+        heard.single() shouldContain "a file or directory name in what it would send carries a GitHub token"
+        git("rev-parse", "main", at = remote).trim() shouldBe pulled
+    }
+
+    /** A directory's name is a name like a file's: one the remote holds does not stop a file added in it. */
+    @Test
+    fun `a directory named with a token the remote holds does not stop a push of a file added in it`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "${aGithubShapedToken()}/notes.md", "a note\n")
+        committedByAnotherTool("${aGithubShapedToken()}/today.md")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /**
+     * Held is the name, wherever the remote holds it: a directory renamed, with a file added, is a new tree at a
+     * path the remote has no tree at, and the name it carries is still not new to the remote.
+     */
+    @Test
+    fun `a renamed directory whose names the remote holds is pushed`() {
+        val remote = remoteInitialised()
+        pulledFrom(remote, "notes/${aGithubShapedToken()}.md", "a note\n")
+        git("mv", "notes", "archive")
+        committedByAnotherTool("archive/today.md")
+
+        sync().push() shouldBe true
+
+        git("rev-parse", "main", at = remote).trim() shouldBe git("rev-parse", "HEAD").trim()
+    }
+
+    /**
+     * What the remote holds is what it says, through `ls-remote`, as for the range (#376): re-created empty, it
+     * holds no name, though `origin/main` still names the commit that brought the token-shaped one.
+     */
+    @Test
+    fun `a token-shaped name only a stale tracking ref says the remote holds is never pushed`() {
+        val remote = remoteInitialised()
+        committedByAnotherTool("notes/${aGithubShapedToken()}.md")
+        git("push", "--quiet", "origin", "main")
+        recreatedEmpty(remote)
+        committedByAnotherTool("notes/today.md")
+
+        sync().push() shouldBe false
+
+        refsAt(remote) shouldContainExactly emptyList()
+    }
+
+    /** The commit's twin: a file added under a directory HEAD already names with a token adds a new name only. */
+    @Test
+    fun `a file added under a directory named with a token HEAD already holds is committed`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("${aGithubShapedToken()}/notes.md")
+        written("${aGithubShapedToken()}/today.md", "a note\n")
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("${aGithubShapedToken()}/today.md")
+    }
+
+    /**
+     * What entered HEAD is read against the tree searched before it, so a token-shaped directory is said once, as
+     * it enters, and not again for each file a later commit adds under it.
+     */
+    @Test
+    fun `a name already said is not said again for a file added under it`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("${aGithubShapedToken()}/notes.md")
+        val sync = sync()
+        val first = warningsWhile(CommandLineGitSync::class) { sync.reconcile() shouldBe true }
+        written("${aGithubShapedToken()}/today.md", "a note\n")
+
+        val later = warningsWhile(CommandLineGitSync::class) { repeat(2) { sync.reconcile() shouldBe true } }
+
+        first.single() shouldContain "already holds a GitHub token"
+        later shouldContainExactly emptyList()
+    }
+
+    @Test
+    fun `a new token-shaped directory under a held one is never committed`() {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("${aGithubShapedToken()}/notes.md")
+        written("${aGithubShapedToken()}/${aGithubShapedToken('B')}/today.md", "a note\n")
+
+        sync().reconcile() shouldBe false
+
+        subjects() shouldContainExactly listOf("added by another tool")
+    }
+
     // Every writer of state, the ignore rule and the pathspec agree (#360) ----------------------
 
     /**
@@ -2090,17 +2436,69 @@ class CommandLineGitSyncTest {
     }
 
     /**
-     * Another tool committed a token and pushed it to `origin`, then the token was removed in a new commit:
-     * HEAD's tree is clean, and the token is in its history and on `origin`.
+     * Another tool committed a token and pushed it to [to] — `origin`, or a repository's path — then the token was
+     * removed in a new commit: HEAD's tree is clean, and the token is in its history and there.
      */
-    private fun aTokenPushedThenRemoved() {
+    private fun aTokenPushedThenRemoved(to: String = "origin") {
         written(".gitignore", ".ps/\n")
         written("notes/pasted.md", "${aGithubShapedToken()}\n")
         git("add", "--all")
         git("commit", "--message", "a token another tool committed")
-        git("push", "--quiet", "origin", "main")
+        git("push", "--quiet", to, "main")
         git("rm", "--quiet", "notes/pasted.md")
         git("commit", "--message", "the token removed")
+    }
+
+    /** `url.<[to]>/.<[kind]> = <[from]>/`: git sends what is addressed under [from]'s directory to [to]'s instead. */
+    private fun rewritten(from: Path, to: Path, kind: String = "insteadOf") {
+        git("config", "url.${urlOf(to.parent)}/.$kind", "${urlOf(from.parent)}/")
+    }
+
+    /**
+     * [path] with forward slashes, as git writes a URL on every system. A rule is a plain prefix of the URL as written
+     * (`starts_with` in git's `remote.c`): with Windows' backslashes in the path and a slash after it, `C:\…\A/`
+     * never starts `C:\…\A\repo.git`, so on Windows CI no rule ever rewrote, and every test that waits for a rewrite
+     * failed while nothing was rewritten (#410).
+     */
+    private fun urlOf(path: Path): String = path.toString().replace(File.separatorChar, '/')
+
+    /**
+     * A bare remote that holds this repository's main and [tips] more commits, a ref each: the commits made here by
+     * `git fast-import`, the remote reading them through `objects/info/alternates`, its refs written as one
+     * `packed-refs`. A remote of many refs, made in well under a second.
+     */
+    private fun aRemoteHolding(tips: Int): Path {
+        written(".gitignore", ".ps/\n")
+        committedByAnotherTool("notes/first.md")
+        val ids = fastImported(tips)
+        val remote = bareAt("many.git")
+        val objects = root.resolve(".git/objects").toAbsolutePath()
+        Files.writeString(remote.resolve("objects/info/alternates"), "$objects\n")
+        Files.writeString(remote.resolve("packed-refs"), packedRefs(git("rev-parse", "HEAD").trim(), ids))
+        git("remote", "add", "origin", remote.toString())
+        return remote
+    }
+
+    /** [count] commits, each with a message of its own and no file, made by `git fast-import`: their ids. */
+    private fun fastImported(count: Int): List<String> {
+        val stream = Files.writeString(base.resolve("tips.import"), (1..count).joinToString("") { tipCommit(it) })
+        val marks = base.resolve("tips.marks")
+        val process = ProcessBuilder("git", "fast-import", "--quiet", "--export-marks=$marks")
+            .directory(root.toFile()).redirectInput(stream.toFile()).redirectErrorStream(true).start()
+        process.inputStream.readAllBytes()
+        check(process.waitFor() == 0) { "git fast-import failed" }
+        return Files.readAllLines(marks).map { it.substringAfter(' ') }
+    }
+
+    private fun tipCommit(n: Int): String =
+        "commit refs/heads/tips\nmark :$n\ncommitter T <t@example.invalid> 1700000000 +0000\n" +
+            "data ${"tip $n\n".length}\ntip $n\n\n"
+
+    /** A `packed-refs` file: main at [head], and a tag for each of [ids], sorted by name as git reads them. */
+    private fun packedRefs(head: String, ids: List<String>): String {
+        val tags = ids.mapIndexed { n, id -> "$id refs/tags/t${n.toString().padStart(TAG_DIGITS, '0')}" }
+        val header = listOf("# pack-refs with: peeled fully-peeled sorted ", "$head refs/heads/main")
+        return (header + tags.sortedBy { it.substringAfter(' ') }).joinToString("\n", postfix = "\n")
     }
 
     /** An empty bare repository called [name], beside the record repository. */
@@ -2165,6 +2563,13 @@ class CommandLineGitSyncTest {
         git("commit", "--message", "pasted elsewhere", at = other)
         git("push", "--quiet", at = other)
         git("pull", "--quiet", "--no-rebase", "--ff-only", "origin", "main")
+    }
+
+    /** A note at [relative], committed with plain git, as another tool commits: none of the tracker's gates run. */
+    private fun committedByAnotherTool(relative: String) {
+        written(relative, "a note\n")
+        git("add", "--all")
+        git("commit", "--message", "added by another tool")
     }
 
     /** A clone of [remote] beside the record repository, with an identity of its own. */
@@ -2250,6 +2655,12 @@ class CommandLineGitSyncTest {
 
         /** Two failed attempts before the external process lets go of the index. */
         const val RELEASED_AFTER = 2
+
+        /** Tips whose ids, 41 bytes each with a separator, fill more than macOS's megabyte of command line. */
+        const val MANY_TIPS = 30_000
+
+        /** Digits enough for every tip's tag to sort by name as by number. */
+        const val TAG_DIGITS = 6
 
         /** How much of a commit's id a refusal names (#375). */
         const val SHORT_ID = 12
