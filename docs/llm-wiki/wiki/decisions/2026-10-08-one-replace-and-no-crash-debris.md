@@ -212,10 +212,11 @@ the reconcile.
   been pushed.
 - **A failed regenerated page waits for the next refresh.** On Windows, a page held open is not rewritten
   until it is closed and something rewrites it. In the boot's vault refresh, the problem pages after it,
-  the index and the tag notes wait with it.
+  the index and the tag notes wait with it. *The rest no longer wait: closed by #407, below.*
 - **Any failed atomic move falls back to a plain one** — a candidate the review named, filed as a
   follow-up. The fallback to `REPLACE_EXISTING` was meant for a filesystem that cannot move atomically,
-  but it runs after any failure of `ATOMIC_MOVE`, and then deletes the target before the rename.
+  but it runs after any failure of `ATOMIC_MOVE`, and then deletes the target before the rename. *Closed
+  by #407, below.*
 
 ## Outcome
 
@@ -325,3 +326,72 @@ The review of #386 found nothing blocking. Its findings, and what the branch did
 - `./scripts/guards.sh`, 12 of 12.
 
 The append-only pin runs on macOS alone and the held-open one on Windows alone; neither has run in CI.
+
+### #407: one page, and a move that falls back
+
+The two accepted costs above that #386 left open, a page that fails to be replaced holding up the vault refresh
+after it, and any failed atomic move falling back to a plain one, are closed on `fix/407-page-guard-and-move`. That
+branch was cut from #374's head, whose `FileReplacement` writes through a `DirectoryHandle`, and main `e302739` (#374's
+squash) was merged in.
+
+- **A page that cannot be replaced waits alone** (`31e9566`).
+  - `refreshProblemPages` wrote every problem page with no guard of its own. A page whose replace failed with an
+    `IOException` other than a refusal — held open on Windows, or on a read-only mount — threw out of the loop. The
+    boot's `refreshVault` ended there, and every page after it, the index and the tag map kept what they held.
+  - `ProblemReadme` now skips such a page, as it already skipped a refused one, and for the same reason: the page is
+    derived from the log and written again at every attachment and boot.
+  - It is said once, with its path and the kind of failure, through `SaidOnce` keyed by the page, so a healthy boot
+    says nothing new. The attach path gains the same guard, so one such page no longer stops the index and the tag
+    notes after it.
+  - Red: with the problem directory closed to writes, the page's test and the vault refresh test both threw
+    `AccessDeniedException`. A Windows test holds the first page open, as the issue measured, and runs on
+    windows-latest alone.
+- **Only "not supported" falls back** (`2ad5790`). A plain `REPLACE_EXISTING` deletes the target and then renames, on
+  Unix and Windows alike. If the rename then fails — an antivirus holding the temporary file on Windows — the
+  target is gone and only the temporary file holds its content.
+  - By path, `ATOMIC_MOVE` now falls back to `REPLACE_EXISTING` only on `AtomicMoveNotSupportedException`, a file
+    system that cannot move atomically at all. Any other failure is thrown with the target untouched, and
+    `FileReplacement` takes the temporary file away.
+  - A file over a directory, which `rename(2)` refuses, used to get through the fallback. It is handled on its own
+    now, as the handle already did: an empty directory is taken away and the move tried again, and one holding
+    something fails.
+  - **Through a handle**, the move is `SecureDirectoryStream.move`, which is `renameat`: atomic, or it fails. "Not
+    supported" there is `EXDEV`, a move across file systems, which a temporary file made beside its target never
+    asks for, and the stream has no plain move to fall back on. So the handle never fell back and still does not:
+    whatever stopped the rename is thrown, and the target is left as it was.
+  - No file system fails an atomic move on demand, so the path handle takes the move as a seam, `PathMoves`, which
+    the directories opened below it inherit. Through a handle, the seam is the stream itself, wrapped.
+  - The pins go through both kinds of handle. A failed move is thrown, the target keeps its bytes, and nothing is
+    left beside it. Through a handle, "not supported" is thrown too. By path, a file system that cannot move
+    atomically is still replaced.
+  - Red, with the seam in and the old fallback: by path, the failed move was not thrown, and the target held the
+    new bytes.
+  - #386's Windows pin, a page held open, still expects a non-refusal `IOException` with the page untouched. It now
+    holds more directly: the atomic move fails, and that failure is thrown as it is, with no plain replace after it.
+- **Mutation**, against the store, git-history, MCP, application and config tests:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | no guard round the page | 2 |
+  | said at every failure | 1 |
+  | said without its path | 1 |
+  | a failed page answered as written | 1 |
+  | one key for every page | 1, after a pin with two failing pages; it survived before |
+  | any failed atomic move falling back, as before | 2 |
+  | "not supported" never falling back | 1 |
+  | a directory target not taken away | 3 |
+  | a child handle without the seam | 1 |
+  | through a handle, a failed rename swallowed | 4 |
+
+  All ten are killed, 1,401 to 1,407 tests a run.
+
+- **Gates**, all exit 0 at `dbd6993`:
+  - check;
+  - test: 2,649 JUnit tests in 176 classes, 0 failures, 13 skipped — those before, and the new Windows test —
+    and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 87% (771 of 882), `application` 90% (396 of 439), every package
+    at or above its floor;
+  - guards: 12 of 12, with this page and progress staged.
+- **What remains.** A page that cannot be replaced keeps its old content until the cause goes. The two Windows tests,
+  the page held open and #386's, run on windows-latest alone, and CI has not run this branch. Not verified live.

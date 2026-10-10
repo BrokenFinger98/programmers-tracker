@@ -6174,3 +6174,31 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   skipped), node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 87%, `adapter/git` 88%,
   `adapter/config` 65% at its floor); guards 12 of 12.
 - **Pending.** Not pushed. CI, where the Windows pins first run, and a live check.
+## 2026-10-10 — #407 one page waits alone, and only "not supported" falls back (branch fix/407-page-guard-and-move)
+- **Base.** Cut from #374's head (`084e54d`); main `e302739`, #374's squash with the same tree, merged in as
+  `dbd6993`. Commits on top, no rebase; gradle run in the background, one command at a time.
+- `31e9566` **Finding 1.** `refreshProblemPages` had no per-page guard, so one page whose replace failed with a
+  non-refusal `IOException` ended the boot's vault refresh for every later page, the index and the tag map.
+  `ProblemReadme` skips it as it skips a refused one, said once with its path through `SaidOnce` keyed by the page;
+  nothing new on a healthy boot. Red: with the problem directory closed to writes, the page test and the vault
+  refresh test threw `AccessDeniedException`. A Windows test holds the first page open (windows-latest only).
+- `2ad5790` **Finding 2.** `PathDirectoryHandle` fell back to `REPLACE_EXISTING` after any failed `ATOMIC_MOVE`,
+  which deletes the target and then renames. It falls back only on `AtomicMoveNotSupportedException` now; any other
+  failure is thrown with the target untouched, and a directory target is handled on its own (an empty one taken
+  away, as the handle does). Through a `SecureDirectoryStream` the move is `renameat`, atomic or nothing, with no
+  plain move to fall back on: it throws whatever stopped it, as it did. The seam is `PathMoves` by path and a wrapped
+  stream through a handle. Red by path, the old fallback in: the failed move was not thrown and the target held the
+  new bytes.
+- **Mutation** (`mutate407.py` in the scratchpad, against the store, git-history, MCP, application and config tests):
+  10 mutants, all killed: the page guard's five, one of them, a key shared by every page, only after a pin with
+  two failing pages; and the move's five: any failure falling back, "not supported" never falling back, a
+  directory target not taken away, a child handle without the seam, a failed rename through a handle swallowed.
+  Per mutant in the ADR.
+- **Gates**, all exit 0, at `dbd6993`: check; test (2,649 JUnit in 176 classes, 0 failures, 13 skipped: those
+  before and the new Windows test; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 771 of 882;
+  `application` 90%, 396 of 439; every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** #386's ADR: its two accepted costs marked closed, and an Outcome note for #407 with the decision on a
+  handle's move.
+- **Remaining.** A page that cannot be replaced keeps its old content until the cause goes; the Windows tests run on
+  windows-latest alone, and CI has not run this branch; not verified live.
+- **Pending.** Not pushed.
