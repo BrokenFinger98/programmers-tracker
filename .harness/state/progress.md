@@ -6202,3 +6202,16 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Remaining.** A page that cannot be replaced keeps its old content until the cause goes; the Windows tests run on
   windows-latest alone, and CI has not run this branch; not verified live.
 - **Pending.** Not pushed.
+## 2026-10-10 — #407 PR #411's Windows CI: the test's own list (branch fix/407-page-guard-and-move)
+- **The failure.** windows-latest alone, the Windows-only held-open test: `NoSuchFileException: Users` from
+  `Files.delete` at `TagMapWritingTest.kt:144`, no production frame in the trace. The line deleted `rest + path`;
+  a `Path` is an `Iterable<Path>`, so `+` resolved to `plus(Iterable)` and the list got the path's names, `Users`
+  first on Windows. A probe here: `listOf(/tmp/one/README.md) + /Users/runneradmin/AppData/tags/dp.md` is six
+  elements. Case (a), the test's; production was never reached, and the line ran on Windows alone.
+- `8ed9b56` **The fix.** The files are listed one by one, in a setup both vault refresh tests share, so it runs on
+  every platform. The no-guard mutant still fails the shared POSIX test (3 tests in all).
+- **Gates**, all exit 0, at `8ed9b56`: check; test (2,649 JUnit in 176 classes, 0 failures, 13 skipped as before;
+  node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 771 of 882; `application` 90%, 396 of 439);
+  guards (12 of 12, docs staged).
+- **Pending.** Not pushed; CI reruns once the coordinator pushes, and the held-open refresh runs there for the first
+  time.

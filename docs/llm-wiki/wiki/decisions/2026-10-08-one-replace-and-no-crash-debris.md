@@ -393,5 +393,17 @@ squash) was merged in.
   - `verifyBranchCoverage`: `adapter/store` 87% (771 of 882), `application` 90% (396 of 439), every package
     at or above its floor;
   - guards: 12 of 12, with this page and progress staged.
+- **PR #411's CI** (`8ed9b56`). The PR failed on windows-latest alone, in the Windows-only test that holds a page
+  open: `NoSuchFileException: Users`, thrown by `Files.delete` in the test's own setup, with no production frame in
+  the trace. The setup meant to add one path to a list of two with `list + path`. A `Path` is an `Iterable<Path>`,
+  so Kotlin resolved `+` to `plus(elements: Iterable)`, and the list got the path's names instead of the path. On
+  Windows the first of them is `Users`, which `Files.delete` took as a relative path. A probe here gave the same:
+  `listOf(/tmp/one/README.md) + /Users/runneradmin/AppData/tags/dp.md` is six elements, `Users` the second. So the
+  failure was the test's, and the line never ran anywhere but Windows. The files are listed one by one now, in a
+  setup both vault refresh tests share, so it runs on every platform. Only the refresh past the held page is
+  Windows' alone, and the no-guard mutant still fails the shared test here. Gates after the fix: check; test, 2,649 JUnit tests in 176 classes, 0 failures, 13 skipped as
+  before, and node 4 of 4; build; `verifyBranchCoverage`, `adapter/store` 87% (771 of 882) and `application`
+  90% (396 of 439); guards, 12 of 12.
 - **What remains.** A page that cannot be replaced keeps its old content until the cause goes. The two Windows tests,
-  the page held open and #386's, run on windows-latest alone, and CI has not run this branch. Not verified live.
+  the page held open and #386's, run on windows-latest alone; the refresh past the held page has not yet run
+  there. Not verified live.
