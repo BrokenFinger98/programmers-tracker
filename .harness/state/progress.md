@@ -6197,3 +6197,72 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Cost**: `git remote` 5.0–5.3 ms a call, paid by a push to a URL remote.
 - **Gates**, all exit 0: check; test (2,707 JUnit across 178 classes, 0 failures, 12 skipped — 8 C#, 3 Windows-only store tests, the `icase` test; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 89%, 529/588; `adapter/config` 65% at its floor); guards (12/12).
 - **Not verified**: Windows (S8 and S9 are POSIX-only: a path holding a drive letter, a name ending in a space); CI; live.
+## 2026-10-10 — #407 one page waits alone, and only "not supported" falls back (branch fix/407-page-guard-and-move)
+- **Base.** Cut from #374's head (`084e54d`); main `e302739`, #374's squash with the same tree, merged in as
+  `dbd6993`. Commits on top, no rebase; gradle run in the background, one command at a time.
+- `31e9566` **Finding 1.** `refreshProblemPages` had no per-page guard, so one page whose replace failed with a
+  non-refusal `IOException` ended the boot's vault refresh for every later page, the index and the tag map.
+  `ProblemReadme` skips it as it skips a refused one, said once with its path through `SaidOnce` keyed by the page;
+  nothing new on a healthy boot. Red: with the problem directory closed to writes, the page test and the vault
+  refresh test threw `AccessDeniedException`. A Windows test holds the first page open (windows-latest only).
+- `2ad5790` **Finding 2.** `PathDirectoryHandle` fell back to `REPLACE_EXISTING` after any failed `ATOMIC_MOVE`,
+  which deletes the target and then renames. It falls back only on `AtomicMoveNotSupportedException` now; any other
+  failure is thrown with the target untouched, and a directory target is handled on its own (an empty one taken
+  away, as the handle does). Through a `SecureDirectoryStream` the move is `renameat`, atomic or nothing, with no
+  plain move to fall back on: it throws whatever stopped it, as it did. The seam is `PathMoves` by path and a wrapped
+  stream through a handle. Red by path, the old fallback in: the failed move was not thrown and the target held the
+  new bytes.
+- **Mutation** (`mutate407.py` in the scratchpad, against the store, git-history, MCP, application and config tests):
+  10 mutants, all killed: the page guard's five, one of them, a key shared by every page, only after a pin with
+  two failing pages; and the move's five: any failure falling back, "not supported" never falling back, a
+  directory target not taken away, a child handle without the seam, a failed rename through a handle swallowed.
+  Per mutant in the ADR.
+- **Gates**, all exit 0, at `dbd6993`: check; test (2,649 JUnit in 176 classes, 0 failures, 13 skipped: those
+  before and the new Windows test; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 771 of 882;
+  `application` 90%, 396 of 439; every package at or above its floor); guards (12 of 12, docs staged).
+- **Docs.** #386's ADR: its two accepted costs marked closed, and an Outcome note for #407 with the decision on a
+  handle's move.
+- **Remaining.** A page that cannot be replaced keeps its old content until the cause goes; the Windows tests run on
+  windows-latest alone, and CI has not run this branch; not verified live.
+- **Pending.** Not pushed.
+## 2026-10-10 — #407 PR #411's Windows CI: the test's own list (branch fix/407-page-guard-and-move)
+- **The failure.** windows-latest alone, the Windows-only held-open test: `NoSuchFileException: Users` from
+  `Files.delete` at `TagMapWritingTest.kt:144`, no production frame in the trace. The line deleted `rest + path`;
+  a `Path` is an `Iterable<Path>`, so `+` resolved to `plus(Iterable)` and the list got the path's names, `Users`
+  first on Windows. A probe here: `listOf(/tmp/one/README.md) + /Users/runneradmin/AppData/tags/dp.md` is six
+  elements. Case (a), the test's; production was never reached, and the line ran on Windows alone.
+- `8ed9b56` **The fix.** The files are listed one by one, in a setup both vault refresh tests share, so it runs on
+  every platform. The no-guard mutant still fails the shared POSIX test (3 tests in all).
+- **Gates**, all exit 0, at `8ed9b56`: check; test (2,649 JUnit in 176 classes, 0 failures, 13 skipped as before;
+  node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 771 of 882; `application` 90%, 396 of 439);
+  guards (12 of 12, docs staged).
+- **Pending.** Not pushed; CI reruns once the coordinator pushes, and the held-open refresh runs there for the first
+  time.
+## 2026-10-10 — #407 PR #411's review: every writer that carries on, and a link at the target (branch fix/407-page-guard-and-move)
+- **Base.** `07b73dd`, pushed: commits on top, no rebase; gradle in the background, one command at a time.
+- `ae0ebd0` **N2, N1.** The guard moved from `ProblemReadme` into `RecordWrites.replaceOrSkip`, once: an `IOException`
+  that is no refusal is skipped and said once for the path, by its kind and `FileSystemException.reason`, never by the
+  message, which names the temporary file; anything else is thrown. Every caller gains it: the tag notes and the
+  index the review named, and the runner files, the examples, the heartbeat's marker and the seeds, whose own lines
+  now cover only what is no `IOException`. Red: `replaceOrSkip` closed to writes and through a `DiskAnswers` seam;
+  two tag notes, the first immutable under `chflags uchg` (held open on Windows), and `tags/` closed to writes; the
+  index closed to writes; the pages heard through `RecordWrites`.
+- `34ab72f` **N3.** Restored, not unsaid: by path, a link to anything or to nothing at the target is taken away as an
+  empty directory is, and the move made again, since Windows will not move over a link to a directory (the review's
+  reading). Red with a seam refusing the first atomic move: a link to a directory and a dangling link. A contract
+  test makes a real link to a directory for both handles; on Windows it runs where a link can be made.
+- **Docs, N5, N4, N6** (the commit after them). #386's ADR: a note on this round, with N4 (the fallback is
+  effectively `EXDEV`-only) and N6 (a transient sharing violation on Windows is now a skipped write; a short
+  Windows-only retry if CI shows flakes); the index line names #407; #361's ADR marks its "a skipping writer does
+  not skip" as changed.
+- **Mutation** (`mutate407r.py` in the scratchpad, against the store, git-history, MCP, application and config
+  tests, 1,419 a run): 19 mutants, 18 killed. The survivor, the directory check made to follow a link, is equivalent
+  but for a dangling Windows junction, which only a state file's move by path could meet: a link answers the link
+  check first. Per mutant in the ADR.
+- **Gates**, all exit 0, at `34ab72f`: check; test (2,661 JUnit in 176 classes, 0 failures, 14 skipped: those
+  before and the note held open on Windows; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 779
+  of 890; `application` 90%, 396 of 439; every package at or above its floor); guards (12 of 12, docs staged).
+- **Remaining.** A file the file system will not take keeps its old content until the cause goes. The Windows tests
+  (a page held open, a note held open, #386's, a real link to a directory) have not run on windows-latest for this
+  round; not verified live.
+- **Pending.** Not pushed.

@@ -31,8 +31,9 @@ class ProblemIndex(private val layout: RecordLayout) {
      * Manufacturing a commit to say "nothing yet" is exactly the noise that claim exists to
      * prevent.
      *
-     * Null too when [RecordWrites] refused it, which it has said: a link on the way (#361). Derived from the log
-     * and written again at every attachment and boot, so a refused index is skipped rather than thrown.
+     * Null too when it was not written, which [RecordWrites] has said: refused, for a link on the way (#361), or
+     * failed, as a file held open on Windows does (#407). Derived from the log and written again at every attachment
+     * and boot, so such an index is skipped rather than thrown.
      */
     fun write(records: List<SubmissionRecord>): Path? {
         if (records.isEmpty()) return null

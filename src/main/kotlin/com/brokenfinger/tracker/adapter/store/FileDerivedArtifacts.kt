@@ -84,7 +84,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
         logger.info("Lesson {}: no runner — {} is not yet supported (#37)", record.lessonId, record.language)
     }
 
-    // Written over a link, never through one, and skipped when refused, which RecordWrites says (#361).
+    // Written over a link, never through one, and skipped when refused or failed, which RecordWrites says (#361, #407).
     private fun written(record: SubmissionRecord, directory: Path, runner: Runner.Generated) {
         runCatching {
             writes.replaceOrSkip(directory.resolve(runner.fileName), runner.source)

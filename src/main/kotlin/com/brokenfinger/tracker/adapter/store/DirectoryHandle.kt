@@ -1,8 +1,11 @@
 package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.CopyOption
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.OpenOption
@@ -72,7 +75,10 @@ interface DirectoryHandle : AutoCloseable {
     /**
      * [name] renamed [target] in [into], held the same way: whatever stands there — a link, an empty directory — is
      * replaced and never written through, and a directory holding something fails the move. False when there is no
-     * [name].
+     * [name]. Atomic over a file: a move that fails leaves [target] as it was and is thrown, unless the file system
+     * cannot move atomically at all, where it is replaced as a plain move replaces it (#407). An empty directory the
+     * file system will not move over is taken away first, and the move made again; by path, so is a link, which Windows
+     * will not move over when it leads to a directory (#407's review). Through a handle, `renameat` replaces any link.
      */
     fun move(name: String, into: DirectoryHandle, target: String): Boolean
 
@@ -149,12 +155,15 @@ private fun throughAHandle(directory: Path): DirectoryHandle {
  * A directory held by its path (#374): every write in it goes where [directory] leads when the write is made. What
  * Windows is left with, and the same contract as a handle in every other way.
  */
-internal class PathDirectoryHandle(private val directory: Path) : DirectoryHandle {
+internal class PathDirectoryHandle(
+    private val directory: Path,
+    private val moves: PathMoves = PathMoves.OF_THE_FILE_SYSTEM,
+) : DirectoryHandle {
     override fun child(name: String): DirectoryHandle? {
         val child = fileOf(name)
         if (!isThere(child)) createdOrThere(child)
         if (!Files.isDirectory(child, NOFOLLOW_LINKS)) return null
-        return PathDirectoryHandle(child)
+        return PathDirectoryHandle(child, moves)
     }
 
     override fun isAt(directory: Path): Boolean = this.directory == directory
@@ -205,15 +214,49 @@ internal class PathDirectoryHandle(private val directory: Path) : DirectoryHandl
         return arrayOf(PosixFilePermissions.asFileAttribute(permissions))
     }
 
-    // ATOMIC_MOVE is the guarantee wanted; where a file system cannot give it, a plain replace still follows no link,
-    // and takes an empty directory away first.
+    // ATOMIC_MOVE, so a reader sees the old file whole or the new one whole. A plain replace deletes the target and
+    // then renames, so it is taken only where the file system cannot move atomically at all: after any other
+    // failure — the target held open, an antivirus holding the temporary file — the target is left as it was and
+    // the failure thrown, where a plain replace whose rename failed too had already deleted it (#407).
     private fun moved(source: Path, target: Path) {
-        runCatching { Files.move(source, target, ATOMIC_MOVE) }
-            .getOrElse { Files.move(source, target, REPLACE_EXISTING) }
+        try {
+            moves.move(source, target, ATOMIC_MOVE)
+        } catch (unsupported: AtomicMoveNotSupportedException) {
+            moves.move(source, target, REPLACE_EXISTING)
+        } catch (failure: IOException) {
+            overADirectory(source, target, failure)
+        }
     }
+
+    // `rename(2)` refuses a file over a directory, and Windows refuses one over a link to a directory too: the plain
+    // replace used to take either away. An empty directory still goes, and so does a link, to anything or to nothing
+    // (#407's review), and the move is tried again. One holding something fails as the file system fails it.
+    private fun overADirectory(source: Path, target: Path, failure: IOException) {
+        if (!isALinkOrADirectory(target)) throw failure
+        Files.delete(target)
+        moves.move(source, target, ATOMIC_MOVE)
+    }
+
+    // A link is one wherever it leads, and a directory is one only where no link stands: neither is followed.
+    private fun isALinkOrADirectory(target: Path): Boolean =
+        Files.isSymbolicLink(target) || Files.isDirectory(target, NOFOLLOW_LINKS)
 
     private companion object {
         const val POSIX = "posix"
+    }
+}
+
+/**
+ * How a file is moved by its path (#407): the file system's own move, unless a test makes one fail — which no file
+ * system does on demand, for a reason other than that it cannot move atomically at all.
+ */
+internal fun interface PathMoves {
+    /** [source] moved to [target], as [option] says. */
+    fun move(source: Path, target: Path, option: CopyOption)
+
+    companion object {
+        /** The file system's own. */
+        val OF_THE_FILE_SYSTEM = PathMoves { source, target, option -> Files.move(source, target, option) }
     }
 }
 

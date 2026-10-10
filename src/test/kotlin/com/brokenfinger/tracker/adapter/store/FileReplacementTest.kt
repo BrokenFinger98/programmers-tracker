@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.support.fixtures.NOT_OURS
 import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.flagged
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.assertions.throwables.shouldThrow
@@ -17,11 +18,15 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.IOException
+import java.nio.file.AccessDeniedException
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.FileSystemException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.SecureDirectoryStream
+import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermissions
 
 /**
@@ -263,13 +268,139 @@ class FileReplacementTest {
         namesIn(aside) shouldContainExactly listOf("timers.json")
     }
 
+    // A move that fails, and where it may fall back (#407) ---------------------------------------------
+
+    /**
+     * Any failed atomic move fell back to a plain one, which deletes the target and then renames: when the rename
+     * failed too — an antivirus holding the temporary file on Windows — the target was gone and only the temporary
+     * file held its content. Only a file system that cannot move atomically at all falls back now. Any other failure
+     * is thrown, the target as it was and the temporary file taken away. The move is a seam here, since no file system
+     * fails one on demand.
+     */
+    @Test
+    fun `a move that fails is thrown, and the target keeps its bytes`() {
+        Files.writeString(target, "before\n")
+        val held = PathDirectoryHandle(root, failingAtomically(IOException("the temporary file is held")))
+
+        val failure = shouldThrow<IOException> { replacedThrough(held) }
+
+        failure.message shouldBe "the temporary file is held"
+        Files.readString(target) shouldBe "before\n"
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    /** A file system that cannot move atomically at all is what the plain replace is for: it still replaces. */
+    @Test
+    fun `a file system that cannot move atomically is replaced all the same`() {
+        Files.writeString(target, "before\n")
+
+        replacedThrough(PathDirectoryHandle(root, failingAtomically(AtomicMoveNotSupportedException(null, null, "no"))))
+
+        Files.readString(target) shouldBe "after\n"
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    /** Through a handle the move is `renameat`: whatever stopped it is thrown, and the target keeps its bytes. */
+    @Test
+    fun `through a handle, a move that fails is thrown, and the target keeps its bytes`() {
+        failedThroughAHandle(IOException("the temporary file is held"))
+    }
+
+    /**
+     * A `SecureDirectoryStream` has no other move to fall back on, so "not supported" — which only a move across file
+     * systems answers, and a replace beside its target never asks for — is thrown too, the target as it was.
+     */
+    @Test
+    fun `through a handle, a move that cannot be atomic is thrown, for a handle has no other`() {
+        failedThroughAHandle(AtomicMoveNotSupportedException(null, null, "no"))
+    }
+
+    /**
+     * Windows will not move a file over a link to a directory, and the plain replace took such a link away with
+     * `RemoveDirectory` until #407 narrowed it (#407's review). A link is taken away now, as an empty directory is, and
+     * the move made again. The seam fails the first move as Windows does; a rename on Linux or macOS replaces any link.
+     */
+    @Test
+    fun `a link to a directory a move will not replace is taken away, and the directory keeps what it holds`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val directory = Files.createDirectory(outside.resolve("a-directory"))
+        Files.writeString(directory.resolve("inside.md"), "inside\n")
+        aLink(target, directory)
+
+        replacedThrough(PathDirectoryHandle(root, failingOnceAtomically()))
+
+        Files.readString(target) shouldBe "after\n"
+        namesIn(directory) shouldContainExactly listOf("inside.md")
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    /** Looked at without following it: a dangling link is a link, taken away, and nothing is made where it points. */
+    @Test
+    fun `a dangling link a move will not replace is taken away, and nothing is made where it points`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val nowhere = outside.resolve("made-by-a-replace.md")
+        aLink(target, nowhere)
+
+        replacedThrough(PathDirectoryHandle(root, failingOnceAtomically()))
+
+        Files.readString(target) shouldBe "after\n"
+        Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /** A directory opened below one held by path is held the same way, its moves as narrow. */
+    @Test
+    fun `below a directory held by path, a move that fails is thrown too`() {
+        val page = Files.writeString(Files.createDirectory(root.resolve("below")).resolve("README.md"), "before\n")
+        val held = PathDirectoryHandle(root, failingAtomically(IOException("the temporary file is held")))
+
+        held.child("below")!!.use { below -> shouldThrow<IOException> { replacedThrough(below) } }
+
+        Files.readString(page) shouldBe "before\n"
+    }
+
+    private fun failedThroughAHandle(failure: IOException) {
+        assumeTrue(DirectoryHandles.givesHandles(root), "this platform gives no directory handle")
+        val stream = Files.newDirectoryStream(root) as SecureDirectoryStream<Path>
+        Files.writeString(target, "before\n")
+
+        SecureDirectoryHandle(FailingMove(stream, failure), root).use { held ->
+            shouldThrow<IOException> { replacedThrough(held) } shouldBe failure
+        }
+
+        Files.readString(target) shouldBe "before\n"
+        namesIn(root) shouldContainExactly listOf("README.md")
+    }
+
+    private fun replacedThrough(held: DirectoryHandle) =
+        replacing(FileMode.KEPT_ELSE_PLAIN).replace(held, "README.md", "after\n")
+
+    // The file system's own move, but an atomic one fails with [failure].
+    private fun failingAtomically(failure: IOException) = PathMoves { source, target, option ->
+        if (option == StandardCopyOption.ATOMIC_MOVE) throw failure
+        Files.move(source, target, option)
+    }
+
+    // The file system's own move, but the first atomic one is refused, as Windows refuses one over a directory's link.
+    private fun failingOnceAtomically(): PathMoves {
+        var refused = false
+        return PathMoves { source, target, option ->
+            if (option == StandardCopyOption.ATOMIC_MOVE && !refused) {
+                refused = true
+                throw AccessDeniedException(target.toString())
+            }
+            Files.move(source, target, option)
+        }
+    }
+
     private fun held(): DirectoryHandle = DirectoryHandles.THROUGH_A_HANDLE.open(root)
 
     private fun replacing(mode: FileMode) = FileReplacement(mode)
 
-    // A file flag set or cleared with `chflags`, which macOS and the BSDs have; false where there is none to run.
-    private fun flagged(directory: Path, flag: String): Boolean =
-        runCatching { ProcessBuilder("chflags", flag, directory.toString()).start().waitFor() == 0 }.getOrDefault(false)
-
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
+}
+
+/** The secure directory stream it wraps, except that a move fails with [failure] (#407). */
+private class FailingMove(private val stream: SecureDirectoryStream<Path>, private val failure: IOException) :
+    SecureDirectoryStream<Path> by stream {
+    override fun move(srcpath: Path, targetdir: SecureDirectoryStream<Path>, targetpath: Path): Unit = throw failure
 }

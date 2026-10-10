@@ -12,6 +12,7 @@ import com.brokenfinger.tracker.support.fixtures.foldsTogether
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -29,6 +30,7 @@ import java.io.FileInputStream
 import java.io.IOException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -607,10 +609,10 @@ class RecordWritesTest {
     /**
      * The measurement #386 asked for, on windows-latest: a page another process holds open, opened without sharing
      * deletion — as `FileInputStream` opens a file, and as a sync client or a scanner may hold one — and then replaced.
-     * Predicted from the JDK, not yet run: the move needs deletion over the target, so it fails, and so does the plain
-     * replace it falls back to. The failure is the filesystem's own, not a refusal, so even a writer that skips
-     * refusals is not spared it; and the page keeps its old bytes, with nothing left beside it. If this fails on
-     * Windows, the prediction was wrong, and that is the result.
+     * The move needs deletion over the target, so it fails, and since #407 that failure is thrown as it is, with no
+     * plain replace after it. It is the file system's own, not a refusal: a writer whose failures reach its caller gets
+     * it, and one that carries on skips it, said once for the path (#407's review). Either way the page keeps its old
+     * bytes, with nothing left beside it.
      */
     @Test
     @EnabledOnOs(OS.WINDOWS)
@@ -618,11 +620,13 @@ class RecordWritesTest {
         val page = inProblem("README.md")
         problems().replace(page, "before\n")
 
-        FileInputStream(page.toFile()).use {
-            val failure = shouldThrow<IOException> { problems().replaceOrSkip(page, "after\n") }
+        val heard = FileInputStream(page.toFile()).use {
+            val failure = shouldThrow<IOException> { problems().replace(page, "after\n") }
             failure.shouldNotBeInstanceOf<RefusedWriteException>()
+            warningsWhile(RecordWrites::class) { problems().replaceOrSkip(page, "after\n") shouldBe false }
         }
 
+        heard.single() shouldContain page.toString()
         Files.readString(page) shouldBe "before\n"
         namesIn(page.parent) shouldBe listOf("README.md")
     }
@@ -661,20 +665,85 @@ class RecordWritesTest {
     }
 
     /**
-     * A refusal is the bound's own answer. Any other failure is not, and reaches the writer as it always did: a
-     * writer that skips refusals still fails on a directory that will not take the file.
+     * A refusal is the bound's own answer. Any other failure is the file system's — a directory that will not take the
+     * file, a file held open on Windows — and reaches a writer whose failures reach its caller as it always did.
      */
     @Test
-    fun `a failure that is no refusal is thrown, even to a writer that skips refusals`() {
+    fun `a failure that is no refusal is thrown to a writer whose failures reach its caller`() {
         assumeTrue(keepsPosixPermissions(root), "this test changes POSIX permissions")
         val directory = Files.createDirectories(root.resolve("problems/1-x"))
-        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("r-x------"))
-        try {
+
+        unwritableWhile(directory) {
             assumeTrue(!Files.isWritable(directory), "a superuser writes anyway")
-            shouldThrow<AccessDeniedException> { problems().replaceOrSkip(directory.resolve("README.md"), "page\n") }
-        } finally {
-            Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
+            shouldThrow<AccessDeniedException> { problems().replace(directory.resolve("README.md"), "page\n") }
         }
+    }
+
+    // A failure of the file system, skipped by a writer that carries on (#407's review) --------------
+
+    /**
+     * A writer that carries on writes its file again — a page, a note, the index at every attachment and boot; a
+     * runner, the examples, a seed, a beat — so a failure of the file system is skipped as a refusal is: false, and
+     * said once for the path. Thrown, it took every page, the index and the tag notes after it down with it.
+     */
+    @Test
+    fun `a writer that carries on skips a failure of the file system, said once for the path`() {
+        assumeTrue(keepsPosixPermissions(root), "this test changes POSIX permissions")
+        val directory = Files.createDirectories(root.resolve("problems/1-x"))
+        val writes = problems()
+
+        val heard = warningsWhile(RecordWrites::class) {
+            unwritableWhile(directory) {
+                assumeTrue(!Files.isWritable(directory), "a superuser writes anyway")
+                repeat(2) { writes.replaceOrSkip(directory.resolve("README.md"), "page\n") shouldBe false }
+            }
+        }
+
+        heard.single() shouldContain "${directory.resolve("README.md")} (AccessDeniedException)"
+    }
+
+    /** Each path that fails is said, once for each, and a path that does not fail is written. */
+    @Test
+    fun `a failure at each of two paths is said for each, and a path that does not fail is written`() {
+        val writes = problems(DiskAnswers(realPathOf = failingAt("1-x", FileSystemException("1-x", null, "no"))))
+
+        val heard = warningsWhile(RecordWrites::class) {
+            writes.replaceOrSkip(inProblem("README.md"), "page\n") shouldBe false
+            writes.replaceOrSkip(inProblem("examples.json"), "[]") shouldBe false
+            writes.replaceOrSkip(root.resolve("problems/2-y/README.md"), "page\n") shouldBe true
+        }
+
+        heard.size shouldBe 2
+        heard.first() shouldContain inProblem("README.md").toString()
+        heard.last() shouldContain inProblem("examples.json").toString()
+        Files.readString(root.resolve("problems/2-y/README.md")) shouldBe "page\n"
+    }
+
+    /**
+     * Said by its kind and, where the file system gave one, its own reason, which is never a path. Never by the
+     * exception's message, which names one: the temporary file's, or wherever the failure was met.
+     */
+    @Test
+    fun `a failure is said by its kind and the file system's reason, never by its message`() {
+        val described = problems(DiskAnswers(realPathOf = failingAt("1-x", FileSystemException(ELSEWHERE, null, "no"))))
+        val bare = problems(DiskAnswers(realPathOf = failingAt("1-x", IOException("met at $ELSEWHERE"))))
+
+        val heard = warningsWhile(RecordWrites::class) {
+            described.replaceOrSkip(inProblem("README.md"), "page\n")
+            bare.replaceOrSkip(inProblem("README.md"), "page\n")
+        }
+
+        heard.first() shouldContain "${inProblem("README.md")} (FileSystemException: no)"
+        heard.last() shouldContain "${inProblem("README.md")} (IOException)"
+        heard.forEach { it shouldNotContain ELSEWHERE }
+    }
+
+    /** What is no failure of the file system is a fault, and is thrown even to a writer that carries on. */
+    @Test
+    fun `a failure that is not the file system's is thrown, even to a writer that carries on`() {
+        val broken = problems(DiskAnswers(realPathOf = failingAt("1-x", IllegalStateException("a fault"))))
+
+        shouldThrow<IllegalStateException> { broken.replaceOrSkip(inProblem("README.md"), "page\n") }
     }
 
     // What a replace does that no case above says, pinned before #386 shares the write -----------
@@ -822,6 +891,12 @@ class RecordWritesTest {
 
     private fun inProblem(relative: String): Path = root.resolve("problems/1-x").resolve(relative)
 
+    // The real path, except that a directory named [name] is not resolved: [failure] is thrown instead.
+    private fun failingAt(name: String, failure: Exception): (Path) -> Path = { path ->
+        if (path.fileName?.toString() == name) throw failure
+        path.toRealPath()
+    }
+
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 
     private companion object {
@@ -829,5 +904,8 @@ class RecordWritesTest {
 
         /** A problem directory named from a Korean title, in NFC as the layout makes it. */
         const val KOREAN_DIRECTORY = "120804-두-수의-곱-구하기"
+
+        /** Where a failure was met, which its message names and a warning never does. */
+        const val ELSEWHERE = "/where/the/failure/was/met"
     }
 }
