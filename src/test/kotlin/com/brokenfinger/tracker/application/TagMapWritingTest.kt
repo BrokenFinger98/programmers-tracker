@@ -120,12 +120,12 @@ class TagMapWritingTest {
     @Test
     fun `a page that cannot be replaced is skipped, and the rest of the vault is refreshed`() {
         assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
-        val store = twoProblemsRecorded()
-        val stuck = Files.createDirectories(RecordLayout(root).problemDirectory(120804, TITLE))
+        val artifacts = refreshedOnceThenForgotten()
+        val stuck = RecordLayout(root).problemDirectory(120804, TITLE)
 
         unwritableWhile(stuck) {
             assumeTrue(!Files.isWritable(stuck), "a superuser writes anyway")
-            attachment(FileDerivedArtifacts(root, store, Clock.systemDefaultZone())).refreshVault()
+            attachment(artifacts).refreshVault()
         }
 
         refreshedAfterTheStuckPage()
@@ -135,17 +135,27 @@ class TagMapWritingTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     fun `a page held open by another process is skipped, and the rest of the vault is refreshed`() {
-        val store = twoProblemsRecorded()
-        val artifacts = FileDerivedArtifacts(root, store, Clock.systemDefaultZone())
-        attachment(artifacts).refreshVault()
-        val layout = RecordLayout(root)
-        val held = layout.problemDirectory(120804, TITLE).resolve("README.md")
-        val rest = listOf(layout.problemDirectory(120805, TITLE).resolve("README.md"), layout.problemIndex())
-        (rest + layout.tagNote("dp")).forEach(Files::delete)
+        val artifacts = refreshedOnceThenForgotten()
+        val held = RecordLayout(root).problemDirectory(120804, TITLE).resolve("README.md")
 
         FileInputStream(held.toFile()).use { attachment(artifacts).refreshVault() }
 
         refreshedAfterTheStuckPage()
+    }
+
+    /**
+     * Both problems recorded and the vault refreshed once, then everything the refresh writes after the first page
+     * deleted, so a second refresh shows whether it got past that page. Shared by both tests, so what the Windows one
+     * sets up runs on every platform. The files are listed one by one: a `Path` is an `Iterable<Path>`, so `list + path`
+     * added the path's names, `Users` first on Windows, rather than the path (PR #411's CI).
+     */
+    private fun refreshedOnceThenForgotten(): DerivedArtifacts {
+        val artifacts = FileDerivedArtifacts(root, twoProblemsRecorded(), Clock.systemDefaultZone())
+        attachment(artifacts).refreshVault()
+        val layout = RecordLayout(root)
+        listOf(layout.problemDirectory(120805, TITLE).resolve("README.md"), layout.problemIndex(), layout.tagNote("dp"))
+            .forEach(Files::delete)
+        return artifacts
     }
 
     // The first problem's page is the one that fails, so everything the vault refresh writes comes after it.
