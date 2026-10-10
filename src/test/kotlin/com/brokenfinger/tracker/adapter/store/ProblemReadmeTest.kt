@@ -406,7 +406,8 @@ class ProblemReadmeTest {
     /**
      * A page whose replace failed for anything but a refusal — another process holding it on Windows, a read-only
      * mount — was thrown, and at boot it took every page after it, the index and the tag map down with it. It is
-     * skipped as a refused one is, and said once with its path: the next attachment or boot writes it again.
+     * skipped as a refused one is, and said once with its path: the next attachment or boot writes it again. Said by
+     * [RecordWrites], which every writer that carries on writes through, since #407's review.
      */
     @Test
     fun `a page that cannot be replaced is skipped, and said once with its path`() {
@@ -414,7 +415,7 @@ class ProblemReadmeTest {
         val readme = ProblemReadme(RecordLayout(root))
         val directory = Files.createDirectories(root.resolve("problems/$DIRECTORY"))
 
-        val heard = warningsWhile(ProblemReadme::class) {
+        val heard = warningsWhile(RecordWrites::class) {
             unwritableWhile(directory) {
                 assumeTrue(!Files.isWritable(directory), "a superuser writes anyway")
                 repeat(2) { readme.write(listOf(aRecord())).shouldBeNull() }
@@ -432,7 +433,7 @@ class ProblemReadmeTest {
         val first = Files.createDirectories(root.resolve("problems/$DIRECTORY"))
         val second = Files.createDirectories(root.resolve("problems/120805-other"))
 
-        val heard = warningsWhile(ProblemReadme::class) {
+        val heard = warningsWhile(RecordWrites::class) {
             unwritableWhile(first) {
                 unwritableWhile(second) {
                     assumeTrue(!Files.isWritable(second), "a superuser writes anyway")
@@ -450,7 +451,7 @@ class ProblemReadmeTest {
     /** No new noise on a healthy boot: a page written as it should be says nothing. */
     @Test
     fun `a page written as it should be says nothing`() {
-        val heard = warningsWhile(ProblemReadme::class) { ProblemReadme(RecordLayout(root)).write(listOf(aRecord())) }
+        val heard = warningsWhile(RecordWrites::class) { ProblemReadme(RecordLayout(root)).write(listOf(aRecord())) }
 
         heard.shouldBeEmpty()
     }

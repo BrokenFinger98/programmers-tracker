@@ -25,8 +25,8 @@ class TagNotes(private val layout: RecordLayout) {
 
     fun write(counts: List<TagCount>) = counts.forEach { writeOne(it) }
 
-    // Written over a link, never through one (#361). The map is derived and rewritten at every boot, so a refused
-    // note is said, once for its reason, and skipped.
+    // Written over a link, never through one (#361). The map is derived and rewritten at every boot, so a note that is
+    // refused, or that the file system will not take, is said once and skipped, and the notes after it written (#407).
     private fun writeOne(count: TagCount) {
         writes.replaceOrSkip(layout.tagNote(count.tag), render(count))
     }

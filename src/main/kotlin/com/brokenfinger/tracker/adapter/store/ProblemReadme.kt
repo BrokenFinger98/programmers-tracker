@@ -3,8 +3,6 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.domain.GradingAction
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.calc.UnknownReason
-import org.slf4j.LoggerFactory
-import java.io.IOException
 import java.nio.file.Path
 import java.time.format.DateTimeFormatter
 
@@ -28,31 +26,20 @@ import java.time.format.DateTimeFormatter
 class ProblemReadme(private val layout: RecordLayout) {
     private val statements = FileProblemStatements(layout)
     private val writes = RecordWrites.underProblems(layout)
-    private val said = SaidOnce()
 
     /**
-     * Writes the page for one problem's records, oldest first, and returns the file — or null when [RecordWrites]
-     * refused it, which it has said: a link on the way to it (#361). The page is derived from the log and written
-     * again at every attachment and boot, so a refused one is skipped rather than thrown, which would take every
-     * page, the index and the tag map after it down with it.
+     * Writes the page for one problem's records, oldest first, and returns the file — or null when it was not written,
+     * which [RecordWrites] has said: refused, for a link on the way to it (#361), or failed, held open by another
+     * process on Windows or on a read-only mount (#407). The page is derived from the log and written again at every
+     * attachment and boot, so one not written is skipped rather than thrown, which would take every page, the index
+     * and the tag map after it down with it.
      */
     fun write(records: List<SubmissionRecord>): Path? {
         require(records.isNotEmpty()) { "a README needs at least one record" }
         val lessonId = records.first().lessonId
         require(records.all { it.lessonId == lessonId }) { "records must all belong to lesson $lessonId" }
         val file = layout.problemDirectory(lessonId, titleOf(records)).resolve(README)
-        return file.takeIf { replaced(it, render(records)) }
-    }
-
-    // A page that cannot be replaced at all — held open by another process on Windows, a read-only mount — is skipped
-    // as a refused one is, for the same reason, and said once with its path (#407): the next boot writes it again.
-    private fun replaced(file: Path, text: String): Boolean {
-        try {
-            return writes.replaceOrSkip(file, text)
-        } catch (failed: IOException) {
-            said.say(file) { logger.warn(NOT_REPLACED, file, failed.javaClass.simpleName) }
-            return false
-        }
+        return file.takeIf { writes.replaceOrSkip(it, render(records)) }
     }
 
     private fun render(records: List<SubmissionRecord>): String =
@@ -242,11 +229,6 @@ class ProblemReadme(private val layout: RecordLayout) {
         value?.let { """"${it.replace("\\", "\\\\").replace("\"", "\\\"")}"""" }
 
     private companion object {
-        val logger = LoggerFactory.getLogger(ProblemReadme::class.java)
-
-        const val NOT_REPLACED =
-            "The problem page {} could not be replaced ({}), so it keeps what it held; the others are still written, " +
-                "and the next attachment or start writes it again. Said once for this page."
         const val README = "README.md"
         const val HISTORY = "## Attempt history"
         const val PROBLEM = "## Problem"

@@ -4,6 +4,7 @@ import com.brokenfinger.tracker.support.fixtures.NOT_OURS
 import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.flagged
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
 import io.kotest.assertions.throwables.shouldThrow
@@ -349,10 +350,6 @@ class FileReplacementTest {
     private fun held(): DirectoryHandle = DirectoryHandles.THROUGH_A_HANDLE.open(root)
 
     private fun replacing(mode: FileMode) = FileReplacement(mode)
-
-    // A file flag set or cleared with `chflags`, which macOS and the BSDs have; false where there is none to run.
-    private fun flagged(directory: Path, flag: String): Boolean =
-        runCatching { ProcessBuilder("chflags", flag, directory.toString()).start().waitFor() == 0 }.getOrDefault(false)
 
     private fun permissionsOf(file: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(file))
 }

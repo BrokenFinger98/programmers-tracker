@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileAlreadyExistsException
@@ -44,7 +45,9 @@ import java.nio.file.attribute.BasicFileAttributes
  * **Said once, never quoted.** A refusal logs one warning naming the path the writer was handed and the reason —
  * once per reason for this instance, never the content and never where a link leads — and throws
  * [RefusedWriteException], unless the writer asked to skip ([replaceOrSkip]). Which writers fail loudly and which
- * carry on is each writer's own posture ([[decisions/2026-10-08-no-writer-follows-a-link]]).
+ * carry on is each writer's own posture ([[decisions/2026-10-08-no-writer-follows-a-link]]). A writer that skips skips
+ * a failure of the file system too, said once for the path by its kind and the file system's own reason, and never by
+ * the exception's message, which names the temporary file (#407's review).
  */
 internal class RecordWrites private constructor(private val bound: RecordBound, ownerOnly: Boolean) {
     private val said = SaidOnce()
@@ -53,12 +56,19 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
     /** Replaces [target] whole with [text]. A link standing there is replaced, never written through. */
     fun replace(target: Path, text: String) = replaceAt(target, fileIn(target), text)
 
-    /** [replace], or false when it was refused, which has been said — for a writer that carries on without the file. */
+    /**
+     * [replace], or false when it was not done, which has been said — for a writer that carries on without the file and
+     * writes it again. A refusal is said once for its reason; a failure of the file system — a file held open on
+     * Windows, a directory that will not take it — once for the path (#407's review). Anything else is no failure of
+     * the file system, and is thrown.
+     */
     fun replaceOrSkip(target: Path, text: String): Boolean {
         try {
             replace(target, text)
         } catch (refused: RefusedWriteException) {
             return false
+        } catch (failed: IOException) {
+            return notReplaced(target, failed)
         }
         return true
     }
@@ -181,6 +191,19 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
         return RefusedWriteException(target, reason)
     }
 
+    // Once for the path for this instance, naming the path the writer was handed and what failed.
+    private fun notReplaced(target: Path, failed: IOException): Boolean {
+        said.say("$NOT_REPLACED $target") { logger.warn(NOT_REPLACED_WARNING, target, whatFailed(failed)) }
+        return false
+    }
+
+    // The kind of failure, and the file system's own reason where it gave one: the system's text, never a path. Never
+    // the message, which names the temporary file, or wherever else the failure was met.
+    private fun whatFailed(failed: IOException): String {
+        val reason = (failed as? FileSystemException)?.reason ?: return failed.javaClass.simpleName
+        return "${failed.javaClass.simpleName}: $reason"
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(RecordWrites::class.java)
         private val CHARSET = StandardCharsets.UTF_8
@@ -197,6 +220,10 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
         private const val REPLACED_WARNING =
             "Replacing {}, which {}, with the file itself rather than writing through it (#361). " +
                 "Said once for this path."
+        private const val NOT_REPLACED = "not replaced"
+        private const val NOT_REPLACED_WARNING =
+            "Could not replace {} ({}), so it keeps what it held; the writer carries on without it, and its next " +
+                "write tries again (#407). Said once for this path."
 
         /** The writer of a problem's files: inside `problems/`, below the root as configured. */
         fun underProblems(

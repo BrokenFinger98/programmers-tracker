@@ -6,7 +6,10 @@ import com.brokenfinger.tracker.support.fixtures.A_PUSH_TOKEN_LINE
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.flagged
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -15,7 +18,10 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import java.io.FileInputStream
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -71,6 +77,56 @@ class TagNotesTest {
 
         Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
         Files.readString(note) shouldContain "tag: dp"
+    }
+
+    // A note the file system will not take (#407's review) --------------------------------------------
+
+    /**
+     * A note whose replace failed for anything but a refusal threw out of the loop, so every note after it kept what
+     * it held until a later boot. Each is skipped now, and said once by its own path, so every note is tried.
+     */
+    @Test
+    fun `notes the file system will not take are each skipped, and said once by their own path`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val tags = aNoteWritten().parent
+        val notes = notes()
+
+        val heard = warningsWhile(RecordWrites::class) {
+            unwritableWhile(tags) {
+                assumeTrue(!Files.isWritable(tags), "a superuser writes anyway")
+                repeat(2) { notes.write(listOf(DP, GREEDY)) }
+            }
+        }
+
+        heard.size shouldBe 2
+        heard.first() shouldContain tags.resolve("dp.md").toString()
+        heard.last() shouldContain tags.resolve("greedy.md").toString()
+    }
+
+    /** One note the file system will not replace, the others writable: immutable, as `chflags uchg` makes it. */
+    @Test
+    fun `a note that cannot be replaced keeps its bytes, and the note after it is written`() {
+        val stuck = aNoteWritten()
+        assumeTrue(flagged(stuck, "uchg"), "no chflags on this machine")
+
+        val heard = try {
+            refreshedPastTheStuckNote()
+        } finally {
+            flagged(stuck, "nouchg")
+        }
+
+        skippedAlone(stuck, heard)
+    }
+
+    /** The same on Windows, where the note is held open by another process, as #407 measured for a page. */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    fun `a note held open by another process keeps its bytes, and the note after it is written`() {
+        val stuck = aNoteWritten()
+
+        val heard = FileInputStream(stuck.toFile()).use { refreshedPastTheStuckNote() }
+
+        skippedAlone(stuck, heard)
     }
 
     @Test
@@ -224,8 +280,30 @@ class TagNotesTest {
         Files.readString(root.resolve("tags/tsp.md")) shouldNotContain "[["
     }
 
+    // The note for dp, as an earlier pass wrote it.
+    private fun aNoteWritten(): Path {
+        notes().write(listOf(DP))
+        return root.resolve("tags/dp.md")
+    }
+
+    // Twice through one writer, with new counts for the stuck note, which comes first: what was said.
+    private fun refreshedPastTheStuckNote(): List<String> {
+        val notes = notes()
+        return warningsWhile(RecordWrites::class) { repeat(2) { notes.write(listOf(DP_LATER, GREEDY)) } }
+    }
+
+    private fun skippedAlone(stuck: Path, heard: List<String>) {
+        Files.readString(stuck) shouldContain "attempted: ${DP.attempted}"
+        Files.readString(stuck.resolveSibling("greedy.md")) shouldContain "tag: greedy"
+        heard.single() shouldContain stuck.toString()
+        namesIn(stuck.parent) shouldBe listOf("dp.md", "greedy.md")
+    }
+
     private companion object {
         val DP = TagCount("dp", catalogTotal = 38, attempted = 5, solved = 3)
         val GREEDY = TagCount("greedy", catalogTotal = 20, attempted = 1, solved = 0)
+
+        /** The same tag met again since: what a note that was replaced would say instead. */
+        val DP_LATER = TagCount("dp", catalogTotal = 38, attempted = 6, solved = 4)
     }
 }
