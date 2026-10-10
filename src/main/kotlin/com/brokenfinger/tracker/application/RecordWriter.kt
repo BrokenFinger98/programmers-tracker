@@ -155,9 +155,10 @@ class RecordWriter private constructor(
 
     /**
      * Appends [record], or takes back what it took and rethrows (#387's review): its copy is withdrawn, and what is
-     * held here forgotten, for the log to restore at the next grading. A copy that stays — the one copy on disk of
-     * frames held in memory, or one that could not be deleted — keeps its number taken instead, so no later grading
-     * is numbered into it while the server runs, and is said.
+     * held here forgotten, for the log to restore at the next grading. The one copy on disk of frames held in memory is
+     * withdrawn by being kept under a name outside the attempt numbering (#403). A copy that stays at its name — one
+     * that could not be taken back at all — keeps its number taken instead, so no later grading is numbered into it
+     * while the server runs, and is said.
      */
     private fun appended(record: SubmissionRecord, capture: SettledCapture) {
         runCatching { store.append(SubmissionRecordJson.encode(record)) }

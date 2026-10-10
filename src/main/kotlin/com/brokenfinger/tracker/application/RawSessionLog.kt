@@ -40,6 +40,10 @@ interface RawSessionLog {
      * it must survive until the record line naming this destination is durable, or an
      * interrupted write loses the grading with nowhere left to look (#95). [discard]
      * retires it afterwards.
+     *
+     * So a crash between the copy and the record leaves the copy, and the replay meets it: a
+     * regular file already holding exactly these frames is that copy, and is returned as it is
+     * (#403). Anything else at [destination] is never replaced.
      */
     fun complete(session: RawSessionId, destination: Path): Path
 
@@ -61,8 +65,9 @@ interface RawSessionLog {
      * copy again under the number it is then given; a copy left behind took that number from every later grading.
      *
      * Only this log's own copy, and only while every frame in it is also on the work list: one that holds frames kept
-     * only in memory is their one copy on disk, and is kept — false, as for anything at [copy] that is not a regular
-     * file.
+     * only in memory is their one copy on disk, and is kept — under a name outside the attempt numbering, so true, since
+     * nothing is left at [copy] to meet the next grading given that number after a restart (#403). Anything at [copy]
+     * that is not a regular file is not this log's to remove or move: false.
      */
     fun withdraw(session: RawSessionId, copy: Path): Boolean
 
