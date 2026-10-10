@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [storage, links, security, state, windows]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
-sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory, decisions/2026-10-08-one-replace-and-no-crash-debris]
+updated: 2026-10-10
+sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory, decisions/2026-10-08-one-replace-and-no-crash-debris, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # State is written in the directory it checked, held open
@@ -285,7 +285,31 @@ unreadable document, the directory that will not open, and the name that cannot 
   `adapter/config` 65% (25 of 38, at its floor), every package at or above its floor;
 - `./scripts/guards.sh`: 12 of 12.
 
-**Not verified.** CI has not run the branch, so the Windows half — no handle given, the fallback said once,
-and every contract case by path — has run on macOS and Linux alone, through its by-path kind. Nor live:
-a rebuilt server should write the same files with the same modes, and its log should say nothing of handles
-on Linux or macOS.
+⚠️ (superseded by the two notes below) **Not verified.** CI has not run the branch, so the Windows half — no
+handle given, the fallback said once, and every contract case by path — has run on macOS and Linux alone,
+through its by-path kind. Nor live: a rebuilt server should write the same files with the same modes, and
+its log should say nothing of handles on Linux or macOS.
+
+**Before the merge, 2026-10-10** (raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md). PR #409's
+CI passed on all three OSes, Windows' by-path fallback included. The gate critic, which had found N10 in
+#360, attacked `084e54d` on the host and in the image, measured:
+
+- **The swap.** `.ps` was swapped for a link at ten points, from before the open to mid-append, for five
+  operations: the timers, the push credential, a raw append, a set-aside and an orphan. The original
+  directory was either deleted or moved. In 100 runs nothing was written outside the directory checked,
+  and the token never appeared outside it.
+- **Descriptors.** The open count stayed at 65 after 10,000 appends, 300 state writes, 300 orphans and a
+  set-aside.
+- **A healthy sequence.** The writes produced files identical in path, mode and SHA-256 to the merge
+  base's, on the host and in the image.
+
+It found nothing blocking and left four Lows. Two were measured. A local `mv` of the held directory into
+the records tree puts later writes where git sees them. A pull that deletes `.ps` mid-append loses that
+one frame, the class of F3's accepted cost. Two were inferred: a race can leave an empty directory under
+a link's target, since `mkdirat` is missing, as the costs above say; and the reads are still by path.
+
+**Live, 2026-10-10 at 23:41 KST** (main `794c37f`, the final rebuild). The boot was healthy with no WARN
+or ERROR line, and no `DirectoryHandle` fallback line: the image's Linux gives `SecureDirectoryStream`. The
+255 record files kept their bytes and their modes (61 `rw-------`, 194 `rw-r--r--`), except the
+`.gitignore` that #386 seeds. Measured. Not observed live: a write through a handle on Windows, where the
+tracker does not run here.

@@ -5,7 +5,7 @@ tags: [storage, links, git, windows, refactor]
 author: BrokenFinger98
 created: 2026-10-08
 updated: 2026-10-10
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md]
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # One replace for records and state, and no crash debris in a commit
@@ -282,9 +282,9 @@ measurement. A failure there means the prediction was wrong, and is the result t
   `adapter/web` 82% (96 of 116), `application` 89% (395 of 439), every package at or above its floor;
 - `./scripts/guards.sh`, 12 of 12.
 
-**Not verified live**, and CI has not run the branch. A rebuilt server should write byte-identical files
-with the same modes, and `git status` in the records repository should show no
-`.programmers-tracker.tmp` after a normal boot.
+⚠️ (superseded by the last note of this page) **Not verified live**, and CI has not run the branch. A
+rebuilt server should write byte-identical files with the same modes, and `git status` in the records
+repository should show no `.programmers-tracker.tmp` after a normal boot.
 
 ### The review
 
@@ -516,3 +516,14 @@ PR #411's review approved #407 with no blocking finding and six notes. The branc
 - **What remains.** A file the file system will not take keeps its old content until the cause goes. The Windows
   tests, a page held open, a note held open, #386's, and a real link to a directory, run on windows-latest alone and
   have not run there for this round. Not verified live.
+
+**Live, 2026-10-10 at 23:41 KST** (main `794c37f`, the final rebuild;
+raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md). The seeded `.*.programmers-tracker.tmp` rule
+reached the owner's records repository. The boot's reconcile committed it as `b1e116e`, "chore: reconcile
+uncommitted records": a five-line change to `.gitignore` and nothing else. Every other record file kept its bytes
+and its mode (61 `rw-------`, 194 `rw-r--r--`). Measured.
+
+So no temporary file was committed, since the commit holds nothing else. The record does not include a
+`git status` listing, so whether one stood untracked on disk is not known. Before the merge, PR #411's
+squash message records that the Windows pins (a page and a tag note held open, and a real link to a
+directory) ran green on windows-latest.

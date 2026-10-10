@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [mcp, prompt, interpretation-boundary, client-compatibility]
 author: BrokenFinger98
 created: 2026-10-07
-updated: 2026-10-08
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md, raw/sessions/2026-10-08-the-first-exam-prep-run.md]
+updated: 2026-10-10
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md, raw/sessions/2026-10-08-the-first-exam-prep-run.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # The exam_prep prompt asks in the open
@@ -250,6 +250,12 @@ run code is kept only from 2026-10-07. Every pattern was therefore named from My
 adds one: where a step has no diff, the pattern is named by the judge's own output, and the answer
 says the diff is missing.
 
+**#370 verified live on 2026-10-08 at 09:58 KST**
+(raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md). PR #371 was squash-merged as main
+`61ead2d`, and the container was rebuilt. It came up healthy, with no WARN or ERROR line. A modern `prompts/get` with `language: "mysql"` answered HTTP 200 with one message
+of 2,144 characters carrying the new fallback sentence. That was measured at the time and recorded only
+by the ingest of #412.
+
 Two smaller observations:
 - A leading space before the command makes Claude Code send it as plain text.
 - The reconnect also brought back `repair_steps`, which the session's cached discovery had been
@@ -315,5 +321,16 @@ Mutants showed both red, and all 24 mutants of the branch were killed. The revie
 the order of the two refusals pinned nowhere: the dispatcher's table names only tools that exist,
 and a mutant letting the unknown-tool refusal win survived all 317 MCP tests. A third pin now sends
 `exam_start` with `"arguments": "x"` in both eras and expects the arguments refusal; the mutant, one
-per era, dies on it. Not verified live: the running container predates the branch, and rebuilding it
-is the owner's step.
+per era, dies on it. ⚠️ (superseded by the live check below) Not verified live: the running container
+predates the branch, and rebuilding it is the owner's step.
+
+**#365 verified live on 2026-10-10 at 23:41 KST**, in the final rebuild from main `794c37f`
+(raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md). Measured:
+
+- `tools/call` `submissions` with `"arguments": "x"` answered HTTP 200 with JSON-RPC `-32602`,
+  "arguments must be an object".
+- `stats` with `{"groupBy": "verdict", "a, b": 1}` answered `isError` with
+  `unknown argument(s): "a, b"; stats takes groupBy`.
+
+The record does not say which era the calls used. HTTP 200 for the refusal is what this page gives a
+handshake client, where a modern one gets 400 (inferred).
