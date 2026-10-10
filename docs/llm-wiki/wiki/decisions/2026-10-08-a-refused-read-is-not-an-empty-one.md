@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [security, storage, links, records, mcp]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md]
+updated: 2026-10-10
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md]
 ---
 
 # A refused read is not an empty one

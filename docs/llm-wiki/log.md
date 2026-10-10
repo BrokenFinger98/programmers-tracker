@@ -131,3 +131,7 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-10-08] ingest | the first exam_prep run → 1 page updated, 1 created
 
 ## [2026-10-08] lint | three source pages written, two dead decision links fixed, disagreements with the raw corrected → 6 pages updated, 3 created, index updated
+
+## [2026-10-10] ingest | the follow-up series, #360 to #410: the token gate in four rounds, seventeen PRs through one queue, the limit and the load (10-08, 10-10) → 12 pages updated, 3 created
+
+## [2026-10-10] lint | three decision lines union kept twice in index.md, and a stray blank line → index updated

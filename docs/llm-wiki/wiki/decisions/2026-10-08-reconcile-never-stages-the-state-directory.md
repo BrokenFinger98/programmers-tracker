@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [security, git, credentials, links, storage, push]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md]
+updated: 2026-10-10
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # Reconciliation never stages the state directory, and the tracker searches what it commits and pushes for tokens
@@ -652,11 +652,23 @@ Every git behaviour the layers rely on was checked on 2.48.1 here and on 2.53.0 
   naming no object: `fatal: bad object origin/main`, exit 128; a linked `.gitignore` under
   `grep --untracked`: a `warning:` only, exit 1.
 
-Not verified live. On a records repository whose `.ps` is a real directory with nothing tracked in it,
-and whose `.gitignore` is a regular file holding the rule, a rebuilt server should log no refusal at
-boot. Its startup reconciliation should succeed, and its next push should carry no
-`.ps` path. The owner's repository was checked by names only, before this branch: no `.p*` path in any
-commit, no tracked symlink, `.ps` a real directory (#360's newest comment).
+⚠️ (superseded the same day by the live check below) Not verified live. On a records repository whose
+`.ps` is a real directory with nothing tracked in it, and whose `.gitignore` is a regular file holding
+the rule, a rebuilt server should log no refusal at boot. Its startup reconciliation should succeed, and
+its next push should carry no `.ps` path. The owner's repository was checked by names only, before this
+branch: no `.p*` path in any commit, no tracked symlink, `.ps` a real directory (#360's newest comment).
+
+**Verified live 2026-10-08 at 14:55 KST.** PR #379 was squash-merged as main `ccca9e6` and the container
+rebuilt (raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md). Measured:
+
+- **The boot.** Healthy, with no WARN or ERROR line, so no refusal. The real `.ps` on the macOS bind mount
+  was judged usable, and the startup reconciliation ran.
+- **The records repository.** HEAD was still `7e144fa`, and the status was clean. No `.p*` path appeared
+  in any commit on any ref, nothing under `.ps` was tracked, and `.ps` was a directory.
+- **The tools.** The 36 MCP snapshot files were identical to the snapshot taken after #364.
+
+Not yet exercised: a real push through the gate. The boot had nothing to commit or push (inferred from
+the unchanged HEAD and the clean status).
 
 **Windows CI found two things the reviews could not (PR #379).**
 - **Test setup.** Git writes objects read-only, and Windows will not delete a read-only file. The runner's `core.autocrlf` also made `hash-object` print a warning that the helper read as the object id.
@@ -1171,3 +1183,14 @@ rebase.
     (340 of 368), every package at or above its floor;
   - guards: 12 of 12, with this page and progress staged.
 - **What remains**, besides the list above: the FIFO swap; and CI has not run these commits.
+
+**The last rebuild, 2026-10-10 at 23:41 KST.** Main `794c37f` carries every PR from #355 to #411, all of
+this page's follow-ups among them (raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md).
+
+- **Measured.** The boot was healthy, with no WARN or ERROR line. Its reconcile committed `b1e116e`,
+  "chore: reconcile uncommitted records": a five-line change to `.gitignore`, #386's seeded rule for the
+  temporary files, and nothing else. The records repository was then one commit ahead of origin, to stay
+  so until the next backup push.
+- **Inferred.** This was the commit half of the gate's first pass over a real reconcile in the owner's
+  repository since #360 shipped: both earlier checks found HEAD at `7e144fa`.
+- **Still not exercised:** the push half, on the owner's repository.

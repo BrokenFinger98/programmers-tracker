@@ -5,7 +5,7 @@ tags: [security, git, credentials, push, commit]
 author: BrokenFinger98
 created: 2026-10-08
 updated: 2026-10-10
-sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory, decisions/2026-10-08-the-push-gate-reads-each-object-once]
+sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory, decisions/2026-10-08-the-push-gate-reads-each-object-once, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # Each gate searches what its destination lacks

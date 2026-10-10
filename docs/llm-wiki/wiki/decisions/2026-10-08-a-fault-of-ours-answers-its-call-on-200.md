@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [mcp, protocol-versioning, adapter, error-handling, logging]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
-sources: [raw/sessions/2026-10-07-repairs-not-verdicts.md, entities/claude-code-mcp-client]
+updated: 2026-10-10
+sources: [raw/sessions/2026-10-07-repairs-not-verdicts.md, entities/claude-code-mcp-client, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md]
 ---
 
 # A fault of ours answers its call: its id, `-32603`, HTTP 200 in both eras

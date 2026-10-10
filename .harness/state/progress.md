@@ -6266,3 +6266,75 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   (a page held open, a note held open, #386's, a real link to a directory) have not run on windows-latest for this
   round; not verified live.
 - **Pending.** Not pushed.
+
+## 2026-10-10 — wiki ingest (#412, branch docs/412-ingest-the-follow-up-series)
+- **Sources.** Session `b240e44e` from 2026-10-08 09:46 to 2026-10-10 23:41 KST, sliced by KST.
+  - The 162 MB inbox snapshot ends at 22:20 on 10-10. It was read by a script extracting the user
+    messages, the coordinator's text and the agents' results.
+  - The coordinator's pending notes cover the live checks and the session's operational events.
+  - The squash messages and this file cover the two merges after 22:20.
+- **Raw pages**, each with a source page, all indexed:
+  - `2026-10-08-the-token-gate-took-four-rounds` (02:57–03:05 and 09:46–14:57);
+  - `2026-10-08-seventeen-prs-through-one-queue` (14:57–23:59);
+  - `2026-10-10-the-limit-the-load-and-the-last-five` (10-09 00:16, and 10-10 16:11–23:41).
+- **Live checks recorded.** Each was measured at the time and written into a decision only now.
+  - **#370**, 2026-10-08 09:58, main `61ead2d`. Healthy, 0 WARN/ERROR. A modern `prompts/get` carries
+    the judge-output line, 2,144 characters. Recorded in the exam_prep ADR.
+  - **#360**, 2026-10-08 14:55, main `ccca9e6`. Healthy, 0 WARN/ERROR, and `.ps` judged usable on the
+    bind mount. No `.p*` path was ever committed, and nothing under `.ps` is tracked. Records clean at
+    `7e144fa`. The 36 MCP files were identical to post-#364. No real push through the gate yet.
+    Recorded in the #360 ADR.
+  - **`41f713e`**, 2026-10-08 16:42 (#355, #356, #362, #366, #381 and #361 since `ccca9e6`). Healthy,
+    0 WARN/ERROR, and no `Not writing`, `Replacing` or refusal line. The 36 MCP files were
+    byte-identical. Records clean at `7e144fa`: 255 files byte-identical, modes unchanged (61
+    `rw-------`, 194 `rw-r--r--`). Recorded in the #361 ADR.
+  - **The final check**, 2026-10-10 23:41, main `794c37f`.
+    - Healthy, 0 WARN/ERROR, and no `DirectoryHandle` fallback.
+    - The 36 MCP files were byte-identical to `41f713e`.
+    - The 255 files were byte-identical except `.gitignore`, which gained #386's rule. The boot's
+      reconcile committed it as `b1e116e` (5 lines), one commit ahead of origin until the next backup
+      push. Modes unchanged.
+    - #365 live: `submissions` with `"arguments": "x"` answered HTTP 200 with `-32602`; the `stats` key
+      came back quoted.
+    - Recorded in the #361, #360, #374, #386 and exam_prep ADRs.
+  - **#354's** check (`a3838c0`) was already in its ADR and in this file, from #368. Nothing was added.
+- **Decisions.** The nine 2026-10-08 ADRs and the exam_prep one now cite the raws that hold their
+  discussion. #374's ADR gains its gate critic's results: 0 of 100 swaps wrote outside the directory
+  checked, and the descriptors stayed flat. Superseded "not verified live" lines are kept under ⚠️.
+- **Concepts.**
+  - `orchestrated-implementation` §6, the merge queue:
+    - review counts (9 of 11 critic passes left a finding fixed or filed);
+    - the finder verifies the fix;
+    - a blocking rule stated first;
+    - merge rather than rebase once pushed;
+    - squash-merged bases and `rebase --onto` before the first push;
+    - one resolver per conflict;
+    - interruptions kept in writing;
+    - load mistaken for failure.
+  - `assumption-vs-measurement`, October 8–10:
+    - the pathspec measured before it shipped;
+    - the bind mount's fold;
+    - Git for Windows' `mkfifo`;
+    - `insteadOf` with backslash paths;
+    - Kotlin's `List + Path`;
+    - git's `(null)`;
+    - `rev-list --stdin` before 2.42;
+    - the locale;
+    - an audit row measured false;
+    - three counter-practice lines.
+- **Lint.** `index.md` listed three decisions twice: the push gate, each-gate and one-replace. The
+  `merge=union` driver had kept both versions of lines amended in place by #375, #402/#405 and #407.
+  The newer line of each stays, and a stray blank line went. `log.md` has no duplicate. All 125 pages
+  are registered.
+- **Inbox: not deleted.** The consumed snapshot `precompact-programmers-tracker-b240e44e.jsonl` is still
+  in `docs/llm-wiki/raw/inbox/`. The owner's danger hook blocked a plain `rm` of that one file, matching
+  the absolute path as a dangerous target, and asked for a person to run it. It was not stepped around.
+  `.inbox.log` is kept.
+- **Gates**, all exit 0: `./scripts/guards.sh` and `./scripts/check.sh`. Every wiki link this ingest
+  wrote resolves to a page under `docs/llm-wiki/wiki/`, checked by script over the changed pages.
+- **Pending.**
+  - The first real push through the content gate on the owner's records: `b1e116e` waits for the next
+    backup push.
+  - #355's live check: a fault cannot be produced on demand.
+  - The owner deletes the inbox snapshot above.
+  - Not pushed.

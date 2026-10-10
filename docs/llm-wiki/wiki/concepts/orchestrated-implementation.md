@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [orchestration, workflow, testing, debugging-pattern, subagents]
 created: 2026-08-05
-updated: 2026-10-08
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
+updated: 2026-10-10
+sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # Building This Project With Supervised Workers
@@ -122,6 +122,72 @@ whole-branch review (raw/sessions/2026-10-07-repairs-not-verdicts.md).
   slept. Every merge waited on CI, and every claim waited on a review. The one acceptance step that
   needs a person, running the `exam_prep` prompt, was left pending rather than worked around
   (raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md).
+
+## 6. One merge queue, many subagents
+
+24 PRs merged between 09:57 on 2026-10-08 and 23:40 on 2026-10-10. They closed 25 issues, 17 of them
+filed during that window from reviews and implementers' reports. Each issue had its own implementer in
+its own git worktree. Critics read commits through `git archive`, and only the coordinator pushed and
+merged (raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md,
+raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md,
+raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md).
+
+- **Adversarial review found a real defect in almost every PR it read.** Eleven PRs met an adversarial
+  critic. Nine left with a measured finding that was fixed before the merge or filed:
+  - **#379:** four rounds. Each of the first three found a High (F1–F4, N2, U1), and the third also
+    had a Critical race, from the quality reviewer, that the coordinator's own design had caused.
+  - **#391:** S1–S5; four were fixed in the branch and two filed.
+  - **#395:** M1, M2 and M4, and L1–L5; M3 went to #378, and the re-check found one more Medium.
+  - **#396:** a Medium regression the PR itself introduced.
+  - **#398:** blocked, by a pre-existing High that its own audit had called harmless, plus a Medium and
+    two Lows.
+  - **#400:** a pre-existing Medium already in #376's scope, and a Low that #402 later fixed.
+  - **#401:** a race-only Medium and a Low.
+  - **#404:** two findings, filed as #405.
+  - **#410:** a Medium, every commit refused on git 2.39, and a Low on how push URLs are read, in four
+    cases.
+
+  The other two, #408 and #409, drew only race-only or local-process Lows, which were accepted. The
+  five quality reviews (#389, #393, #399, #406, #411) all approved with nothing blocking, and every one
+  still changed its branch. CI's other machines then found what no reviewer had, in tests and once in the
+  product. The October 8–10 section of the assumption-vs-measurement page lists them.
+- **The critic who found it checks the fix.** Long-lived agents carried related issues. One critic
+  attacked the token gate in #360, #373, #375, #376 and #410, and the writers in #361 and #374. One
+  implementer took #373, #375 and #374. Each re-verification went back to whoever had found the defect:
+  U1, the orphans hang, N10. A completion
+  notice still carries the agent's first task name ("Implement #373" reported #374), so it is a handle,
+  not a description.
+- **A blocking rule, stated before the pass.** After #360's third round, the coordinator wrote down what
+  blocks a merge: the server's own leak, or data lost on a healthy repository. Everything else became an
+  issue. That is what let four rounds end, and what turned the remainder into 17 issues rather than one
+  endless PR. The rule bounds what blocks, not what gets fixed. #373's regression was Medium, so "not
+  blocking", and it still did not merge until it was fixed: a known regression does not go into a token
+  gate.
+- **Once pushed, merge; never rebase.** Force pushes to three PR branches went out as `git -C <dir> push
+  --force-with-lease`. The owner's hook matches `git push … --force`, and the `-C` between the two words
+  slipped past it. A plain spelling was blocked later the same day. The rule since: a pushed PR branch
+  gets `origin/main` merged in and a plain push, and a hook's pattern is never stepped around. Also,
+  GitHub's mergeability check runs no custom merge driver, so a PR that `merge=union` resolves locally
+  can show a conflict there. Each next PR is brought up to date locally before its merge.
+- **A squash-merged base conflicts with what is stacked on it.** An upper branch that merged the lower
+  one's head holds the lower's commits; the squash is a different commit with the same tree. Merging main
+  then conflicts wherever the upper branch re-edited the lower's lines. #375 met six such conflicts, all
+  resolved to the branch's version, a merge that changed no file. The coordinator had predicted a clean
+  merge. Before the first push the cure is to move the branch: `git rebase --onto origin/main <old base>`
+  replays only its own commits (#390, #378, #386, #374). After the first push, merge.
+- **One conflict, one resolver.** Two agents began resolving the same seven hunks. One was stopped, and
+  the single resolution was handed down: #387, then #386, then #374. Two resolutions of one conflict
+  diverge, then conflict with each other.
+- **An interruption keeps its state only if the state is written down.** When the owner left work, every
+  agent was stopped. Each issue's branch, worktree, agent and next step went into `goal.md`, and the
+  scratch tools were copied out of `/tmp`. On resume each agent was told exactly where it had stopped. The
+  weekly usage limit cut three agents off with HTTP 429 mid-task at 23:51, and was handled the same way
+  when the session resumed 40 hours later. A worktree that another agent had taken over in the meantime
+  was replaced, for its reviewer, by `git archive <sha>`.
+- **Load looks like failure.** macOS's XProtect at 773% CPU, with a load average of 64–82, made each
+  process spawn take minutes. Agents tripped the 600 s stream watchdog three times, and a push killed at
+  the 30-minute limit turned out to have succeeded. Retrying would have added load. The fix was to wait
+  on a load monitor, then run every Gradle command in the background with a long timeout, one at a time.
 
 ## Tests for things that loop forever
 

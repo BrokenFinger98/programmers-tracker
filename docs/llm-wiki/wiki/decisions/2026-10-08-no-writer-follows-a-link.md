@@ -5,7 +5,7 @@ tags: [security, storage, links, records]
 author: BrokenFinger98
 created: 2026-10-08
 updated: 2026-10-10
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md]
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
 ---
 
 # No writer follows a link
@@ -436,10 +436,23 @@ defensive case:
 
 CI has not run the branch.
 
-**Not verified live.** The bound changes nothing a normal records repository can see. A rebuilt
-server should write byte-identical pages and code files with the same modes. `git status` in the
-records repository should stay clean after a boot with nothing to recover. A normal boot should log
-no `Not writing` or `Replacing` line.
+⚠️ (superseded the same day by the live check below) **Not verified live.** The bound changes nothing a
+normal records repository can see. A rebuilt server should write byte-identical pages and code files
+with the same modes. `git status` in the records repository should stay clean after a boot with nothing
+to recover. A normal boot should log no `Not writing` or `Replacing` line.
+
+**Verified live 2026-10-08 at 16:42 KST.** PR #391 was squash-merged as main `41f713e`, which added
+#355, #356, #362, #366, #381 and #361 to `ccca9e6`, and the container was rebuilt
+(raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md). Measured:
+
+- **The boot.** Healthy, with no WARN or ERROR line, and no `Not writing`, `Replacing` or refusal line.
+- **The tools.** The 36 MCP snapshot files were byte-identical before and after. None of the owner's
+  answers carries `incompleteHistory`, so #356's order change cannot show on these records.
+- **The records repository.** Clean at `7e144fa`. All 255 files were byte-identical, and the modes were
+  unchanged: 61 `rw-------` and 194 `rw-r--r--`. That held although the boot replaced the pages, the
+  index and the tag notes through `RecordWrites`.
+
+All three predictions above held.
 
 **The reads, 2026-10-08 (#387).** The reads S5 and Q7 named now walk this bound. The walk was taken out
 of `RecordWrites` into `RecordBound`, with `RecordWritesTest` passing unchanged, and shared with a reader,
@@ -463,3 +476,17 @@ held open on Windows is pinned by
 a test enabled there alone, which asserts the predicted failure and that nothing is lost; its first run
 on windows-latest is the measurement (Q4). The inventory, the options and the debris choice:
 [[decisions/2026-10-08-one-replace-and-no-crash-debris]].
+
+**The last rebuild, 2026-10-10 at 23:41 KST.** Main `794c37f` carries every PR from #355 to #411, so the
+reads that walk this bound (#387), the one write (#386), its handle (#374) and #407's guard on every
+regenerated file were all in the build (raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md).
+Measured against the container at `41f713e` above:
+
+- **The boot.** Healthy, with no WARN or ERROR line.
+- **The tools.** The 36 MCP snapshot files were byte-identical.
+- **The records repository.** All 255 files were byte-identical except `.gitignore`. It gained #386's
+  `.*.programmers-tracker.tmp` rule, which the boot's reconcile committed as `b1e116e`: five lines,
+  nothing else. The modes were unchanged: 61 `rw-------` and 194 `rw-r--r--`.
+
+On the owner's repository, then, the whole series changed one ignore rule. The MCP answers and every
+other file are the same bytes.

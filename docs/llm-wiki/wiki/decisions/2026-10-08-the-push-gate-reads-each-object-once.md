@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [security, git, credentials, push, performance]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
-sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory]
+updated: 2026-10-10
+sources: [decisions/2026-10-08-reconcile-never-stages-the-state-directory, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md]
 ---
 
 # The push gate reads each object a push would send once
