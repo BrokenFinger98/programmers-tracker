@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
 /**
@@ -40,6 +43,26 @@ class RecordBoundTest {
         problems().fileIn(root.resolve("problems/1-x/runs.jsonl"), creating = false).shouldBeNull()
 
         namesIn(root).shouldBeEmpty()
+    }
+
+    /** A directory itself, as the state directory is asked for: walked, made where absent, and answered as itself. */
+    @Test
+    fun `a directory is made where absent and answered as itself`() {
+        val made = RecordBound.underRoot(root, setOf(".ps")).made(root.resolve(".ps"))
+
+        made shouldBe realRoot().resolve(".ps")
+        Files.isDirectory(root.resolve(".ps"), LinkOption.NOFOLLOW_LINKS) shouldBe true
+    }
+
+    @Test
+    fun `a directory made through a link is out of bounds, and nothing is made where it leads`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        aLink(root.resolve(".ps"), outside)
+
+        val out = shouldThrow<OutOfBounds> { RecordBound.underRoot(root, setOf(".ps")).made(root.resolve(".ps/raw")) }
+
+        out.reason shouldBe ".ps is a symbolic link"
+        namesIn(outside).shouldBeEmpty()
     }
 
     @Test
@@ -100,6 +123,18 @@ class RecordBoundTest {
     @Test
     fun `a path is said relative to the real root, with forward slashes on every platform`() {
         problems().relative(realRoot().resolve("problems/1-x/README.md")) shouldBe "problems/1-x/README.md"
+    }
+
+    /**
+     * A directory another writer made between the look and the make is no failure (#386): the caller judges what is
+     * there after, so a link that won that race is still refused. Any other failure to make one is thrown.
+     */
+    @Test
+    fun `a directory made meanwhile is no failure to make, and any other failure is`() {
+        val made = Files.createDirectory(root.resolve("made-meanwhile"))
+
+        shouldNotThrowAny { createdOrThere(made) }
+        shouldThrow<NoSuchFileException> { createdOrThere(root.resolve("no-parent/child")) }
     }
 
     private fun problems() = RecordBound.underProblems(RecordLayout(root))

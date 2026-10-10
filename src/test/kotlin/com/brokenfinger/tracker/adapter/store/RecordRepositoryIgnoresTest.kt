@@ -3,6 +3,7 @@ package com.brokenfinger.tracker.adapter.store
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.git.GitWorkspace
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -163,6 +164,24 @@ class RecordRepositoryIgnoresTest {
         val text = read(".gitignore")
         text.shouldContain(".programmers-tracker.lock")
         text.shouldContain(".DS_Store")
+    }
+
+    /**
+     * The temporary file a crash leaves beside a file the tracker writes whole (#386). The tracker's own commits leave
+     * it out by pathspec; this rule keeps it out of every other `git add` too, such as an Obsidian Git backup. Only a
+     * hidden name with the tracker's ending: a visible file of the owner's that ends the same way is theirs. Asked of
+     * git itself.
+     */
+    @Test
+    fun `ignores the temporary file a crash leaves, and no visible file of the owner's`(@TempDir base: Path) {
+        val repo = GitWorkspace(base)
+        RecordRepositoryIgnores(repo.root).ensure()
+        val left = "problems/1-x/.README.md.4242${FileReplacement.TEMP_SUFFIX}"
+        repo.write(left, "half\n")
+        repo.write("notes/report${FileReplacement.TEMP_SUFFIX}", "mine\n")
+
+        repo.statusOf(left) shouldBe ""
+        repo.statusOf("notes") shouldBe "?? notes/"
     }
 
     /**

@@ -6,10 +6,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.attribute.PosixFileAttributes
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A read-modify-write state document written temp-then-replace
@@ -22,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * The temporary file is created **in the target's own directory** so the replace stays a
  * rename within one filesystem; a cross-filesystem move degrades to copy-then-delete, which
- * is precisely the window this class removes.
+ * is precisely the window this class removes. The write is [FileReplacement], the one the
+ * records repository's files share (#386).
  *
  * **A rename replaces whatever stands at the target, a link included, and never writes through
  * it** — which is why the push credential and the owner's `.gitignore` are written here too
@@ -47,12 +45,14 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class AtomicStateFile(
     private val path: Path,
-    private val keepsPermissions: Boolean = false,
+    keepsPermissions: Boolean = false,
     private val guard: StateDirectory? = null,
 ) {
     private val directory: Path = path.toAbsolutePath().parent
 
-    private val said = ConcurrentHashMap.newKeySet<StateDirectory.Refusal>()
+    private val said = SaidOnce()
+
+    private val replacement = FileReplacement(FileMode.forState(keepsPermissions))
 
     /** The current document, or null when it has never been written — or what stands there is no regular file. */
     fun read(): String? = runCatching { readNotFollowing() }.getOrElse { failed(it) }
@@ -64,11 +64,7 @@ class AtomicStateFile(
     fun write(text: String) {
         if (refusedByGuard()) return
         Files.createDirectories(directory)
-        val temp = Files.createTempFile(directory, path.fileName.toString(), SUFFIX)
-        runCatching { replacedWith(temp, text) }.onFailure {
-            Files.deleteIfExists(temp)
-            throw it
-        }
+        replacement.replace(path, text)
     }
 
     /**
@@ -76,12 +72,6 @@ class AtomicStateFile(
      * document exactly as it was — nothing is written and no debris is left behind.
      */
     fun update(transform: (String?) -> String) = write(transform(read()))
-
-    private fun replacedWith(temp: Path, text: String) {
-        Files.writeString(temp, text, CHARSET)
-        if (keepsPermissions) keepPermissions(temp)
-        replace(temp)
-    }
 
     // A regular file only, looked at without following a link: anything else is no document, and a FIFO is never
     // opened, since opening one to read waits for a writer (#387's review). A name that cannot be looked at is thrown,
@@ -91,34 +81,14 @@ class AtomicStateFile(
         return Files.newInputStream(path, NOFOLLOW_LINKS).use { String(it.readAllBytes(), CHARSET) }
     }
 
-    /**
-     * Hands the document's current permissions to the temporary file, so the replace does not narrow
-     * them. Only a regular file's are kept — a link's own bits say nothing about a document — and a
-     * filesystem with no POSIX permissions has none to keep. Best effort: a mode that cannot be set
-     * leaves the replacement owner-only rather than failing the write.
-     */
-    private fun keepPermissions(temp: Path) {
-        val current = runCatching { Files.readAttributes(path, PosixFileAttributes::class.java, NOFOLLOW_LINKS) }
-        val attributes = current.getOrNull() ?: return
-        if (!attributes.isRegularFile) return
-        runCatching { Files.setPosixFilePermissions(temp, attributes.permissions()) }
-    }
-
     private fun refusedByGuard(): Boolean = when (val inspection = guard?.forWriting()) {
         null, is StateDirectory.Usable -> false
         is StateDirectory.Refused -> skipped(inspection.refusal)
     }
 
     private fun skipped(refusal: StateDirectory.Refusal): Boolean {
-        if (said.add(refusal)) logger.warn(NOT_WRITTEN, path.fileName, refusal.reason)
+        said.say(refusal) { logger.warn(NOT_WRITTEN, path.fileName, refusal.reason) }
         return true
-    }
-
-    // ATOMIC_MOVE is the guarantee we want; where the filesystem cannot give it, an ordinary
-    // replace is still better than writing the target in place.
-    private fun replace(temp: Path) {
-        runCatching { Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE) }
-            .getOrElse { Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING) }
     }
 
     private fun failed(cause: Throwable): String? {
@@ -128,7 +98,6 @@ class AtomicStateFile(
 
     companion object {
         private val CHARSET = StandardCharsets.UTF_8
-        private const val SUFFIX = ".tmp"
         private const val NOT_WRITTEN = "The state file {} was not written: {}. Said once for this reason."
 
         private val logger = LoggerFactory.getLogger(AtomicStateFile::class.java)
