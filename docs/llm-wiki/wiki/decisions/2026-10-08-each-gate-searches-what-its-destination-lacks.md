@@ -303,6 +303,17 @@ pass on #404, the same branch).
 - **The Windows command line (inferred by the critic).** The range put every held tip in `rev-list`'s argv,
   and about 800 fill 32,767 characters. Every listing now goes on stdin, `--not` and all; measured here, 30,000
   tips failed to start on argv (exit 126, past macOS's 1 MB) and ran on stdin. A test pushes past 30,000.
+- **Windows CI on PR #410: a fixture difference, not a fail-open.** Nine rewrite tests failed on
+  windows-latest alone, and no rule had rewritten anything. A `url.<base>` rule is a plain prefix of the URL
+  as written (`starts_with` in git's `remote.c`), and the tests built each rule as "<path>/" from a Windows
+  path: `C:\…\A/` never starts `C:\…\A\repo.git`. Git left every URL as it was, `ls-remote` and the push
+  agreed on it, and the push went where it was asked. Measured with those strings on git 2.48.1, the mixed
+  rule left `ls-remote --get-url` and `remote get-url --push` unchanged, and forward slashes throughout
+  rewrote both; rules made inert the same way here failed the same nine tests with the same messages, and
+  the one that heard two warnings heard the content gate refuse twice — the token was not sent. The tests
+  that wait for no rewrite passed on Windows, so `--get-url` echoes a backslash URL unchanged there. The
+  tests now write every rule and URL with forward slashes, which git on Windows takes as a path (`C:/…`), so
+  the rewrite is exercised there, not skipped (`db9f126`).
 
 Cost: `ls-remote --get-url` 6.7 ms a push URL, the rule listing 7.8 ms for a URL remote, each push.
 
@@ -317,7 +328,8 @@ a listing cut off as no rule, `d6d5fe7`'s check 1; rules read without `--null`, 
 `ls-remote` cannot resolve taken as agreeing 1; the notice at every attempt 1; never said again 1; the check
 skipped 3; the listing on argv again 2.
 
-Gates for #402 and #405, on the branch with main `4700074` merged in, all exit 0: check; test (2,607 JUnit
-across 176 classes, 0 failures, 12 skipped — 8 C#, three Windows-only store tests main brought, and the `icase`
-test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 89%, 520 of 578;
-`adapter/config` 65% at its floor); guards (12 of 12). Not verified on Windows, by CI, or live.
+Gates for #402 and #405, on the branch with main `e302739` merged in and the Windows fixture fix, all exit 0:
+check; test (2,693 JUnit across 178 classes, 0 failures, 12 skipped — 8 C#, three Windows-only store tests
+main brought, and the `icase` test on this case-insensitive host; node 4/4); build; `verifyBranchCoverage`
+(`adapter/git` 89%, 520 of 578; `adapter/config` 65% at its floor); guards (12 of 12). Not verified on Windows
+until CI runs the fixed tests there, nor live.
