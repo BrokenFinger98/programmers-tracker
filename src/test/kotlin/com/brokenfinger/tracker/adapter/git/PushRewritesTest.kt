@@ -5,6 +5,7 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.io.InputStream
 import java.nio.file.Path
 
@@ -98,12 +99,20 @@ class PushRewritesTest {
     private fun rewrites(calls: GitCalls = calls()): PushRewrites = PushRewrites(calls)
 
     /** A repository's path under [name]'s directory beside the workspace; nothing need be there. */
-    private fun path(name: String): String = base.resolve(name).resolve("repo.git").toString()
+    private fun path(name: String): String = "${directory(name)}/repo.git"
 
     /** `url.<[to]>/.<[kind]> = <[from]>/`: what is addressed under [from]'s directory goes to [to]'s instead. */
     private fun rule(from: String, to: String, kind: String = "insteadOf") {
-        repo.git("config", "url.${base.resolve(to)}/.$kind", "${base.resolve(from)}/")
+        repo.git("config", "url.${directory(to)}/.$kind", "${directory(from)}/")
     }
+
+    /**
+     * [name]'s directory beside the workspace, with forward slashes, as git writes a URL on every system. A rule is a
+     * plain prefix of the URL as written (`starts_with` in git's `remote.c`): with Windows' backslashes in the path
+     * and a slash after it, `C:\…\A/` never starts `C:\…\A\repo.git`, so on Windows CI no rule ever rewrote, and the
+     * tests that wait for a rewrite failed while nothing was rewritten (#410).
+     */
+    private fun directory(name: String): String = base.resolve(name).toString().replace(File.separatorChar, '/')
 
     /** Git's real answers, each to a call whose arguments hold [argument] replaced by [change]'s. */
     private fun altering(argument: String, change: (GitResult) -> GitResult): GitCalls =

@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -1755,8 +1756,8 @@ class CommandLineGitSyncTest {
     @Test
     fun `a push URL ls-remote would rewrite again is not pushed to, and that is said once`() {
         val (a, b, c) = listOf("A", "B", "C").map { bareAt("$it/repo.git") }
-        aTokenPushedThenRemoved(to = c.toString())
-        git("remote", "add", "origin", b.toString())
+        aTokenPushedThenRemoved(to = urlOf(c))
+        git("remote", "add", "origin", urlOf(b))
         rewritten(from = b, to = a)
         rewritten(from = a, to = c)
         val sync = sync()
@@ -1773,7 +1774,7 @@ class CommandLineGitSyncTest {
         val (a, b) = listOf("A", "B").map { bareAt("$it/repo.git") }
         written(".gitignore", ".ps/\n")
         committedByAnotherTool("notes/today.md")
-        git("remote", "add", "origin", b.toString())
+        git("remote", "add", "origin", urlOf(b))
         rewritten(from = b, to = a)
 
         sync().push() shouldBe true
@@ -1789,8 +1790,8 @@ class CommandLineGitSyncTest {
     @Test
     fun `a branch whose remote is a URL a pushInsteadOf rule rewrites is not pushed to`() {
         val (u, p) = listOf("U", "P").map { bareAt("$it/repo.git") }
-        aTokenPushedThenRemoved(to = u.toString())
-        git("config", "branch.main.remote", u.toString())
+        aTokenPushedThenRemoved(to = urlOf(u))
+        git("config", "branch.main.remote", urlOf(u))
         rewritten(from = u, to = p, kind = "pushInsteadOf")
 
         val heard = warningsWhile(CommandLineGitSync::class) { sync().push() shouldBe false }
@@ -1805,7 +1806,7 @@ class CommandLineGitSyncTest {
         val (u, v) = listOf("U", "V").map { bareAt("$it/repo.git") }
         written(".gitignore", ".ps/\n")
         committedByAnotherTool("notes/today.md")
-        git("config", "branch.main.remote", u.toString())
+        git("config", "branch.main.remote", urlOf(u))
         rewritten(from = u, to = v)
 
         sync().push() shouldBe true
@@ -1819,12 +1820,12 @@ class CommandLineGitSyncTest {
         val (a, b, c) = listOf("A", "B", "C").map { bareAt("$it/repo.git") }
         written(".gitignore", ".ps/\n")
         committedByAnotherTool("notes/today.md")
-        git("remote", "add", "origin", b.toString())
+        git("remote", "add", "origin", urlOf(b))
         rewritten(from = b, to = a)
         val sync = sync()
         rewritten(from = a, to = c)
         sync.push() shouldBe false
-        git("config", "--unset", "url.${c.parent}/.insteadOf")
+        git("config", "--unset", "url.${urlOf(c.parent)}/.insteadOf")
         sync.push() shouldBe true
         rewritten(from = a, to = c)
         committedByAnotherTool("notes/later.md")
@@ -2334,8 +2335,16 @@ class CommandLineGitSyncTest {
 
     /** `url.<[to]>/.<[kind]> = <[from]>/`: git sends what is addressed under [from]'s directory to [to]'s instead. */
     private fun rewritten(from: Path, to: Path, kind: String = "insteadOf") {
-        git("config", "url.${to.parent}/.$kind", "${from.parent}/")
+        git("config", "url.${urlOf(to.parent)}/.$kind", "${urlOf(from.parent)}/")
     }
+
+    /**
+     * [path] with forward slashes, as git writes a URL on every system. A rule is a plain prefix of the URL as written
+     * (`starts_with` in git's `remote.c`): with Windows' backslashes in the path and a slash after it, `C:\…\A/`
+     * never starts `C:\…\A\repo.git`, so on Windows CI no rule ever rewrote, and every test that waits for a rewrite
+     * failed while nothing was rewritten (#410).
+     */
+    private fun urlOf(path: Path): String = path.toString().replace(File.separatorChar, '/')
 
     /**
      * A bare remote that holds this repository's main and [tips] more commits, a ref each: the commits made here by
