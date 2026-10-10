@@ -96,6 +96,9 @@ class CommandLineGitSync(
     /** What a push's destinations already hold, asked of them through the push's own credential (#376). */
     private val remoteTips = RemoteTips(calls)
 
+    /** Whether those destinations are where the push goes, every `url.<base>` rule applied (#405). */
+    private val pushRewrites = PushRewrites(calls)
+
     /** Whether a destination that could not say what it holds was already said, since it last answered. */
     private val unansweredSaid = AtomicBoolean()
 
@@ -348,34 +351,13 @@ class CommandLineGitSync(
     private fun isUrl(remote: String): Boolean = URL_SIGNS.any { it in remote }
 
     /**
-     * Whether `ls-remote` asks the destinations the push goes to, so that what each says it holds is what the push
-     * leaves out (#405); said once while it does not, until it does again. A push URL is git's answer, a
-     * `url.<base>.pushInsteadOf` or `insteadOf` rule applied once; handed to `ls-remote`, an `insteadOf` rule rewrote
-     * it a second time — the gate critic's B to A, then A to C — and C said what it held while the push went to A.
-     * A branch whose remote is a URL goes to `ls-remote` and to the push as it is, each rewriting it once, alike
-     * unless a `pushInsteadOf` rule rewrites the push's alone.
+     * Whether `ls-remote` asks the destinations the push goes to ([PushRewrites], #405), so that what each says it
+     * holds is what the push leaves out; said once while it does not, until it does again.
      */
     private fun sentWhereAsked(remote: String, destinations: List<String>): Boolean {
-        if (askedAsSent(remote, destinations)) return true.also { rewrittenSaid.set(false) }
+        if (pushRewrites.agree(remote, destinations)) return true.also { rewrittenSaid.set(false) }
         if (!rewrittenSaid.getAndSet(true)) logger.warn(REWRITTEN, root)
         return false
-    }
-
-    private fun askedAsSent(remote: String, destinations: List<String>): Boolean {
-        if (destinations == listOf(remote)) return !pushRewritten(remote)
-        return destinations.all { askedAs(it) == it }
-    }
-
-    // What `ls-remote` would ask for [url], its `insteadOf` rules applied, asking nothing (`--get-url`).
-    private fun askedAs(url: String): String? =
-        git(listOf("ls-remote", "--get-url", url)).takeIf { it.succeeded() }?.stdout?.trim()
-
-    // Whether a `url.<base>.pushInsteadOf` rule's prefix starts [url]: git rewrites by the longest one that does, so
-    // any one is a rewrite. Configuration git cannot read may hold one.
-    private fun pushRewritten(url: String): Boolean {
-        val rules = git(listOf("config", "--get-regexp", PUSH_INSTEAD_OF))
-        if (rules.code > NO_KEY_MATCHED) return true
-        return rules.stdout.lines().map { it.substringAfter(' ', "") }.any { it.isNotEmpty() && url.startsWith(it) }
     }
 
     // What the destinations already hold, said once while one cannot say, until it answers again (#376).
@@ -741,12 +723,6 @@ class CommandLineGitSync(
             "git push skipped in {}: a url.<base>.insteadOf or pushInsteadOf rule has its remote's URL rewritten " +
                 "where the push goes and not where it is asked what it holds, or rewritten again there, so what the " +
                 "push would send could not be told, and nothing was sent. This is said once, until the two agree."
-
-        /** Every `url.<base>.pushInsteadOf` rule, as `git config --get-regexp` matches its lowercased key. */
-        private const val PUSH_INSTEAD_OF = "^url\\..*\\.pushinsteadof$"
-
-        /** `git config --get-regexp` exits 1 when no key matches, which is no error. */
-        private const val NO_KEY_MATCHED = 1
 
         /** What git's own test for a remote's nickname rules out: a directory separator, and a colon besides. */
         private val URL_SIGNS = listOf('/', '\\', ':')
