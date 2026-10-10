@@ -13,9 +13,7 @@ import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.NoSuchFileException
-import java.nio.file.OpenOption
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Clock
@@ -37,9 +35,10 @@ import java.util.concurrent.atomic.AtomicLong
  * discards a frame for it (#360).** Its [guard] is asked at a session's first frame — once, because
  * asking asks git, and a grading sends a frame per testcase — and again at the next frame when the
  * refusal was transient, such as a read that failed: such a refusal is never kept for the session.
- * Before every write the directory itself is checked — `.ps`, `raw`, `recorded`, `orphans`, none of
- * them a link — which costs a stat each, so a link swapped in between two frames is never written
- * through.
+ * Before every write its directory is opened — `.ps` through the record root, then `raw`, `recorded` or
+ * `orphans`, each through the one above it, none through a link — and the write goes through what was
+ * opened, by name ([StateDirectory.open], #374). A link swapped in between two frames, or between the open
+ * and the write, is never written through: the frame lands in the directory that was opened.
  *
  * **So the answer a session's first frame got holds for that grading alone (#377).** Asking git at every
  * frame would cost a median of 7–8 ms a frame against 0.03 ms for the append itself (measured on the host,
@@ -145,8 +144,10 @@ class FileRawSessionLog(
         val state = live.computeIfAbsent(session.value) { LiveSession() }
         synchronized(state) {
             val raw = destinationOf(state) ?: return hold(state.frames, line)
-            writeHeldFirst(raw.resolve(session.value), state)
-            appended(raw.resolve(session.value), line, state)
+            raw.use {
+                writeHeldFirst(it, session.value, state)
+                appended(it, session.value, line, state)
+            }
         }
     }
 
@@ -178,7 +179,7 @@ class FileRawSessionLog(
 
     override fun discard(session: RawSessionId) {
         live.remove(session.value)?.let { released(it.frames) }
-        rawDirectory()?.let { Files.deleteIfExists(it.resolve(session.value)) }
+        opened(null)?.use { it.delete(session.value) }
     }
 
     // A sub-directory, so `unprocessed` stops seeing it: that walk keeps only direct children
@@ -187,10 +188,10 @@ class FileRawSessionLog(
     override fun setAside(session: RawSessionId) {
         val held = live.remove(session.value)?.let { synchronized(it) { it.frames.toList() } }.orEmpty()
         val recorded = writable(RETIRED) ?: return holdRun(session.value, held)
-        rawDirectory()?.resolve(session.value)?.takeIf { Files.exists(it) }?.let {
-            Files.move(it, recorded.resolve(session.value), StandardCopyOption.REPLACE_EXISTING)
+        recorded.use {
+            opened(null)?.use { raw -> raw.move(session.value, it, session.value) }
+            appendedAll(it, session.value, held)
         }
-        appendedAll(recorded.resolve(session.value), held)
         releaseHeld()
     }
 
@@ -228,9 +229,14 @@ class FileRawSessionLog(
         val line = lineOf(frameText)
         val orphans = writable(ORPHANS) ?: return holdOrphan(lessonId, line)
         releaseHeld()
-        val file = orphans.resolve("$lessonId$SUFFIX")
-        if (isThereButNotAFile(file)) return heldBehind(lessonId, line)
-        if (!written { appendLine(file, line) }) holdOrphan(lessonId, line)
+        orphans.use { appendOrphan(it, lessonId, line) }
+    }
+
+    // Through the orphans directory held, by name (#374), and only to a regular file or nothing (#378).
+    private fun appendOrphan(orphans: DirectoryHandle, lessonId: Long, line: String) {
+        val name = "$lessonId$SUFFIX"
+        if (orphans.isThereButNotAFile(name)) return heldBehind(lessonId, line)
+        if (!written { appendLine(orphans, name, line) }) holdOrphan(lessonId, line)
     }
 
     // Held inside the map's own step for the lesson, so a release that takes the lesson's frames takes this one too
@@ -246,9 +252,6 @@ class FileRawSessionLog(
         sayOnce(ORPHAN_NOT_A_FILE_KEY) { logger.warn(ORPHAN_NOT_A_FILE) }
         holdOrphan(lessonId, line)
     }
-
-    private fun isThereButNotAFile(file: Path): Boolean =
-        Files.exists(file, LinkOption.NOFOLLOW_LINKS) && !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
 
     /**
      * What is still held when the server stops. Written into `.ps` if it is usable now — a live
@@ -455,11 +458,11 @@ class FileRawSessionLog(
 
     private fun lineOf(frameText: String): String = frameText.trimEnd('\r', '\n')
 
-    // Where this session's frames go now: the raw directory, or null while they are held.
-    private fun destinationOf(state: LiveSession): Path? {
+    // Where this session's frames go now: the raw directory, held for this write, or null while they are held.
+    private fun destinationOf(state: LiveSession): DirectoryHandle? {
         if (state.verdict == Verdict.UNDECIDED) state.verdict = decided()
         if (state.verdict != Verdict.DISK) return null
-        return rawDirectory()
+        return opened(null)
     }
 
     // A transient refusal leaves the session undecided, so its next frame asks again.
@@ -475,27 +478,27 @@ class FileRawSessionLog(
     }
 
     // Written in arrival order: what was held while `.ps` was refused goes before the frame at hand.
-    private fun writeHeldFirst(file: Path, state: LiveSession) {
+    private fun writeHeldFirst(raw: DirectoryHandle, name: String, state: LiveSession) {
         while (state.frames.isNotEmpty()) {
-            appended(file, state.frames.first(), state)
+            appended(raw, name, state.frames.first(), state)
             released(listOf(state.frames.removeAt(0)))
         }
     }
 
-    private fun appended(file: Path, line: String, state: LiveSession) {
-        appendLine(file, line)
+    private fun appended(raw: DirectoryHandle, name: String, line: String, state: LiveSession) {
+        appendLine(raw, name, line)
         state.wroteToDisk = true
     }
 
     // Written verbatim: re-serializing would silently rewrite whatever Programmers actually sent (dev
     // rules §2.4). Only a trailing line break is dropped, so a frame never opens a blank line; interior
-    // breaks stay as they arrived. Opened without following a link.
-    private fun appendLine(file: Path, line: String) {
-        Files.writeString(file, line + "\n", CHARSET, *APPEND_MODE)
+    // breaks stay as they arrived. Through the directory held, by name, and never through a link.
+    private fun appendLine(directory: DirectoryHandle, name: String, line: String) {
+        directory.append(name, (line + "\n").toByteArray(CHARSET))
     }
 
-    private fun appendedAll(file: Path, lines: List<String>) {
-        lines.forEach { appendLine(file, it) }
+    private fun appendedAll(directory: DirectoryHandle, name: String, lines: List<String>) {
+        lines.forEach { appendLine(directory, name, it) }
         released(lines)
     }
 
@@ -549,8 +552,8 @@ class FileRawSessionLog(
     private fun charsOf(lines: List<String>): Long = lines.sumOf { it.length.toLong() }
 
     // Settled frames written at last leave both counts.
-    private fun appendedSettled(file: Path, lines: List<String>) {
-        appendedAll(file, lines)
+    private fun appendedSettled(directory: DirectoryHandle, name: String, lines: List<String>) {
+        appendedAll(directory, name, lines)
         settledChars.addAndGet(-charsOf(lines))
     }
 
@@ -559,24 +562,24 @@ class FileRawSessionLog(
     // throws: the frame that asked for it may be a live grading's first (the review of PR #401).
     private fun releaseHeld() {
         if (heldRuns.isEmpty() && heldOrphans.isEmpty()) return
-        subdirectory(RETIRED)?.let { recorded -> heldRuns.keys.toList().forEach { releaseRun(recorded, it) } }
-        subdirectory(ORPHANS)?.let { orphans -> heldOrphans.keys.toList().forEach { releaseOrphans(orphans, it) } }
+        opened(RETIRED)?.use { recorded -> heldRuns.keys.toList().forEach { releaseRun(recorded, it) } }
+        opened(ORPHANS)?.use { orphans -> heldOrphans.keys.toList().forEach { releaseOrphans(orphans, it) } }
     }
 
-    private fun releaseRun(recorded: Path, name: String) {
+    private fun releaseRun(recorded: DirectoryHandle, name: String) {
         val lines = heldRuns.remove(name) ?: return
-        if (written { appendedSettled(recorded.resolve(name), lines) }) return
+        if (written { appendedSettled(recorded, name, lines) }) return
         heldRuns.merge(name, lines) { since, kept -> kept + since }
     }
 
     // A lesson whose orphans file is a link keeps its frames held: written through it, they would land where it
     // leads (#378).
-    private fun releaseOrphans(orphans: Path, lessonId: Long) {
-        val file = orphans.resolve("$lessonId$SUFFIX")
-        if (isThereButNotAFile(file)) return
+    private fun releaseOrphans(orphans: DirectoryHandle, lessonId: Long) {
+        val name = "$lessonId$SUFFIX"
+        if (orphans.isThereButNotAFile(name)) return
         val held = heldOrphans.remove(lessonId) ?: return
         val lines = synchronized(held) { held.toList() }
-        if (!written { appendedSettled(file, lines) }) keptFirst(lessonId, lines)
+        if (!written { appendedSettled(orphans, name, lines) }) keptFirst(lessonId, lines)
     }
 
     private fun keptFirst(lessonId: Long, lines: List<String>) {
@@ -595,8 +598,8 @@ class FileRawSessionLog(
     }
 
     private fun flushEverything() {
-        val raw = rawDirectory() ?: return
-        live.forEach { (name, state) -> synchronized(state) { writeHeldFirst(raw.resolve(name), state) } }
+        val raw = opened(null) ?: return
+        raw.use { live.forEach { (name, state) -> synchronized(state) { writeHeldFirst(it, name, state) } } }
         releaseHeld()
     }
 
@@ -629,21 +632,30 @@ class FileRawSessionLog(
 
     private fun unreachable() = java.io.IOException("the raw directory under .ps is not a real directory")
 
-    /** The raw directory, checked before every write: none of it a link (#360). */
-    private fun rawDirectory(): Path? = subdirectory(null)
-
-    // [sub] below the raw directory, or the raw directory itself.
-    private fun subdirectory(sub: String?): Path? {
-        val guard = guard ?: return Files.createDirectories(sub?.let(directory::resolve) ?: directory)
-        return when (val inspection = guard.pathFor(*listOfNotNull(RAW, sub).toTypedArray())) {
+    /** The raw directory, for a read: none of it a link (#360). */
+    private fun rawDirectory(): Path? {
+        val guard = guard ?: return Files.createDirectories(directory)
+        return when (val inspection = guard.pathFor(RAW)) {
             is StateDirectory.Usable -> inspection.directory
             is StateDirectory.Refused -> null.also { refused(inspection.refusal) }
         }
     }
 
-    // For a write that belongs to no live session: `.ps` usable now, and the directory a real one.
-    private fun writable(sub: String): Path? = when (val inspection = guard?.forWriting()) {
-        null, is StateDirectory.Usable -> subdirectory(sub)
+    // [sub] below the raw directory, or the raw directory itself, held for one write (#374): opened through `.ps`
+    // and never through a link. The caller closes it. Built bare, the log holds the directory it was told.
+    private fun opened(sub: String?): DirectoryHandle? {
+        val guard = guard ?: return DirectoryHandles.ON_THIS_PLATFORM.open(Files.createDirectories(bare(sub)))
+        return when (val opening = guard.open(*listOfNotNull(RAW, sub).toTypedArray())) {
+            is StateDirectory.Opened -> opening.handle
+            is StateDirectory.Refused -> null.also { refused(opening.refusal) }
+        }
+    }
+
+    private fun bare(sub: String?): Path = sub?.let(directory::resolve) ?: directory
+
+    // For a write that belongs to no live session: `.ps` usable now, and the directory held.
+    private fun writable(sub: String): DirectoryHandle? = when (val inspection = guard?.forWriting()) {
+        null, is StateDirectory.Usable -> opened(sub)
         is StateDirectory.Refused -> null.also { refused(inspection.refusal) }
     }
 
@@ -684,8 +696,6 @@ class FileRawSessionLog(
         // a quieter loss than the collision it exists to prevent.
         private val NAME = Regex("""(\d{8}T\d{9}Z)-(\d+)(?:-\d+)?\.jsonl""")
         private val ORPHAN_NAME = Regex("""(\d+)\.jsonl""")
-        private val APPEND_MODE: Array<OpenOption> =
-            arrayOf(StandardOpenOption.CREATE, StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS)
         private val CHARSET = StandardCharsets.UTF_8
         private const val SUFFIX = ".jsonl"
         private const val RAW = "raw"

@@ -6147,3 +6147,42 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Docs.** Outcome notes for #402 and #405 in [[decisions/2026-10-08-each-gate-searches-what-its-destination-lacks]], its two costs marked resolved; the index line; the Windows `GIT_INDEX_FILE` path with a space, inferred to fail closed.
 - **Gates**, all exit 0: check; test (2,607 JUnit across 176 classes, 0 failures, 12 skipped — 8 C#, 3 Windows-only store tests from main, the `icase` test; node 4/4); build; `verifyBranchCoverage` (`adapter/git` 89%, 520/578; `adapter/config` 65% at its floor); guards (12/12).
 - **Not verified**: Windows; CI; live.
+- **Pending.** Not pushed. CI, the Windows pin's first run and the live check, as before.
+## 2026-10-08 — #374 state is written in the directory it checked, held open (branch fix/374-state-through-a-handle)
+- **Base.** Main `b5d79f0`. Built on #386's branch and, unpushed, moved three times: onto #386 as reviewed
+  (`300a9ad`) — taking in its suppressed clean-up, a zip file system's bare name and #401's guards for orphans
+  — then onto main `4700074`, where #386 landed (PR #406) with the same tree, then onto #408 (`b5d79f0`),
+  cleanly: its adoption of a crash's copy and its `unrecorded-` rename are in the records tree, through
+  `RecordWrites`, and write nothing into `.ps`. The seam is in #386's `FileReplacement`, not a third copy of
+  the replace.
+- `b70b89a` `DirectoryHandle`, two kinds and one contract — `SecureDirectoryHandle` over
+  `SecureDirectoryStream`, `PathDirectoryHandle` by path — and `DirectoryHandles`, which holds a directory
+  through a handle where the file system gives one and says once at startup when it does not (Windows).
+- `ac0f60f` `FileReplacement.replace(directory, name, text)`: #386's one replace over a handle; a path is
+  wrapped by path, so the records and every document outside `.ps` are written as before.
+- `9237f7e` `StateDirectory.openForWriting()` and `open(segments)`, `Refusal.CHANGED`; `AtomicStateFile` under
+  the record repository, and the push credential, written through `.ps` held open.
+- `64876d8` the raw log's appends, set-asides, orphans, releases and discards through the directory opened per
+  operation; #401's guards through the handle's `isThereButNotAFile`.
+- `321e30f` a held directory's child opened straight away, looked at only when that fails; `c24a6de` a rooted
+  name of one segment pinned; `4c4aa9d` a probe that cannot be answered keeps the handle rather than writing by
+  path on Linux and saying the platform gives none.
+- **Red first.** On main `258ed10`, `.ps` swapped for a link to `problems/zz` while git answered: the timers
+  document landed there, `.ps` deleted or moved aside alike, and so did `git-credentials`. On #386 the three
+  `AtomicStateFile` races failed. On main `4700074`, with handles held by path, a frame landed in
+  `problems/zz`, a discard deleted a file there, a set-aside missed and an orphan was held rather than
+  appended. Stubs: 41 contract cases, 4 replace cases and 9 of 10 `StateDirectory` cases.
+- **Platforms.** `UnixSecureDirectoryStream` on the host (APFS, JDK 25.0.3) and in `programmers-tracker:local`
+  (JDK 25.0.4.1), over the macOS bind mount (`fakeowner`) and on its overlay. In the image over the bind mount
+  the six store classes ran 212 of 218 and the remote's test 26 of 26; the others abort on their
+  assumption, as `fakeowner` reads a directory whose modes were taken away.
+- **Cost**, median per call: an append 29.7–33.2 → 63.4–71.3 µs on the host, 49.4–54.8 → 129.5–146.5 µs in the
+  image; a replace 194–212 → 263–317 µs and 577–607 → 692–737 µs.
+- **Mutation**: 38 mutants; 37 failed a test at once, and the root check of a name failed both kinds once a
+  rooted name of one segment was pinned (`c24a6de`). Seven ran again, or first, after the move.
+- **Docs.** ADR [[decisions/2026-10-08-state-is-written-in-the-directory-it-checked]]; notes on N10 in
+  [[decisions/2026-10-08-reconcile-never-stages-the-state-directory]]; `SECURITY.md`; index.
+- **Gates** on main `b5d79f0` with this branch, all exit 0: check; test 2,639 (176 classes, 0 failures, 12
+  skipped), node 4 of 4; build; `verifyBranchCoverage` (`adapter/store` 87%, `adapter/git` 88%,
+  `adapter/config` 65% at its floor); guards 12 of 12.
+- **Pending.** Not pushed. CI, where the Windows pins first run, and a live check.

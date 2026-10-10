@@ -36,6 +36,12 @@ import java.nio.file.attribute.BasicFileAttributes
  * replaces it. A FIFO is never opened — opening one to read waits for a writer, and one at the tool's
  * `.ps/watch-token` held the server's start that way (#387's review).
  *
+ * **And it is written in the directory the guard checked, held open** ([StateDirectory.openForWriting],
+ * #374): never by a path resolved again after the check, so `.ps` swapped for a link while git answers is
+ * never written through. Measured on main before this: the timers document and the push credential both
+ * landed in the tracked directory such a link led to. A document built without a guard — the tool's own
+ * `/watch` token, the owner's `.gitignore` — is written by path, as before.
+ *
  * **The directory above the document is not checked for a link when reading, on purpose.** Under the
  * record repository, git and every state writer refuse a `.ps` that is a link (#360), and what is read
  * there is a timer, a date or a hash: never a credential, never a record. The tool's own `.ps`, which
@@ -43,11 +49,14 @@ import java.nio.file.attribute.BasicFileAttributes
  * configuration. No pull delivers it — `scripts/guards.sh` fails the build on anything tracked there
  * but its `.gitkeep` — and whoever can put a link there can write the token file itself.
  */
-class AtomicStateFile(
+class AtomicStateFile private constructor(
     private val path: Path,
-    keepsPermissions: Boolean = false,
-    private val guard: StateDirectory? = null,
+    keepsPermissions: Boolean,
+    private val guard: StateDirectory?,
 ) {
+    /** A document at [path], written by path: one outside the record repository's `.ps`, which no guard asks for. */
+    constructor(path: Path, keepsPermissions: Boolean = false) : this(path, keepsPermissions, guard = null)
+
     private val directory: Path = path.toAbsolutePath().parent
 
     private val said = SaidOnce()
@@ -58,13 +67,16 @@ class AtomicStateFile(
     fun read(): String? = runCatching { readNotFollowing() }.getOrElse { failed(it) }
 
     /**
-     * Replaces the document. A reader sees either the whole previous one or the whole new one. Skipped,
-     * and said once for each reason, while [guard] refuses the state directory.
+     * Replaces the document. A reader sees either the whole previous one or the whole new one. Under the record
+     * repository it is written in `.ps` held open, and skipped, said once for each reason, while [guard] refuses it.
+     * True when it was written.
      */
-    fun write(text: String) {
-        if (refusedByGuard()) return
-        Files.createDirectories(directory)
-        replacement.replace(path, text)
+    fun write(text: String): Boolean {
+        val guard = guard ?: return writtenByPath(text)
+        return when (val opening = guard.openForWriting()) {
+            is StateDirectory.Opened -> opening.handle.use { writtenIn(it, text) }
+            is StateDirectory.Refused -> skipped(opening.refusal)
+        }
     }
 
     /**
@@ -81,14 +93,22 @@ class AtomicStateFile(
         return Files.newInputStream(path, NOFOLLOW_LINKS).use { String(it.readAllBytes(), CHARSET) }
     }
 
-    private fun refusedByGuard(): Boolean = when (val inspection = guard?.forWriting()) {
-        null, is StateDirectory.Usable -> false
-        is StateDirectory.Refused -> skipped(inspection.refusal)
+    // In `.ps` held open, by name: never through a path that may have come to lead elsewhere since the check.
+    private fun writtenIn(stateDirectory: DirectoryHandle, text: String): Boolean {
+        replacement.replace(stateDirectory, path.fileName.toString(), text)
+        return true
     }
 
+    private fun writtenByPath(text: String): Boolean {
+        Files.createDirectories(directory)
+        replacement.replace(path, text)
+        return true
+    }
+
+    // Said once for each reason; nothing is written.
     private fun skipped(refusal: StateDirectory.Refusal): Boolean {
         said.say(refusal) { logger.warn(NOT_WRITTEN, path.fileName, refusal.reason) }
-        return true
+        return false
     }
 
     private fun failed(cause: Throwable): String? {
@@ -107,6 +127,6 @@ class AtomicStateFile(
          * written only while [state] allows it (#360). No default: a writer never assumes "nothing tracked".
          */
         fun under(recordRoot: Path, name: String, state: StateDirectory): AtomicStateFile =
-            AtomicStateFile(recordRoot.resolve(StateDirectory.NAME).resolve(name), guard = state)
+            AtomicStateFile(recordRoot.resolve(StateDirectory.NAME).resolve(name), keepsPermissions = false, state)
     }
 }

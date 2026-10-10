@@ -38,17 +38,29 @@ import java.nio.file.Path
  * the tracker's own writers replaced theirs, and took an entry that vanished mid-walk for a refusal: 444
  * of 3,000 inspections of a healthy directory, and whole sessions of raw frames (the review of ea1357c).
  * No writer needs that answer. A link that arrives by pull is tracked, and refused as such; what a writer
- * needs besides is that its own path follows no link, which [pathFor] checks before every write and a
- * rename or a no-follow open keeps for the file itself.
+ * needs besides is that its own way follows no link, which [open] holds from before every write to it.
  *
- * Git and the credential ask [forGit]; every writer of state asks [forWriting]. A refusal carries a
- * [Refusal] — structural, until someone changes the repository, or transient, worth asking again.
+ * **A writer holds what was checked** (#374). A check is of a path at one moment, and a write by path
+ * resolved it again: `.ps` swapped for a link while git answered led the write wherever it pointed (N10 in
+ * the review of #360; measured, the timers document and the push credential written into `problems/`).
+ * So a writer is handed the directory itself, open — [openForWriting], [open] — through a
+ * [DirectoryHandle], and writes in it by name: what `.ps` comes to name after the check is never followed.
+ * Where the platform gives no handle, as Windows does not, [DirectoryHandles] holds it by path, as before.
+ *
+ * Git asks [forGit]; every writer of state asks [forWriting], or [openForWriting] to be handed `.ps`. A
+ * refusal carries a [Refusal] — structural, until someone changes the repository, or transient, worth
+ * asking again.
  */
-class StateDirectory(
+class StateDirectory internal constructor(
     private val recordRoot: Path,
     private val tracked: TrackedState,
-    listing: (Path) -> Set<String> = ::namesOnDisk,
+    listing: (Path) -> Set<String>,
+    private val handles: DirectoryHandles,
 ) {
+    /** The state directory of [recordRoot], held through this platform's handles where it gives them (#374). */
+    constructor(recordRoot: Path, tracked: TrackedState, listing: (Path) -> Set<String> = ::namesOnDisk) :
+        this(recordRoot, tracked, listing, DirectoryHandles.ON_THIS_PLATFORM)
+
     // `.ps` is checked by the step every record write takes (#386), with the root's listing handed in as before.
     private val bound = RecordBound.underRoot(recordRoot, setOf(NAME), DiskAnswers(namesIn = listing))
 
@@ -68,10 +80,32 @@ class StateDirectory(
 
     /**
      * The directory [segments] name below `.ps`, each created if absent and none of them a link, `.ps`
-     * included — for a writer whose file is not directly in `.ps`. A stat per segment, so it runs before
-     * every write: a pull can swap a directory for a link between two frames. Never throws.
+     * included — for a reader of what a writer keeps there, such as the raw work list. A stat per segment:
+     * a pull can swap a directory for a link at any time. A writer is handed the directory held, [open].
+     * Never throws.
      */
     fun pathFor(vararg segments: String): Inspection = runCatching { realDirectories(segments.toList()) }
+        .getOrElse { Refused(Refusal.NOT_INSPECTED) }
+
+    /**
+     * [forWriting], with `.ps` held (#374). It is opened first, through the record root and without following a
+     * link, and handed over only if, once git has answered, `.ps` is still the directory held: a write through it
+     * lands there, whatever `.ps` comes to name. Swapped meanwhile, it is [Refusal.CHANGED], and nothing is handed
+     * over. The caller closes what it is handed. Never throws.
+     */
+    fun openForWriting(): Opening {
+        val held = runCatching { stateDirectoryHeld(makingTheRoot = true) }.getOrNull()
+        val inspection = forWriting()
+        if (inspection is Refused) return inspection.also { held?.close() }
+        return stillChecked(held)
+    }
+
+    /**
+     * [pathFor], held (#374): the directory [segments] name below `.ps`, each made where absent and opened through
+     * the one above it without following a link, `.ps` through the record root — for a writer whose file is not
+     * directly in `.ps`, before every write. The caller closes what it is handed. Never throws.
+     */
+    fun open(vararg segments: String): Opening = runCatching { heldBelow(segments.toList()) }
         .getOrElse { Refused(Refusal.NOT_INSPECTED) }
 
     /**
@@ -104,6 +138,29 @@ class StateDirectory(
         return directory
     }
 
+    // Handed over only while `.ps`, looked at without following a link, is the directory held.
+    private fun stillChecked(held: DirectoryHandle?): Opening {
+        if (held != null && isStill(held)) return Opened(held)
+        held?.close()
+        return Refused(Refusal.CHANGED)
+    }
+
+    private fun isStill(held: DirectoryHandle): Boolean =
+        runCatching { held.isAt(recordRoot.resolve(NAME)) }.getOrDefault(false)
+
+    // Each directory opened through the one above it, which is let go once it has: nothing is resolved again.
+    private fun heldBelow(segments: List<String>): Opening {
+        val held = segments.fold(stateDirectoryHeld()) { parent, segment -> parent?.use { it.child(segment) } }
+        return held?.let(::Opened) ?: Refused(Refusal.HOLDS_A_LINK)
+    }
+
+    // `.ps`, opened through the record root's own handle and never through a link: made where absent, and the
+    // record root above it too where a writer of state asks, as [forWriting] makes it.
+    private fun stateDirectoryHeld(makingTheRoot: Boolean = false): DirectoryHandle? {
+        if (makingTheRoot) Files.createDirectories(recordRoot)
+        return handles.open(recordRoot).use { it.child(NAME) }
+    }
+
     // `all` stops at the first that is not a real directory, so nothing is created through a link.
     private fun realDirectories(segments: List<String>): Inspection {
         val directories = segments.runningFold(recordRoot.resolve(NAME)) { parent, segment -> parent.resolve(segment) }
@@ -122,8 +179,16 @@ class StateDirectory(
     /** Usable: git may run, the credential be stored, the state be written in [directory]. */
     data class Usable(val directory: Path) : Inspection
 
+    /** What a writer of state is handed (#374): the directory, [Opened], or why not, [Refused]. */
+    sealed interface Opening
+
+    /** Opened: written in through [handle], by name, and closed by whoever was handed it. */
+    class Opened(val handle: DirectoryHandle) : Opening
+
     /** Not, because of [refusal]. */
-    data class Refused(val refusal: Refusal) : Inspection
+    data class Refused(val refusal: Refusal) :
+        Inspection,
+        Opening
 
     /**
      * Why `.ps` was refused, and whether that can change on its own. A [transient] refusal is asked
@@ -154,6 +219,11 @@ class StateDirectory(
         ),
         UNANSWERED(transient = true, reason = "git could not say whether it tracks anything under .ps"),
         NOT_INSPECTED(transient = true, reason = "what answers to .ps could not be read"),
+        CHANGED(
+            transient = true,
+            reason = "what answers to .ps changed while it was being checked — swapped for a link, as a pull swaps " +
+                "it, most likely — so nothing was written there",
+        ),
     }
 
     companion object {
