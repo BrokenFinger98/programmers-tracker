@@ -5,7 +5,9 @@ import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.sealedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -239,6 +241,41 @@ class DirectoryHandleTest {
         }
 
         permissionsOf(document) shouldBe "rw-------"
+    }
+
+    /** What the raw log asks before an orphan's append (#378): a link, a directory or a FIFO is no file to append to. */
+    @ParameterizedTest
+    @EnumSource(Held::class)
+    fun `what stands at a name is told apart from a regular file, without following a link`(held: Held) {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        Files.writeString(root.resolve("file.jsonl"), "frame\n")
+        aLink(root.resolve("link.jsonl"), aFileNotOurs(outside))
+        Files.createDirectory(root.resolve("directory.jsonl"))
+        val fifo = madeFifo(root.resolve("fifo.jsonl"))
+
+        opened(held).use { directory ->
+            directory.isThereButNotAFile("file.jsonl") shouldBe false
+            directory.isThereButNotAFile("absent.jsonl") shouldBe false
+            directory.isThereButNotAFile("link.jsonl") shouldBe true
+            directory.isThereButNotAFile("directory.jsonl") shouldBe true
+            directory.isThereButNotAFile("fifo.jsonl") shouldBe fifo
+        }
+    }
+
+    /** As `Files.exists` answers, so a release of held frames that asks never throws for it (#378). */
+    @ParameterizedTest
+    @EnumSource(Held::class)
+    fun `what cannot be looked at is taken for nothing there`(held: Held) {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val sealed = Files.createDirectory(root.resolve("sealed"))
+        aLink(sealed.resolve("link.jsonl"), outside)
+
+        held.handles.open(sealed).use { directory ->
+            sealedWhile(sealed) {
+                assumeTrue(!Files.isReadable(sealed), "a superuser reads it anyway")
+                directory.isThereButNotAFile("link.jsonl") shouldBe false
+            }
+        }
     }
 
     @ParameterizedTest

@@ -53,6 +53,13 @@ interface DirectoryHandle : AutoCloseable {
     /** Whether [directory], looked at without following a link, is the directory held here. */
     fun isAt(directory: Path): Boolean
 
+    /**
+     * Whether something that is not a regular file stands at [name] — a link, a directory, a FIFO — looked at without
+     * following a link and never opened; false where nothing does, or where that cannot be told, as `Files.exists`
+     * answers.
+     */
+    fun isThereButNotAFile(name: String): Boolean
+
     /** A new, empty file [name], in [permissions] where the file system keeps a mode; never made where anything stands. */
     fun create(name: String, permissions: Set<PosixFilePermission>)
 
@@ -147,6 +154,11 @@ internal class PathDirectoryHandle(private val directory: Path) : DirectoryHandl
     }
 
     override fun isAt(directory: Path): Boolean = this.directory == directory
+
+    override fun isThereButNotAFile(name: String): Boolean {
+        val file = fileOf(name)
+        return Files.exists(file, NOFOLLOW_LINKS) && !Files.isRegularFile(file, NOFOLLOW_LINKS)
+    }
 
     override fun create(name: String, permissions: Set<PosixFilePermission>) {
         Files.newByteChannel(fileOf(name), NEW_FILE, *modeOf(permissions)).close()

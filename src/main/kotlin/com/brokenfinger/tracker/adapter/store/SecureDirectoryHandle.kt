@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.NoSuchFileException
@@ -33,6 +34,11 @@ internal class SecureDirectoryHandle(private val stream: SecureDirectoryStream<P
         val held = stream.getFileAttributeView(BasicFileAttributeView::class.java).readAttributes().fileKey()
         val there = Files.readAttributes(directory, BasicFileAttributes::class.java, NOFOLLOW_LINKS).fileKey()
         return held != null && held == there
+    }
+
+    override fun isThereButNotAFile(name: String): Boolean {
+        val attributes = lookedAt(name) ?: return false
+        return !attributes.isRegularFile
     }
 
     override fun create(name: String, permissions: Set<PosixFilePermission>) {
@@ -103,6 +109,13 @@ internal class SecureDirectoryHandle(private val stream: SecureDirectoryStream<P
         } catch (absent: NoSuchFileException) {
             return null
         }
+    }
+
+    // As `Files.exists` answers: what cannot be looked at is taken for nothing there. A bad name still throws.
+    private fun lookedAt(name: String): BasicFileAttributes? = try {
+        attributesOf(name)
+    } catch (unknown: IOException) {
+        null
     }
 
     private fun posixViewOf(name: String): PosixFileAttributeView =
