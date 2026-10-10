@@ -56,6 +56,8 @@ internal class SecureDirectoryHandle(private val stream: SecureDirectoryStream<P
         stream.newByteChannel(nameIn(name), APPENDED_FILE).use { it.writeAll(bytes) }
     }
 
+    // `renameat`: atomic, or it fails. A stream has no plain move to fall back on, so whatever stopped the rename —
+    // "not supported" included, which only a move across file systems answers — is thrown, the target as it was (#407).
     override fun move(name: String, into: DirectoryHandle, target: String): Boolean {
         if (attributesOf(name) == null) return false
         val there = into as SecureDirectoryHandle

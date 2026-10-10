@@ -14,7 +14,9 @@ import com.brokenfinger.tracker.support.fixtures.aSensorObservation
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.aTestcaseResult
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -397,6 +399,61 @@ class ProblemReadmeTest {
         Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
         Files.readString(readme) shouldContain "lessonId: 120804"
         heard.single() shouldContain readme.toString()
+    }
+
+    // A page that cannot be replaced at all (#407) ------------------------------------------------------
+
+    /**
+     * A page whose replace failed for anything but a refusal — another process holding it on Windows, a read-only
+     * mount — was thrown, and at boot it took every page after it, the index and the tag map down with it. It is
+     * skipped as a refused one is, and said once with its path: the next attachment or boot writes it again. Said by
+     * [RecordWrites], which every writer that carries on writes through, since #407's review.
+     */
+    @Test
+    fun `a page that cannot be replaced is skipped, and said once with its path`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val readme = ProblemReadme(RecordLayout(root))
+        val directory = Files.createDirectories(root.resolve("problems/$DIRECTORY"))
+
+        val heard = warningsWhile(RecordWrites::class) {
+            unwritableWhile(directory) {
+                assumeTrue(!Files.isWritable(directory), "a superuser writes anyway")
+                repeat(2) { readme.write(listOf(aRecord())).shouldBeNull() }
+            }
+        }
+
+        heard.single() shouldContain directory.resolve("README.md").toString()
+    }
+
+    /** Each page that cannot be replaced is said once, by its own path: one of them is no word for another. */
+    @Test
+    fun `each page that cannot be replaced is said once, by its own path`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val readme = ProblemReadme(RecordLayout(root))
+        val first = Files.createDirectories(root.resolve("problems/$DIRECTORY"))
+        val second = Files.createDirectories(root.resolve("problems/120805-other"))
+
+        val heard = warningsWhile(RecordWrites::class) {
+            unwritableWhile(first) {
+                unwritableWhile(second) {
+                    assumeTrue(!Files.isWritable(second), "a superuser writes anyway")
+                    readme.write(listOf(aRecord())).shouldBeNull()
+                    readme.write(listOf(aSubmissionRecord(lessonId = 120805, title = "other"))).shouldBeNull()
+                }
+            }
+        }
+
+        heard.size shouldBe 2
+        heard.first() shouldContain first.resolve("README.md").toString()
+        heard.last() shouldContain second.resolve("README.md").toString()
+    }
+
+    /** No new noise on a healthy boot: a page written as it should be says nothing. */
+    @Test
+    fun `a page written as it should be says nothing`() {
+        val heard = warningsWhile(RecordWrites::class) { ProblemReadme(RecordLayout(root)).write(listOf(aRecord())) }
+
+        heard.shouldBeEmpty()
     }
 
     private fun aRecord(): SubmissionRecord = aSubmissionRecord()

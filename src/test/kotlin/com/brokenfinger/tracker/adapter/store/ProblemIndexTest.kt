@@ -9,7 +9,9 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aPushTokenIn
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import com.brokenfinger.tracker.support.fixtures.namesIn
+import com.brokenfinger.tracker.support.fixtures.unwritableWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -196,6 +198,28 @@ class ProblemIndexTest {
         Files.exists(nowhere, NOFOLLOW_LINKS) shouldBe false
         Files.readString(index) shouldContain "# Problems"
         heard.single() shouldContain index.toString()
+    }
+
+    // An index the file system will not take (#407's review) ------------------------------------------
+
+    /**
+     * Thrown, it took the tag notes after it down with it, at every attachment and boot. Written again at each, so it
+     * is skipped as a refused one is, and said once with its path.
+     */
+    @Test
+    fun `an index the file system will not take is skipped, and said once with its path`() {
+        assumeTrue(keepsPosixPermissions(root), "this test closes a directory to writes")
+        val problems = Files.createDirectories(root.resolve("problems"))
+        val index = index()
+
+        val heard = warningsWhile(RecordWrites::class) {
+            unwritableWhile(problems) {
+                assumeTrue(!Files.isWritable(problems), "a superuser writes anyway")
+                repeat(2) { index.write(listOf(aSubmissionRecord())).shouldBeNull() }
+            }
+        }
+
+        heard.single() shouldContain problems.resolve("README.md").toString()
     }
 
     private fun at(instant: String): OffsetDateTime = Instant.parse(instant).atOffset(ZoneOffset.ofHours(9))

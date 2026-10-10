@@ -28,10 +28,11 @@ class ProblemReadme(private val layout: RecordLayout) {
     private val writes = RecordWrites.underProblems(layout)
 
     /**
-     * Writes the page for one problem's records, oldest first, and returns the file — or null when [RecordWrites]
-     * refused it, which it has said: a link on the way to it (#361). The page is derived from the log and written
-     * again at every attachment and boot, so a refused one is skipped rather than thrown, which would take every
-     * page, the index and the tag map after it down with it.
+     * Writes the page for one problem's records, oldest first, and returns the file — or null when it was not written,
+     * which [RecordWrites] has said: refused, for a link on the way to it (#361), or failed, held open by another
+     * process on Windows or on a read-only mount (#407). The page is derived from the log and written again at every
+     * attachment and boot, so one not written is skipped rather than thrown, which would take every page, the index
+     * and the tag map after it down with it.
      */
     fun write(records: List<SubmissionRecord>): Path? {
         require(records.isNotEmpty()) { "a README needs at least one record" }

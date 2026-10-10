@@ -170,6 +170,26 @@ class DirectoryHandleTest {
         namesIn(root) shouldContainExactly listOf("doc.json")
     }
 
+    /**
+     * Windows will not move a file over a link to a directory, and a replace by path took such a link away until #407
+     * narrowed its fallback (#407's review). Wherever a link can be made — on Windows, as an administrator, as on
+     * windows-latest — it is replaced, and the directory it led to keeps what it holds.
+     */
+    @ParameterizedTest
+    @EnumSource(Held::class)
+    fun `a move replaces a link to a directory at its target, and the directory keeps what it holds`(held: Held) {
+        val directory = Files.createDirectory(outside.resolve("a-directory"))
+        Files.writeString(directory.resolve("inside"), "inside\n")
+        assumeTrue(runCatching { aLink(root.resolve("doc.json"), directory) }.isSuccess, "no link can be made here")
+        Files.writeString(root.resolve("temp"), "new\n")
+
+        opened(held).use { it.move("temp", it, "doc.json") } shouldBe true
+
+        Files.readString(root.resolve("doc.json")) shouldBe "new\n"
+        namesIn(directory) shouldContainExactly listOf("inside")
+        namesIn(root) shouldContainExactly listOf("doc.json")
+    }
+
     @ParameterizedTest
     @EnumSource(Held::class)
     fun `a move goes into another directory held`(held: Held) {

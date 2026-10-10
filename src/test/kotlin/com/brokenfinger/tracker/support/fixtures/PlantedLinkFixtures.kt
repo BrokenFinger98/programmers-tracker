@@ -89,6 +89,14 @@ fun <T> sealedWhile(directory: Path, action: () -> T): T {
 }
 
 /**
+ * A file flag set on [path], or cleared, with `chflags`: `uchg` makes a file immutable, so nothing is renamed over it,
+ * and `uappnd` a directory append-only. macOS and the BSDs have it; false where there is none to run, as on Linux and
+ * Windows. A test that sets one clears it in a `finally`, or its `@TempDir` cannot be cleaned up.
+ */
+fun flagged(path: Path, flag: String): Boolean =
+    runCatching { ProcessBuilder("chflags", flag, path.toString()).start().waitFor() == 0 }.getOrDefault(false)
+
+/**
  * [link] made a Windows junction to the directory [target]: a directory that leads elsewhere without being a symbolic
  * link, so no link check sees one (#387). `mklink /J` needs no privilege, unlike a symbolic link. It fails loudly where
  * the junction cannot be made: a test that needs one runs on Windows alone, and a skip there would leave the junction

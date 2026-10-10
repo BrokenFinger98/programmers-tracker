@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [storage, links, git, windows, refactor]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-10
 sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md]
 ---
 
@@ -212,10 +212,11 @@ the reconcile.
   been pushed.
 - **A failed regenerated page waits for the next refresh.** On Windows, a page held open is not rewritten
   until it is closed and something rewrites it. In the boot's vault refresh, the problem pages after it,
-  the index and the tag notes wait with it.
+  the index and the tag notes wait with it. *The rest no longer wait: closed by #407, below.*
 - **Any failed atomic move falls back to a plain one** — a candidate the review named, filed as a
   follow-up. The fallback to `REPLACE_EXISTING` was meant for a filesystem that cannot move atomically,
-  but it runs after any failure of `ATOMIC_MOVE`, and then deletes the target before the rename.
+  but it runs after any failure of `ATOMIC_MOVE`, and then deletes the target before the rename. *Closed
+  by #407, below.*
 
 ## Outcome
 
@@ -325,3 +326,193 @@ The review of #386 found nothing blocking. Its findings, and what the branch did
 - `./scripts/guards.sh`, 12 of 12.
 
 The append-only pin runs on macOS alone and the held-open one on Windows alone; neither has run in CI.
+
+### #407: one page, and a move that falls back
+
+The two accepted costs above that #386 left open, a page that fails to be replaced holding up the vault refresh
+after it, and any failed atomic move falling back to a plain one, are closed on `fix/407-page-guard-and-move`. That
+branch was cut from #374's head, whose `FileReplacement` writes through a `DirectoryHandle`, and main `e302739` (#374's
+squash) was merged in.
+
+- **A page that cannot be replaced waits alone** (`31e9566`).
+  - `refreshProblemPages` wrote every problem page with no guard of its own. A page whose replace failed with an
+    `IOException` other than a refusal — held open on Windows, or on a read-only mount — threw out of the loop. The
+    boot's `refreshVault` ended there, and every page after it, the index and the tag map kept what they held.
+  - `ProblemReadme` now skips such a page, as it already skipped a refused one, and for the same reason: the page is
+    derived from the log and written again at every attachment and boot.
+  - It is said once, with its path and the kind of failure, through `SaidOnce` keyed by the page, so a healthy boot
+    says nothing new. The attach path gains the same guard, so one such page no longer stops the index and the tag
+    notes after it.
+  - Red: with the problem directory closed to writes, the page's test and the vault refresh test both threw
+    `AccessDeniedException`. A Windows test holds the first page open, as the issue measured, and runs on
+    windows-latest alone.
+- **Only "not supported" falls back** (`2ad5790`). A plain `REPLACE_EXISTING` deletes the target and then renames, on
+  Unix and Windows alike. If the rename then fails — an antivirus holding the temporary file on Windows — the
+  target is gone and only the temporary file holds its content.
+  - By path, `ATOMIC_MOVE` now falls back to `REPLACE_EXISTING` only on `AtomicMoveNotSupportedException`, a file
+    system that cannot move atomically at all. Any other failure is thrown with the target untouched, and
+    `FileReplacement` takes the temporary file away.
+  - A file over a directory, which `rename(2)` refuses, used to get through the fallback. It is handled on its own
+    now, as the handle already did: an empty directory is taken away and the move tried again, and one holding
+    something fails.
+  - **Through a handle**, the move is `SecureDirectoryStream.move`, which is `renameat`: atomic, or it fails. "Not
+    supported" there is `EXDEV`, a move across file systems, which a temporary file made beside its target never
+    asks for, and the stream has no plain move to fall back on. So the handle never fell back and still does not:
+    whatever stopped the rename is thrown, and the target is left as it was.
+  - No file system fails an atomic move on demand, so the path handle takes the move as a seam, `PathMoves`, which
+    the directories opened below it inherit. Through a handle, the seam is the stream itself, wrapped.
+  - The pins go through both kinds of handle. A failed move is thrown, the target keeps its bytes, and nothing is
+    left beside it. Through a handle, "not supported" is thrown too. By path, a file system that cannot move
+    atomically is still replaced.
+  - Red, with the seam in and the old fallback: by path, the failed move was not thrown, and the target held the
+    new bytes.
+  - #386's Windows pin, a page held open, still expects a non-refusal `IOException` with the page untouched. It now
+    holds more directly: the atomic move fails, and that failure is thrown as it is, with no plain replace after it.
+- **Mutation**, against the store, git-history, MCP, application and config tests:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | no guard round the page | 2 |
+  | said at every failure | 1 |
+  | said without its path | 1 |
+  | a failed page answered as written | 1 |
+  | one key for every page | 1, after a pin with two failing pages; it survived before |
+  | any failed atomic move falling back, as before | 2 |
+  | "not supported" never falling back | 1 |
+  | a directory target not taken away | 3 |
+  | a child handle without the seam | 1 |
+  | through a handle, a failed rename swallowed | 4 |
+
+  All ten are killed, 1,401 to 1,407 tests a run.
+
+- **Gates**, all exit 0 at `dbd6993`:
+  - check;
+  - test: 2,649 JUnit tests in 176 classes, 0 failures, 13 skipped — those before, and the new Windows test —
+    and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 87% (771 of 882), `application` 90% (396 of 439), every package
+    at or above its floor;
+  - guards: 12 of 12, with this page and progress staged.
+- **PR #411's CI** (`8ed9b56`). The PR failed on windows-latest alone, in the Windows-only test that holds a page
+  open: `NoSuchFileException: Users`, thrown by `Files.delete` in the test's own setup, with no production frame in
+  the trace. The setup meant to add one path to a list of two with `list + path`. A `Path` is an `Iterable<Path>`,
+  so Kotlin resolved `+` to `plus(elements: Iterable)`, and the list got the path's names instead of the path. On
+  Windows the first of them is `Users`, which `Files.delete` took as a relative path. A probe here gave the same:
+  `listOf(/tmp/one/README.md) + /Users/runneradmin/AppData/tags/dp.md` is six elements, `Users` the second. So the
+  failure was the test's, and the line never ran anywhere but Windows. The files are listed one by one now, in a
+  setup both vault refresh tests share, so it runs on every platform. Only the refresh past the held page is
+  Windows' alone, and the no-guard mutant still fails the shared test here. Gates after the fix: check; test, 2,649 JUnit tests in 176 classes, 0 failures, 13 skipped as
+  before, and node 4 of 4; build; `verifyBranchCoverage`, `adapter/store` 87% (771 of 882) and `application`
+  90% (396 of 439); guards, 12 of 12.
+- **What remains.** A page that cannot be replaced keeps its old content until the cause goes. The two Windows tests,
+  the page held open and #386's, run on windows-latest alone; the refresh past the held page has not yet run
+  there. Not verified live.
+
+### #407's review: every writer that carries on, and a link at the target
+
+PR #411's review approved #407 with no blocking finding and six notes. The branch was pushed, so they land on top of
+`07b73dd`.
+
+- **Every writer that carries on skips a failed write** (`ae0ebd0`, notes N2 and N1).
+  - The page's guard covered the page alone. `TagNotes.write` and `ProblemIndex.write` called `replaceOrSkip` the
+    same unguarded way. One note the file system would not take threw out of the loop, and the notes after it waited
+    for a later boot. An index that failed threw out of the vault refresh before the tag notes.
+  - **Decision: once, in `RecordWrites.replaceOrSkip`,** rather than a guard in each writer or a second method beside
+    it. Every writer that asks to skip writes its file again: a page, a note or the index at every attachment and boot,
+    a runner at every attachment, the examples at every run, a seed at every boot, the marker at every beat. A refusal
+    is said once for its reason, as before. Any other `IOException` is said once for the path, by its kind and
+    `FileSystemException.reason`, the system's own text, which is never a path. It is never said by the message,
+    which names the temporary file. Anything that is no `IOException` is still thrown. `ProblemReadme`'s own guard is
+    gone.
+  - It is not the option set aside above, turning the failure into a refusal. A refusal says the repository needs
+    fixing; this says the write keeps the old file and its next write tries again, which is what a file held open
+    is: a moment, not a structure. And it supersedes the posture above, "the write fails, its caller says it", for
+    every writer that asks to skip. A writer whose failures reach its caller, `replace`, still throws.
+  - So every caller of `replaceOrSkip` gains it, not only the derived pages the review named. The runner files, the
+    examples, the heartbeat's marker and the seeds hear such a failure from `RecordWrites`, once for the path. Each
+    had said its own line at every failure: the heartbeat's "relying on the lock alone" at every beat. Each one's
+    catch still takes anything else, so that line is now said only for what is no failure of the file system. A runner
+    file that fails no longer stops its extras.
+  - Red, before the guard moved: `replaceOrSkip` under a directory closed to writes threw `AccessDeniedException`,
+    and through a `DiskAnswers` seam `FileSystemException`. The tag notes threw with `tags/` closed to writes, and
+    with the first note immutable under `chflags uchg` (`FileSystemException`, "Operation not permitted"). The index
+    threw `AccessDeniedException`. The pages, heard through `RecordWrites`, said nothing there. A Windows test holds
+    the first note open, as #407 measured for a page. Two tests had pinned the old contract, a failure thrown to a
+    writer that skips. They now pin `replace` throwing it and `replaceOrSkip` skipping it.
+  - The review's three mutants on the page's guard moved with it. The catch widened to every exception is pinned by a
+    seam throwing `IllegalStateException`. A refusal sent through the guard is said twice, which the refusal tests'
+    single warning already fails, `ProblemReadmeTest`'s included. So the reviewer's probe, "a refused page is not said
+    again by the guard", adds nothing a test here does not hold, and its listener on `ProblemReadme`'s logger would
+    now hear nothing at all. The message logged for the kind is pinned by a warning that names the kind and the
+    reason, and no path the exception carried.
+- **A link at the target is replaced again** (`34ab72f`, N3).
+  - By the review's reading of `MoveFileEx`, Windows will not move a file over a link to a directory, which carries
+    the directory attribute. The plain replace that followed any failed atomic move took such a link away with
+    `RemoveDirectory`. #407 kept a file over an empty directory, but looked for it with
+    `Files.isDirectory(NOFOLLOW_LINKS)`, which is false for a link. A link to a directory where a record or a state
+    file should be failed the write on Windows, while the move's KDoc said a link is replaced.
+  - **Decision: restore the replacement, not unsay the KDoc.** A link at a record's path is the case #361 exists for,
+    and replaced is what every other platform does with it. By path, a link to anything or to nothing is taken away
+    as an empty directory is, looked at without following it, and the move made again. A regular file is still never
+    deleted before a move that succeeds. Through a handle, `renameat` replaces any link itself, so the handle is
+    unchanged, and the KDoc says which.
+  - Red: with a seam refusing the first atomic move, as Windows refuses it, a link to a directory and a dangling link
+    at the target were both thrown. A contract test makes a real link to a directory for both handles. It passes on
+    macOS, where a rename replaces the link. On Windows it runs where a link can be made, as on windows-latest, and
+    measures the review's reading there.
+  - The review's mutant on this line, the directory check made to follow a link, survives, and is equivalent in every
+    case but one. A symbolic link answers the link check first, and anything else reads the same followed or not,
+    except a Windows junction, which Java does not count as a link. A dangling junction reads as a directory when not
+    followed, and as nothing when followed. A record writer refuses a junction as a directory before it moves
+    anything, so only a state file's move by path could meet one, on Windows. There the check as written takes the
+    junction away, where the mutant would throw. No pin was added for that one case. The mutant's live counterpart, a
+    link taken away only where it leads somewhere, is killed by the dangling link.
+- **Two notes, and no change for either.**
+  - **The fallback is effectively `EXDEV`-only** (N4). The JDK throws `AtomicMoveNotSupportedException` for an atomic
+    move across file systems: `EXDEV` on Unix, `ERROR_NOT_SAME_DEVICE` on Windows. A temporary file made beside its
+    target never crosses one. The fallback stays as the specification's answer for a file system that cannot move
+    atomically, and it costs nothing where it never runs.
+  - **On Windows, a transient sharing violation is now a failed write** (N6). Before #407, the plain replace after a
+    failed atomic move could succeed once a scanner or a sync client let go of the file. Now the failure is thrown,
+    and a writer that carries on skips the file until its next write. The remedy is a short retry on Windows alone,
+    if CI shows flakes. Until then, such a page, note or index waits for the next attachment or boot.
+- **An I/O failure that is not an `IOException` is thrown, as before.** A listing on the way that fails mid-iteration
+  surfaces as `DirectoryIteratorException`, a `RuntimeException`, and the guard does not take it. Not seen; left as
+  it is.
+- **Mutation**, against the store, git-history, MCP, application and config tests:
+
+  | Mutant | Tests failed |
+  |---|---|
+  | no guard: a failure of the file system thrown | 9 |
+  | the guard widened to every exception | 1 |
+  | a refusal sent through the guard | 8 |
+  | one key for every path | 3 |
+  | said at every failure | 5 |
+  | said by the exception's message | 2 |
+  | the kind without the file system's reason | 1 |
+  | the reason without the kind | 1 |
+  | said without its path | 8 |
+  | a failed write answered as written | 5 |
+  | no reason, said as `null` | 2 |
+  | a page not written answered as written | 3 |
+  | a note written as a writer that throws | 3 |
+  | the index written as a writer that throws | 2 |
+  | a link not taken away, as before | 2 |
+  | a directory not taken away | 3 |
+  | whatever stands there taken away | 2 |
+  | only a link that leads somewhere taken away | 1 |
+  | the directory check following a link | survives: equivalent but for a dangling junction on Windows, above |
+
+  18 of the 19 are killed, 1,419 tests a run.
+
+- **Gates**, all exit 0 at `34ab72f`:
+  - check;
+  - test: 2,661 JUnit tests in 176 classes, 0 failures, 14 skipped — those before, and the note held open on
+    Windows — and node 4 of 4;
+  - build;
+  - `verifyBranchCoverage`: `adapter/store` 87% (779 of 890), `application` 90% (396 of 439), every package at or
+    above its floor;
+  - guards: 12 of 12, with this page and progress staged.
+- **What remains.** A file the file system will not take keeps its old content until the cause goes. The Windows
+  tests, a page held open, a note held open, #386's, and a real link to a directory, run on windows-latest alone and
+  have not run there for this round. Not verified live.
