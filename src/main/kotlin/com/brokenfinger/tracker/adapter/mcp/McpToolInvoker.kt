@@ -1,7 +1,7 @@
 package com.brokenfinger.tracker.adapter.mcp
 
 import com.brokenfinger.tracker.application.LeftUnreplayed
-import com.brokenfinger.tracker.application.OrphanedFrames
+import com.brokenfinger.tracker.application.Orphans
 import com.brokenfinger.tracker.application.RecordQuery
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.domain.calc.ProblemProgress
@@ -190,14 +190,18 @@ class McpToolInvoker(private val query: RecordQuery) {
      *
      * `sessionsNotReplayed` counts the sessions the last start left on its work list rather than
      * replay, and `rawDirectoryNotListed` says one could not be listed, so how many it holds is
-     * unknown (#377). Each is written only when it has something to say.
+     * unknown (#377). `orphanFilesNotRead` counts orphan files the store would not open, and
+     * `orphansNotListed` says their directory could not be listed (#378). Each is written only when it
+     * has something to say.
      */
-    private fun incompleteHistory(orphans: List<OrphanedFrames>, left: LeftUnreplayed): JsonObject = buildJsonObject {
-        put("lessonsWithOrphanedFrames", orphans.size)
-        put("frames", orphans.sumOf { it.frames })
-        put("lessons", JsonArray(orphans.map { JsonPrimitive(it.lessonId) }))
+    private fun incompleteHistory(orphans: Orphans, left: LeftUnreplayed): JsonObject = buildJsonObject {
+        put("lessonsWithOrphanedFrames", orphans.read.size)
+        put("frames", orphans.read.sumOf { it.frames })
+        put("lessons", JsonArray(orphans.read.map { JsonPrimitive(it.lessonId) }))
         if (left.counted > 0) put("sessionsNotReplayed", left.counted)
         if (left.uncounted) put("rawDirectoryNotListed", true)
+        if (orphans.unread > 0) put("orphanFilesNotRead", orphans.unread)
+        if (orphans.unlisted) put("orphansNotListed", true)
     }
 
     // An absent key is omitted rather than written as null — it means the grouping value
@@ -295,7 +299,7 @@ class McpToolInvoker(private val query: RecordQuery) {
     private fun withGaps(payload: JsonObject): JsonObject {
         val orphans = query.orphanedFrames()
         val left = query.unreplayedSessions()
-        if (orphans.isEmpty() && left.isNothing()) return payload
+        if (orphans.isNothing() && left.isNothing()) return payload
         return JsonObject(mapOf("incompleteHistory" to incompleteHistory(orphans, left)) + payload)
     }
 

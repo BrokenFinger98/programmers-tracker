@@ -174,6 +174,12 @@ class RecordRepositoryIgnores(private val recordRoot: Path) {
                     "# see it; this covers the one case where it cannot — a run from before `git init`.\n",
             ),
             IgnoreRule(
+                rule = ".*${FileReplacement.TEMP_SUFFIX}",
+                because = "# What a crash leaves mid-write. The tracker writes a file whole beside itself, under\n" +
+                    "# this name, and moves it over itself; stopped in between, it leaves this behind. Its own\n" +
+                    "# commits leave the name out; this keeps it out of every other `git add` too (#386).\n",
+            ),
+            IgnoreRule(
                 rule = ".DS_Store",
                 because = "# Finder noise, which `git add --all` would otherwise commit as if it were records.\n",
             ),

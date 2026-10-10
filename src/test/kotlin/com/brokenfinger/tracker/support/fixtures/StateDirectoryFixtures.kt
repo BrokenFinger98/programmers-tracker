@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.support.fixtures
 
 import com.brokenfinger.tracker.adapter.store.StateDirectory
+import com.brokenfinger.tracker.adapter.store.TrackedHistory
 import com.brokenfinger.tracker.adapter.store.TrackedState
 import java.io.IOException
 import java.nio.file.Files
@@ -19,8 +20,11 @@ const val UNTRACK_EVERY_SPELLING = "git rm -r --cached --ignore-unmatch -- ':(ic
 val NOTHING_TRACKED: TrackedState = object : TrackedState {
     override fun tracksAnything(): Boolean = false
 
-    override fun pathsEverTracked(): Set<String> = emptySet()
+    override fun pathsEverTracked(): TrackedHistory = TrackedHistory.Known(emptySet())
 }
+
+/** Why git could not say what it has ever tracked, in a test that says it could not. */
+const val GIT_COULD_NOT_SAY = "fatal: the history could not be read, as this test says"
 
 /** The state directory of [root], with git answering [tracked]. */
 fun aStateDirectory(root: Path, tracked: TrackedState = NOTHING_TRACKED): StateDirectory = StateDirectory(root, tracked)
@@ -41,7 +45,9 @@ class ChangingAnswer(
 
     override fun tracksAnything(): Boolean? = answer.also { whileAsked() }
 
-    override fun pathsEverTracked(): Set<String>? = history.also { historyAsked += 1 }
+    override fun pathsEverTracked(): TrackedHistory = history.also { historyAsked += 1 }
+        ?.let { TrackedHistory.Known(it) }
+        ?: TrackedHistory.Unanswered(GIT_COULD_NOT_SAY)
 }
 
 /** A root listing whose first read fails, as a passing I/O error does, and then answers from disk. */

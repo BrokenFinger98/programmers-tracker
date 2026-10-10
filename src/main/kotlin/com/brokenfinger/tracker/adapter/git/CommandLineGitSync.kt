@@ -1,6 +1,7 @@
 package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.adapter.git.StoredCredential.Patterns
+import com.brokenfinger.tracker.adapter.store.FileReplacement
 import com.brokenfinger.tracker.adapter.store.StateDirectory
 import com.brokenfinger.tracker.application.GitSync
 import com.brokenfinger.tracker.domain.GradingAction
@@ -697,9 +698,20 @@ class CommandLineGitSync(
          * pathspec matches in HEAD too: with a tracked `.ps` link taken out of the index by hand and a
          * real directory in its place, it found a directory where a link was tracked and stopped —
          * "'.ps' does not have a commit checked out" (measured on 2.48.1 and 2.53.0).
+         *
+         * **And no temporary file of a replace** (#386). Every file the tracker writes whole is written
+         * beside itself and moved over itself ([FileReplacement]); a process killed in between leaves the
+         * temporary file, and a reconcile racing a live write sees one. Named by the store and left out
+         * here, as `.ps` is, so neither is ever committed, and a tree that holds nothing else is clean.
+         * The pattern starts with a wildcard, so it names no path an ignore rule could make `add` refuse.
          */
         private val RECONCILE_SCOPE = "[${StateDirectory.NAME.first()}]${StateDirectory.NAME.drop(1)}".let { glob ->
-            listOf(".", ":(exclude,glob,icase)$glob", ":(exclude,glob,icase)$glob/**")
+            listOf(
+                ".",
+                ":(exclude,glob,icase)$glob",
+                ":(exclude,glob,icase)$glob/**",
+                ":(exclude,glob)**/.*${FileReplacement.TEMP_SUFFIX}",
+            )
         }
 
         /** Said once per process, so it stays readable instead of drowning every other line. */

@@ -500,8 +500,8 @@ private class RecordingRawSessionLog(private val journal: MutableList<String>) :
     // Nothing was copied anywhere, so there is nothing to keep.
     override fun withdraw(session: RawSessionId, copy: Path): Boolean = true
 
-    override fun orphans(): List<OrphanedFrames> =
-        orphans.mapIndexed { index, _ -> OrphanedFrames(index.toLong(), 1, Path.of("orphans")) }
+    override fun orphans(): Orphans =
+        Orphans(orphans.mapIndexed { index, _ -> OrphanedFrames(index.toLong(), 1, Path.of("orphans")) }, 0, false)
 
     override fun orphaned(lessonId: Long, frameText: String) {
         journal += "orphaned"

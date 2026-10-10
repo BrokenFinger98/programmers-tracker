@@ -2,10 +2,12 @@ package com.brokenfinger.tracker.adapter.store
 
 import com.brokenfinger.tracker.application.LeftUnreplayed
 import com.brokenfinger.tracker.application.OrphanedFrames
+import com.brokenfinger.tracker.application.Orphans
 import com.brokenfinger.tracker.application.RawSession
 import com.brokenfinger.tracker.application.RawSessionId
 import com.brokenfinger.tracker.application.RawSessionLog
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -15,6 +17,7 @@ import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -47,7 +50,10 @@ import java.util.concurrent.atomic.AtomicLong
  * While the state directory is refused, frames are **held in memory** instead, within [heldLimit]
  * characters across the log. A submit's frames go to its attempt file at [complete], which lies outside
  * `.ps`; a run set aside and an orphan are written into `.ps` the first time it is usable again, and
- * [close] says what is still held when the server stops. Each refusal, and the limit, is said once.
+ * [close] says what is still held when the server stops. Each refusal, and the limit, is said once. Runs set
+ * aside and orphans hold three quarters of the limit at most, so a submit in flight always has room (#378); the
+ * full limit of 8,000,000 characters retains about 16 MB of heap (measured with the fixtures' frames, whose Korean
+ * makes each character two bytes).
  *
  * **A boot replays only what a write would accept (#377).** [unprocessed] lists the work list only while
  * the [guard] would let a frame be written there: what it refuses is left where it is, unread, and said
@@ -67,6 +73,7 @@ class FileRawSessionLog(
     private val guard: StateDirectory? = null,
     private val heldLimit: Long = HELD_LIMIT,
     recordRoot: Path? = null,
+    private val orphanBytes: Long = ORPHAN_BYTES,
 ) : RawSessionLog,
     AutoCloseable {
     /** Where a submit's frames are copied: under the record repository's `problems/`, through no link. */
@@ -84,7 +91,14 @@ class FileRawSessionLog(
 
     private val heldChars = AtomicLong()
 
-    private val said = ConcurrentHashMap.newKeySet<String>()
+    /**
+     * What runs set aside and orphans may hold, of [heldLimit], so that a quarter always stays for the gradings in
+     * flight: settled frames filled the budget and a submit's were dropped, its attempt left with no raw copy (#378).
+     */
+    private val settledLimit = heldLimit - heldLimit / LIVE_SHARE
+    private val settledChars = AtomicLong()
+
+    private val said = SaidOnce()
 
     /** What the last [unprocessed] left on the work list, for the history's readers (#377). */
     @Volatile
@@ -183,10 +197,29 @@ class FileRawSessionLog(
     // only direct children whose name parses as a session.
     override fun orphaned(lessonId: Long, frameText: String) {
         val line = lineOf(frameText)
-        val orphans = writable(ORPHANS) ?: return hold(heldOrphans.computeIfAbsent(lessonId) { orphanList() }, line)
+        val orphans = writable(ORPHANS) ?: return holdOrphan(lessonId, line)
         releaseHeld()
-        appendLine(orphans.resolve("$lessonId$SUFFIX"), line)
+        val file = orphans.resolve("$lessonId$SUFFIX")
+        if (isThereButNotAFile(file)) return heldBehind(lessonId, line)
+        if (!written { appendLine(file, line) }) holdOrphan(lessonId, line)
     }
+
+    // Held inside the map's own step for the lesson, so a release that takes the lesson's frames takes this one too
+    // or leaves it for the next: never a list the release has already taken.
+    private fun holdOrphan(lessonId: Long, line: String) {
+        heldOrphans.compute(lessonId) { _, held -> (held ?: orphanList()).also { holdSettled(it, line) } }
+    }
+
+    // Anything but a regular file where a lesson's orphans go — a link, most likely — loses no frame (#378): it is held
+    // like a refused frame and written once a regular file or nothing stands there. The link is never replaced: the
+    // file is append-only, and a link there stands for history a replacement would drop. Said once, never where.
+    private fun heldBehind(lessonId: Long, line: String) {
+        sayOnce(ORPHAN_NOT_A_FILE_KEY) { logger.warn(ORPHAN_NOT_A_FILE) }
+        holdOrphan(lessonId, line)
+    }
+
+    private fun isThereButNotAFile(file: Path): Boolean =
+        Files.exists(file, LinkOption.NOFOLLOW_LINKS) && !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
 
     /**
      * What is still held when the server stops. Written into `.ps` if it is usable now — a live
@@ -200,22 +233,97 @@ class FileRawSessionLog(
         if (left > 0) logger.warn(LOST_AT_EXIT, left)
     }
 
-    override fun orphans(): List<OrphanedFrames> {
-        val orphans = directory.resolve(ORPHANS)
-        if (!Files.isDirectory(orphans)) return emptyList()
-        return Files.list(orphans).use { entries ->
-            entries.toList().mapNotNull { orphanOf(it) }.sortedBy { it.lessonId }
+    /**
+     * The orphans, read only where a frame could be written now, as [unprocessed] reads the work list (#378): `.ps`
+     * the tracker's own with git tracking nothing there, then no link on the way, checked after each of git's
+     * answers. Only a regular file no larger than [orphanBytes] is opened, without following a link, and never one
+     * git has ever tracked. A FIFO, a device or a link is never read: one hung the boot and every MCP call, another
+     * reported a file outside as orphaned frames (the review of #387, measured). What is passed over is counted, and
+     * an orphans directory that could not be listed is said to be, so a refusal never reads as a whole history.
+     */
+    override fun orphans(): Orphans {
+        if (!Files.isDirectory(directory.resolve(ORPHANS))) return Orphans.NONE
+        val guard = guard ?: return orphansIn(namedLikeOrphans(directory.resolve(ORPHANS)), known = emptySet())
+        val state = guard.forWriting()
+        if (state is StateDirectory.Refused) return orphansNotRead(state.refusal, guard.pathFor(RAW, ORPHANS))
+        return when (val orphans = guard.pathFor(RAW, ORPHANS)) {
+            is StateDirectory.Usable -> orphansUnknownToGit(namedLikeOrphans(orphans.directory), guard)
+            is StateDirectory.Refused -> orphansNotListed(orphans.refusal)
         }
+    }
+
+    // Under a refused state directory the orphans are counted by name where no link is on the way, never opened.
+    private fun orphansNotRead(refusal: StateDirectory.Refusal, inspection: StateDirectory.Inspection): Orphans {
+        val orphans = (inspection as? StateDirectory.Usable)?.directory ?: return orphansNotListed(refusal)
+        val named = namedLikeOrphans(orphans).size
+        if (named > 0) sayOnce("$ORPHANS_KEY${refusal.name}") { logger.warn(ORPHANS_NOT_READ, named, refusal.reason) }
+        return Orphans(emptyList(), named, unlisted = false)
+    }
+
+    private fun orphansNotListed(refusal: StateDirectory.Refusal): Orphans {
+        sayOnce("$ORPHANS_KEY${refusal.name}") { logger.warn(ORPHANS_NOT_LISTED, refusal.reason) }
+        return Orphans(emptyList(), 0, unlisted = true)
+    }
+
+    // Git is asked what it has ever tracked only when a file waits to be read; unanswered, none is read.
+    private fun orphansUnknownToGit(named: List<Path>, guard: StateDirectory): Orphans {
+        if (named.isEmpty()) return Orphans.NONE
+        return when (val history = guard.pathsEverTracked()) {
+            is TrackedHistory.Known -> orphansStillUsable(guard, history.paths)
+            is TrackedHistory.Unanswered -> orphansUnanswered(named.size, history.reason)
+        }
+    }
+
+    // Checked again once git has answered, and listed anew: a pull while git answered could have put a link where
+    // `orphans/` was, and what is read is read just after this (the review of PR #401).
+    private fun orphansStillUsable(guard: StateDirectory, known: Set<String>): Orphans =
+        when (val orphans = guard.pathFor(RAW, ORPHANS)) {
+            is StateDirectory.Usable -> orphansIn(namedLikeOrphans(orphans.directory), known)
+            is StateDirectory.Refused -> orphansNotListed(orphans.refusal)
+        }
+
+    private fun orphansUnanswered(named: Int, reason: String): Orphans {
+        sayOnce(ORPHANS_UNANSWERED_KEY) { logger.warn(ORPHANS_UNANSWERED, named, reason) }
+        return Orphans(emptyList(), named, unlisted = false)
+    }
+
+    // A file git has known is neither read nor counted: what git delivered is no gap in what this server captured,
+    // and counting it would mark every answer for good. It is said once instead (the review of PR #395).
+    private fun orphansIn(named: List<Path>, known: Set<String>): Orphans {
+        val (delivered, ours) = named.partition { file -> known.any { isPath(it, RAW, ORPHANS, "${file.fileName}") } }
+        if (delivered.isNotEmpty()) sayOnce(ORPHANS_KNOWN_KEY) { logger.warn(ORPHANS_KNOWN, delivered.size) }
+        val read = ours.mapNotNull { orphanOf(it) }.sortedBy { it.lessonId }
+        val unread = ours.size - read.size
+        if (unread > 0) sayOnce(ORPHANS_PASSED_KEY) { logger.warn(ORPHANS_PASSED_OVER, unread, orphanBytes) }
+        return Orphans(read, unread, unlisted = false)
     }
 
     // A count of lines, not of gradings: several gradings sit in one file end to end with no
     // separator, and saying "3 gradings" would be a claim this class cannot support.
     private fun orphanOf(file: Path): OrphanedFrames? {
-        val lessonId = ORPHAN_NAME.matchEntire(file.fileName.toString())?.groupValues?.get(1)?.toLongOrNull()
-            ?: return null
-        val frames = runCatching { Files.readAllLines(file, CHARSET).count { it.isNotBlank() } }.getOrElse { 0 }
+        val lessonId = lessonIdOf(file) ?: return null
+        if (!isAReadableOrphan(file)) return null
+        val frames = runCatching { framesIn(file) }.getOrNull() ?: return null
         return OrphanedFrames(lessonId, frames, file)
     }
+
+    // Names only: an entry whose name is a lesson's, whatever it is. Nothing is opened here.
+    private fun namedLikeOrphans(orphans: Path): List<Path> =
+        Files.list(orphans).use { entries -> entries.toList().filter { lessonIdOf(it) != null } }
+
+    private fun lessonIdOf(file: Path): Long? =
+        ORPHAN_NAME.matchEntire(file.fileName.toString())?.groupValues?.get(1)?.toLongOrNull()
+
+    // A regular file, judged without following a link, and small enough to count: never a FIFO, a device or a link.
+    private fun isAReadableOrphan(file: Path): Boolean = runCatching {
+        val attributes = Files.readAttributes(file, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        attributes.isRegularFile && attributes.size() <= orphanBytes
+    }.getOrDefault(false)
+
+    // Counted line by line and opened without following a link, so one swapped in after the check fails here.
+    private fun framesIn(file: Path): Int = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)
+        .bufferedReader(CHARSET)
+        .useLines { lines -> lines.count { it.isNotBlank() } }
 
     /**
      * The work list, read only from where a frame would be written now (#377): `.ps` the tracker's own,
@@ -249,23 +357,31 @@ class FileRawSessionLog(
     // file behind: never replayed (#377). One question to git, only when a session waits; unanswered, none is.
     private fun unknownToGit(listed: Listing, guard: StateDirectory): WorkList {
         if (listed.files.isEmpty()) return listed.keeping(emptyList())
-        val known = guard.pathsEverTracked() ?: return unanswered(listed)
-        val (delivered, ours) = listed.files.partition { session -> known.any { isPathOf(session, it) } }
-        if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
-        return listed.keeping(ours)
+        return when (val history = guard.pathsEverTracked()) {
+            is TrackedHistory.Known -> notDelivered(listed, history.paths)
+            is TrackedHistory.Unanswered -> unanswered(listed, history.reason)
+        }
     }
 
-    private fun unanswered(listed: Listing): WorkList {
-        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size) }
+    // A session git has known is never replayed, and not counted as left: git delivered it, so it is no gap in what
+    // this server captured, and counting it would mark every answer for good (the review of PR #395). Said once.
+    private fun notDelivered(listed: Listing, known: Set<String>): WorkList {
+        val (delivered, ours) = listed.files.partition { session -> known.any { isPath(it, RAW, session.id.value) } }
+        if (delivered.isNotEmpty()) sayOnce(KNOWN) { logger.warn(KNOWN_TO_GIT, delivered.size) }
+        return listed.without(delivered).keeping(ours)
+    }
+
+    private fun unanswered(listed: Listing, reason: String): WorkList {
+        sayOnce(UNANSWERED) { logger.warn(HISTORY_UNANSWERED, listed.files.size, reason) }
         return listed.keeping(emptyList())
     }
 
-    // `raw/<name>` below the state directory, in any case: git keeps a name as it was committed, and a filesystem
-    // that folds case answers it for the session's own.
-    private fun isPathOf(session: RawSession, path: String): Boolean {
+    // [path], below the state directory, is [expected] segment by segment in any case: git keeps a name as it was
+    // committed, and a filesystem that folds case answers it for the tracker's own.
+    private fun isPath(path: String, vararg expected: String): Boolean {
         val segments = path.split('/')
-        if (segments.size != 2) return false
-        return segments[0].equals(RAW, ignoreCase = true) && segments[1].equals(session.id.value, ignoreCase = true)
+        if (segments.size != expected.size) return false
+        return segments.zip(expected).all { (actual, wanted) -> actual.equals(wanted, ignoreCase = true) }
     }
 
     // Regular files alone (#377): the tracker writes no link there, so one named like a session is not its own,
@@ -356,35 +472,97 @@ class FileRawSessionLog(
 
     // Bounded across the whole log: past the limit a frame is dropped, and that is said once.
     private fun hold(frames: MutableList<String>, line: String) {
-        if (heldChars.addAndGet(line.length.toLong()) <= heldLimit) {
+        if (reserved(line.length.toLong())) {
             synchronized(frames) { frames += line }
             return
         }
-        heldChars.addAndGet(-line.length.toLong())
         sayOnce(LIMIT) { logger.warn(OVER_LIMIT, heldLimit) }
     }
 
+    // A frame whose grading has settled — an orphan — holds within the settled share, and that limit is said once.
+    private fun holdSettled(frames: MutableList<String>, line: String) {
+        if (reservedSettled(line.length.toLong())) {
+            synchronized(frames) { frames += line }
+            return
+        }
+        sayOnce(SETTLED_LIMIT_KEY) { logger.warn(OVER_SETTLED_LIMIT, settledLimit, heldLimit - settledLimit) }
+    }
+
+    // A run set aside moves its frames, held already, into the settled share; past that share they are dropped.
     private fun holdRun(name: String, frames: List<String>) {
-        if (frames.isNotEmpty()) heldRuns.merge(name, frames) { old, new -> old + new }
+        if (frames.isEmpty()) return
+        if (settledChars.addAndGet(charsOf(frames)) <= settledLimit) {
+            heldRuns.merge(name, frames) { old, new -> old + new }
+            return
+        }
+        settledChars.addAndGet(-charsOf(frames))
+        released(frames)
+        sayOnce(SETTLED_LIMIT_KEY) { logger.warn(OVER_SETTLED_LIMIT, settledLimit, heldLimit - settledLimit) }
+    }
+
+    private fun reserved(chars: Long): Boolean {
+        if (heldChars.addAndGet(chars) <= heldLimit) return true
+        heldChars.addAndGet(-chars)
+        return false
+    }
+
+    private fun reservedSettled(chars: Long): Boolean {
+        val withinShare = settledChars.addAndGet(chars) <= settledLimit
+        if (withinShare && reserved(chars)) return true
+        settledChars.addAndGet(-chars)
+        return false
     }
 
     private fun released(lines: List<String>) {
-        heldChars.addAndGet(-lines.sumOf { it.length.toLong() })
+        heldChars.addAndGet(-charsOf(lines))
     }
 
-    // Runs and orphans kept while `.ps` was refused, now that it is usable (#360).
+    private fun charsOf(lines: List<String>): Long = lines.sumOf { it.length.toLong() }
+
+    // Settled frames written at last leave both counts.
+    private fun appendedSettled(file: Path, lines: List<String>) {
+        appendedAll(file, lines)
+        settledChars.addAndGet(-charsOf(lines))
+    }
+
+    // Runs and orphans kept while `.ps` was refused, now that it is usable (#360). Each is taken from memory and
+    // written; one whose write fails goes back ahead of anything held since, for the next release. A release never
+    // throws: the frame that asked for it may be a live grading's first (the review of PR #401).
     private fun releaseHeld() {
         if (heldRuns.isEmpty() && heldOrphans.isEmpty()) return
-        subdirectory(RETIRED)?.let { recorded ->
-            heldRuns.keys.forEach { name -> heldRuns.remove(name)?.let { appendedAll(recorded.resolve(name), it) } }
-        }
-        subdirectory(ORPHANS)?.let { orphans ->
-            heldOrphans.keys.forEach { id ->
-                heldOrphans.remove(id)?.let { held ->
-                    appendedAll(orphans.resolve("$id$SUFFIX"), synchronized(held) { held.toList() })
-                }
-            }
-        }
+        subdirectory(RETIRED)?.let { recorded -> heldRuns.keys.toList().forEach { releaseRun(recorded, it) } }
+        subdirectory(ORPHANS)?.let { orphans -> heldOrphans.keys.toList().forEach { releaseOrphans(orphans, it) } }
+    }
+
+    private fun releaseRun(recorded: Path, name: String) {
+        val lines = heldRuns.remove(name) ?: return
+        if (written { appendedSettled(recorded.resolve(name), lines) }) return
+        heldRuns.merge(name, lines) { since, kept -> kept + since }
+    }
+
+    // A lesson whose orphans file is a link keeps its frames held: written through it, they would land where it
+    // leads (#378).
+    private fun releaseOrphans(orphans: Path, lessonId: Long) {
+        val file = orphans.resolve("$lessonId$SUFFIX")
+        if (isThereButNotAFile(file)) return
+        val held = heldOrphans.remove(lessonId) ?: return
+        val lines = synchronized(held) { held.toList() }
+        if (!written { appendedSettled(file, lines) }) keptFirst(lessonId, lines)
+    }
+
+    private fun keptFirst(lessonId: Long, lines: List<String>) {
+        heldOrphans.compute(lessonId) { _, since -> orphanList().apply { addAll(lines + since.orEmpty()) } }
+    }
+
+    // A write of held frames, or of an orphan, that fails — a link swapped in after the check, a full disk — keeps
+    // what it was writing. Said once, by the kind of failure and never where. A write that fails partway may leave
+    // part of it behind, and the frames are written again whole: a duplicate, never a loss.
+    private fun written(write: () -> Unit): Boolean = try {
+        write()
+        true
+    } catch (failed: IOException) {
+        sayOnce(WRITE_FAILED_KEY) { logger.warn(WRITE_FAILED, failed.javaClass.simpleName) }
+        false
     }
 
     private fun flushEverything() {
@@ -441,7 +619,7 @@ class FileRawSessionLog(
     }
 
     private fun sayOnce(key: String, warn: () -> Unit) {
-        if (said.add(key)) warn()
+        said.say(key, warn)
     }
 
     private fun orphanList(): MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
@@ -459,6 +637,9 @@ class FileRawSessionLog(
         // [replayable] replayed, and everything else listed here left on the work list, counted in one place.
         fun keeping(replayable: List<RawSession>) =
             WorkList(replayable, LeftUnreplayed(files.size - replayable.size + others, uncounted = false))
+
+        // The same listing less [these], which leave the count altogether.
+        fun without(these: List<RawSession>) = Listing(files - these.toSet(), others)
     }
 
     // What a start replays, and what it leaves on the work list for a later one.
@@ -496,11 +677,11 @@ class FileRawSessionLog(
                 "counted, and it is left as it is. Said once for this reason."
         private const val KNOWN_TO_GIT =
             "{} raw session(s) were left in place and will never be replayed: git has tracked their names under " +
-                ".ps, so each may be what a pull delivered rather than a grading this server captured. They stay " +
-                "where they are, for a person to read. Said once."
+                ".ps, so each may be what a pull delivered rather than a grading this server captured. They are not " +
+                "counted as gaps in the history, and stay where they are for a person to read or delete. Said once."
         private const val HISTORY_UNANSWERED =
             "{} raw session(s) were left in place, not replayed: git could not say what it has ever tracked under " +
-                ".ps, and a session git delivered must never be replayed. They are replayed at the first start " +
+                ".ps ({}), and a session git delivered must never be replayed. They are replayed at the first start " +
                 "where git answers. Said once."
         private const val KNOWN = "known to git"
         private const val UNANSWERED = "history unanswered"
@@ -508,11 +689,50 @@ class FileRawSessionLog(
             "{} raw session(s) were not replayed because each is not a regular file — a link, most likely, which " +
                 "this server never writes there — and none was read. Said once."
         private const val NOT_A_FILE = "not a file"
+        private const val ORPHANS_NOT_READ =
+            "{} orphaned-frame file(s) were counted but not read: {}. Their frames are counted once .ps is usable. " +
+                "Said once for this reason."
+        private const val ORPHANS_NOT_LISTED =
+            "Orphaned frames were not listed: {}. Their directory was not read, so nothing in it was counted. " +
+                "Said once for this reason."
+        private const val ORPHANS_PASSED_OVER =
+            "{} orphaned-frame file(s) were not read: each is not a regular file — a link, a FIFO or a device — or " +
+                "holds more than {} bytes, or git has tracked its name. Said once."
+        private const val ORPHANS_UNANSWERED =
+            "{} orphaned-frame file(s) were not read: git could not say what it has ever tracked under .ps ({}). " +
+                "Said once."
+        private const val ORPHANS_KNOWN =
+            "{} orphaned-frame file(s) git has tracked were neither read nor counted: each may be what a pull " +
+                "delivered rather than frames this server kept, and none is a gap in the history. Said once."
+        private const val ORPHANS_KNOWN_KEY = "orphans known to git"
+        private const val ORPHAN_NOT_A_FILE =
+            "An orphaned frame was held in memory rather than written: where its lesson's orphans go is not a " +
+                "regular file — a link, most likely — and an append-only file is never replaced. It is written " +
+                "once a regular file or nothing stands there, and lost if the server stops first. Said once."
+        private const val ORPHAN_NOT_A_FILE_KEY = "orphan not a file"
+        private const val ORPHANS_KEY = "orphans: "
+        private const val ORPHANS_PASSED_KEY = "orphans passed over"
+        private const val ORPHANS_UNANSWERED_KEY = "orphans unanswered"
         private const val NOT_REPLAYED = "not replayed: "
         private const val LIMIT = "limit"
+        private const val OVER_SETTLED_LIMIT =
+            "Raw frames of runs set aside and of orphans, held in memory, reached {} characters; beyond that " +
+                "they are dropped until .ps is usable again, so that the gradings in flight keep {} characters of " +
+                "their own. Said once."
+        private const val SETTLED_LIMIT_KEY = "settled limit"
+        private const val WRITE_FAILED =
+            "Raw frames held in memory, or orphaned, could not be written into .ps ({}). They stay in memory and are " +
+                "written at the next release, and lost if the server stops first. Said once."
+        private const val WRITE_FAILED_KEY = "write failed"
+
+        /** One part in this many of what the log holds is kept for the gradings in flight (#378). */
+        private const val LIVE_SHARE = 4
 
         /** What the log holds in memory at most, across every session, while `.ps` is refused. */
         const val HELD_LIMIT = 8_000_000L
+
+        /** The largest orphans file read to count its frames (#378). */
+        const val ORPHAN_BYTES = 16L * 1024 * 1024
 
         private val logger = LoggerFactory.getLogger(FileRawSessionLog::class.java)
 

@@ -9,6 +9,7 @@ import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.foldsTogether
+import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -134,8 +136,17 @@ class StateDirectoryTest {
     fun `the way out of a tracked state directory deletes what git put there before untracking it`() {
         val reason = Refusal.TRACKED.reason
 
-        reason shouldContain "Delete from disk any that git put there rather than this server"
-        reason.indexOf("Delete from disk") shouldBeLessThan reason.indexOf(UNTRACK_EVERY_SPELLING)
+        reason shouldContain "First, and without fail, delete from disk every one git put there rather than this server"
+        reason.indexOf("delete from disk") shouldBeLessThan reason.indexOf(UNTRACK_EVERY_SPELLING)
+    }
+
+    /**
+     * Skipped, the delete was made good only while git's history named the file: a reflog that expired, or a history
+     * rewritten with filter-repo or a shallow fetch, let it replay (the review of PR #395, measured). The way out says so.
+     */
+    @Test
+    fun `the way out says why the delete cannot be skipped`() {
+        Refusal.TRACKED.reason shouldContain "an expired reflog or a rewritten history"
     }
 
     /** Removed alone, a linked raw directory takes the sessions behind it off the work list (the review of PR #395). */
@@ -153,6 +164,18 @@ class StateDirectoryTest {
         state.forGit() shouldBe Refused(Refusal.UNANSWERED)
         Refusal.UNANSWERED.transient shouldBe true
         state.forWriting() shouldBe Usable(root.resolve(".ps"))
+    }
+
+    /** A port that throws is answered as one that cannot say, with the exception's kind for why, never its message. */
+    @Test
+    fun `a history the port threw on is answered with why`() {
+        val throwing = object : TrackedState {
+            override fun tracksAnything(): Boolean = false
+
+            override fun pathsEverTracked(): TrackedHistory = throw IllegalStateException("never in a reason")
+        }
+
+        StateDirectory(root, throwing).pathsEverTracked() shouldBe TrackedHistory.Unanswered("IllegalStateException")
     }
 
     @Test
@@ -204,6 +227,31 @@ class StateDirectoryTest {
         Files.isDirectory(root.resolve(".ps/raw/orphans"), LinkOption.NOFOLLOW_LINKS) shouldBe true
     }
 
+    // Pinned before #386 shares the creation --------------------------------------------------------
+
+    /** A writer's path that cannot be made says nothing about the repository: asked again, never thrown. */
+    @Test
+    fun `a writer's directories under a records path that is a file are not inspected, and that can pass`() {
+        val notADirectory = Files.writeString(root.resolve("records"), "a file\n")
+
+        val refusal = aStateDirectory(notADirectory).pathFor("raw").shouldBeInstanceOf<Refused>().refusal
+
+        refusal shouldBe Refusal.NOT_INSPECTED
+        refusal.transient shouldBe true
+    }
+
+    /** The state directory and a writer's directories get what a plain mkdir gives one. */
+    @Test
+    fun `the directories made for state get what a plain mkdir gives one`() {
+        assumeTrue(keepsPosixPermissions(root), "this test reads POSIX permissions")
+        val plain = Files.createDirectory(root.resolve("plain"))
+
+        aStateDirectory(root).pathFor("raw", "orphans")
+
+        permissionsOf(root.resolve(".ps")) shouldBe permissionsOf(plain)
+        permissionsOf(root.resolve(".ps/raw/orphans")) shouldBe permissionsOf(plain)
+    }
+
     /** Nothing is created through a link: the check stops at the first segment that is not a real directory. */
     @Test
     fun `nothing is created below a link`() {
@@ -215,4 +263,6 @@ class StateDirectoryTest {
 
         Files.exists(tracked.resolve("orphans")) shouldBe false
     }
+
+    private fun permissionsOf(path: Path): String = PosixFilePermissions.toString(Files.getPosixFilePermissions(path))
 }

@@ -1,8 +1,10 @@
 package com.brokenfinger.tracker.adapter.git
 
 import com.brokenfinger.tracker.adapter.store.FileBackupLog
+import com.brokenfinger.tracker.adapter.store.FileMode
 import com.brokenfinger.tracker.adapter.store.FileProblemTimer
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
+import com.brokenfinger.tracker.adapter.store.FileReplacement
 import com.brokenfinger.tracker.adapter.store.RecordRepositoryIgnores
 import com.brokenfinger.tracker.adapter.store.SeedLedger
 import com.brokenfinger.tracker.adapter.store.StateDirectory
@@ -422,6 +424,88 @@ class CommandLineGitSyncTest {
         sync().reconcile() shouldBe true
 
         filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+    }
+
+    // A temporary file a replace makes, and a crash leaves, is never committed (#386) ---------------
+
+    /**
+     * A record file is written beside itself and moved over itself, and a process killed between the two leaves the
+     * temporary file behind; a reconcile racing a live write sees one too. Reconciliation stages everything but `.ps`,
+     * so either was committed. The files here are made by the replace itself, under the name it gives them.
+     */
+    @Test
+    fun `a temporary file a replace left beside a record is never committed`() {
+        val left = listOf("problems/120804/README.md", "tags/dp.md", "dashboard.base").map { leftBehind(it) }
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+        left.forEach { Files.exists(it) shouldBe true }
+    }
+
+    /** What a crash left, and nothing else, is not a change: no commit, empty or otherwise. */
+    @Test
+    fun `a temporary file alone is nothing to reconcile`() {
+        written("log/submissions.jsonl", RECORD)
+        git("add", "--all")
+        git("commit", "--message", "records")
+        leftBehind("problems/120804/README.md")
+
+        sync().reconcile() shouldBe true
+
+        subjects() shouldContainExactly listOf("records")
+    }
+
+    /** Only the tracker's own name is left out: a file of the owner's that merely ends in `.tmp` is a record like any. */
+    @Test
+    fun `a file of the owner's that ends in tmp is committed as any other`() {
+        written("notes/.draft.tmp", "a draft\n")
+        written("notes/scratch.tmp", "scratch\n")
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("notes/.draft.tmp", "notes/scratch.tmp")
+    }
+
+    /**
+     * Nor is every name with the tracker's ending: a replace makes its temporary file hidden, so only a hidden one is
+     * left out, and a visible file of the owner's that happens to end the same way is committed (#386's review).
+     */
+    @Test
+    fun `a visible file of the owner's with the tracker's ending is committed as any other`() {
+        written("notes/report${FileReplacement.TEMP_SUFFIX}", "a report\n")
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf("notes/report${FileReplacement.TEMP_SUFFIX}")
+    }
+
+    /**
+     * An exclusion that names an ignored path makes `add --all` exit 1, which is why `.ps` is spelled as a glob. This
+     * one names no path before its first wildcard, so an owner's rule that ignores the same files changes nothing.
+     */
+    @Test
+    fun `an owner's rule that ignores temporary files does not stop reconciliation`() {
+        written(".gitignore", "*.tmp\n")
+        leftBehind("problems/120804/README.md")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
+    }
+
+    /** Nor does the rule the server seeds for that very name (#386's review): the exclusion still names no path. */
+    @Test
+    fun `the seeded rule for the temporary file does not stop reconciliation`() {
+        written(".gitignore", ".*${FileReplacement.TEMP_SUFFIX}\n")
+        leftBehind("problems/120804/README.md")
+        written("log/submissions.jsonl", RECORD)
+
+        sync().reconcile() shouldBe true
+
+        filesInHead() shouldContainExactly listOf(".gitignore", "log/submissions.jsonl")
     }
 
     /** A timer ticked or a frame landed, and nothing else moved: that is nothing to reconcile, not an empty commit. */
@@ -2170,6 +2254,13 @@ class CommandLineGitSyncTest {
         run(listOf("check-ignore", "--quiet", "--no-index", root.relativize(file).joinToString("/")), root).first == 0
 
     private fun sync(waitFor: (Duration) -> Unit = {}) = CommandLineGitSync(root, waitFor = waitFor)
+
+    // The temporary file a replace of [relative] makes first, left where a crash would leave it.
+    private fun leftBehind(relative: String): Path {
+        val target = root.resolve(relative)
+        Files.createDirectories(target.parent)
+        return FileReplacement(FileMode.KEPT_ELSE_PLAIN).temporaryBeside(target).also { Files.writeString(it, "half") }
+    }
 
     /** Every commit a repository holds, with its full diff — what a push could ever have delivered there. */
     private fun everythingAt(repository: Path): String =

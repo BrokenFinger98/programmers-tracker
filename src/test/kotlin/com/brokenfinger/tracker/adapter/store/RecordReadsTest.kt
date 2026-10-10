@@ -264,6 +264,35 @@ class RecordReadsTest {
         warnings.single() shouldContain "log is a symbolic link"
     }
 
+    /** Once for each reason, not once for the reader: a refusal for another reason is said too (#386's review). */
+    @Test
+    fun `a refusal for each of two reasons is said for each`() {
+        val reads = RecordReads.underRoot(root, setOf("log", "tags"))
+        val directory = Files.createDirectories(root.resolve("log/submissions.jsonl"))
+        val outOfBounds = written("other.md", "not kept here\n")
+
+        val warnings = warningsWhile(RecordReads::class) {
+            shouldThrow<RefusedReadException> { reads.readAllBytes(directory) }
+            shouldThrow<RefusedReadException> { reads.readAllBytes(outOfBounds) }
+        }
+
+        warnings.size shouldBe 2
+    }
+
+    /** The words of a refusal, pinned before #386 shares how a reason is said once. */
+    @Test
+    fun `a refusal is said in exactly these words`() {
+        val token = aPushTokenIn(root)
+
+        val heard = warningsWhile(RecordReads::class) {
+            shouldThrow<RefusedReadException> { logReads().readAllBytes(token) }
+        }
+
+        heard.single() shouldBe "Not reading $token: it is none of the names kept at the root for it: log. A file " +
+            "the records repository keeps is read through real directories and never through a link, as it is " +
+            "written (#387). Said once for this reason."
+    }
+
     private fun logReads() = RecordReads.underRoot(root, setOf("log"))
 
     private fun written(relative: String, text: String): Path {
