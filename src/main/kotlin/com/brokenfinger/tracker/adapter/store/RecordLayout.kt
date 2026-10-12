@@ -77,9 +77,16 @@ class RecordLayout(private val root: Path) {
      */
     fun problemIndex(): Path = root.resolve(PROBLEMS).resolve("$PROBLEM_PAGE.md")
 
+    /** The repository's front page, `README.md` — the index, where github.com opens the repository (#414). */
+    fun rootIndex(): Path = root.resolve(ROOT_INDEX)
+
     /** A problem page's path **as written from the index beside it**, one directory down. */
     fun problemNoteLinkFromIndex(lessonId: Long, title: String?): String =
         "${problemDirectory(lessonId, title).fileName}/$PROBLEM_PAGE.md"
+
+    /** A problem page's path **as written from the front page**, two directories down (#414). */
+    fun problemNoteLinkFromRoot(lessonId: Long, title: String?): String =
+        "$PROBLEMS/${problemNoteLinkFromIndex(lessonId, title)}"
 
     /** The code of one attempt — `attempts/NNN.<ext>`, the extension following its language. */
     fun attemptFile(lessonId: Long, title: String?, attempt: Int, language: String?): Path =
@@ -169,6 +176,9 @@ class RecordLayout(private val root: Path) {
 
         /** The page [ProblemReadme] writes, named here because links point at it. */
         private const val PROBLEM_PAGE = "README"
+
+        /** The front page [RootIndex] writes, the one name it keeps at the root (#414). */
+        internal const val ROOT_INDEX = "$PROBLEM_PAGE.md"
         const val STATEMENT = "statement"
         private const val ATTEMPTS = "attempts"
         private const val SUBMISSION_LOG = "$LOG/submissions.jsonl"

@@ -8,7 +8,7 @@ import java.nio.file.Path
  *
  * The record repository is the product, and opening it on github.com showed nothing:
  * `dashboard.base` renders as raw YAML because it is an Obsidian query and Obsidian is not there,
- * the root `README.md` is a usage guide, and `problems/` is a folder listing. Everything the
+ * the root `README.md` was a usage guide, and `problems/` is a folder listing. Everything the
  * repository knows was in it and none of it was legible where a browser opens.
  *
  * A **directory README**, because GitHub renders one at the root of any directory — and browsing
@@ -16,12 +16,16 @@ import java.nio.file.Path
  * ownership category: this file is regenerated from the records like every problem page and tag
  * note beside it, rather than being a fourth kind of file with its own rules.
  *
+ * **Since #414 the front page carries the same table** ([RootIndex]), and this page stays as it was: the one place
+ * the index always is, whoever the front page belongs to. Both render through [IndexTable], so they cannot disagree.
+ *
  * **Counts, never a verdict.** How many problems and how many passed are facts; newest-first is an
  * ordering of when things happened, not a ranking of anything
  * ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]).
  */
 class ProblemIndex(private val layout: RecordLayout) {
     private val writes = RecordWrites.underProblems(layout)
+    private val table = IndexTable(layout::problemNoteLinkFromIndex)
 
     /**
      * Null when there is nothing recorded, and no file either.
@@ -38,11 +42,26 @@ class ProblemIndex(private val layout: RecordLayout) {
     fun write(records: List<SubmissionRecord>): Path? {
         if (records.isEmpty()) return null
         val file = layout.problemIndex()
-        return file.takeIf { writes.replaceOrSkip(it, render(records)) }
+        return file.takeIf { writes.replaceOrSkip(it, HEADING + table.render(records)) }
     }
 
-    private fun render(records: List<SubmissionRecord>): String =
-        byProblem(records).let { HEADING + summary(it) + table(it) }
+    private companion object {
+        const val HEADING = "# Problems\n"
+    }
+}
+
+/**
+ * The index's counts and its table, one row per problem — what `problems/README.md` and the front page both carry
+ * (#292, #414). The two differ only in where a link starts, so each hands in how a problem's page is linked from it,
+ * which [RecordLayout] answers: a problem Programmers renamed is linked at the directory it has (#233).
+ */
+internal class IndexTable(private val linkOf: (lessonId: Long, title: String?) -> String) {
+    /** The counts, then the table — none when nothing is recorded, since a table with no rows reads as a defect. */
+    fun render(records: List<SubmissionRecord>): String {
+        val problems = byProblem(records)
+        if (problems.isEmpty()) return summary(problems)
+        return summary(problems) + table(problems)
+    }
 
     /**
      * One row per problem, newest submission first — and a problem with only runs still counts,
@@ -85,7 +104,7 @@ class ProblemIndex(private val layout: RecordLayout) {
      */
     private fun link(record: SubmissionRecord): String {
         val title = record.title.ifBlank { null } ?: record.lessonId.toString()
-        return "[$title](${layout.problemNoteLinkFromIndex(record.lessonId, record.title)})"
+        return "[$title](${linkOf(record.lessonId, record.title)})"
     }
 
     /** Absent stays absent — an em dash rather than a blank cell, which reads as a table defect. */
@@ -93,7 +112,6 @@ class ProblemIndex(private val layout: RecordLayout) {
 
     private companion object {
         const val PASS = "PASS"
-        const val HEADING = "# Problems\n"
         const val HEADER = "| Problem | Level | Kind | Language | Verdict | Submits | Last submit |"
         const val SEPARATOR = "|---|---|---|---|---|---|---|"
     }
