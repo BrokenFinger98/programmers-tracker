@@ -1,11 +1,13 @@
 package com.brokenfinger.tracker.adapter.store
 
+import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.support.fixtures.NOT_OURS
 import com.brokenfinger.tracker.support.fixtures.aFileNotOurs
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.madeFifo
+import com.brokenfinger.tracker.support.logging.loggedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -152,6 +154,23 @@ class VaultDashboardTest {
 
         Files.exists(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
         Files.readString(root.resolve("GUIDE.md")) shouldContain "## Structure"
+    }
+
+    /**
+     * The owner's only notice that the guide moved: which file was taken away, and what stands in its place. A
+     * line nobody asserts on is a line that can go missing unnoticed — the mutant that dropped it survived.
+     */
+    @Test
+    fun `a README taken away is said, with what stands in its place`() {
+        seededEarlier("README.md", AN_OLDER_GUIDE)
+
+        val heard = loggedWhile(VaultDashboard::class, Level.INFO) {
+            VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+        }
+
+        val said = heard.single { it.startsWith("Took ") }
+        said shouldContain root.resolve("README.md").toString()
+        said shouldContain "the guide is GUIDE.md"
     }
 
     /** The rule #254 states: editing is respected forever. One character is an edit. */
