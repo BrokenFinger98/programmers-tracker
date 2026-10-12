@@ -63,7 +63,15 @@ guide, a page of their own, a link, a guide seeded before the ledger existed.
 **The guide it was is judged by the ledger, once, at boot.** `VaultDashboard` applies #300's test to
 the two retired seeds. A file still holding the recorded bytes was never anybody's, so it is taken
 away. `README.md` then holds nothing, and the index takes it in the same boot. `README.ko.md` gives
-way to `GUIDE.ko.md`. One byte different, or no record at all, and the file is kept as it is.
+way to `GUIDE.ko.md`. One byte different, or no record at all, and the file is kept as it is. The
+review added two conditions:
+
+- **What replaces it must be there.** A retired seed goes only while its guide (`GUIDE.md` for
+  `README.md`, `GUIDE.ko.md` for `README.ko.md`) is a regular file, judged without following a link.
+- **The pair goes together.** The old `README.md` links `README.ko.md` by name under its title. So
+  the twin goes only when the README is gone (absent, or retired in the same pass) or is the index.
+  A README kept as the owner's keeps its twin, or their page would link nothing. Only the twin
+  edited still retires the README and keeps the twin.
 
 **The index it becomes is never compared with the ledger.** The ledger's `README.md` entry names the
 old guide, and no index will ever hash to it. Had the ledger stayed the comparison, the second boot
@@ -86,9 +94,17 @@ remembering were considered:
 **Chosen: the page carries its own seal** (`PageSeal`, in `RootIndex.kt`).
 
 - Its first line is an HTML comment holding the SHA-256 of everything after it.
-- The page is the server's only while it is exactly the seal of its own body, followed by that body.
-- One byte changed anywhere breaks the seal, and the page is then the owner's. That covers the body,
-  the comment, and a line added above, inside or below.
+- The page is the server's only while its first line is a seal and the seal's digest is the SHA-256
+  of the body after the first line break.
+- A byte of the body changed breaks the seal, and the page is then the owner's. So does a line added
+  above the seal, inside it (which splits it over two lines) or below it.
+- **The framing is a format; the words are free** (the review's finding 1). A seal is one line,
+  from `<!--` to ` -->`, holding `sha256:` and exactly 64 lowercase hex. Every deployed page carries
+  that framing, so changing it needs a reader for the old one beside it. The words between are
+  presentation and are not checked: the first version compared the whole line with today's words,
+  so a release that reworded them would have orphaned every deployed page. A page sealed under
+  older words is the server's, and is rewritten under the new. A golden test pins the first line
+  this version writes.
 - It is the ledger's notion, "exactly the bytes this server wrote", carried in the file it vouches
   for. So it survives a clone, needs no state, and costs nothing per grading.
 - It is written beside the page and moved over it with the page, as one file, through
@@ -106,9 +122,12 @@ carries a valid seal, so it is never taken for an owner's edit. An owner's edit 
 it is never taken for a regenerated index.
 
 **A front page that is the owner's is never written.** The index stays in `problems/README.md`, and
-the server says so once for each run. It logs a `WARN` through `SaidOnce`, naming the file and where
-the index is, never its content. A link at `README.md` is the owner's, as at a seed (#361): left
-alone, never written through or over.
+the server says so once for each run through `SaidOnce`, naming the file and where the index is,
+never its content. A page that reads but carries no seal of its body is the owner's choice, so it
+is stated at INFO, not warned, as a repository with no remote is: the first version warned, and the
+review moved it (finding 8). Its message names the guide an older version seeded among what the
+page can be (finding 5). What the read refuses (a link, a FIFO, a directory) is warned. A link at
+`README.md` is the owner's, as at a seed (#361): left alone, never written through or over.
 
 **This is neither marker #300 nor #292 rejected.** #300 rejected a marker inside a seed. A seed is a
 document its reader is expected to make their own, and a marker would sit in their way. The index is
@@ -146,6 +165,10 @@ Written by [programmers-tracker](https://github.com/BrokenFinger98/programmers-t
   #292's property still holds, restated: a boot that recovered nothing commits nothing, because the
   page is the same bytes at every boot. A fresh repository's first boot commits the page alone, beside
   the seeds.
+- **An empty history leaves a page already there as it is** (the review's finding 4). A history read
+  as empty, with the log moved away or every line unreadable, rewrote the front page to zero, where
+  `problems/README.md` is left as it is. Both are left now; only a repository with no page gets the
+  zero-count one.
 - **Links through `RecordLayout`.** `problemNoteLinkFromRoot` resolves the directory a problem has,
   so a problem Programmers renamed is linked where it is (#233).
 
@@ -162,7 +185,9 @@ Written by [programmers-tracker](https://github.com/BrokenFinger98/programmers-t
 `removeFile` could not remove a file at the root's own level. It found the directory to walk as the
 file's parent, which at the root is the root itself: no name below it, so the bound refused it as
 outside the repository. The first green run caught this. It now walks to the file as a write does, so
-the root's level and `problems/` take the same path.
+the root's level and `problems/` take the same path. The review found that the walk resolved the
+records root's real path first, so a root that is not there threw where it had answered "nothing
+left there" (finding 6); the target's directory is looked for before the walk again.
 
 ## Accepted costs
 
@@ -178,7 +203,21 @@ the root's level and `problems/` take the same path.
 - **The read and the replace are not one step.** An edit saved in the instant between them is
   overwritten. The seeds have the same window.
 - **A guide seeded before the ledger existed is kept**, with the index only in `problems/README.md`.
-  Absence is not permission (#300).
+  Absence is not permission (#300). The same holds wherever the ledger cannot vouch for the old
+  guide (the review's finding 5, accepted): on a clone with no ledger, or in a CRLF checkout whose
+  bytes the recorded hash does not match, the old guide is kept as the owner's, and the server
+  states that once at each start. Removing `README.md` by hand gives the index. Matching the hashes
+  of every guide ever shipped was not added (YAGNI).
+- **A front page edited on github.com stops the pushes** (the review's finding 3). The server never
+  pulls or fetches. A commit made on the website puts the remote ahead, so every later push is
+  rejected (git: the branch is behind its remote counterpart), logged as a failed push and left to
+  the daily backup, and records stop reaching GitHub until the owner merges by hand. On the front
+  page that merge conflicts wherever the web edit meets the lines a grading rewrites, and the seal
+  line changes at every grading. Measured on the critic's simulation: the push was rejected, and the
+  merge stopped with a content conflict in `README.md`. An edit at the bottom of a ten-row table, far
+  from the rewritten lines, merged cleanly and left a page whose seal no longer matches, which is
+  then the owner's. The guide now says to edit in the clone the tracker writes to, never on
+  github.com.
 - **A `GUIDE.md` the owner already had is theirs.** The guide is not seeded over it, an untouched old
   README is still retired, and the front page's link leads to the owner's file. The old guide's text
   is then only in the repository's history.
@@ -205,9 +244,11 @@ application and config tests, 1,100 tests a run.
 - 23 were killed at first.
 - The survivor dropped the INFO line that says a retired seed was taken away. Nothing asserted on the
   owner's only notice of the move. A test now does, and kills it.
-- One planned mutant compared the seal's first line alone. It was equivalent to the original, so it
-  was replaced by one that compares the digest alone. That one showed no test edited the mark's own
-  words; a test case now does.
+- ⚠️ (old) — "One planned mutant compared the seal's first line alone. It was equivalent to the
+  original, so it was replaced by one that compares the digest alone. That one showed no test edited
+  the mark's own words; a test case now does." **Reversed by the review** (finding 1): the words are
+  free, so a page whose seal words differ is the server's, and that case became the
+  forward-compatibility test.
 
 **Measured on a copy of the owner's records** (`b1e116e`, with its remote removed, the push credential
 emptied and no token given). The built jar was booted with `TRACKER_RECORD_REPO` pointing at the copy.
@@ -221,6 +262,37 @@ emptied and no token given). The built jar was booted with `TRACKER_RECORD_REPO`
 - **Boot 2** made no commit and left a clean tree, with all 256 files outside `.git` and `.ps`
   byte-identical.
 - **Boot 3** ran after a line was added to `README.md`. The file kept its bytes, the server warned
-  once, and the index stayed in `problems/README.md`.
+  once, and the index stayed in `problems/README.md`. Since the review that is said at INFO.
 
-⚠️ Not yet run in the owner's container, and CI has not run the branch.
+CI ran green on ubuntu, macos and windows at `b94053e`, before the review round. ⚠️ Not yet run in the
+owner's container.
+
+### Review round 1 (2026-10-12, PR #415)
+
+An independent critic found nothing blocking, and no way the owner's content is lost. Its ten
+findings, each with a test shown failing first, in new commits:
+
+| # | Finding | Answer |
+|---|---|---|
+| 1 | The seal's words were compared, so rewording them would orphan every deployed page | Framing checked, words free; golden and forward-compatibility tests (`e41ea86`) |
+| 2 | The pair retired unevenly: an owner's README linked a twin that was gone | The twin goes only with the README gone or the index (`05a6a38`) |
+| 3 | A front page edited on github.com stops the pushes | Measured; the guide says so, and an accepted cost above |
+| 4 | An empty history zeroed the front page | Left as it is when a page is there (`7ed7dba`) |
+| 5 | Retirement relies on the per-machine ledger | Accepted; the message names the old guide (`24d43ce`), a cost above |
+| 6 | `removeFile` threw for a missing records root | True again, as before (`cb5f4cb`) |
+| 7 | Retirement did not check what replaces it | Only while its guide is a regular file (`05a6a38`) |
+| 8 | Log levels and wording | INFO for the owner's page, WARN for a refused read (`24d43ce`); "Could not retire" (`05a6a38`) |
+| 9 | The 2026-08-13 ADR still said deleting the README resurrects it | Marked ⚠️ (old), linked here |
+| 10 | Test gaps | A FIFO and a directory at `README.md` for both writers; the Korean twin's notice |
+
+The critic's harness cases, rerun after the fixes:
+
+- `pair` keeps the twin.
+- `absent-root` answers true.
+- `empty2` leaves the page at its count.
+- `note` finds the page sealed under older words intact. Its own write is empty, so it leaves the
+  page, as finding 4 decided.
+- `pair-reverse` retires the README and keeps the edited twin, as before.
+- `noledger` and `crlf-retire` keep the old guide, as accepted, and are stated at INFO.
+- `bom` and `case` are unchanged. A BOM is a byte added above the seal, so the page is the owner's.
+  `Readme.md` on a case-folding volume held the untouched seed's exact bytes, so it was retired.

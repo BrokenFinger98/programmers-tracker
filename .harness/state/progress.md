@@ -6384,3 +6384,43 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Remaining.** Not run in the owner's container; CI has not run the branch, Windows included. A `GUIDE.md` the
   owner already had is kept, and the old guide's text is then only in history.
 - **Pending.** Not pushed.
+
+## 2026-10-12 — #414 PR #415's review round 1 (branch feat/414-root-index)
+- **Where it stood.** CI green on all three OSes at `b94053e`; the critic found nothing blocking and no way the
+  owner's content is lost. Ten findings, each fixed in a new commit with its test shown failing first; no amend, no
+  rebase, nothing pushed.
+- `cb5f4cb` **6: a missing records root removes nothing.** Walked to the file, `removeFile` resolved the root's real
+  path first and threw `NoSuchFileException`; it looks for the target's directory first again. Red: 1 of 61.
+- `e41ea86` **1: the seal's framing, not its words.** `isIntact` rebuilt the line with today's words, so a reworded
+  `NOTE` would have orphaned every deployed page. Now a seal is one line from `<!--` to ` -->` holding `sha256:` and
+  exactly 64 lowercase hex, and its digest must be the body's; the words are free. A golden test pins this version's
+  first line (digest taken with `shasum`). Red: 2 of 23 (a page under other words; a well-framed seal with other
+  words).
+- `7ed7dba` **4: an empty history leaves the front page**, as `problems/README.md` is left; a repository with no page
+  still gets the zero-count one. Red: 1 of 24.
+- `24d43ce` **8, 5 (message), 10: an owner's front page is stated at INFO**, naming the guide an older version
+  seeded among what it can be; a refused read (link, FIFO, directory) stays a WARN. Red: 2 of 26 (warned, not
+  stated; no message of its own for a refused read). FIFO and directory cases pin the WARN.
+- `05a6a38` **2, 7, 8, 10: the README pair retires together.** The twin goes only when the README is gone (absent, or
+  retired in the same pass) or is the index; a retired seed goes only while its guide is a regular file, no link
+  followed; a failed retirement says "Could not retire". Red: 7 of 48 (the twin retired beside an owner's README; a
+  README retired with a link or a directory at its guide; a twin retired with a directory at `GUIDE.ko.md`; "Could
+  not seed" for a FIFO and a directory; the boot test's commit). The old guide's link line, word for word, is in
+  the test now; the first round's guide had no link, which is why it missed this.
+- **Docs** (the commit after them). **3:** the server never pulls or fetches; a web commit makes every later push
+  fail (measured on a copy of the critic's simulation: rejected, "the tip of your current branch is behind"), and the
+  hand merge conflicts where the edit meets the lines a grading rewrites ("CONFLICT (content): Merge conflict in
+  README.md"; an edit at the bottom of a ten-row table merged cleanly). `GUIDE.md` says to edit in the clone, the
+  twin follows, `translated-from` refreshed (guards red until then). **5:** accepted; an accepted cost in the ADR.
+  **9:** the 2026-08-13 ADR's line marked ⚠️ (old) and linked. The ADR, its index line and this file record the
+  round.
+- **The critic's harness**, rerun after the fixes: `pair` keeps the twin; `absent-root` answers true; `empty2` leaves
+  the page at 2; `note` is intact (its own write is empty, so it leaves the page, by finding 4); `pair-reverse` as
+  before; `noledger` and `crlf-retire` keep the old guide, stated at INFO; `bom` and `case` as designed.
+- **Gates**, all exit 0, at `05a6a38` with the docs staged: check; test (2,781 JUnit in 179 classes, 0 failures,
+  14 skipped as before; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 818 of 932; `application`
+  90%, 396 of 439; every package at or above its floor); guards (12 of 12).
+- **Remaining.** CI has not run the round; not run in the owner's container. A web edit far from the rewritten lines
+  merges cleanly and leaves the page the owner's (frozen at that merge), which the guide's advice avoids rather than
+  prevents.
+- **Pending.** Not pushed; the coordinator pushes.

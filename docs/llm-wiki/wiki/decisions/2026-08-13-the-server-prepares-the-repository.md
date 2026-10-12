@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [git, bootstrap, security, vault]
 author: BrokenFinger98
 created: 2026-08-13
-updated: 2026-08-13
+updated: 2026-10-12
 sources: [raw/sessions/2026-08-13-the-map-becomes-a-workspace.md]
 ---
 
@@ -80,8 +80,11 @@ behind the same private check — so a crash between creation and wiring heals o
 - **A repo-creating token is broader than this tool needs**, and for its useful window it sits
   beside the session cookie. Chosen by the owner over the host-side one-liner that avoids it;
   the window is one boot.
-- **Deleting the seeded README resurrects it.** Editing is respected forever; deletion is read
-  as loss, not intent. The rarer intent loses.
+- ⚠️ (old) — "**Deleting the seeded README resurrects it.** Editing is respected forever; deletion
+  is read as loss, not intent. The rarer intent loses." **Changed on 2026-10-12 (#414)**: the
+  README is no seed any more but the index, and deleting it brings the index back rather than the
+  guide; the guide is `GUIDE.md`, a seed under the same rule
+  ([[decisions/2026-10-12-the-front-page-is-the-index]]).
 - **A defaulted record path means data lands somewhere the user did not type.** Contained by the
   boot announcement and by the default being the path every document already suggested.
 - **SSH is retired outright, not demoted** — a further owner call on the same day. The deploy-key

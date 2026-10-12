@@ -27,8 +27,12 @@ log/submissions.jsonl  Full submission log (the source the MCP tools read)
 ```
 
 **The front page is the index until you change it.** `README.md` is rewritten after every
-grading. Edit anything in it and it is yours: the server never writes it again, says so at each
-start, and the index carries on in `problems/README.md`. Delete it and the index comes back.
+grading. Change what it says, or add to it, and it is yours: the server never writes it again,
+says so at each start, and the index carries on in `problems/README.md`. Delete it and the index
+comes back. **Make such edits — to the front page or any page the server writes — in the clone
+the tracker writes to, never on github.com**: the server never pulls, so a commit made on the
+website makes every later push fail until you merge it by hand, and on the front page that merge
+conflicts wherever your edit meets the lines a grading rewrites.
 
 **`dashboard.base` is written once, on the first start that finds it missing, and never again.**
 It is an [Obsidian Base](https://help.obsidian.md/bases) — a *query*, not a copy of your records,
