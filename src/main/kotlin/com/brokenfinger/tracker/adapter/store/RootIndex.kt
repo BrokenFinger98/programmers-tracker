@@ -21,9 +21,9 @@ import java.security.MessageDigest
  *
  * ### Whose it is
  *
- * The server's while it is **exactly the page the server wrote**, the owner's the moment one character differs — the
- * rule [SeedLedger] keeps for the seeds (#300), and never a mix of the two in one file. What the server wrote is not
- * looked up in the ledger, though, and cannot be:
+ * The server's while it is **exactly the page the server wrote** — its seal's words aside, which a release may
+ * reword — the owner's the moment a byte of it differs: the rule [SeedLedger] keeps for the seeds (#300), and never a
+ * mix of the two in one file. What the server wrote is not looked up in the ledger, though, and cannot be:
  * - the page changes at every grading, and the ledger is written through the state directory, which asks git what
  *   it tracks before every write (#360) — a git process per grading;
  * - `.ps` is never committed, so a clone, or a ledger lost or corrupt, has no record, and no record means edited: the
@@ -31,11 +31,16 @@ import java.security.MessageDigest
  * - a crash between the page and the ledger leaves them disagreeing, and the page is taken for an edit the same way.
  *
  * So the page carries its own proof: [PageSeal], a first line holding the digest of the rest, written and moved over
- * the old page as one file. Anything else at `README.md` — an edit of the page, a page of the owner's own, the guide
- * an older server seeded and someone edited, a link — is left alone, and said once: the index carries on in
- * `problems/README.md`. Nothing there at all is the server's, which is how a fresh repository gets the page, and how
- * an owner who deletes theirs gets the index back. The guide an older server seeded and nobody touched is the
- * ledger's to judge, at boot: [VaultDashboard] takes it away, and this then finds nothing there.
+ * the old page as one file. Anything else at `README.md` is left alone, and said once, while the index carries on in
+ * `problems/README.md`:
+ * - a page that reads but carries no seal of its body — an edit of the page, a page of the owner's own, the guide an
+ *   older version seeded that the ledger could not vouch for (edited, on a clone with no ledger, in a CRLF checkout) —
+ *   is the owner's choice, and is stated at INFO, not warned, as a repository with no remote is (#414's review);
+ * - what the read refuses — a link, a FIFO, a directory — or cannot read is warned.
+ *
+ * Nothing there at all is the server's, which is how a fresh repository gets the page, and how an owner who deletes
+ * theirs gets the index back. The guide an older version seeded and nobody touched is the ledger's to judge, at boot:
+ * [VaultDashboard] takes it away, and this then finds nothing there.
  *
  * Written through [RecordWrites] like every derived page: beside its name and moved over it, never through a link, and
  * skipped and said when refused or failed (#361, #407). Read through [RecordReads], the same walk, so a page the read
@@ -57,20 +62,21 @@ class RootIndex(private val layout: RecordLayout) {
         return when (standingAt(file)) {
             Standing.NOTHING -> written(file, records)
             Standing.SEALED -> rewritten(file, records)
-            Standing.THE_OWNERS -> leftAlone(file)
+            Standing.UNSEALED -> leftAlone(file, UNSEALED) { logger.info(UNSEALED, file) }
+            Standing.UNREADABLE -> leftAlone(file, UNREADABLE) { logger.warn(UNREADABLE, file) }
         }
     }
 
-    // What stands at the front page: nothing, a page this server sealed, or anything else. What the read refuses is
-    // no page of the server's.
+    // What stands at the front page: nothing, a page this server sealed, a page it did not, or nothing the read takes
+    // for a page. Neither of the last two is the server's to replace.
     private fun standingAt(file: Path): Standing {
         val current = try {
             reads.readAllBytes(file)
         } catch (refused: IOException) {
-            return Standing.THE_OWNERS
+            return Standing.UNREADABLE
         } ?: return Standing.NOTHING
         if (PageSeal.isIntact(current)) return Standing.SEALED
-        return Standing.THE_OWNERS
+        return Standing.UNSEALED
     }
 
     // A history read as empty — a log moved away, every line unreadable — is no count to put on a page already there:
@@ -83,12 +89,13 @@ class RootIndex(private val layout: RecordLayout) {
     private fun written(file: Path, records: List<SubmissionRecord>): Path? =
         file.takeIf { writes.replaceOrSkip(it, PageSeal.sealed(HEADER + table.render(records))) }
 
-    private fun leftAlone(file: Path): Path? {
-        said.say(file) { logger.warn(LEFT_ALONE, file) }
+    // Said once for this instance, for each way a page is the owner's, and left as it is.
+    private fun leftAlone(file: Path, why: String, words: () -> Unit): Path? {
+        said.say(why to file, words)
         return null
     }
 
-    private enum class Standing { NOTHING, SEALED, THE_OWNERS }
+    private enum class Standing { NOTHING, SEALED, UNSEALED, UNREADABLE }
 
     private companion object {
         val logger = LoggerFactory.getLogger(RootIndex::class.java)
@@ -98,10 +105,16 @@ class RootIndex(private val layout: RecordLayout) {
             "Written by [programmers-tracker](https://github.com/BrokenFinger98/programmers-tracker) after every " +
             "grading. The guide: [English](GUIDE.md) · [한국어](GUIDE.ko.md).\n"
 
-        const val LEFT_ALONE =
-            "Left {} alone: it is not the front page this server last wrote — an edit, a page of your own or a " +
-                "link — so it is yours, and the index is in problems/README.md alone. Remove it and the index " +
-                "takes its place again (#414). Said once until the next start."
+        /** Stated, not warned: a page the owner made theirs is their choice, not a fault (#414's review). */
+        const val UNSEALED =
+            "Left {} alone: it is a page this server did not seal — your edit of the index, a page of your own, or " +
+                "the guide an older version seeded — so it is yours, and the index is in problems/README.md alone. " +
+                "Remove it and the index takes its place (#414). Said once until the next start."
+
+        const val UNREADABLE =
+            "Left {} alone: it could not be read as a page — a link, a FIFO, a directory or a file this process may " +
+                "not read — so it is not this server's to replace, and the index is in problems/README.md alone " +
+                "(#414). Said once until the next start."
     }
 }
 

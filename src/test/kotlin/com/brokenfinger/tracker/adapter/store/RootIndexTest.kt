@@ -1,5 +1,6 @@
 package com.brokenfinger.tracker.adapter.store
 
+import ch.qos.logback.classic.Level
 import com.brokenfinger.tracker.domain.SubmissionRecord
 import com.brokenfinger.tracker.domain.Verdict
 import com.brokenfinger.tracker.support.fixtures.NOT_OURS
@@ -9,7 +10,9 @@ import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.aSubmissionRecord
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.fixtures.keepsPosixPermissions
+import com.brokenfinger.tracker.support.fixtures.madeFifo
 import com.brokenfinger.tracker.support.fixtures.unwritableWhile
+import com.brokenfinger.tracker.support.logging.loggedWhile
 import com.brokenfinger.tracker.support.logging.warningsWhile
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
@@ -20,6 +23,7 @@ import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -176,20 +180,29 @@ class RootIndexTest {
             "2 problems recorded"
     }
 
-    /** A front page of the owner's own is theirs: never overwritten, and said once however often the index is due. */
+    /**
+     * A front page of the owner's own is theirs: never overwritten, and said once however often the index is due. It
+     * is their choice rather than a fault, so it is stated, not warned — the rule `StartupReconciliation` follows for a
+     * repository with no remote — and the guide an older version seeded is named among what it can be, since a clone
+     * with no ledger keeps that guide as the owner's (#414's review).
+     */
     @Test
-    fun `a page of the owner's own is never overwritten, and that is said once`() {
+    fun `a page of the owner's own is never overwritten, and that is stated once, not warned`() {
         Files.writeString(readme, "# my records\n")
         val index = index()
+        var stated = emptyList<String>()
 
-        val heard = warningsWhile(RootIndex::class) {
-            repeat(3) { index.write(listOf(aSubmissionRecord())).shouldBeNull() }
+        val warned = warningsWhile(RootIndex::class) {
+            stated = loggedWhile(RootIndex::class, Level.INFO) {
+                repeat(3) { index.write(listOf(aSubmissionRecord())).shouldBeNull() }
+            }
         }
 
         Files.readString(readme) shouldBe "# my records\n"
-        heard.size shouldBe 1
-        heard.single() shouldContain readme.toString()
-        heard.single() shouldContain "problems/README.md"
+        warned.shouldBeEmpty()
+        stated.single() shouldContain readme.toString()
+        stated.single() shouldContain "problems/README.md"
+        stated.single() shouldContain "the guide an older version seeded"
     }
 
     /** One character is an edit, and an edit is the owner's (#300's rule): the page is not written again. */
@@ -311,6 +324,39 @@ class RootIndexTest {
 
         Files.readString(elsewhere) shouldBe NOT_OURS
         Files.isSymbolicLink(readme) shouldBe true
+        heard.single() shouldContain readme.toString()
+        heard.single() shouldContain "could not be read as a page"
+    }
+
+    /**
+     * A FIFO there is refused by the read, which never opens one — a read would wait for a writer that never comes —
+     * so what this pins is that the call returns at all, that nothing replaces the FIFO, and that it is warned once.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO at the front page is left alone, warned once, and not waited on`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        assumeTrue(madeFifo(readme), "no mkfifo on this machine")
+        val index = index()
+
+        val heard = warningsWhile(RootIndex::class) {
+            repeat(2) { index.write(listOf(aSubmissionRecord())).shouldBeNull() }
+        }
+
+        Files.isRegularFile(readme, NOFOLLOW_LINKS) shouldBe false
+        heard.single() shouldContain readme.toString()
+    }
+
+    @Test
+    fun `a directory at the front page is left alone, and warned once`() {
+        Files.createDirectory(readme)
+        val index = index()
+
+        val heard = warningsWhile(RootIndex::class) {
+            repeat(2) { index.write(listOf(aSubmissionRecord())).shouldBeNull() }
+        }
+
+        Files.isDirectory(readme, NOFOLLOW_LINKS) shouldBe true
         heard.single() shouldContain readme.toString()
     }
 
