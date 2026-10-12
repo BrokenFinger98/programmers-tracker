@@ -16,7 +16,8 @@ import java.security.MessageDigest
  * `problems/README.md` carries ([IndexTable]), its links starting at the root. Counts and recorded facts, never a
  * verdict ([[decisions/2026-08-12-the-server-counts-and-names-nothing]]). A fresh repository gets it before its first
  * record, with a count of none and no table: the page that says what the repository is helps its first visitor, and
- * it is the same bytes at every boot until something is recorded.
+ * it is the same bytes at every boot until something is recorded. A page already there is never zeroed by a history
+ * read as empty, which is left as `problems/README.md` leaves it (#414's review).
  *
  * ### Whose it is
  *
@@ -48,28 +49,46 @@ class RootIndex(private val layout: RecordLayout) {
 
     /**
      * Writes the front page for the whole history and returns it — or null when it was not written: the page there is
-     * the owner's, which is said once, or [RecordWrites] did not write it and has said why.
+     * the owner's, which is said once; an empty history met a page already there, which is left as it is; or
+     * [RecordWrites] did not write it and has said why.
      */
     fun write(records: List<SubmissionRecord>): Path? {
         val file = layout.rootIndex()
-        if (!isTheServers(file)) return leftAlone(file)
-        return file.takeIf { writes.replaceOrSkip(it, PageSeal.sealed(HEADER + table.render(records))) }
+        return when (standingAt(file)) {
+            Standing.NOTHING -> written(file, records)
+            Standing.SEALED -> rewritten(file, records)
+            Standing.THE_OWNERS -> leftAlone(file)
+        }
     }
 
-    // Nothing there, or exactly a page this server sealed. What the read refuses is no page of the server's.
-    private fun isTheServers(file: Path): Boolean {
+    // What stands at the front page: nothing, a page this server sealed, or anything else. What the read refuses is
+    // no page of the server's.
+    private fun standingAt(file: Path): Standing {
         val current = try {
             reads.readAllBytes(file)
         } catch (refused: IOException) {
-            return false
-        }
-        return current == null || PageSeal.isIntact(current)
+            return Standing.THE_OWNERS
+        } ?: return Standing.NOTHING
+        if (PageSeal.isIntact(current)) return Standing.SEALED
+        return Standing.THE_OWNERS
     }
+
+    // A history read as empty — a log moved away, every line unreadable — is no count to put on a page already there:
+    // it is left as it is, as problems/README.md is (#414's review).
+    private fun rewritten(file: Path, records: List<SubmissionRecord>): Path? {
+        if (records.isEmpty()) return null
+        return written(file, records)
+    }
+
+    private fun written(file: Path, records: List<SubmissionRecord>): Path? =
+        file.takeIf { writes.replaceOrSkip(it, PageSeal.sealed(HEADER + table.render(records))) }
 
     private fun leftAlone(file: Path): Path? {
         said.say(file) { logger.warn(LEFT_ALONE, file) }
         return null
     }
+
+    private enum class Standing { NOTHING, SEALED, THE_OWNERS }
 
     private companion object {
         val logger = LoggerFactory.getLogger(RootIndex::class.java)

@@ -132,6 +132,23 @@ class RootIndexTest {
         text shouldNotContain "| Problem |"
     }
 
+    /**
+     * A history read as empty — a log moved away, or every line unreadable — is no count to put on a page already
+     * there: it is left as it is, as `problems/README.md` is (#414's review). Only a repository with no page gets the
+     * zero-count one.
+     */
+    @Test
+    fun `an empty history leaves a page already there as it is`() {
+        val index = index()
+        index.write(listOf(aSubmissionRecord(lessonId = 1), aSubmissionRecord(lessonId = 2)))
+        val before = Files.readString(readme)
+
+        index.write(emptyList()).shouldBeNull()
+
+        Files.readString(readme) shouldBe before
+        before shouldContain "2 problems recorded"
+    }
+
     @Test
     fun `it carries no wikilink at all`() {
         render(listOf(aSubmissionRecord())) shouldNotContain "[["
