@@ -232,6 +232,135 @@ class VaultDashboardTest {
         heard.single() shouldContain readme.toString()
     }
 
+    // The pair, and what replaces each (#414's review) ----------------------------------------------------
+
+    /**
+     * Under its title the older guide links its Korean twin by name, so a README the owner keeps keeps its twin too:
+     * retiring the twin alone left their page a dead link (#414's review). The guide here carries that exact line,
+     * which [AN_OLDER_GUIDE] does not, and is why the first test of the pair missed it.
+     */
+    @Test
+    fun `a README kept as the owner's keeps the Korean twin it links`() {
+        seededEarlier("README.md", A_GUIDE_LINKING_ITS_TWIN)
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+        Files.writeString(root.resolve("README.md"), "${A_GUIDE_LINKING_ITS_TWIN}My own line.\n")
+
+        ensure()
+
+        Files.readString(root.resolve("README.md")) shouldContain "](README.ko.md)"
+        Files.readString(root.resolve("README.ko.md")) shouldBe AN_OLDER_GUIDE
+    }
+
+    /** The reverse: only the twin was edited, so the README goes, the index takes its place, and the twin stays. */
+    @Test
+    fun `a README goes while its edited Korean twin stays`() {
+        seededEarlier("README.md", A_GUIDE_LINKING_ITS_TWIN)
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+        Files.writeString(root.resolve("README.ko.md"), "$AN_OLDER_GUIDE ")
+
+        ensure()
+
+        Files.exists(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
+        Files.readString(root.resolve("README.ko.md")) shouldBe "$AN_OLDER_GUIDE "
+    }
+
+    /** Both untouched: the README goes first in the same pass, and with it gone nothing links the twin, which goes. */
+    @Test
+    fun `an untouched pair goes together in one pass`() {
+        seededEarlier("README.md", A_GUIDE_LINKING_ITS_TWIN)
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+
+        ensure()
+
+        Files.exists(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
+        Files.exists(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /** A README that is already the index links no twin: the twin left behind by an earlier pass goes now. */
+    @Test
+    fun `the Korean twin goes once the README is the index`() {
+        RootIndex(RecordLayout(root)).write(emptyList())
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+
+        ensure()
+
+        Files.exists(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /** What replaces a README must be a regular file, judged without following a link: a link at the guide is none. */
+    @Test
+    fun `a README stays while a link stands where its guide should be`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        seededEarlier("README.md", AN_OLDER_GUIDE)
+        aLink(root.resolve("GUIDE.md"), aFileNotOurs(outside))
+
+        ensure()
+
+        Files.readString(root.resolve("README.md")) shouldBe AN_OLDER_GUIDE
+    }
+
+    @Test
+    fun `a README stays while a directory stands where its guide should be`() {
+        seededEarlier("README.md", AN_OLDER_GUIDE)
+        Files.createDirectory(root.resolve("GUIDE.md"))
+
+        ensure()
+
+        Files.readString(root.resolve("README.md")) shouldBe AN_OLDER_GUIDE
+    }
+
+    /** Each retired seed has its own guide: the Korean twin waits for `GUIDE.ko.md`, whatever `GUIDE.md` is. */
+    @Test
+    fun `a Korean twin stays while a directory stands where its guide should be`() {
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+        Files.createDirectory(root.resolve("GUIDE.ko.md"))
+
+        ensure()
+
+        Files.readString(root.resolve("README.ko.md")) shouldBe AN_OLDER_GUIDE
+    }
+
+    @Test
+    fun `a Korean twin taken away is said, with what stands in its place`() {
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+
+        val heard = loggedWhile(VaultDashboard::class, Level.INFO) { ensure() }
+
+        val said = heard.single { it.startsWith("Took ") }
+        said shouldContain root.resolve("README.ko.md").toString()
+        said shouldContain "the Korean guide is GUIDE.ko.md"
+    }
+
+    /**
+     * A retirement that fails is said as one, naming the file; it was said as a seed that could not be written. A FIFO
+     * is refused by the read, which never opens one, so the call returns, and the FIFO stays where it is.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a FIFO where a README was is not retired, said, and not waited on`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes a FIFO")
+        assumeTrue(madeFifo(root.resolve("README.md")), "no mkfifo on this machine")
+        SeedLedger(root, aStateDirectory(root)).record("README.md", AN_OLDER_GUIDE)
+
+        val heard = warningsWhile(VaultDashboard::class) { ensure() }
+
+        Files.isRegularFile(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
+        heard.single() shouldContain "Could not retire ${root.resolve("README.md")}"
+    }
+
+    @Test
+    fun `a directory where a README was is not retired, and said`() {
+        Files.createDirectory(root.resolve("README.md"))
+        SeedLedger(root, aStateDirectory(root)).record("README.md", AN_OLDER_GUIDE)
+
+        val heard = warningsWhile(VaultDashboard::class) { ensure() }
+
+        Files.isDirectory(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe true
+        heard.single() shouldContain "Could not retire ${root.resolve("README.md")}"
+    }
+
+    private fun ensure() = VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
     /** What an older server wrote as [seed], and recorded writing, the way #300's ledger has done since. */
     private fun seededEarlier(seed: String, content: String) {
         Files.writeString(root.resolve(seed), content)
@@ -396,5 +525,8 @@ class VaultDashboardTest {
     private companion object {
         /** Any guide an older server seeded as a README: what matters is that the ledger recorded writing it. */
         const val AN_OLDER_GUIDE = "# ps-records\n\nThe usage guide an older server seeded.\n"
+
+        /** The guide as #258 to #413 seeded it begins: under its title, the link to the Korean twin, word for word. */
+        const val A_GUIDE_LINKING_ITS_TWIN = "# ps-records\n\n**[한국어](README.ko.md)**\n\nThe usage guide.\n"
     }
 }

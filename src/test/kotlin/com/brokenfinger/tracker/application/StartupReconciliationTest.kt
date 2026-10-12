@@ -162,7 +162,8 @@ class StartupReconciliationTest {
         boot()
 
         Files.readString(repo.root.resolve("README.md")) shouldBe "$AN_OLDER_GUIDE\nMy own line.\n"
-        repo.filesInHead() shouldContainExactly listOf("GUIDE.ko.md", "GUIDE.md", "README.ko.md")
+        repo.filesInHead() shouldContainExactly listOf("GUIDE.ko.md", "GUIDE.md")
+        Files.readString(repo.root.resolve("README.ko.md")) shouldBe AN_OLDER_KOREAN_GUIDE
     }
 
     @Test
