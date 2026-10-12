@@ -164,6 +164,36 @@ class RecordWritesTest {
         Files.exists(root.resolve("problems/2-y")) shouldBe false
     }
 
+    /**
+     * A file at the root's own level is removed like one below it (#414): the seeds retire `README.md` and
+     * `README.ko.md` from there. The directory to walk was asked for as the file's parent, which at the root is the
+     * root itself — no name below it, so the bound refused it as outside the repository.
+     */
+    @Test
+    fun `removes a regular file at the root's own level, and keeps what is not one`() {
+        Files.writeString(root.resolve("README.md"), "the old guide\n")
+        Files.createDirectory(root.resolve("README.ko.md"))
+        val seeds = RecordWrites.underRoot(root, setOf("README.md", "README.ko.md"))
+
+        seeds.removeFile(root.resolve("README.md")) shouldBe true
+        seeds.removeFile(root.resolve("README.ko.md")) shouldBe false
+
+        Files.exists(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
+        Files.isDirectory(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe true
+    }
+
+    /** Nothing there is nothing left there, and a name the writer does not keep at the root is refused, not touched. */
+    @Test
+    fun `a root-level removal of nothing is done, and of a name not kept there is refused`() {
+        Files.writeString(root.resolve("notes.md"), "mine\n")
+        val seeds = RecordWrites.underRoot(root, setOf("README.md"))
+
+        seeds.removeFile(root.resolve("README.md")) shouldBe true
+        shouldThrow<RefusedWriteException> { seeds.removeFile(root.resolve("notes.md")) }
+
+        Files.readString(root.resolve("notes.md")) shouldBe "mine\n"
+    }
+
     /** A root behind a link by configuration — macOS's `/var`, a `~/ps-records` link — is written as itself. */
     @Test
     fun `a records root reached through a link is written as itself`() {
