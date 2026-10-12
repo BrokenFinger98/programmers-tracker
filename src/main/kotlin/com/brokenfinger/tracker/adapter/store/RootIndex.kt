@@ -130,28 +130,57 @@ class RootIndex(private val layout: RecordLayout) {
  * ever writes LF.
  *
  * **The framing is a format; the words are free** (#414's review). Every page already deployed carries a seal framed
- * as [FRAMING] reads it — one line, from `<!--` to ` -->`, holding `sha256:` and exactly 64 lowercase hex — so a
+ * as [digestIn] reads it — one line, from `<!--` to ` -->`, ending in `sha256:` and exactly 64 lowercase hex — so a
  * change to the framing needs a reader for the old one beside it, or every such page is taken for an edit and never
  * written again. The [NOTE] between is what a person reads, and is not checked: a release may reword it, and a page
  * sealed under older words is still the server's and is rewritten under the new.
+ *
+ * **One comment, read by hand, and short** (#414's second review). A close before the end — `-->`, or the `--!>` a
+ * browser also closes on — would show what follows it on github.com, so the owner's words on the seal's own line
+ * make the page theirs rather than being wiped by the next write. And the line is parsed left to right without a
+ * regex, and only when it is at most [LONGEST_LINE] characters, about five times a real seal: a pulled page can carry
+ * anything on its first line, the seal is read at every grading and at boot, and a backtracking regex took 15 s over
+ * a 1 MiB line of repeated digests — the class of #387's FIFO, which held the boot.
  */
 internal object PageSeal {
-    private const val NOTE = "Written by programmers-tracker. Edit this page and it is yours: it is never written " +
-        "again, and the index stays in problems/README.md."
+    private const val NOTE = "Written by programmers-tracker. Change what this page shows and it is yours: it is " +
+        "never written again, and the index stays in problems/README.md."
 
-    private val FRAMING = Regex("""<!--.*sha256:([0-9a-f]{64})(?![0-9a-f]).* -->""")
+    private const val OPEN = "<!--"
+    private const val CLOSE = " -->"
+    private const val COMMENT_END = "-->"
+    private const val BROWSER_END = "--!>"
+    private const val DIGEST = "sha256:"
+    private const val HEX_LENGTH = 64
+    private const val LONGEST_LINE = 1024
 
     /** [body] under its seal. */
-    fun sealed(body: String): String = "<!-- $NOTE sha256:${digestOf(body)} -->\n$body"
+    fun sealed(body: String): String = "$OPEN $NOTE $DIGEST${digestOf(body)}$CLOSE\n$body"
 
     /** Whether [bytes] are a body under a seal holding its digest, line endings aside and the seal's words unread. */
     fun isIntact(bytes: ByteArray): Boolean {
         val text = String(bytes, UTF_8).replace("\r\n", "\n")
         val end = text.indexOf('\n')
-        if (end < 0) return false
-        val digest = FRAMING.matchEntire(text.substring(0, end))?.groupValues?.get(1) ?: return false
+        if (end !in 0..LONGEST_LINE) return false
+        val digest = digestIn(text.substring(0, end)) ?: return false
         return digest == digestOf(text.substring(end + 1))
     }
+
+    // The digest a seal holds, or null when [line] is none: one comment from `<!--` to ` -->`, closed nowhere before
+    // its end, `sha256:` and exactly 64 lowercase hex just before the close.
+    private fun digestIn(line: String): String? {
+        val hex = line.length - CLOSE.length - HEX_LENGTH
+        if (hex - DIGEST.length < OPEN.length || !line.startsWith(OPEN) || !line.endsWith(CLOSE)) return null
+        if (!line.startsWith(DIGEST, hex - DIGEST.length) || closesEarly(line)) return null
+        return line.substring(hex, hex + HEX_LENGTH).takeIf { digest -> digest.all(::isLowerHex) }
+    }
+
+    // A close anywhere but at the end: the final ` -->` is the only `-->` a seal holds, and it holds no `--!>`, which
+    // can never be that end.
+    private fun closesEarly(line: String): Boolean =
+        line.indexOf(COMMENT_END) < line.length - COMMENT_END.length || BROWSER_END in line
+
+    private fun isLowerHex(c: Char): Boolean = c in '0'..'9' || c in 'a'..'f'
 
     private fun digestOf(body: String): String =
         MessageDigest.getInstance("SHA-256").digest(body.toByteArray(UTF_8)).joinToString("") { "%02x".format(it) }

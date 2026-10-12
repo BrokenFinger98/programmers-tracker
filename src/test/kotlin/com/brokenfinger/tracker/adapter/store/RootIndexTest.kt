@@ -284,21 +284,69 @@ class RootIndexTest {
     @Test
     fun `the first line this version writes, for a known body`() {
         PageSeal.sealed("# A known body\n").lines().first() shouldBe
-            "<!-- Written by programmers-tracker. Edit this page and it is yours: it is never written again, and " +
-            "the index stays in problems/README.md. " +
+            "<!-- Written by programmers-tracker. Change what this page shows and it is yours: it is never written " +
+            "again, and the index stays in problems/README.md. " +
             "sha256:7c02085cfb8b1dbf007d9c9ce0f68cac716b13969dcdb3d3c8aa8cdf7ffc72ed -->"
     }
 
-    /** A digest is exactly 64 lowercase hex: one in capitals, one short or one long, is no seal at all. */
+    /**
+     * A digest is exactly 64 lowercase hex, just before the close: one in capitals, one short or one long, or one
+     * followed by more words, is no seal at all.
+     */
     @Test
-    fun `a seal whose digest is not 64 lowercase hex is no seal`() {
+    fun `a seal whose digest is not 64 lowercase hex just before its close is no seal`() {
         val body = "# A known body\n"
         val digest = sha256Of(body)
 
-        listOf(digest.uppercase(), digest.drop(1), digest + "0").forEach { written ->
+        listOf(digest.uppercase(), digest.drop(1), digest + "0", "$digest, then words").forEach { written ->
             PageSeal.isIntact("<!-- a seal sha256:$written -->\n$body".toByteArray()) shouldBe false
         }
         PageSeal.isIntact("<!-- a seal sha256:$digest -->\n$body".toByteArray()) shouldBe true
+    }
+
+    /**
+     * The seal is one comment. Text after a close before the end — `-->`, or the `--!>` a browser also closes on — is
+     * shown on github.com: the owner's words on the seal's own line, which a write would wipe (#414's second review).
+     */
+    @Test
+    fun `owner text on the seal's line makes the page the owner's`() {
+        index().write(listOf(aSubmissionRecord(lessonId = 1)))
+        val written = Files.readString(readme)
+        val (first, body) = written.substringBefore('\n') to written.substringAfter('\n')
+        val edits = listOf(
+            "$first **My study plan** <!-- mine -->\n$body",
+            "${first.replaceFirst("<!-- ", "<!-- --!> **My study plan** <!-- ")}\n$body",
+        )
+
+        edits.forEach { edited ->
+            Files.writeString(readme, edited)
+            index().write(listOf(aSubmissionRecord(lessonId = 1), aSubmissionRecord(lessonId = 2))).shouldBeNull()
+            Files.readString(readme) shouldBe edited
+        }
+    }
+
+    /** A real seal is about 211 characters. A first line past 1,024 is no seal, however well framed. */
+    @Test
+    fun `a first line longer than 1024 characters is no seal`() {
+        val body = "# A known body\n"
+        val atTheCap = "<!-- ${"w".repeat(943)} sha256:${sha256Of(body)} -->"
+
+        atTheCap.length shouldBe 1024
+        PageSeal.isIntact("$atTheCap\n$body".toByteArray()) shouldBe true
+        PageSeal.isIntact("${atTheCap.replaceFirst("w", "ww")}\n$body".toByteArray()) shouldBe false
+    }
+
+    /**
+     * A pulled page can carry anything on its first line, and the seal is read at every grading and at boot. A regex
+     * took 15 s over a 1 MiB line of repeated digests, measured by the review; this one is 1.4 MiB, and must answer
+     * at once.
+     */
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `a huge hostile first line is no seal, and answers at once`() {
+        val line = "<!--" + ("sha256:" + "a".repeat(64) + "x").repeat(20_000) + " not closed"
+
+        PageSeal.isIntact("$line\n# body\n".toByteArray()) shouldBe false
     }
 
     /** The mark is a comment no renderer shows: github.com and Obsidian's reading view start the page at its title. */
