@@ -49,16 +49,16 @@ class VaultDashboardTest {
     fun `a seed that is a link is left alone, and the file it leads to keeps its bytes`() {
         assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
         val elsewhere = aFileNotOurs(outside)
-        val readme = aLink(root.resolve("README.md"), elsewhere)
-        SeedLedger(root, aStateDirectory(root)).record("README.md", NOT_OURS)
+        val guide = aLink(root.resolve("GUIDE.md"), elsewhere)
+        SeedLedger(root, aStateDirectory(root)).record("GUIDE.md", NOT_OURS)
 
         val heard = warningsWhile(VaultDashboard::class) {
             VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
         }
 
         Files.readString(elsewhere) shouldBe NOT_OURS
-        Files.isSymbolicLink(readme) shouldBe true
-        heard.single() shouldContain readme.toString()
+        Files.isSymbolicLink(guide) shouldBe true
+        heard.single() shouldContain guide.toString()
         heard.single() shouldNotContain elsewhere.toString()
     }
 
@@ -105,28 +105,118 @@ class VaultDashboardTest {
     }
 
     /**
-     * The README moved from the copied template into the seeds (#258): a template reaches only
-     * repositories that do not exist yet, which is how the live vault's front page described
-     * five phantom notes for months. Both twins ship, and the Korean one keeps its
-     * translated-from marker so the drift guard still applies at the source.
+     * The guide moved from the copied template into the seeds (#258) — a template reaches only repositories that do
+     * not exist yet, which is how the live vault's front page described five phantom notes for months — and from
+     * `README.md` to `GUIDE.md` when the front page became the index (#414). Both twins ship, and the Korean one keeps
+     * its translated-from marker so the drift guard still applies at the source.
      */
     @Test
-    fun `seeds both readme twins alongside the dashboard`() {
+    fun `seeds the guide in both languages alongside the dashboard`() {
         VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
-        Files.readString(root.resolve("README.md")) shouldContain "# ps-records"
-        Files.readString(root.resolve("README.ko.md")) shouldContain "translated-from: README.md@"
+        Files.readString(root.resolve("GUIDE.md")) shouldContain "## Structure"
+        Files.readString(root.resolve("GUIDE.ko.md")) shouldContain "translated-from: GUIDE.md@"
     }
 
-    /** Each seed is judged alone: a vault that kept its README still gains the dashboard. */
+    /** The front page is the index's now (#414): nothing here writes a README of either language. */
+    @Test
+    fun `a fresh repository gets no README from the seeds`() {
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
+        Files.exists(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
+        Files.exists(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /** Each seed is judged alone: a vault that kept its guide still gains the dashboard. */
     @Test
     fun `a missing seed is written even when the others exist`() {
-        Files.writeString(root.resolve("README.md"), "mine\n")
+        Files.writeString(root.resolve("GUIDE.md"), "mine\n")
 
         VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
 
-        Files.readString(root.resolve("README.md")) shouldBe "mine\n"
+        Files.readString(root.resolve("GUIDE.md")) shouldBe "mine\n"
         Files.exists(dashboard) shouldBe true
+    }
+
+    // The two READMEs it used to seed (#414) ------------------------------------------------------------
+
+    /**
+     * `README.md` was the guide, seeded and refreshed while untouched (#300). Still exactly as a server seeded it, it
+     * was never anybody's, so it goes: the index takes the front page, and the guide is `GUIDE.md`.
+     */
+    @Test
+    fun `a README still exactly as this server seeded it is taken away, for the index to take its place`() {
+        seededEarlier("README.md", AN_OLDER_GUIDE)
+
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
+        Files.exists(root.resolve("README.md"), NOFOLLOW_LINKS) shouldBe false
+        Files.readString(root.resolve("GUIDE.md")) shouldContain "## Structure"
+    }
+
+    /** The rule #254 states: editing is respected forever. One character is an edit. */
+    @Test
+    fun `a README someone edited is kept as it is`() {
+        seededEarlier("README.md", AN_OLDER_GUIDE)
+        Files.writeString(root.resolve("README.md"), "$AN_OLDER_GUIDE ")
+
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
+        Files.readString(root.resolve("README.md")) shouldBe "$AN_OLDER_GUIDE "
+    }
+
+    /** Absence is not permission: a vault seeded before the ledger has no record, and its README stays. */
+    @Test
+    fun `a README nothing recorded is kept as it is`() {
+        Files.writeString(root.resolve("README.md"), AN_OLDER_GUIDE)
+
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
+        Files.readString(root.resolve("README.md")) shouldBe AN_OLDER_GUIDE
+    }
+
+    /** The Korean twin goes by the same rule: untouched, it gives way to `GUIDE.ko.md`. */
+    @Test
+    fun `a README ko still exactly as this server seeded it gives way to GUIDE ko`() {
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
+        Files.exists(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe false
+        Files.readString(root.resolve("GUIDE.ko.md")) shouldContain "translated-from: GUIDE.md@"
+    }
+
+    @Test
+    fun `a README ko someone edited is kept as it is`() {
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+        Files.writeString(root.resolve("README.ko.md"), "$AN_OLDER_GUIDE ")
+
+        VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+
+        Files.readString(root.resolve("README.ko.md")) shouldBe "$AN_OLDER_GUIDE "
+    }
+
+    /** A link is something somebody made, whatever the ledger remembers of the file it leads to: it is left alone. */
+    @Test
+    fun `a README that is a link is left alone, and so is the file it leads to`() {
+        assumeTrue(canPlantLinksIn(root), "this test makes symbolic links")
+        val elsewhere = aFileNotOurs(outside)
+        val readme = aLink(root.resolve("README.md"), elsewhere)
+        SeedLedger(root, aStateDirectory(root)).record("README.md", NOT_OURS)
+
+        val heard = warningsWhile(VaultDashboard::class) {
+            VaultDashboard(root, SeedLedger(root, aStateDirectory(root))).ensure()
+        }
+
+        Files.isSymbolicLink(readme) shouldBe true
+        Files.readString(elsewhere) shouldBe NOT_OURS
+        heard.single() shouldContain readme.toString()
+    }
+
+    /** What an older server wrote as [seed], and recorded writing, the way #300's ledger has done since. */
+    private fun seededEarlier(seed: String, content: String) {
+        Files.writeString(root.resolve(seed), content)
+        SeedLedger(root, aStateDirectory(root)).record(seed, content)
     }
 
     /**
@@ -282,5 +372,10 @@ class VaultDashboardTest {
         val text = Files.readString(dashboard)
         listOf("Recent", "Not passed yet", "By attempts", "By part", "By language", "Tags")
             .forEach { text shouldContain it }
+    }
+
+    private companion object {
+        /** Any guide an older server seeded as a README: what matters is that the ledger recorded writing it. */
+        const val AN_OLDER_GUIDE = "# ps-records\n\nThe usage guide an older server seeded.\n"
     }
 }

@@ -1,16 +1,20 @@
-<!-- translated-from: README.md@9a48fe7801372ee75471b24c69f6c1501c267dcc -->
+<!-- translated-from: GUIDE.md@e132d53b6b24479d023eae08bcde32affa1578e7 -->
 
-# ps-records
+# 기록 읽는 법
 
-**[English](README.md)**
+**[English](GUIDE.md)**
 
-프로그래머스 문제 풀이 기록. [programmers-tracker](https://github.com/BrokenFinger98/programmers-tracker)가 생성합니다.
+이 프로그래머스 문제 풀이 기록이 어떻게 놓여 있고 어떻게 읽는지 설명합니다. 기록은
+[programmers-tracker](https://github.com/BrokenFinger98/programmers-tracker)가 쓰고, 첫 화면인
+[README.md](README.md)가 지금까지 기록된 전부의 색인입니다.
 
 ## 구조
 
 매 run·submit 이후 서버가 씁니다:
 
 ```
+README.md              색인: 모든 문제를 최신순으로. 매번 다시 쓰임 — 아래 참고
+problems/README.md     같은 색인. problems/ 안으로 들어온 사람을 위해
 problems/<lessonId>-<title>/
 ├── README.md          프론트매터 + 시도 이력. 매번 덮어쓰기됨
 ├── notes.md           내 오답 노트. 서버가 절대 건드리지 않음
@@ -23,6 +27,10 @@ tags/<tag>.md          문제 유형별 노트 하나. 그 유형을 얼마나 �
 dashboard.base         위의 전부를 훑는 Obsidian 표 — 아래 참고
 log/submissions.jsonl  전체 제출 로그 (MCP 툴이 읽는 원본)
 ```
+
+**첫 화면은 여러분이 고치기 전까지 색인입니다.** `README.md` 는 채점이 끝날 때마다 다시
+쓰입니다. 무엇이든 고치면 그때부터 여러분 파일입니다 — 서버는 다시 쓰지 않고, 시작할 때마다
+그렇다고 알리며, 색인은 `problems/README.md` 에서 계속됩니다. 지우면 색인이 돌아옵니다.
 
 **`dashboard.base` 는 없을 때 딱 한 번 쓰이고, 그 뒤로는 건드리지 않습니다.**
 [Obsidian Base](https://help.obsidian.md/bases) — 기록의 사본이 아니라 *질의문*이라 낡을 수가

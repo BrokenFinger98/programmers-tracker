@@ -52,13 +52,31 @@ import java.nio.file.Path
  * file is read — a FIFO there blocked the boot — and anything else standing there is refused,
  * which leaves it alone and is said, as a seed that could not be written always was. [SeedLedger]
  * hashes those bytes; it read the file again itself, following a link.
+ *
+ * ### A seed retired
+ *
+ * The guide was `README.md` and `README.ko.md` until the front page became the index (#414); it ships as `GUIDE.md`
+ * and `GUIDE.ko.md` now. A repository seeded before then holds the old pair, judged once more by the ledger's rule:
+ * still exactly as a server seeded it, a file was never anybody's, and it is taken away — the index then takes the
+ * front page ([RootIndex]), and `GUIDE.ko.md` stands where the Korean twin did. One byte different, or no record of
+ * it, and it is the owner's, kept as it is. A link is left alone and said, as at a seed.
  */
 class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
-    private val writes = RecordWrites.underRoot(recordRoot, SEEDS.toSet())
-    private val reads = RecordReads.underRoot(recordRoot, SEEDS.toSet())
+    private val writes = RecordWrites.underRoot(recordRoot, (SEEDS + RETIRED.keys).toSet())
+    private val reads = RecordReads.underRoot(recordRoot, (SEEDS + RETIRED.keys).toSet())
 
     fun ensure() {
         SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }
+        RETIRED.forEach { (seed, successor) -> runCatching { retire(seed, successor) }.onFailure { warn(it) } }
+    }
+
+    // Taken away only while still exactly as seeded, which the ledger answers; kept otherwise, as an edited seed is.
+    private fun retire(seed: String, successor: String) {
+        val file = recordRoot.resolve(seed)
+        if (Files.isSymbolicLink(file)) return leftAlone(file)
+        val current = reads.readAllBytes(file) ?: return
+        if (!ledger.isUnchanged(seed, current)) return
+        if (writes.removeFile(file)) logger.info(RETIRED_ONE, file, successor)
     }
 
     // Read once, through the bound its writer takes: a seed that is no regular file is refused, which leaves it alone.
@@ -125,16 +143,24 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
 
     private companion object {
         /**
-         * Everything the vault starts with and the reader then owns (#255, #258). The README is
-         * here — and not regenerated — because a user who rewrote their vault's front page must
-         * keep it; the one who deleted it gets a fresh copy on the next boot, which is the rarer
-         * intent and the recoverable mistake.
+         * Everything the vault starts with and the reader then owns (#255, #258). The guide is
+         * here — and not regenerated — because a user who rewrote it must keep it; the one who
+         * deleted it gets a fresh copy on the next boot, which is the rarer intent and the
+         * recoverable mistake. The front page is no seed since #414: it is the index.
          */
-        val SEEDS = listOf("dashboard.base", "README.md", "README.ko.md")
+        val SEEDS = listOf("dashboard.base", "GUIDE.md", "GUIDE.ko.md")
+
+        /** What this server seeded once and ships no more, each with what stands in its place now (#414). */
+        val RETIRED = mapOf(
+            "README.md" to "the index takes its place, and the guide is GUIDE.md",
+            "README.ko.md" to "the Korean guide is GUIDE.ko.md",
+        )
 
         val logger = LoggerFactory.getLogger(VaultDashboard::class.java)
 
         const val LEFT_ALONE =
             "Left {} alone: it is a symbolic link, and a seed is written neither through one nor over one"
+
+        const val RETIRED_ONE = "Took {} away, still exactly as this server seeded it: {} now (#414)"
     }
 }
