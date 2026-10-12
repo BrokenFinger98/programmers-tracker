@@ -326,9 +326,9 @@ interface DerivedArtifacts {
     fun writeReadme(records: List<SubmissionRecord>)
 
     /**
-     * Rewrites `problems/README.md` — what has been solved, in the one form a browser renders
-     * (#292). Takes the **whole** history rather than one problem's, because an index of one
-     * problem is a problem page.
+     * Rewrites the index — what has been solved, in the one form a browser renders: `problems/README.md` (#292),
+     * and the repository's front page while the owner has not made it theirs (#414). Takes the **whole** history
+     * rather than one problem's, because an index of one problem is a problem page.
      */
     fun writeIndex(records: List<SubmissionRecord>)
 

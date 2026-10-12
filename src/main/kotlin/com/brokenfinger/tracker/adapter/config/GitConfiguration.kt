@@ -101,7 +101,8 @@ class GitConfiguration {
      * trailing a boot behind.
      *
      * Written only when absent — a `.base` is a query the reader owns once they touch it, not
-     * derived data to regenerate (#254).
+     * derived data to regenerate (#254). The guide the same; and the READMEs it once seeded are
+     * taken away here while untouched, so the move to the index lands in that one commit too (#414).
      */
     @Bean
     fun vaultDashboard(

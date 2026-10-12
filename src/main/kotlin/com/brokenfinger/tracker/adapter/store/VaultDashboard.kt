@@ -1,7 +1,10 @@
 package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
+import java.io.IOException
+import java.nio.charset.StandardCharsets.ISO_8859_1
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 
 /**
@@ -52,13 +55,56 @@ import java.nio.file.Path
  * file is read — a FIFO there blocked the boot — and anything else standing there is refused,
  * which leaves it alone and is said, as a seed that could not be written always was. [SeedLedger]
  * hashes those bytes; it read the file again itself, following a link.
+ *
+ * ### A seed retired
+ *
+ * The guide was `README.md` and `README.ko.md` until the front page became the index (#414); it ships as `GUIDE.md`
+ * and `GUIDE.ko.md` now. A repository seeded before then holds the old pair, judged once more by the ledger's rule:
+ * still exactly as a server seeded it, a file was never anybody's, and it is taken away — the index then takes the
+ * front page ([RootIndex]), and `GUIDE.ko.md` stands where the Korean twin did. One byte different, or no record of
+ * it, and it is the owner's, kept as it is. A link is left alone and said, as at a seed.
+ *
+ * Two more conditions, from #414's review. **What replaces a retired seed must be there**: its guide, a regular file
+ * judged without following a link, or the guide would be gone with nothing in its place. **The pair goes together**:
+ * the old `README.md` links `README.ko.md` by name under its title, so the twin stays only while the README's bytes
+ * name it, or the README cannot be read to say they do not. Gone — absent, or retired in the same pass — the index,
+ * or a front page the owner wrote without that link: the twin goes, or it would stay beside `GUIDE.ko.md` forever with
+ * nothing saying so (#414's second review).
  */
 class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
-    private val writes = RecordWrites.underRoot(recordRoot, SEEDS.toSet())
-    private val reads = RecordReads.underRoot(recordRoot, SEEDS.toSet())
+    private val writes = RecordWrites.underRoot(recordRoot, KEPT_AT_THE_ROOT)
+    private val reads = RecordReads.underRoot(recordRoot, KEPT_AT_THE_ROOT)
 
     fun ensure() {
         SEEDS.forEach { seed -> runCatching { seed(seed) }.onFailure { warn(it) } }
+        RETIRED.forEach { seed -> runCatching { retire(seed) }.onFailure { notRetired(seed, it) } }
+    }
+
+    // Taken away only while still exactly as seeded, which the ledger answers, and while what replaces it is there;
+    // kept otherwise, as an edited seed is.
+    private fun retire(seed: RetiredSeed) {
+        val file = recordRoot.resolve(seed.name)
+        if (Files.isSymbolicLink(file)) return leftAlone(file)
+        val current = reads.readAllBytes(file) ?: return
+        if (!ledger.isUnchanged(seed.name, current) || !isReplaced(seed)) return
+        if (writes.removeFile(file)) logger.info(RETIRED_ONE, file, seed.successor)
+    }
+
+    // Its guide is a regular file, and the page it is the twin of, if any, links it no more.
+    private fun isReplaced(seed: RetiredSeed): Boolean {
+        if (!Files.isRegularFile(recordRoot.resolve(seed.guide), NOFOLLOW_LINKS)) return false
+        return seed.twinOf?.let { page -> !names(page, seed.name) } ?: true
+    }
+
+    // Whether [page] may still link [name]: its bytes hold the name, or it cannot be read to say they do not. Nothing
+    // there names nothing, and neither does the index or a front page of the owner's own written without the link.
+    private fun names(page: String, name: String): Boolean {
+        val current = try {
+            reads.readAllBytes(recordRoot.resolve(page))
+        } catch (refused: IOException) {
+            return true
+        } ?: return false
+        return name in String(current, ISO_8859_1)
     }
 
     // Read once, through the bound its writer takes: a seed that is no regular file is refused, which leaves it alone.
@@ -123,18 +169,45 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
         )
     }
 
+    // A retirement that failed leaves the seed where it is, said by its kind alone: the next start tries again.
+    private fun notRetired(seed: RetiredSeed, cause: Throwable) {
+        logger.warn(NOT_RETIRED, recordRoot.resolve(seed.name), cause.javaClass.simpleName)
+    }
+
     private companion object {
         /**
-         * Everything the vault starts with and the reader then owns (#255, #258). The README is
-         * here — and not regenerated — because a user who rewrote their vault's front page must
-         * keep it; the one who deleted it gets a fresh copy on the next boot, which is the rarer
-         * intent and the recoverable mistake.
+         * Everything the vault starts with and the reader then owns (#255, #258). The guide is
+         * here — and not regenerated — because a user who rewrote it must keep it; the one who
+         * deleted it gets a fresh copy on the next boot, which is the rarer intent and the
+         * recoverable mistake. The front page is no seed since #414: it is the index.
          */
-        val SEEDS = listOf("dashboard.base", "README.md", "README.ko.md")
+        val SEEDS = listOf("dashboard.base", "GUIDE.md", "GUIDE.ko.md")
+
+        /**
+         * What this server seeded once and ships no more, each with its guide and what stands in its place now
+         * (#414). In this order: the README goes first in a pass, so its twin can follow it in the same one.
+         */
+        val RETIRED = listOf(
+            RetiredSeed("README.md", "GUIDE.md", "the index takes its place, and the guide is GUIDE.md"),
+            RetiredSeed("README.ko.md", "GUIDE.ko.md", "the Korean guide is GUIDE.ko.md", twinOf = "README.md"),
+        )
+
+        /** The names this writes and reads at the root: never `.git` or `.ps` (#361). */
+        val KEPT_AT_THE_ROOT = (SEEDS + RETIRED.map { it.name }).toSet()
 
         val logger = LoggerFactory.getLogger(VaultDashboard::class.java)
 
         const val LEFT_ALONE =
             "Left {} alone: it is a symbolic link, and a seed is written neither through one nor over one"
+
+        const val RETIRED_ONE = "Took {} away, still exactly as this server seeded it: {} now (#414)"
+
+        const val NOT_RETIRED = "Could not retire {} ({}); it stays as it is, and the next start tries again (#414)"
     }
+
+    /**
+     * A seed this server seeded once and ships no more (#414): [name], the [guide] that replaces it, what to say
+     * stands in its place, and the page it is the twin of, which links it by name.
+     */
+    private class RetiredSeed(val name: String, val guide: String, val successor: String, val twinOf: String? = null)
 }

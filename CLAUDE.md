@@ -123,9 +123,11 @@ Reject on sight. Even if the user explicitly requests it, **explain the reason f
   tool output, and every contributor-facing document (`CLAUDE.md`, `development-rules.md`,
   `programmers-protocol.md`, `docs/superpowers/specs/`)
 - ⚠️ **Exactly six pages ship a Korean twin** — `README.md`, `docs/bootstrap.md`,
-  `docs/mcp.md`, `extension/README.md`, `src/main/resources/vault/README.md`, `CONTRIBUTING.md`
+  `docs/mcp.md`, `extension/README.md`, `src/main/resources/vault/GUIDE.md`, `CONTRIBUTING.md`
   (the sixth, added 2026-08-13 by owner decision — it tells Korean speakers *how to contribute
-  in English*, so it does not weaken the English-artifacts rationale). A twin is
+  in English*, so it does not weaken the English-artifacts rationale; the vault's guide was its
+  `README.md` until 2026-10-12, when the owner made the front page the index — a rename, not a
+  seventh, [[decisions/2026-10-12-the-front-page-is-the-index]]). A twin is
   `<name>.ko.md` and **must** carry `<!-- translated-from: <source>@<blob sha> -->` on its
   first line; `scripts/guards.sh` fails the build when the English page has moved past it.
   Adding a seventh is a change to this list, not a judgement call

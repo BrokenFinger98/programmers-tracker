@@ -124,6 +124,23 @@ class CodeAttachmentTest {
         readme shouldContain "| 2 |"
     }
 
+    /**
+     * The front page is the index (#414), regenerated in the same pass as `problems/README.md` and row for row the
+     * same, its links starting one directory higher.
+     */
+    @Test
+    fun `the front page's index is regenerated at every grading, as problems README is`() = runBlocking<Unit> {
+        val first = stored(aPending(attempt = 1, captureKey = CaptureKey("aaaa000000000001")))
+        attachment(fetches(CODE_V1)).attach(first)
+        val once = indexRowsAtTheRoot()
+
+        attachment(fetches(CODE_V2)).attach(stored(aPending(attempt = 2)))
+
+        once.single() shouldContain "| 1 |"
+        indexRowsAtTheRoot().single() shouldContain "| 2 |"
+        indexRowsAtTheRoot() shouldBe indexRowsIn("problems/README.md").map { it.replaceFirst("](", "](problems/") }
+    }
+
     // Failure paths — the record must survive all of them ------------------------------------
 
     @Test
@@ -403,6 +420,12 @@ class CodeAttachmentTest {
     }
 
     private fun problemDirectory(): Path = root.resolve("problems/120804-두-수의-곱-구하기")
+
+    private fun indexRowsAtTheRoot(): List<String> = indexRowsIn("README.md")
+
+    // The table's rows: every line that is a cell row, the header and its separator left out.
+    private fun indexRowsIn(page: String): List<String> = Files.readAllLines(root.resolve(page))
+        .filter { it.startsWith("| ") && !it.startsWith("| Problem") }
 
     private companion object {
         val CODE_V1 =

@@ -7,11 +7,14 @@ import com.brokenfinger.tracker.adapter.store.FileDerivedArtifacts
 import com.brokenfinger.tracker.adapter.store.FileRawSessionLog
 import com.brokenfinger.tracker.adapter.store.JsonlRecordStore
 import com.brokenfinger.tracker.adapter.store.RecordLayout
+import com.brokenfinger.tracker.adapter.store.SeedLedger
+import com.brokenfinger.tracker.adapter.store.VaultDashboard
 import com.brokenfinger.tracker.domain.SensorObservation
 import com.brokenfinger.tracker.support.fixtures.FixtureLoader
 import com.brokenfinger.tracker.support.fixtures.aFrameReader
 import com.brokenfinger.tracker.support.fixtures.aLink
 import com.brokenfinger.tracker.support.fixtures.aQuietGitSync
+import com.brokenfinger.tracker.support.fixtures.aStateDirectory
 import com.brokenfinger.tracker.support.fixtures.anEmptyCatalog
 import com.brokenfinger.tracker.support.fixtures.canPlantLinksIn
 import com.brokenfinger.tracker.support.git.GitWorkspace
@@ -52,6 +55,7 @@ class StartupReconciliationTest {
         repo = GitWorkspace(base)
     }
 
+    /** With the front page the boot writes beside it (#414): a repository that had none gets one. */
     @Test
     fun `a record an earlier run left uncommitted is committed at startup`() {
         repo.write("log/submissions.jsonl", A_RECORD)
@@ -59,7 +63,7 @@ class StartupReconciliationTest {
         startup()
 
         repo.subjects().single() shouldBe CommandLineGitSync.RECONCILE_MESSAGE
-        repo.filesInHead() shouldContainExactly listOf("log/submissions.jsonl")
+        repo.filesInHead() shouldContainExactly listOf("README.md", "log/submissions.jsonl")
     }
 
     /** Sessions become records before records become commits, or the commit misses them. */
@@ -92,11 +96,74 @@ class StartupReconciliationTest {
         Files.readString(elsewhere) shouldBe "$A_RECORD\n"
     }
 
+    /**
+     * A fresh repository has a front page before it has a record (#414): what it is, where the guide is, and a count of
+     * none. Its first boot writes that page and nothing else.
+     */
+    @Test
+    fun `a fresh repository's first boot commits its front page alone`() {
+        startup()
+
+        repo.filesInHead() shouldContainExactly listOf("README.md")
+        Files.readString(repo.root.resolve("README.md")) shouldContain "0 problems recorded, 0 passed."
+    }
+
+    /**
+     * A boot that had nothing to recover does nothing (#292). The front page a first boot writes is the same bytes at
+     * every boot after it, so it is no exception.
+     */
     @Test
     fun `a boot with nothing left behind commits nothing`() {
         startup()
+        val once = repo.subjects()
 
-        repo.subjects() shouldContainExactly emptyList()
+        startup()
+
+        repo.subjects() shouldContainExactly once
+    }
+
+    // The front page becomes the index (#414) ----------------------------------------------------------
+
+    /**
+     * A repository as the server left it before #414: the guide seeded as `README.md` and `README.ko.md`, untouched,
+     * and recorded in the ledger. The boot moves the guide to `GUIDE.md` and `GUIDE.ko.md`, puts the index on the front
+     * page, and commits exactly that.
+     */
+    @Test
+    fun `an untouched guide moves aside for the index, and the commit holds the move alone`() {
+        seededAndCommitted()
+
+        boot()
+
+        repo.filesInHead() shouldContainExactly listOf("GUIDE.ko.md", "GUIDE.md", "README.ko.md", "README.md")
+        Files.readString(repo.root.resolve("README.md")) shouldContain "# Programmers solving records"
+        Files.exists(repo.root.resolve("README.ko.md")) shouldBe false
+    }
+
+    /** Whatever a boot changes outside `.ps` it commits, so no new commit is no change. */
+    @Test
+    fun `a second boot after the move changes nothing`() {
+        seededAndCommitted()
+        boot()
+        val once = repo.subjects()
+
+        boot()
+
+        repo.subjects() shouldContainExactly once
+    }
+
+    /** An edited guide is the owner's front page: it stays, and the index stays in `problems/README.md`. */
+    @Test
+    fun `an edited README stays the front page, and the boot commits the guide alone`() {
+        seededAndCommitted()
+        repo.write("README.md", "$AN_OLDER_GUIDE\nMy own line.\n")
+        repo.git("commit", "--all", "--message", "mine")
+
+        boot()
+
+        Files.readString(repo.root.resolve("README.md")) shouldBe "$AN_OLDER_GUIDE\nMy own line.\n"
+        repo.filesInHead() shouldContainExactly listOf("GUIDE.ko.md", "GUIDE.md")
+        Files.readString(repo.root.resolve("README.ko.md")) shouldBe AN_OLDER_KOREAN_GUIDE
     }
 
     @Test
@@ -162,6 +229,35 @@ class StartupReconciliationTest {
     // Harness --------------------------------------------------------------------------------
 
     private fun startup() = runBlocking { reconciliation().run() }
+
+    /** A boot as the server makes one: the seeds while the beans are built, then the startup pass. */
+    private fun boot() {
+        VaultDashboard(repo.root, ledger()).ensure()
+        startup()
+    }
+
+    /**
+     * The repository as a server before #414 left it: the guide seeded as both READMEs and the dashboard as it ships,
+     * each recorded in the ledger, and committed — `.ps` left out, as every commit of the tracker's leaves it.
+     */
+    private fun seededAndCommitted() {
+        val seeds = mapOf(
+            "README.md" to AN_OLDER_GUIDE,
+            "README.ko.md" to AN_OLDER_KOREAN_GUIDE,
+            "dashboard.base" to shipped("dashboard.base"),
+        )
+        seeds.forEach { (seed, content) ->
+            repo.write(seed, content)
+            ledger().record(seed, content)
+        }
+        repo.git("add", "--", *seeds.keys.toTypedArray())
+        repo.git("commit", "--message", "seeded")
+    }
+
+    private fun ledger() = SeedLedger(repo.root, aStateDirectory(repo.root))
+
+    private fun shipped(seed: String): String =
+        checkNotNull(javaClass.getResourceAsStream("/vault/$seed")).bufferedReader().use { it.readText() }
 
     private fun reconciliation(): StartupReconciliation {
         val git = CommandLineGitSync(repo.root)
@@ -250,6 +346,14 @@ class StartupReconciliationTest {
     private companion object {
         const val LESSON_ID = 120804L
         const val A_RECORD = """{"lessonId":120804}"""
+
+        /**
+         * A guide an older server seeded as a README, recorded in the ledger, and opening as the real one did: under
+         * its title, the link to the Korean twin, which is what keeps the twin beside an edited README.
+         */
+        const val AN_OLDER_GUIDE =
+            "# ps-records\n\n**[한국어](README.ko.md)**\n\nThe usage guide an older server seeded.\n"
+        const val AN_OLDER_KOREAN_GUIDE = "# ps-records\n\nIts Korean twin, as an older server seeded it.\n"
     }
 }
 

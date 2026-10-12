@@ -38,6 +38,7 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
     private val runs = RunLog(layout, clock)
     private val readme = ProblemReadme(layout)
     private val index = ProblemIndex(layout)
+    private val rootIndex = RootIndex(layout)
     private val tagNotes = TagNotes(layout)
 
     /**
@@ -127,8 +128,10 @@ class FileDerivedArtifacts(private val recordRoot: Path, records: RecordStore, c
         readme.write(records)
     }
 
+    // The same table in both places, from the same records: problems/README.md always, the front page while it is ours.
     override fun writeIndex(records: List<SubmissionRecord>) {
         index.write(records)
+        rootIndex.write(records)
     }
 
     override fun writeTagNotes(counts: List<TagCount>) {

@@ -70,8 +70,10 @@ yours private while the tool stays public.
 
 **There is nothing to run.** On first start the server creates the directory
 (`~/ps-records` unless `TRACKER_RECORD_REPO` in `.env` says otherwise), runs `git init`,
-and seeds a README, an Obsidian dashboard and the ignore rules. The startup log says
-`Records live at <path>` so the location is never silent.
+and seeds a guide (`GUIDE.md`, and `GUIDE.ko.md` in Korean), an Obsidian dashboard and the
+ignore rules. Its front page, `README.md`, is the index of what you have solved, rewritten
+after every grading. The startup log says `Records live at <path>` so the location is never
+silent.
 
 For an off-machine backup, put a GitHub token in `.env`:
 
@@ -350,6 +352,7 @@ observes the grading live and — once it settles — writes into your record re
 
 ```
 ps-records/
+├── README.md                                    the index: every problem, newest first
 ├── log/submissions.jsonl                        one line per grading, the authority for attempt numbers
 └── problems/120804-<title>/
     ├── README.md                                attempt history

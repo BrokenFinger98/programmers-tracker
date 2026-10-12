@@ -8,7 +8,7 @@ import java.security.MessageDigest
  * What the server last wrote for each seeded file, so it can tell **untouched** from **edited**
  * (#300).
  *
- * `dashboard.base` and the vault READMEs are written once and then belong to the reader (#254) —
+ * `dashboard.base` and the vault's guide are written once and then belong to the reader (#254) —
  * *editing is respected forever; deletion is read as loss, not intent.* That rule is right and is
  * not changing. What it did not consider is the third state: a file **nobody has touched**, which
  * is not the reader's yet and is only out of date. Twice on 2026-08-13 an improvement reached the

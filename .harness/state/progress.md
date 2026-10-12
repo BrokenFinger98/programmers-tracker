@@ -6338,3 +6338,118 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - #355's live check: a fault cannot be produced on demand.
   - The owner deletes the inbox snapshot above.
   - Not pushed.
+
+## 2026-10-12 — #414 the front page is the index (branch feat/414-root-index)
+- **The owner's decision (2026-10-12).** The records repository's root `README.md` becomes the regenerated index, and
+  the guide moves to `GUIDE.md` and `GUIDE.ko.md`, still seeds. ADR `2026-10-12-the-front-page-is-the-index`.
+- `a04aa83` **A file at the root is removed through the walk.** `RecordWrites.removeFile` asked the bound for the
+  target's parent, which at the root is the root itself, refused as outside the repository; it walks to the file
+  now, as a write does. Found by the first green run; red in `RecordWritesTest` (2 of 60).
+- `73cef31` **The guide moves.** `VaultDashboard` seeds `dashboard.base`, `GUIDE.md` and `GUIDE.ko.md`, and retires
+  `README.md` and `README.ko.md` by the ledger: still exactly as seeded, taken away and said at INFO; edited, or no
+  record, kept; a link left alone and said. The guide's structure block names the front page and
+  `problems/README.md`.
+- `ef0ceb7` **The index on the front page.** `RootIndex` writes a header (what the repository is, the guide in both
+  languages), then `problems/README.md`'s counts and table through the shared `IndexTable`, linked from the root; an
+  empty history gets the header and `0 problems recorded, 0 passed.` The page is the server's only while it is
+  exactly what it wrote, which `PageSeal` proves: a first-line comment holding the SHA-256 of the rest, CRLF set
+  aside. Anything else is the owner's: never written, a WARN said once, the index in `problems/README.md` alone.
+  Written by `RecordWrites.replaceOrSkip`, read by `RecordReads`.
+- `8e79f1d` **The retirement's notice pinned**, after the mutant that dropped it survived.
+- **Docs** (the commit after them). `CLAUDE.md`'s twin list names `src/main/resources/vault/GUIDE.md`: a rename by
+  the owner's decision, still six. `README.md`, `docs/bootstrap.md` and their twins, `translated-from` refreshed to
+  the staged blobs; `SECURITY.md`; the ADR, its index line, and an amendment to
+  `2026-08-11-korean-for-the-user-facing-half`.
+- **Decisions.** `problems/README.md` stays as it was: the smaller change, one rule, and the index must live there
+  whenever the front page is the owner's. The front page is compared with the ledger once, while it may still be the
+  old guide, and after that only with its own seal: the ledger is per machine (a clone has none), a ledger write per
+  grading asks git (#360), and a crash between two files would make the server's page look edited.
+- **Red.** Against a `RootIndex` that wrote nothing and the old seeds: 32 of 82 tests in the five classes failed,
+  each for the feature's absence. Then `removeFile`: 2 of 60, `it lies outside the records repository`.
+- **Mutation** (`mutate414.py` in the scratchpad; store, application and config tests, 1,100 a run): 24 mutants,
+  23 killed at first. The survivor dropped the retirement's INFO line; `8e79f1d` pins it, and the rerun kills it
+  (1 of 1,101). A planned mutant comparing the seal's first line alone was equivalent and was replaced; its
+  replacement, the digest alone, showed no test edited the mark's words, which a case now does.
+- **Measured on a copy of the owner's records** (`b1e116e`; remote removed, credential emptied, no token), the built
+  jar booted with `TRACKER_RECORD_REPO` on the copy:
+  - boot 1: `GUIDE.md` and `GUIDE.ko.md` written, both READMEs taken away, 0 WARN/ERROR; the reconcile commit
+    `6123161` holds `README.ko.md → GUIDE.ko.md` (R090), `GUIDE.md` (A) and `README.md` (M), nothing else;
+  - the front page: 25 rows equal to `problems/README.md`'s from the root, 27 relative links all resolving, the seal
+    matching its body; `problems/README.md` unchanged;
+  - boot 2: no commit, a clean tree, 256 files byte-identical;
+  - boot 3, after a line was added to `README.md`: its bytes kept, one WARN.
+- **Gates**, all exit 0, at `8e79f1d` with the docs staged: check; test (2,764 JUnit in 179 classes, 0 failures,
+  14 skipped as before; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 795 of 908; `application`
+  90%, 396 of 439; every package at or above its floor); guards (12 of 12).
+- **Remaining.** Not run in the owner's container; CI has not run the branch, Windows included. A `GUIDE.md` the
+  owner already had is kept, and the old guide's text is then only in history.
+- **Pending.** Not pushed.
+
+## 2026-10-12 — #414 PR #415's review round 1 (branch feat/414-root-index)
+- **Where it stood.** CI green on all three OSes at `b94053e`; the critic found nothing blocking and no way the
+  owner's content is lost. Ten findings, each fixed in a new commit with its test shown failing first; no amend, no
+  rebase, nothing pushed.
+- `cb5f4cb` **6: a missing records root removes nothing.** Walked to the file, `removeFile` resolved the root's real
+  path first and threw `NoSuchFileException`; it looks for the target's directory first again. Red: 1 of 61.
+- `e41ea86` **1: the seal's framing, not its words.** `isIntact` rebuilt the line with today's words, so a reworded
+  `NOTE` would have orphaned every deployed page. Now a seal is one line from `<!--` to ` -->` holding `sha256:` and
+  exactly 64 lowercase hex, and its digest must be the body's; the words are free. A golden test pins this version's
+  first line (digest taken with `shasum`). Red: 2 of 23 (a page under other words; a well-framed seal with other
+  words).
+- `7ed7dba` **4: an empty history leaves the front page**, as `problems/README.md` is left; a repository with no page
+  still gets the zero-count one. Red: 1 of 24.
+- `24d43ce` **8, 5 (message), 10: an owner's front page is stated at INFO**, naming the guide an older version
+  seeded among what it can be; a refused read (link, FIFO, directory) stays a WARN. Red: 2 of 26 (warned, not
+  stated; no message of its own for a refused read). FIFO and directory cases pin the WARN.
+- `05a6a38` **2, 7, 8, 10: the README pair retires together.** The twin goes only when the README is gone (absent, or
+  retired in the same pass) or is the index; a retired seed goes only while its guide is a regular file, no link
+  followed; a failed retirement says "Could not retire". Red: 7 of 48 (the twin retired beside an owner's README; a
+  README retired with a link or a directory at its guide; a twin retired with a directory at `GUIDE.ko.md`; "Could
+  not seed" for a FIFO and a directory; the boot test's commit). The old guide's link line, word for word, is in
+  the test now; the first round's guide had no link, which is why it missed this.
+- **Docs** (the commit after them). **3:** the server never pulls or fetches; a web commit makes every later push
+  fail (measured on a copy of the critic's simulation: rejected, "the tip of your current branch is behind" —
+  corrected in round 2: that is what a clone that had fetched is told; the tracker never fetches, and is told
+  "(fetch first)", "the remote contains work that you do not have locally"), and the hand merge conflicts where
+  the edit meets the lines a grading rewrites ("CONFLICT (content): Merge conflict in
+  README.md"; an edit at the bottom of a ten-row table merged cleanly). `GUIDE.md` says to edit in the clone, the
+  twin follows, `translated-from` refreshed (guards red until then). **5:** accepted; an accepted cost in the ADR.
+  **9:** the 2026-08-13 ADR's line marked ⚠️ (old) and linked. The ADR, its index line and this file record the
+  round.
+- **The critic's harness**, rerun after the fixes: `pair` keeps the twin; `absent-root` answers true; `empty2` leaves
+  the page at 2; `note` is intact (its own write is empty, so it leaves the page, by finding 4); `pair-reverse` as
+  before; `noledger` and `crlf-retire` keep the old guide, stated at INFO; `bom` and `case` as designed.
+- **Gates**, all exit 0, at `05a6a38` with the docs staged: check; test (2,781 JUnit in 179 classes, 0 failures,
+  14 skipped as before; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 818 of 932; `application`
+  90%, 396 of 439; every package at or above its floor); guards (12 of 12).
+- **Remaining.** CI has not run the round; not run in the owner's container. A web edit far from the rewritten lines
+  merges cleanly and leaves the page the owner's (frozen at that merge), which the guide's advice avoids rather than
+  prevents.
+- **Pending.** Not pushed; the coordinator pushes.
+
+## 2026-10-12 — #414 PR #415's review round 2 (branch feat/414-root-index)
+- **Where it stood.** The critic re-reviewed `b94053e..8b3f4c9`: every round-1 finding closed or accepted, nothing
+  blocking, four small issues from the fixes. Each fixed in a new commit, test failing first; nothing pushed.
+- `4437458` **1, 2: the seal is read by hand, as one comment.** The regex backtracked on a hostile first line (the
+  critic: 173 ms at 112 KiB, 15 s at 1 MiB, about 4 min at 4 MiB), on the boot path and at every grading. The first
+  line is parsed left to right, only up to 1,024 characters; and a close before the end, `-->` or a browser's
+  `--!>`, makes the page the owner's, since github.com shows what follows it. The digest must sit just before the
+  final close. `NOTE` now reads "Change what this page shows and it is yours". Red: 5 of 29 (the owner's text on the
+  seal line overwritten; a 1,025-character seal accepted; a 1.4 MiB hostile line timed out at 5 s; a digest followed
+  by words accepted; the old words written).
+- `1cf4411` **3: the twin stays only while it is named.** A front page the owner wrote without the twin's link kept
+  the untouched Korean guide forever; now the twin stays only while `README.md`'s bytes name it (or it cannot be
+  read), and the index never does, so the seal is no longer parsed on that path. Red: 1 of 36. The boot test's old
+  guide now opens with the twin's link, as the real one did, or the new rule retires its twin.
+- **Docs** (the commit after them). **4:** the guide's advice covers any file, not only the server's pages, the twin
+  follows (guards red until its hash moved); the ADR states INFO, not a warning, for an owner's front page, and quotes
+  git's own rejection for a clone that never fetches (measured here: `! [rejected] HEAD -> main (fetch first)`, "the
+  remote contains work that you do not have locally"); round 1's quote above is corrected in place.
+- **The critic's probes**, after the fixes: `Seal visible`, not intact, the owner's text survives; `Seal redos`,
+  7 KiB to 4 MiB each in 0 to 4 ms (181 ms at 112 KiB and 716 ms at 225 KiB before, on this machine); `TwoBoots`, the
+  twin kept while linked and retired after the README goes. Round 1's cases answer as before.
+- **Gates**, all exit 0, at `1cf4411` with the docs staged: check; test (2,786 JUnit in 179 classes, 0 failures,
+  14 skipped as before; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 840 of 956; `application`
+  90%, 396 of 439; every package at or above its floor); guards (12 of 12).
+- **Remaining.** CI has not run this round; not run in the owner's container.
+- **Pending.** Not pushed; the coordinator pushes.
