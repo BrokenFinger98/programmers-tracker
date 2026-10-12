@@ -6338,3 +6338,49 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - #355's live check: a fault cannot be produced on demand.
   - The owner deletes the inbox snapshot above.
   - Not pushed.
+
+## 2026-10-12 — #414 the front page is the index (branch feat/414-root-index)
+- **The owner's decision (2026-10-12).** The records repository's root `README.md` becomes the regenerated index, and
+  the guide moves to `GUIDE.md` and `GUIDE.ko.md`, still seeds. ADR `2026-10-12-the-front-page-is-the-index`.
+- `a04aa83` **A file at the root is removed through the walk.** `RecordWrites.removeFile` asked the bound for the
+  target's parent, which at the root is the root itself, refused as outside the repository; it walks to the file
+  now, as a write does. Found by the first green run; red in `RecordWritesTest` (2 of 60).
+- `73cef31` **The guide moves.** `VaultDashboard` seeds `dashboard.base`, `GUIDE.md` and `GUIDE.ko.md`, and retires
+  `README.md` and `README.ko.md` by the ledger: still exactly as seeded, taken away and said at INFO; edited, or no
+  record, kept; a link left alone and said. The guide's structure block names the front page and
+  `problems/README.md`.
+- `ef0ceb7` **The index on the front page.** `RootIndex` writes a header (what the repository is, the guide in both
+  languages), then `problems/README.md`'s counts and table through the shared `IndexTable`, linked from the root; an
+  empty history gets the header and `0 problems recorded, 0 passed.` The page is the server's only while it is
+  exactly what it wrote, which `PageSeal` proves: a first-line comment holding the SHA-256 of the rest, CRLF set
+  aside. Anything else is the owner's: never written, a WARN said once, the index in `problems/README.md` alone.
+  Written by `RecordWrites.replaceOrSkip`, read by `RecordReads`.
+- `8e79f1d` **The retirement's notice pinned**, after the mutant that dropped it survived.
+- **Docs** (the commit after them). `CLAUDE.md`'s twin list names `src/main/resources/vault/GUIDE.md`: a rename by
+  the owner's decision, still six. `README.md`, `docs/bootstrap.md` and their twins, `translated-from` refreshed to
+  the staged blobs; `SECURITY.md`; the ADR, its index line, and an amendment to
+  `2026-08-11-korean-for-the-user-facing-half`.
+- **Decisions.** `problems/README.md` stays as it was: the smaller change, one rule, and the index must live there
+  whenever the front page is the owner's. The front page is compared with the ledger once, while it may still be the
+  old guide, and after that only with its own seal: the ledger is per machine (a clone has none), a ledger write per
+  grading asks git (#360), and a crash between two files would make the server's page look edited.
+- **Red.** Against a `RootIndex` that wrote nothing and the old seeds: 32 of 82 tests in the five classes failed,
+  each for the feature's absence. Then `removeFile`: 2 of 60, `it lies outside the records repository`.
+- **Mutation** (`mutate414.py` in the scratchpad; store, application and config tests, 1,100 a run): 24 mutants,
+  23 killed at first. The survivor dropped the retirement's INFO line; `8e79f1d` pins it, and the rerun kills it
+  (1 of 1,101). A planned mutant comparing the seal's first line alone was equivalent and was replaced; its
+  replacement, the digest alone, showed no test edited the mark's words, which a case now does.
+- **Measured on a copy of the owner's records** (`b1e116e`; remote removed, credential emptied, no token), the built
+  jar booted with `TRACKER_RECORD_REPO` on the copy:
+  - boot 1: `GUIDE.md` and `GUIDE.ko.md` written, both READMEs taken away, 0 WARN/ERROR; the reconcile commit
+    `6123161` holds `README.ko.md → GUIDE.ko.md` (R090), `GUIDE.md` (A) and `README.md` (M), nothing else;
+  - the front page: 25 rows equal to `problems/README.md`'s from the root, 27 relative links all resolving, the seal
+    matching its body; `problems/README.md` unchanged;
+  - boot 2: no commit, a clean tree, 256 files byte-identical;
+  - boot 3, after a line was added to `README.md`: its bytes kept, one WARN.
+- **Gates**, all exit 0, at `8e79f1d` with the docs staged: check; test (2,764 JUnit in 179 classes, 0 failures,
+  14 skipped as before; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 795 of 908; `application`
+  90%, 396 of 439; every package at or above its floor); guards (12 of 12).
+- **Remaining.** Not run in the owner's container; CI has not run the branch, Windows included. A `GUIDE.md` the
+  owner already had is kept, and the old guide's text is then only in history.
+- **Pending.** Not pushed.

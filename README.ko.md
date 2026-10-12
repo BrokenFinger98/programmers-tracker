@@ -1,4 +1,4 @@
-<!-- translated-from: README.md@514575e277895b28f2b71f01c32cfbc9d1574663 -->
+<!-- translated-from: README.md@0df354efb2998558141e51160b6c893336597cb8 -->
 
 # programmers-tracker
 
@@ -169,8 +169,10 @@ JDK 25 위에서 네이티브로도 돌아갑니다 (`./gradlew bootRun`). 안�
                                 resources/vault/ 포함
 ```
 
-기록은 **직접 만드는 별도 저장소** 에 들어가고(위 *시작하기* 의 `cp -R template/ps-records …`),
-서버는 그 안에 쓰기만 합니다. §5.5의 파생 페이지가 생기면 Obsidian 볼트로 열 수 있습니다.
+기록은 **서버가 만들어 주는 별도 저장소** 에 들어가고(`TRACKER_RECORD_REPO` 가 없으면
+`~/ps-records`), 서버는 그 안에 쓰기만 합니다. 그 저장소의 첫 화면은 지금까지 푼 문제의 색인으로
+github.com이 가장 먼저 보여주는 페이지이고, 옆의 `GUIDE.ko.md` 가 나머지를 읽는 법을 알려줍니다.
+Obsidian 볼트로 열면 그래프, 대시보드, 태그 노트가 알아서 관리됩니다.
 
 > 클론 후 한 번: `git config core.hooksPath .githooks` — 푸시 게이트를 켭니다.
 > 헌법 가드를 먼저 돌리고, 그다음 위키 기록을 요구합니다.

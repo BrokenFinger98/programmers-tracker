@@ -4,7 +4,7 @@ project: programmers-tracker
 tags: [language, documentation, open-source, guards, drift]
 author: BrokenFinger98
 created: 2026-08-11
-updated: 2026-08-13
+updated: 2026-10-12
 sources: [decisions/2026-08-04-english-only-artifacts, decisions/2026-08-10-guards-must-prove-they-ran, concepts/assumption-vs-measurement, raw/sessions/2026-08-11-capture-defects-found-by-solving.md]
 ---
 
@@ -126,3 +126,11 @@ is weakened, which is why this is an amendment and not a supersession.
 The constitution's list moves 5 → 6, the drift guard covers the new twin like the others, and a
 seventh remains a change to the list.
 
+## Amended 2026-10-12 (#414): the vault twin is the guide, renamed
+
+The vault's twin was `src/main/resources/vault/README.md`, the guide seeded as the records
+repository's front page. The owner made that front page the index on 2026-10-12, and the guide
+moved to `GUIDE.md`, its twin to `GUIDE.ko.md`
+([[decisions/2026-10-12-the-front-page-is-the-index]]). The constitution's list renames that one
+entry. It still names six pages, and a seventh is still a change to the list. The drift guard
+needed no change: it walks every tracked `*.ko.md`, and `GUIDE.ko.md` declares `GUIDE.md`'s blob.

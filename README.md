@@ -169,8 +169,10 @@ which have been built.
 ```
 
 Your records live in a **separate repository the server creates for you** (`~/ps-records`
-unless `TRACKER_RECORD_REPO` says otherwise) and only ever writes into. Open it as an
-Obsidian vault — the graph, the dashboard and the tag notes are maintained for you.
+unless `TRACKER_RECORD_REPO` says otherwise) and only ever writes into. Its front page is the
+index of what you have solved, which is what github.com shows first, and `GUIDE.md` beside it
+says how to read the rest. Open it as an Obsidian vault — the graph, the dashboard and the tag
+notes are maintained for you.
 
 > Once after cloning: `git config core.hooksPath .githooks` — activates the push gate,
 > which runs the constitution guards and then asks for a wiki record.

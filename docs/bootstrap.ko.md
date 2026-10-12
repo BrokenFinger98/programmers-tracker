@@ -1,4 +1,4 @@
-<!-- translated-from: bootstrap.md@781686eb0185b0bb04156890f76dd63ab4fd556e -->
+<!-- translated-from: bootstrap.md@5bb1ab5e9c7085e1fdd5ba4427acd35b9538832b -->
 
 # 부트스트랩 — 아무것도 없는 상태에서 첫 기록까지
 
@@ -69,9 +69,10 @@ cd programmers-tracker
 있습니다.
 
 **실행할 게 없습니다.** 첫 시작 때 서버가 디렉토리를 만들고(`.env` 의 `TRACKER_RECORD_REPO`
-가 없으면 `~/ps-records`), `git init` 을 하고, README와 Obsidian 대시보드와 ignore 규칙을
-심습니다. 시작 로그에 `Records live at <경로>` 가 찍혀서 위치가 조용히 정해지는 일은
-없습니다.
+가 없으면 `~/ps-records`), `git init` 을 하고, 안내서(`GUIDE.md`, 한국어는 `GUIDE.ko.md`)와
+Obsidian 대시보드와 ignore 규칙을 심습니다. 첫 화면인 `README.md` 는 지금까지 푼 문제의
+색인이고, 채점이 끝날 때마다 다시 쓰입니다. 시작 로그에 `Records live at <경로>` 가 찍혀서
+위치가 조용히 정해지는 일은 없습니다.
 
 기계 밖 백업을 원하면 `.env` 에 GitHub 토큰을 넣으세요:
 
@@ -338,6 +339,7 @@ Docker라면 `docker compose ps` 가 1분 안에 컨테이너를 `healthy` 로 �
 
 ```
 ps-records/
+├── README.md                                    색인 — 모든 문제를 최신순으로
 ├── log/submissions.jsonl                        채점 하나당 한 줄, 시도 번호의 authority
 └── problems/120804-<title>/
     ├── README.md                                시도 이력
