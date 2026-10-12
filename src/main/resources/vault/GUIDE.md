@@ -29,8 +29,8 @@ log/submissions.jsonl  Full submission log (the source the MCP tools read)
 **The front page is the index until you change it.** `README.md` is rewritten after every
 grading. Change what it says, or add to it, and it is yours: the server never writes it again,
 says so at each start, and the index carries on in `problems/README.md`. Delete it and the index
-comes back. **Make such edits — to the front page or any page the server writes — in the clone
-the tracker writes to, never on github.com**: the server never pulls, so a commit made on the
+comes back. **Edit any file here — the front page, your notes, this guide, the dashboard — in the
+clone the tracker writes to, never on github.com**: the server never pulls, so any commit made on the
 website makes every later push fail until you merge it by hand, and on the front page that merge
 conflicts wherever your edit meets the lines a grading rewrites.
 

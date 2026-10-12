@@ -69,9 +69,13 @@ review added two conditions:
 - **What replaces it must be there.** A retired seed goes only while its guide (`GUIDE.md` for
   `README.md`, `GUIDE.ko.md` for `README.ko.md`) is a regular file, judged without following a link.
 - **The pair goes together.** The old `README.md` links `README.ko.md` by name under its title. So
-  the twin goes only when the README is gone (absent, or retired in the same pass) or is the index.
-  A README kept as the owner's keeps its twin, or their page would link nothing. Only the twin
-  edited still retires the README and keeps the twin.
+  the twin stays only while the README's bytes hold its name, or the README cannot be read to say
+  they do not. A README kept as the owner's that links it keeps it, or their page would link
+  nothing. Gone (absent, or retired in the same pass), the index, or a front page the owner wrote
+  without the link, and the twin goes: the first rule of the review, "only when gone or the index",
+  kept the untouched Korean guide forever beside `GUIDE.ko.md` under a front page written from
+  scratch, and nothing said so (the second review's finding 3). Only the twin edited still retires
+  the README and keeps the twin.
 
 **The index it becomes is never compared with the ledger.** The ledger's `README.md` entry names the
 old guide, and no index will ever hash to it. Had the ledger stayed the comparison, the second boot
@@ -99,12 +103,22 @@ remembering were considered:
 - A byte of the body changed breaks the seal, and the page is then the owner's. So does a line added
   above the seal, inside it (which splits it over two lines) or below it.
 - **The framing is a format; the words are free** (the review's finding 1). A seal is one line,
-  from `<!--` to ` -->`, holding `sha256:` and exactly 64 lowercase hex. Every deployed page carries
-  that framing, so changing it needs a reader for the old one beside it. The words between are
-  presentation and are not checked: the first version compared the whole line with today's words,
-  so a release that reworded them would have orphaned every deployed page. A page sealed under
-  older words is the server's, and is rewritten under the new. A golden test pins the first line
-  this version writes.
+  from `<!--` to ` -->`, ending in `sha256:` and exactly 64 lowercase hex just before the close.
+  Every deployed page carries that framing, so changing it needs a reader for the old one beside it.
+  The words between are presentation and are not checked: the first version compared the whole line
+  with today's words, so a release that reworded them would have orphaned every deployed page. A
+  page sealed under older words is the server's, and is rewritten under the new. A golden test pins
+  the first line this version writes. Its words now say the rule: "Change what this page shows and
+  it is yours", since a change to the comment's own words is overwritten.
+- **One comment, read by hand, at most 1,024 characters** (the second review's findings 1 and 2).
+  The round-1 regex backtracked on a hostile first line: the critic measured 173 ms at 112 KiB,
+  15 s at 1 MiB and about 4 min at 4 MiB, on the boot path and at every grading, from a page a pull
+  can deliver (the class of #387's FIFO). The line is now parsed left to right with no regex, and
+  only up to 1,024 characters, about five times a real seal; a 1.4 MiB hostile line answers in
+  milliseconds. And the regex took a line such as `<!-- … sha256:H --> **My plan** <!-- mine -->`
+  for a seal, though github.com shows the text in the middle, so the next write wiped the owner's
+  words. A close before the end, `-->` or the `--!>` a browser also closes on, now makes the page
+  the owner's.
 - It is the ledger's notion, "exactly the bytes this server wrote", carried in the file it vouches
   for. So it survives a clone, needs no state, and costs nothing per grading.
 - It is written beside the page and moved over it with the page, as one file, through
@@ -139,7 +153,7 @@ both.
 ### 4. The header
 
 ```
-<!-- Written by programmers-tracker. Edit this page and it is yours: … sha256:<64 hex> -->
+<!-- Written by programmers-tracker. Change what this page shows and it is yours: … sha256:<64 hex> -->
 # Programmers solving records
 
 Written by [programmers-tracker](https://github.com/BrokenFinger98/programmers-tracker) after every grading. The guide: [English](GUIDE.md) · [한국어](GUIDE.ko.md).
@@ -195,8 +209,8 @@ left there" (finding 6); the target's directory is looked for before the walk ag
 - **One comment line in the page's source**, whose digest changes at every rewrite: one more changed
   line per diff.
 - **An owner who edits the front page in place keeps a frozen copy there.** The page is theirs, and
-  the live index carries on in `problems/README.md`. The warning says so at every start, and
-  deleting the page hands it back.
+  the live index carries on in `problems/README.md`. The server states so at INFO at every start,
+  and deleting the page hands it back.
 - **Restoring the retired guide's exact bytes as `README.md`** (from history, say) counts as
   untouched. The next boot takes it away again. The ledger's entry is kept rather than forgotten,
   because forgetting it would be a state write to settle a case nobody has met.
@@ -208,16 +222,19 @@ left there" (finding 6); the target's directory is looked for before the walk ag
   bytes the recorded hash does not match, the old guide is kept as the owner's, and the server
   states that once at each start. Removing `README.md` by hand gives the index. Matching the hashes
   of every guide ever shipped was not added (YAGNI).
-- **A front page edited on github.com stops the pushes** (the review's finding 3). The server never
-  pulls or fetches. A commit made on the website puts the remote ahead, so every later push is
-  rejected (git: the branch is behind its remote counterpart), logged as a failed push and left to
-  the daily backup, and records stop reaching GitHub until the owner merges by hand. On the front
-  page that merge conflicts wherever the web edit meets the lines a grading rewrites, and the seal
-  line changes at every grading. Measured on the critic's simulation: the push was rejected, and the
-  merge stopped with a content conflict in `README.md`. An edit at the bottom of a ten-row table, far
-  from the rewritten lines, merged cleanly and left a page whose seal no longer matches, which is
-  then the owner's. The guide now says to edit in the clone the tracker writes to, never on
-  github.com.
+- **Any file edited on github.com stops the pushes** (the review's finding 3; the second review
+  widened it from the front page to every file, the owner's notes and guide included). The server
+  never pulls or fetches. A commit made on the website puts the remote ahead, so every later push is
+  rejected, logged as a failed push and left to the daily backup, and records stop reaching GitHub
+  until the owner merges by hand. Measured on a clone that never fetched, as the tracker's is: git
+  answers `! [rejected]        HEAD -> main (fetch first)`, with the hint "Updates were rejected
+  because the remote contains work that you do not have locally". (The first round quoted "the tip
+  of your current branch is behind", which is what a clone that had fetched is told.) On the front
+  page the hand merge conflicts wherever the web edit meets the lines a grading rewrites, and the
+  seal line changes at every grading: measured, the merge stopped with a content conflict in
+  `README.md`. An edit at the bottom of a ten-row table, far from the rewritten lines, merged cleanly
+  and left a page whose seal no longer matches, which is then the owner's. The guide says to edit
+  any file in the clone the tracker writes to, never on github.com.
 - **A `GUIDE.md` the owner already had is theirs.** The guide is not seeded over it, an untouched old
   README is still retired, and the front page's link leads to the owner's file. The old guide's text
   is then only in the repository's history.
@@ -296,3 +313,27 @@ The critic's harness cases, rerun after the fixes:
 - `noledger` and `crlf-retire` keep the old guide, as accepted, and are stated at INFO.
 - `bom` and `case` are unchanged. A BOM is a byte added above the seal, so the page is the owner's.
   `Readme.md` on a case-folding volume held the untouched seed's exact bytes, so it was retired.
+
+### Review round 2 (2026-10-12, PR #415)
+
+The critic re-reviewed `b94053e..8b3f4c9`. Every round-1 finding was closed or accepted, and nothing
+blocked. The fixes had introduced four small issues, each answered in a new commit with its test
+shown failing first:
+
+| # | Finding | Answer |
+|---|---|---|
+| 1 | The seal's regex was quadratic on a hostile first line, on the boot path | Parsed by hand, at most 1,024 characters (`4437458`) |
+| 2 | Owner text after a close on the seal's line counted as intact, and was wiped | One comment: `-->` or `--!>` before the end is the owner's; the note's words say so (`4437458`) |
+| 3 | Every kept README held the twin back, even one that never names it | The twin stays only while the README's bytes name it (`1cf4411`) |
+| 4 | Docs: the advice covered only pages the server writes; a stale WARN; a misquoted git message | Any file; INFO; git's own words for a clone that never fetches (the docs commit after them) |
+
+The critic's new probes, rerun after the fixes:
+
+- `Seal visible`: the page is not intact, the write leaves it, and the owner's text survives.
+- `Seal redos`: first lines of 7 KiB, 112 KiB, 1 MiB and 4 MiB each answer in 0 to 4 ms. Before the
+  fix, this machine took 181 ms at 112 KiB and 716 ms at 225 KiB, quadratic.
+- `TwoBoots`: the twin is kept while the owner's README links it, and goes on the boot after that
+  README is removed, beside a sealed index.
+
+The round-1 cases `pair`, `pair-reverse`, `noledger`, `note`, `absent-root` and `empty2` answer as
+before.

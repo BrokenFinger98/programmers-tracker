@@ -6408,8 +6408,10 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   not seed" for a FIFO and a directory; the boot test's commit). The old guide's link line, word for word, is in
   the test now; the first round's guide had no link, which is why it missed this.
 - **Docs** (the commit after them). **3:** the server never pulls or fetches; a web commit makes every later push
-  fail (measured on a copy of the critic's simulation: rejected, "the tip of your current branch is behind"), and the
-  hand merge conflicts where the edit meets the lines a grading rewrites ("CONFLICT (content): Merge conflict in
+  fail (measured on a copy of the critic's simulation: rejected, "the tip of your current branch is behind" —
+  corrected in round 2: that is what a clone that had fetched is told; the tracker never fetches, and is told
+  "(fetch first)", "the remote contains work that you do not have locally"), and the hand merge conflicts where
+  the edit meets the lines a grading rewrites ("CONFLICT (content): Merge conflict in
   README.md"; an edit at the bottom of a ten-row table merged cleanly). `GUIDE.md` says to edit in the clone, the
   twin follows, `translated-from` refreshed (guards red until then). **5:** accepted; an accepted cost in the ADR.
   **9:** the 2026-08-13 ADR's line marked ⚠️ (old) and linked. The ADR, its index line and this file record the
@@ -6423,4 +6425,31 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
 - **Remaining.** CI has not run the round; not run in the owner's container. A web edit far from the rewritten lines
   merges cleanly and leaves the page the owner's (frozen at that merge), which the guide's advice avoids rather than
   prevents.
+- **Pending.** Not pushed; the coordinator pushes.
+
+## 2026-10-12 — #414 PR #415's review round 2 (branch feat/414-root-index)
+- **Where it stood.** The critic re-reviewed `b94053e..8b3f4c9`: every round-1 finding closed or accepted, nothing
+  blocking, four small issues from the fixes. Each fixed in a new commit, test failing first; nothing pushed.
+- `4437458` **1, 2: the seal is read by hand, as one comment.** The regex backtracked on a hostile first line (the
+  critic: 173 ms at 112 KiB, 15 s at 1 MiB, about 4 min at 4 MiB), on the boot path and at every grading. The first
+  line is parsed left to right, only up to 1,024 characters; and a close before the end, `-->` or a browser's
+  `--!>`, makes the page the owner's, since github.com shows what follows it. The digest must sit just before the
+  final close. `NOTE` now reads "Change what this page shows and it is yours". Red: 5 of 29 (the owner's text on the
+  seal line overwritten; a 1,025-character seal accepted; a 1.4 MiB hostile line timed out at 5 s; a digest followed
+  by words accepted; the old words written).
+- `1cf4411` **3: the twin stays only while it is named.** A front page the owner wrote without the twin's link kept
+  the untouched Korean guide forever; now the twin stays only while `README.md`'s bytes name it (or it cannot be
+  read), and the index never does, so the seal is no longer parsed on that path. Red: 1 of 36. The boot test's old
+  guide now opens with the twin's link, as the real one did, or the new rule retires its twin.
+- **Docs** (the commit after them). **4:** the guide's advice covers any file, not only the server's pages, the twin
+  follows (guards red until its hash moved); the ADR states INFO, not a warning, for an owner's front page, and quotes
+  git's own rejection for a clone that never fetches (measured here: `! [rejected] HEAD -> main (fetch first)`, "the
+  remote contains work that you do not have locally"); round 1's quote above is corrected in place.
+- **The critic's probes**, after the fixes: `Seal visible`, not intact, the owner's text survives; `Seal redos`,
+  7 KiB to 4 MiB each in 0 to 4 ms (181 ms at 112 KiB and 716 ms at 225 KiB before, on this machine); `TwoBoots`, the
+  twin kept while linked and retired after the README goes. Round 1's cases answer as before.
+- **Gates**, all exit 0, at `1cf4411` with the docs staged: check; test (2,786 JUnit in 179 classes, 0 failures,
+  14 skipped as before; node 4 of 4); build; `verifyBranchCoverage` (`adapter/store` 87%, 840 of 956; `application`
+  90%, 396 of 439; every package at or above its floor); guards (12 of 12).
+- **Remaining.** CI has not run this round; not run in the owner's container.
 - **Pending.** Not pushed; the coordinator pushes.
