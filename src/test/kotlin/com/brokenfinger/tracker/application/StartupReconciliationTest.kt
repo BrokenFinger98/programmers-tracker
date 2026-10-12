@@ -347,8 +347,12 @@ class StartupReconciliationTest {
         const val LESSON_ID = 120804L
         const val A_RECORD = """{"lessonId":120804}"""
 
-        /** Any guide an older server seeded as a README: what matters is that the ledger recorded writing it. */
-        const val AN_OLDER_GUIDE = "# ps-records\n\nThe usage guide an older server seeded.\n"
+        /**
+         * A guide an older server seeded as a README, recorded in the ledger, and opening as the real one did: under
+         * its title, the link to the Korean twin, which is what keeps the twin beside an edited README.
+         */
+        const val AN_OLDER_GUIDE =
+            "# ps-records\n\n**[한국어](README.ko.md)**\n\nThe usage guide an older server seeded.\n"
         const val AN_OLDER_KOREAN_GUIDE = "# ps-records\n\nIts Korean twin, as an older server seeded it.\n"
     }
 }

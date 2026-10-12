@@ -251,6 +251,32 @@ class VaultDashboardTest {
         Files.readString(root.resolve("README.ko.md")) shouldBe AN_OLDER_GUIDE
     }
 
+    /**
+     * A README the owner wrote from scratch names no twin. Kept as theirs, it held the untouched Korean guide beside
+     * `GUIDE.ko.md` forever, and nothing said so (#414's second review): the twin stays only while the README names it.
+     */
+    @Test
+    fun `a README of the owner's own that names no twin lets the untouched twin go`() {
+        Files.writeString(root.resolve("README.md"), "# My own front page\n")
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+
+        ensure()
+
+        Files.readString(root.resolve("README.md")) shouldBe "# My own front page\n"
+        Files.exists(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe false
+    }
+
+    /** A README that cannot be read cannot say it names no twin, so the twin stays. */
+    @Test
+    fun `a README that cannot be read keeps the untouched twin`() {
+        Files.createDirectory(root.resolve("README.md"))
+        seededEarlier("README.ko.md", AN_OLDER_GUIDE)
+
+        ensure()
+
+        Files.readString(root.resolve("README.ko.md")) shouldBe AN_OLDER_GUIDE
+    }
+
     /** The reverse: only the twin was edited, so the README goes, the index takes its place, and the twin stays. */
     @Test
     fun `a README goes while its edited Korean twin stays`() {

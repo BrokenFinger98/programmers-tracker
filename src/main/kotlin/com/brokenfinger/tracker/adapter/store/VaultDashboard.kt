@@ -2,6 +2,7 @@ package com.brokenfinger.tracker.adapter.store
 
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.nio.charset.StandardCharsets.ISO_8859_1
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -65,9 +66,10 @@ import java.nio.file.Path
  *
  * Two more conditions, from #414's review. **What replaces a retired seed must be there**: its guide, a regular file
  * judged without following a link, or the guide would be gone with nothing in its place. **The pair goes together**:
- * the old `README.md` links `README.ko.md` by name under its title, so the twin goes only when the README is gone —
- * absent, or retired in the same pass — or is the index. A README kept as the owner's keeps its twin, or their page
- * would link nothing.
+ * the old `README.md` links `README.ko.md` by name under its title, so the twin stays only while the README's bytes
+ * name it, or the README cannot be read to say they do not. Gone — absent, or retired in the same pass — the index,
+ * or a front page the owner wrote without that link: the twin goes, or it would stay beside `GUIDE.ko.md` forever with
+ * nothing saying so (#414's second review).
  */
 class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedger) {
     private val writes = RecordWrites.underRoot(recordRoot, KEPT_AT_THE_ROOT)
@@ -91,18 +93,18 @@ class VaultDashboard(private val recordRoot: Path, private val ledger: SeedLedge
     // Its guide is a regular file, and the page it is the twin of, if any, links it no more.
     private fun isReplaced(seed: RetiredSeed): Boolean {
         if (!Files.isRegularFile(recordRoot.resolve(seed.guide), NOFOLLOW_LINKS)) return false
-        return seed.twinOf?.let(::isGoneOrTheIndex) ?: true
+        return seed.twinOf?.let { page -> !names(page, seed.name) } ?: true
     }
 
-    // Nothing there, or the index this server sealed. Anything else — the owner's page, or what the read refuses — is
-    // a page that may still link its twin.
-    private fun isGoneOrTheIndex(name: String): Boolean {
+    // Whether [page] may still link [name]: its bytes hold the name, or it cannot be read to say they do not. Nothing
+    // there names nothing, and neither does the index or a front page of the owner's own written without the link.
+    private fun names(page: String, name: String): Boolean {
         val current = try {
-            reads.readAllBytes(recordRoot.resolve(name))
+            reads.readAllBytes(recordRoot.resolve(page))
         } catch (refused: IOException) {
-            return false
-        }
-        return current == null || PageSeal.isIntact(current)
+            return true
+        } ?: return false
+        return name in String(current, ISO_8859_1)
     }
 
     // Read once, through the bound its writer takes: a seed that is no regular file is refused, which leaves it alone.
