@@ -91,22 +91,34 @@ class RootIndex(private val layout: RecordLayout) {
  * everything after it. A comment, because no renderer shows one — github.com and Obsidian's reading view start the
  * page at its title.
  *
- * A page is intact when it is precisely the seal of its own body followed by that body, so one byte changed anywhere
- * breaks it: the body, the comment, a line added above, inside or below. A seal copied onto another page vouches for
- * nothing. Line endings alone are set aside, because git's `core.autocrlf` checks a page out with CRLF and that is the
- * checkout's doing rather than an edit; the server only ever writes LF.
+ * A page is intact when its first line is a seal and the seal's digest is the SHA-256 of the body after the first line
+ * break. So a byte of the body changed breaks it, and so does a line added above the seal, inside it — which splits it
+ * — or below it. A seal copied onto another page vouches for nothing. Line endings alone are set aside, because git's
+ * `core.autocrlf` checks a page out with CRLF and that is the checkout's doing rather than an edit; the server only
+ * ever writes LF.
+ *
+ * **The framing is a format; the words are free** (#414's review). Every page already deployed carries a seal framed
+ * as [FRAMING] reads it — one line, from `<!--` to ` -->`, holding `sha256:` and exactly 64 lowercase hex — so a
+ * change to the framing needs a reader for the old one beside it, or every such page is taken for an edit and never
+ * written again. The [NOTE] between is what a person reads, and is not checked: a release may reword it, and a page
+ * sealed under older words is still the server's and is rewritten under the new.
  */
 internal object PageSeal {
     private const val NOTE = "Written by programmers-tracker. Edit this page and it is yours: it is never written " +
         "again, and the index stays in problems/README.md."
 
+    private val FRAMING = Regex("""<!--.*sha256:([0-9a-f]{64})(?![0-9a-f]).* -->""")
+
     /** [body] under its seal. */
     fun sealed(body: String): String = "<!-- $NOTE sha256:${digestOf(body)} -->\n$body"
 
-    /** Whether [bytes] are a body under its own seal, line endings aside. */
+    /** Whether [bytes] are a body under a seal holding its digest, line endings aside and the seal's words unread. */
     fun isIntact(bytes: ByteArray): Boolean {
         val text = String(bytes, UTF_8).replace("\r\n", "\n")
-        return text == sealed(text.substringAfter('\n'))
+        val end = text.indexOf('\n')
+        if (end < 0) return false
+        val digest = FRAMING.matchEntire(text.substring(0, end))?.groupValues?.get(1) ?: return false
+        return digest == digestOf(text.substring(end + 1))
     }
 
     private fun digestOf(body: String): String =

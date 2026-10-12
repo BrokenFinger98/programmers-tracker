@@ -24,6 +24,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.security.MessageDigest
 
 /**
  * The records repository's front page, `README.md`, is the index (#414): what has been solved, where github.com opens.
@@ -187,18 +188,18 @@ class RootIndexTest {
     }
 
     /**
-     * An addition is an edit too, wherever it is made: above the page, inside it, below it. So is a change to the
-     * words of the mark itself, which the digest does not cover: the whole first line is compared, not its digest.
+     * An addition is an edit too, wherever it is made: above the seal, inside it — which splits it over two lines —
+     * just below it, and at the end of the page.
      */
     @Test
-    fun `a line added anywhere, or the mark's own words changed, makes the page the owner's`() {
+    fun `a line added above, inside or below the seal makes the page the owner's`() {
         index().write(listOf(aSubmissionRecord()))
         val written = Files.readString(readme)
         val edits = listOf(
             "mine\n$written",
+            written.replaceFirst(" sha256:", "\nmine sha256:"),
             written.replaceFirst("\n", "\nmine\n"),
             "${written}mine\n",
-            written.replaceFirst("programmers-tracker", "me"),
         )
 
         edits.forEach { edited ->
@@ -228,6 +229,46 @@ class RootIndexTest {
 
         render(listOf(aSubmissionRecord(lessonId = 1), aSubmissionRecord(lessonId = 2))) shouldContain
             "2 problems recorded"
+    }
+
+    /**
+     * The seal's words are presentation: a release that rewords them must not orphan every page already deployed. A
+     * page sealed under other words, its digest intact, is still the server's, and is rewritten under today's.
+     */
+    @Test
+    fun `a page sealed under other words is the server's, and is rewritten with today's`() {
+        index().write(listOf(aSubmissionRecord(lessonId = 1)))
+        val body = Files.readString(readme).substringAfter('\n')
+        Files.writeString(readme, "<!-- Sealed by an older programmers-tracker. sha256:${sha256Of(body)} -->\n$body")
+
+        val text = render(listOf(aSubmissionRecord(lessonId = 1), aSubmissionRecord(lessonId = 2)))
+
+        text shouldContain "2 problems recorded"
+        text shouldBe PageSeal.sealed(text.substringAfter('\n'))
+    }
+
+    /**
+     * The seal's framing is what every deployed page carries, so it is pinned to the byte: this version's first line
+     * for a body whose digest was taken outside the code under test (`printf '# A known body\n' | shasum -a 256`).
+     */
+    @Test
+    fun `the first line this version writes, for a known body`() {
+        PageSeal.sealed("# A known body\n").lines().first() shouldBe
+            "<!-- Written by programmers-tracker. Edit this page and it is yours: it is never written again, and " +
+            "the index stays in problems/README.md. " +
+            "sha256:7c02085cfb8b1dbf007d9c9ce0f68cac716b13969dcdb3d3c8aa8cdf7ffc72ed -->"
+    }
+
+    /** A digest is exactly 64 lowercase hex: one in capitals, one short or one long, is no seal at all. */
+    @Test
+    fun `a seal whose digest is not 64 lowercase hex is no seal`() {
+        val body = "# A known body\n"
+        val digest = sha256Of(body)
+
+        listOf(digest.uppercase(), digest.drop(1), digest + "0").forEach { written ->
+            PageSeal.isIntact("<!-- a seal sha256:$written -->\n$body".toByteArray()) shouldBe false
+        }
+        PageSeal.isIntact("<!-- a seal sha256:$digest -->\n$body".toByteArray()) shouldBe true
     }
 
     /** The mark is a comment no renderer shows: github.com and Obsidian's reading view start the page at its title. */
@@ -290,6 +331,10 @@ class RootIndexTest {
     private fun index() = RootIndex(RecordLayout(root))
 
     private fun render(records: List<SubmissionRecord>): String = Files.readString(checkNotNull(index().write(records)))
+
+    // Taken here rather than asked of the code under test, so a digest computed wrongly there cannot agree with itself.
+    private fun sha256Of(text: String): String =
+        MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 
     private companion object {
         /** A markdown link's target: what a renderer resolves against the page's own directory. */
