@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [discipline, protocol, review-pattern, failed-attempts]
 created: 2026-08-05
-updated: 2026-10-10
-sources: [raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md, raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
+updated: 2026-10-12
+sources: [raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md, raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-night-the-records-learned-the-question.md, raw/sessions/2026-08-13-the-tally-that-counted-runs.md, raw/sessions/2026-08-11-expiry-has-no-socket-signal.md, raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-11-capture-defects-found-by-solving.md, raw/sessions/2026-08-05-capture-pipeline-built-end-to-end.md, raw/sessions/2026-08-19-the-vault-reset-and-the-guard-that-was-rerun.md, raw/sessions/2026-08-28-the-first-real-record.md, raw/sessions/2026-09-29-a-session-expiry-and-the-socket-that-looked-alive.md, raw/sessions/2026-09-30-the-sensor-hands-the-session-over.md, raw/sessions/2026-10-01-a-wrong-query-and-the-purple-question-mark.md, raw/sessions/2026-10-03-the-fix-measured-and-an-sql-error-frame.md, raw/sessions/2026-10-06-the-history-that-folded.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md]
 ---
 
 # Assumption vs Measurement — how our own claims became "facts"
@@ -534,6 +534,39 @@ the author's machine did not hold elsewhere, and only running elsewhere showed i
   leaves". The critic hung the boot, and every MCP call with it, with one pulled link to
   `/proc/self/fd/1` in the deployed image.
 
+## October 11–12: notes repeated as facts, a quote from the wrong clone, and a guard replayed
+
+*(raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md)*
+
+None of these was about the protocol. Each was a sentence the coordinator or an agent had written down,
+and the state it described had moved on or had never been the one that mattered.
+
+- **Two notes nobody measured again.** Asked what was left, the coordinator named private vulnerability
+  reporting as disabled and `domain/calc/runner` coverage as backlog. Asked again the next morning, it
+  checked first.
+  - The API answered `{"enabled": true}`.
+  - #302 had retired the coverage exemption on 2026-08-14, at 83%.
+
+  Both sentences had been copied forward each time the state file was rewritten.
+- **A quote from the wrong clone.** Round 1 of #414's review measured what git says once a web edit has
+  put the remote ahead, and quoted "the tip of your current branch is behind". That reproduction ran on
+  a clone that had fetched. The tracker never fetches, and git tells it "(fetch first)". Round 2
+  measured on a clone like the tracker's.
+- **A fix wider than its bug.** The danger hook let a force push through when an option stood between
+  `git` and `push`. Its first fix let any words stand there. That would have read commit-message prose as
+  a command, and the second trigger that shares the prefix showed it.
+- **A guard replayed against its own history.**
+  - 51 hand-written cases said the new hook was right.
+  - Replaying 7,575 commands the project had really run said more: four pushes the old hook had let
+    through, and which of the new refusals were prose.
+  - The coordinator read the 49 commands the evidence-gate trigger newly catches as all `git -C` forms.
+    Re-deriving that comparison at ingest gave the same totals, with both regexes translated and run
+    over the same corpus. It also found that two of the 49 were prose in heredocs.
+- **Two greps on one machine.** The hook's bash finds BSD grep 2.6.0, while the interactive shell's `grep`
+  is ugrep 7.8.4. A regex proved in the shell is not the one the hook runs.
+- **A date that drifted.** The owner chose the front page at 08:39 on 10-12. The PR body and the squash
+  message say 2026-10-11, the day the question was first asked.
+
 ## The counter-practice
 
 - Cite the section inline when stating protocol behaviour; an uncited protocol claim is a
@@ -586,6 +619,11 @@ the author's machine did not hold elsewhere, and only running elsewhere showed i
   version alone.** Pin the behaviour at a seam, assert only what every version says, and let the
   three-OS matrix and an older git's image be the measurement.
 - **Measure where it runs.** A fold, a real path or a locale measured on the host says nothing about the
-  container over a bind mount that the owner deploys.
+  container over a bind mount that the owner deploys. A hook's regex is measured in the shell the hook
+  runs, not in the terminal's, and a git message on a clone that behaves like the tracker's.
+- **A note is a measurement with a date.** Before repeating a stored claim to the owner, measure it again.
+  A state file copies its sentences forward whether or not they are still true.
+- **Replay a guard against what was actually run.** Hand-written cases show that a guard does what its
+  author imagined. A corpus of real commands shows what it would have done, in both directions.
 - **Give the harmless row the same attack as the others.** An audit's "nothing leaves here" is a
   premise. Test it before it decides what is out of scope.

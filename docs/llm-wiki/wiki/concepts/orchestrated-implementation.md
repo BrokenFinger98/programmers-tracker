@@ -3,8 +3,8 @@ type: concept
 project: programmers-tracker
 tags: [orchestration, workflow, testing, debugging-pattern, subagents]
 created: 2026-08-05
-updated: 2026-10-10
-sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
+updated: 2026-10-12
+sources: [raw/sessions/2026-08-05-design-review-and-stack-upgrade.md, raw/sessions/2026-08-12-two-workers-that-never-started.md, raw/sessions/2026-10-07-repairs-not-verdicts.md, raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-prompt-only-the-owner-can-run.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md, raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md]
 ---
 
 # Building This Project With Supervised Workers
@@ -168,7 +168,8 @@ raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md).
   slipped past it. A plain spelling was blocked later the same day. The rule since: a pushed PR branch
   gets `origin/main` merged in and a plain push, and a hook's pattern is never stepped around. Also,
   GitHub's mergeability check runs no custom merge driver, so a PR that `merge=union` resolves locally
-  can show a conflict there. Each next PR is brought up to date locally before its merge.
+  can show a conflict there. Each next PR is brought up to date locally before its merge. The hook's
+  gap was closed on 2026-10-12 at the owner's request; §7 says how, and what it still refuses.
 - **A squash-merged base conflicts with what is stacked on it.** An upper branch that merged the lower
   one's head holds the lower's commits; the squash is a different commit with the same tree. Merging main
   then conflicts wherever the upper branch re-edited the lower's lines. #375 met six such conflicts, all
@@ -188,6 +189,63 @@ raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md).
   process spawn take minutes. Agents tripped the 600 s stream watchdog three times, and a push killed at
   the 30-minute limit turned out to have succeeded. Retrying would have added load. The fix was to wait
   on a load monitor, then run every Gradle command in the background with a long timeout, one at a time.
+
+## 7. The owner's danger hook, and working beside it
+
+`~/.claude/hooks/block-danger.sh` is the owner's global PreToolUse hook, not part of this repository. It
+is what holds this repository's agents to "never force-push". A command it refuses is a person's to run,
+and an agent that meets one stops rather than respelling it. On 2026-10-12 the owner asked the
+coordinator to close the gap §6 found, and to make the change itself
+(raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md).
+
+- **The gap.** Every git pattern wanted the subcommand right after `git`, so anything between passed:
+  `-C <dir>`, `-c k=v`, `--git-dir`. Some forms had no pattern at all: a `+refspec`, `--mirror`, a
+  bundled `-uf`. Now only git's global options, with their arguments, may stand between `git` and the
+  subcommand, and each of those forms is caught.
+- **The first draft let any word stand there.** The coordinator's own check of the evidence-gate trigger,
+  which shares the prefix, caught it: `git commit -m "fix: merge …"` would have read as a merge. That
+  draft would also have refused ordinary commits whose messages mention a force push.
+- **Verified against history, not only cases.**
+  - 51 hand-written cases passed.
+  - Then every unique Bash command this project had run, 7,575 of them, went through the old and the
+    new hook. Six verdicts changed, all to BLOCK and none the other way.
+  - Four of the six were real force or mirror pushes the old hook had let through, the three of §6 among
+    them. Two were prose in heredocs.
+- **Test a hook's regex in the hook's shell.** The hook runs under `bash`, whose `grep` is BSD grep 2.6.0.
+  The interactive shell's `grep` is ugrep. A pattern checked in the wrong one is not the pattern that
+  runs.
+- **What it still refuses, and the way through.**
+  - **Prose in a heredoc.** Prose that names a force push inside a Bash heredoc is refused, because the
+    hook reads the whole command. It has happened to a memory note (10-08) and to the hook's own test
+    cases (10-12). Such text goes through the Write tool.
+  - **An `rm` by absolute path.** Removing a file whose name holds `-programmers` by an absolute path is
+    refused. The rm check reads `-pr…` as a recursive flag and the leading `/` as a dangerous target.
+  - **The way through for the inbox.** A relative path from the repository root passes. That is how the
+    consumed inbox snapshot was deleted at the 2026-10-12 ingest (#416), after the absolute path had
+    stopped #412's.
+
+## 8. A second round reviews the fixes
+
+#414 went through the same critic twice in one morning
+(raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md).
+
+- **Round 1** found nothing blocking and no way the owner's content is lost. It found three Important
+  findings, six Minor ones and the test gaps, most of them reproduced against the branch's compiled
+  classes. The critic asked for the three Important ones before the merge.
+- **Nearly all were answered in the PR itself.** They concerned what the PR had just written, and one was
+  a regression it had introduced. One finding asked for new machinery: matching every shipped guide's
+  hash, so that a clone could retire the old guide too. It was declined as YAGNI and written down as a
+  cost.
+- **Round 2 reviewed the fixes and found four defects in them.**
+  - The worst came from the fix for round 1's first finding: a seal regex with two greedy `.*`. It was
+    quadratic on a hostile first line, 15 s at 1 MiB, and ran on the boot path and at every grading.
+  - Another fix made owner text on the seal line count as part of the seal, so the next write
+    overwrote it.
+  - Neither was in the code round 1 had read.
+- **The scope question, asked of the series before.** On 10-11 the owner asked what the "MCP
+  strengthening" had been. The coordinator's own accounting: three or four MCP PRs, and a long tail of
+  fixes from reviewing them, some wider than the repository's YAGNI. It proposed filing low-risk review
+  findings, with the owner asked for their priority, rather than fixing them at once.
 
 ## Tests for things that loop forever
 

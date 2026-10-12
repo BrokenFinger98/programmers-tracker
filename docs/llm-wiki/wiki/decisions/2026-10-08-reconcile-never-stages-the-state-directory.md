@@ -4,8 +4,8 @@ project: programmers-tracker
 tags: [security, git, credentials, links, storage, push]
 author: BrokenFinger98
 created: 2026-10-08
-updated: 2026-10-10
-sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md]
+updated: 2026-10-12
+sources: [raw/sessions/2026-10-07-the-readers-that-followed-links.md, raw/sessions/2026-10-08-the-token-gate-took-four-rounds.md, raw/sessions/2026-10-08-seventeen-prs-through-one-queue.md, raw/sessions/2026-10-10-the-limit-the-load-and-the-last-five.md, raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md]
 ---
 
 # Reconciliation never stages the state directory, and the tracker searches what it commits and pushes for tokens
@@ -1193,4 +1193,14 @@ this page's follow-ups among them (raw/sessions/2026-10-10-the-limit-the-load-an
   so until the next backup push.
 - **Inferred.** This was the commit half of the gate's first pass over a real reconcile in the owner's
   repository since #360 shipped: both earlier checks found HEAD at `7e144fa`.
-- **Still not exercised:** the push half, on the owner's repository.
+- ⚠️ (old) — "**Still not exercised:** the push half, on the owner's repository." Exercised the next
+  night; see below.
+
+**The push half, 2026-10-11 at 23:00 KST.** The daily backup logged "Daily backup pushed the record
+repository" at 23:00:47. At 08:35 the next morning, after a fetch, the records repository was level with
+origin (raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md).
+
+- **What it shows.** `b1e116e` was the first push of the owner's real records through both halves of the
+  gate. Nothing was refused, and no WARN line was logged.
+- **What comes next.** The next commit to go out is #414's reconcile, `6ccde3e`, made at 11:03 on
+  2026-10-12. It waits for a pass or the 23:00 backup.

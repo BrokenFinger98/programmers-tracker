@@ -4,8 +4,8 @@ project: programmers-tracker
 author: BrokenFinger98
 tags: [obsidian, vault, seeds, record-keeping]
 created: 2026-08-14
-updated: 2026-10-08
-sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-warnings-and-what-was-under-them.md]
+updated: 2026-10-12
+sources: [raw/sessions/2026-08-14-the-first-run-test-and-what-it-found.md, raw/sessions/2026-08-14-the-clean-slate.md, raw/sessions/2026-08-14-the-warnings-and-what-was-under-them.md, raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md]
 ---
 
 # `dashboard.base` ships in the form Obsidian rewrites it to, and a file that already matches is ours
@@ -98,3 +98,15 @@ a safe automatic answer here, so it gets one.
 
 Implemented in #314. The owner's vault was the measurement instrument twice: once for the defect,
 once for the trigger the first diagnosis got wrong.
+
+**2026-10-12: the ledger retires seeds as well as updating them (#414).** The guide moved to
+`GUIDE.md` and `GUIDE.ko.md`, so the vault README this page names is `GUIDE.md` now. The ledger also
+decides whether the old `README.md` and `README.ko.md` may be taken away: only while each still holds
+the bytes it recorded ([[decisions/2026-10-12-the-front-page-is-the-index]]).
+
+- **Measured on the owner's repository at 11:03.** Both matched their records. They went in one
+  reconcile commit, `6ccde3e`, each stated at INFO, and no WARN or ERROR line was logged
+  (raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md).
+- **Kept by the same rule.** A clone has no ledger, and a CRLF checkout holds bytes no recorded hash
+  matches, so either keeps the old guide as the owner's. That is this page's rule again: ambiguous means
+  edited. #414 accepted it rather than match the hash of every guide ever shipped.

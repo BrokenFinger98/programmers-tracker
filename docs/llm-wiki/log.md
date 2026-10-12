@@ -135,3 +135,5 @@ ingest / query / lint history. **Append-only**; entries start with the date so c
 ## [2026-10-10] ingest | the follow-up series, #360 to #410: the token gate in four rounds, seventeen PRs through one queue, the limit and the load (10-08, 10-10) → 12 pages updated, 3 created
 
 ## [2026-10-10] lint | three decision lines union kept twice in index.md, and a stray blank line → index updated
+
+## [2026-10-12] ingest | the front page, the hook and two stale notes: #414 verified live, the danger hook replayed against its history, the first real push through the token gate (10-11, 10-12) → 6 pages updated, 1 created

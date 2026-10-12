@@ -5,7 +5,7 @@ tags: [git, bootstrap, security, vault]
 author: BrokenFinger98
 created: 2026-08-13
 updated: 2026-10-12
-sources: [raw/sessions/2026-08-13-the-map-becomes-a-workspace.md]
+sources: [raw/sessions/2026-08-13-the-map-becomes-a-workspace.md, raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md]
 ---
 
 # The server prepares the record repository, and the token retires SSH outright
@@ -44,6 +44,13 @@ push credential always (that is both the SSH-migration path and token rotation),
 `origin` besides: create a **private** repository named after the record directory, wire it, and
 let the startup backup carry the first push (`push.default current`). `template/` is deleted; the seeds live once, in
 `src/main/resources/vault/`, because the Docker image ships `src` and not the template.
+
+⚠️ The seeds changed on 2026-10-12 (#414). They are `GUIDE.md`, `GUIDE.ko.md` and `dashboard.base`, and
+`README.md` is the regenerated index. A repository seeded under this decision has its two READMEs retired
+at its first boot on that version, and only while they are still exactly as seeded. The owner's
+repository was migrated that way at 11:03 that day, in one reconcile commit
+(raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md; the decision is linked under
+Accepted costs).
 
 `TRACKER_RECORD_REPO` now defaults in compose exactly as it always has in `application.yml`
 (`~/ps-records`) — the one place that was strict — and the path is announced at every boot:

@@ -6453,3 +6453,58 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   90%, 396 of 439; every package at or above its floor); guards (12 of 12).
 - **Remaining.** CI has not run this round; not run in the owner's container.
 - **Pending.** Not pushed; the coordinator pushes.
+
+## 2026-10-12 — #414 verified live, and the wiki ingest (#416, branch docs/416-ingest-the-front-page-session)
+- **#414's live check ✅**, 11:03 KST on main `4583f36`. PR #415 was squash-merged at 11:02, after CI went green on
+  ubuntu, macos and windows at `b94053e`, `8b3f4c9` and `8af6a30`, seven checks each.
+  - **Boot 1** made one reconcile commit on the records repository, `6ccde3e`: `R086 README.ko.md → GUIDE.ko.md`,
+    `A GUIDE.md`, `M README.md`, and no other tracked file; the tree was clean. INFO said "Took /records/README.md
+    away, still exactly as this server seeded it: the index takes its place", and the same for `README.ko.md`.
+    0 WARN/ERROR.
+  - **The front page** has seal digest `badb8264…`, the copy's, under the reworded note. It shows 25 problems,
+    25 passed, the same table lines as `problems/README.md`, and 27 relative links with 0 unresolved.
+  - **Boot 2** (restart at 11:04) made no commit. `README.md` stayed byte-identical, the tree stayed clean, and
+    there was 0 WARN/ERROR.
+  - **Pending.** `6ccde3e` is one commit ahead of origin until the next pass or the 23:00 backup pushes it
+    through the token gate. The server never pulls.
+- **The #412 entry's pending items ✅.**
+  - **The first real push through the content gate.** The daily backup pushed `b1e116e` at 2026-10-11
+    23:00:47; at 08:35 on 10-12 the records were level with origin, and nothing was refused.
+  - **That entry's inbox snapshot** was deleted by the owner, by hand, at 2026-10-11 00:34.
+- **Outside the repository** (the owner's global config: know-how, not an ADR of this repo).
+  - **The hook.** `~/.claude/hooks/block-danger.sh` now catches a force push, a `+refspec`, `--mirror`, a bundled
+    `-uf`, and `reset --hard`/`clean -f`, when git's global options stand before the subcommand. Only those
+    options may stand there.
+  - **Measured before it was installed (09:45).** 41 danger cases and 10 evidence-gate cases passed. A replay of
+    7,575 real commands changed 6 verdicts, all to BLOCK: four real pushes the old hook had missed, and two
+    heredocs of prose. The gate trigger, compared over 7,578 commands, gates 49 more and 23 fewer.
+  - **Live.** `git -C /nonexistent-dir-hook-check push --force origin x` was refused.
+  - **Private vulnerability reporting** was already enabled (`{"enabled": true}`), so the note saying it was
+    disabled was stale. `SECURITY.md` is unchanged.
+- **Ingest.**
+  - **Sources.** Session `b240e44e` from 2026-10-10 23:42 to 2026-10-12 11:08 KST: the inbox snapshot up to its
+    08:59 compaction, the live transcript after it, and the #414 implementer's transcript for the copy's seal
+    digest. They were read by scripts filtering on KST.
+  - **Re-derived.** The gate-trigger comparison was re-run with both regexes translated to Python over the
+    same 7,578 commands. Totals were identical: 693 and 719, 49 and 23. Two of the 49 were prose in heredocs,
+    not the `git -C` forms they had been read as.
+  - **Raw** `2026-10-12-the-front-page-the-hook-and-two-stale-notes`, with a source page of the same name,
+    indexed.
+  - **Updated.**
+    - The ADR `2026-10-12-the-front-page-is-the-index`: the live check and the CI of both rounds, with its "not
+      yet run in the owner's container" kept under ⚠️.
+    - `2026-08-13-the-server-prepares-the-repository`: the seeds are the guide's since #414, under ⚠️.
+    - `2026-08-14-the-seed-ships-in-the-form-its-reader-rewrites-it-to`: the ledger's first retirement,
+      measured.
+    - #360's ADR: the push half exercised, with its "still not exercised" kept under ⚠️.
+    - `orchestrated-implementation`: §7 on the danger hook and working beside it, and §8 on a second round
+      that reviews the fixes.
+    - `assumption-vs-measurement`: an October 11–12 section and three counter-practice lines.
+  - **No new ADR.** #414's decisions are in its ADR. The hook is the owner's config, not this repository's.
+- **Inbox ✅.** The consumed snapshot `precompact-programmers-tracker-b240e44e.jsonl` was deleted from the main
+  checkout by a relative path, which the hook let through. `.inbox.log` is kept.
+- **Gates**, all exit 0:
+  - `./scripts/guards.sh`: 12 of 12, 269 source citations and 15 ingest dates;
+  - `./scripts/check.sh`;
+  - a script over every wiki page: no dead link this ingest wrote, no orphan, every page in `index.md`.
+- **Pending.** Not pushed.

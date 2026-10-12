@@ -5,7 +5,7 @@ tags: [vault, seeds, index, ownership, records, constitution]
 author: BrokenFinger98
 created: 2026-10-12
 updated: 2026-10-12
-sources: [decisions/2026-08-12-the-server-counts-and-names-nothing, decisions/2026-08-11-korean-for-the-user-facing-half, decisions/2026-08-14-the-seed-ships-in-the-form-its-reader-rewrites-it-to, decisions/2026-10-08-no-writer-follows-a-link]
+sources: [decisions/2026-08-12-the-server-counts-and-names-nothing, decisions/2026-08-11-korean-for-the-user-facing-half, decisions/2026-08-14-the-seed-ships-in-the-form-its-reader-rewrites-it-to, decisions/2026-10-08-no-writer-follows-a-link, raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md]
 ---
 
 # The front page is the index, and the guide moves to `GUIDE.md`
@@ -281,8 +281,8 @@ emptied and no token given). The built jar was booted with `TRACKER_RECORD_REPO`
 - **Boot 3** ran after a line was added to `README.md`. The file kept its bytes, the server warned
   once, and the index stayed in `problems/README.md`. Since the review that is said at INFO.
 
-CI ran green on ubuntu, macos and windows at `b94053e`, before the review round. ⚠️ Not yet run in the
-owner's container.
+CI ran green on ubuntu, macos and windows at `b94053e`, before the review round. ⚠️ (old) — "Not yet
+run in the owner's container." It ran there at 11:03 the same day: see "Merged and verified live" below.
 
 ### Review round 1 (2026-10-12, PR #415)
 
@@ -337,3 +337,24 @@ The critic's new probes, rerun after the fixes:
 
 The round-1 cases `pair`, `pair-reverse`, `noledger`, `note`, `absent-root` and `empty2` answer as
 before.
+
+### Merged and verified live (2026-10-12)
+
+CI ran green on all three systems after each round as well, seven checks at `8b3f4c9` and seven at
+`8af6a30`. PR #415 was squash-merged as `4583f36` at 11:02. The owner's container was rebuilt from it
+(raw/sessions/2026-10-12-the-front-page-the-hook-and-two-stale-notes.md). Measured on the owner's
+records repository:
+
+- **Boot 1 (11:03)** made one reconcile commit, `6ccde3e`: `README.ko.md → GUIDE.ko.md` (R086),
+  `GUIDE.md` added and `README.md` modified. No other tracked file changed. The copy's rename was 90%
+  similar; the guide gained its editing advice in between.
+- **The ledger held both hashes.** Each README was said at INFO to be taken away "still exactly as this
+  server seeded it". There was no WARN or ERROR line.
+- **The front page.**
+  - Its seal's digest, `badb8264…`, is the copy's. The note's words changed in round 2, and the digest
+    did not: the body is the same records, and the words are free, as decision 3 says.
+  - "25 problems recorded, 25 passed", in the same table as `problems/README.md`.
+  - All 27 relative links resolve.
+- **Boot 2 (11:04)** made no commit. `README.md` stayed byte-identical, and there was no WARN or ERROR.
+- **Not on github.com yet.** The server never pulls, and the host did not push, so that the push goes
+  through the server's token gate. `6ccde3e` waits for the next pass or the 23:00 backup.
