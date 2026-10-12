@@ -182,6 +182,21 @@ class RecordWritesTest {
         Files.isDirectory(root.resolve("README.ko.md"), NOFOLLOW_LINKS) shouldBe true
     }
 
+    /**
+     * A records root that is not there holds nothing to remove: done, as before #414, and nothing is made. Walked to
+     * the file, the removal resolved the root's real path first, and a root that is not there threw instead.
+     */
+    @Test
+    fun `a removal under a records root that is not there is done, and makes nothing`() {
+        val never = root.resolve("never-made")
+
+        RecordWrites.underRoot(never, setOf("README.md")).removeFile(never.resolve("README.md")) shouldBe true
+        RecordWrites.underProblems(RecordLayout(never)).removeFile(never.resolve("problems/1-x/README.md")) shouldBe
+            true
+
+        Files.exists(never, NOFOLLOW_LINKS) shouldBe false
+    }
+
     /** Nothing there is nothing left there, and a name the writer does not keep at the root is refused, not touched. */
     @Test
     fun `a root-level removal of nothing is done, and of a name not kept there is refused`() {

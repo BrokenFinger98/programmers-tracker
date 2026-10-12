@@ -120,9 +120,11 @@ internal class RecordWrites private constructor(private val bound: RecordBound, 
      * writer's to delete, and is kept: false. A directory on the way that is refused is thrown, as for every write.
      *
      * Walked as a write walks to its file, so a file at the root's own level is removed too (#414): asked for as the
-     * file's parent, the root itself has no name below the root, and the bound refused it.
+     * file's parent, the root itself has no name below the root, and the bound refused it. A directory that is not
+     * there — the records root included, whose real path the walk starts from — holds nothing: true, as before.
      */
     fun removeFile(target: Path): Boolean {
+        if (!isThere(target.toAbsolutePath().parent)) return true
         val file = bounded(target) { bound.fileIn(target, creating = false) } ?: return true
         return removedIfRegular(file)
     }
