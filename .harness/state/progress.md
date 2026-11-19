@@ -6508,3 +6508,8 @@ Next: /commit → /pull-request → CI → merge → rebuild from main.
   - `./scripts/check.sh`;
   - a script over every wiki page: no dead link this ingest wrote, no orphan, every page in `index.md`.
 - **Pending.** Not pushed.
+
+## 2026-11-19 — #418 the resident container is bounded
+- `compose.yaml`: `mem_limit ${TRACKER_MEM_LIMIT:-1536m}`, `cpus ${TRACKER_CPUS:-2}`, and `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60`, so the heap follows the limit. Both variables are documented in `.env.example`.
+- Before: no limit, a 4.4 GB max heap (ergonomic, from the 17.5 GB Docker VM), and 742 MiB RSS when idle.
+- After the recreate: `Memory=1610612736 NanoCpus=2000000000`, `MaxHeapSize` 922 MiB, 276 MiB used when idle, healthy, 0 WARN/ERROR.
