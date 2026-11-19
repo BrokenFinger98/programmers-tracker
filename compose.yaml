@@ -17,6 +17,13 @@ services:
     container_name: programmers-tracker
     restart: unless-stopped
 
+    # A light service with no bound: left alone, the JVM sizes its heap from the Docker VM's
+    # whole memory (4.4 GB max heap on a 17.5 GB VM, measured 2026-11-19 at 742 MiB RSS idle).
+    # The limit caps the container; MaxRAMPercentage below makes the heap follow it, leaving
+    # the rest for metaspace, thread stacks and git child processes instead of an OOM kill.
+    mem_limit: ${TRACKER_MEM_LIMIT:-1536m}
+    cpus: ${TRACKER_CPUS:-2}
+
     # ---------------------------------------------------------------------
     # THE LOOPBACK PREFIX ON THE LEFT IS THE SECURITY CONTROL. DO NOT REMOVE IT.
     #
@@ -38,6 +45,8 @@ services:
     environment:
       TRACKER_PORT: ${TRACKER_PORT:-1619}
       TRACKER_BIND_ADDRESS: "0.0.0.0"
+      # The heap follows mem_limit above: 60% of it, about 920 MB at the 1.5 GB default.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60"
       # The session cookie lives in the mounted .ps/ directory below, not in a Docker secret:
       # the server writes it there when the sensor extension hands a fresh one over (#332),
       # and a secret mount is read-only by construction. Same host file as before.
